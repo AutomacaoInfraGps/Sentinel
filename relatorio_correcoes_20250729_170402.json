@@ -1,0 +1,25 @@
+{
+  "data_correcao": "2025-07-29T17:04:02.371981",
+  "correcoes_aplicadas": [
+    "servidores.json adicionado ao .gitignore",
+    "Adicionado TODO para SSL em Chelist.py",
+    "Adicionado TODO para SSL em gerenciar_servidores.py",
+    "Adicionado TODO para SSL em iLOcheck.py",
+    "Adicionado TODO para SSL em verificar_servidores_v2.py",
+    "Adicionado TODO para avisos SSL em auditoria_seguranca_v2.py",
+    "Adicionado TODO para avisos SSL em Chelist.py",
+    "Adicionado TODO para avisos SSL em gerenciar_fortigate.py",
+    "Adicionado TODO para avisos SSL em gerenciar_servidores.py",
+    "Adicionado TODO para avisos SSL em gerenciar_vms.py",
+    "Adicionado TODO para avisos SSL em iLOcheck.py",
+    "Adicionado TODO para avisos SSL em Unifi.Py",
+    "Adicionado TODO para avisos SSL em verificar_servidores_v2.py",
+    "Modo debug corrigido em web_config.py",
+    "Arquivo .env.example criado",
+    ".env adicionado ao .gitignore",
+    "Guia de segurança criado"
+  ],
+  "erros": [],
+  "total_correcoes": 17,
+  "total_erros": 0
+}

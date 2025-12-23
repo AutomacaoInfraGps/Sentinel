@@ -1,0 +1,49 @@
+{
+  "nome": "Produção",
+  "descricao": "Configuração otimizada para ambiente de produção",
+  "ambiente": "producao",
+  "configuracao": {
+    "naos_server": {
+      "ip": "10.0.0.10",
+      "usuario": "prod\\admin.sistema",
+      "senha": "ALTERE_AQUI"
+    },
+    "unifi_controller": {
+      "host": "10.0.0.20",
+      "port": 8443,
+      "username": "admin.rede",
+      "password": "ALTERE_AQUI"
+    },
+    "gps_amigo": {
+      "url": "https://gpsamigo.com.br/login.php"
+    },
+    "timeouts": {
+      "connection_timeout": 5,
+      "max_retries": 3
+    },
+    "cleanup": {
+      "remove_temp_files": true,
+      "keep_logs": true
+    }
+  },
+  "servidores_exemplo": [
+    {
+      "nome": "Prod Primary",
+      "tipo": "idrac",
+      "ip": "10.0.0.100",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "producao",
+      "descricao": "Servidor primário de produção"
+    },
+    {
+      "nome": "Prod Secondary",
+      "tipo": "idrac",
+      "ip": "10.0.0.101",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "producao",
+      "descricao": "Servidor secundário de produção"
+    }
+  ]
+}

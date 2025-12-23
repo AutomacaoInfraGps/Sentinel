@@ -1,0 +1,49 @@
+{
+  "nome": "Desenvolvimento",
+  "descricao": "Configuração para ambiente de desenvolvimento e testes",
+  "ambiente": "desenvolvimento",
+  "configuracao": {
+    "naos_server": {
+      "ip": "192.168.100.10",
+      "usuario": "dev\\admin",
+      "senha": "ALTERE_AQUI"
+    },
+    "unifi_controller": {
+      "host": "192.168.100.20",
+      "port": 8443,
+      "username": "admin",
+      "password": "ALTERE_AQUI"
+    },
+    "gps_amigo": {
+      "url": "https://gpsamigo.com.br/login.php"
+    },
+    "timeouts": {
+      "connection_timeout": 20,
+      "max_retries": 1
+    },
+    "cleanup": {
+      "remove_temp_files": false,
+      "keep_logs": true
+    }
+  },
+  "servidores_exemplo": [
+    {
+      "nome": "Servidor Dev",
+      "tipo": "idrac",
+      "ip": "192.168.100.100",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "desenvolvimento",
+      "descricao": "Servidor de desenvolvimento"
+    },
+    {
+      "nome": "Servidor Teste",
+      "tipo": "ilo",
+      "ip": "192.168.100.101",
+      "usuario": "administrator",
+      "senha": "ALTERE_AQUI",
+      "grupo": "teste",
+      "descricao": "Servidor de testes"
+    }
+  ]
+}

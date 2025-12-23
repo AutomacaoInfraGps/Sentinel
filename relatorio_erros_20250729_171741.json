@@ -1,0 +1,438 @@
+{
+  "data_verificacao": "2025-07-29T17:17:41.661617",
+  "total_erros": 45,
+  "status": "🔴 CRÍTICO - Muitos erros encontrados",
+  "erros_sintaxe": [
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: '(' was never closed",
+      "arquivo": "Chelist.py",
+      "linha": 21,
+      "timestamp": "2025-07-29T17:16:57.676744"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: unexpected indent",
+      "arquivo": "config.py",
+      "linha": 1,
+      "timestamp": "2025-07-29T17:16:57.686416"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: invalid syntax. Perhaps you forgot a comma?",
+      "arquivo": "gerenciar_servidores.py",
+      "linha": 308,
+      "timestamp": "2025-07-29T17:16:57.827253"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: invalid syntax",
+      "arquivo": "iLOcheck.py",
+      "linha": 26,
+      "timestamp": "2025-07-29T17:16:57.893602"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: '(' was never closed",
+      "arquivo": "Chelist.py",
+      "linha": 21,
+      "timestamp": "2025-07-29T17:16:58.220844"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: unexpected indent",
+      "arquivo": "config.py",
+      "linha": 1,
+      "timestamp": "2025-07-29T17:16:58.229012"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: invalid syntax. Perhaps you forgot a comma?",
+      "arquivo": "gerenciar_servidores.py",
+      "linha": 308,
+      "timestamp": "2025-07-29T17:16:58.362377"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: invalid syntax",
+      "arquivo": "iLOcheck.py",
+      "linha": 26,
+      "timestamp": "2025-07-29T17:16:58.405344"
+    }
+  ],
+  "erros_importacao": [
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "cadastrar_switch.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:03.355214"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar gerenciar_servidores: invalid syntax. Perhaps you forgot a comma? (gerenciar_servidores.py, line 308)",
+      "arquivo": "configure.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:06.163066"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "corrigir_ips_excel.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:06.166576"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "gerenciar_switches.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:06.186281"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "gerenciar_vms.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:06.192291"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "InfSwitches.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:06.198783"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar gerenciar_servidores: invalid syntax. Perhaps you forgot a comma? (gerenciar_servidores.py, line 308)",
+      "arquivo": "manage.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:06.228522"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "testar_ip.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:07.772621"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar data_store: unexpected indent (config.py, line 1)",
+      "arquivo": "test_api.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:07.785237"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar data_store: unexpected indent (config.py, line 1)",
+      "arquivo": "Unifi.Py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:07.789236"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar data_store: unexpected indent (config.py, line 1)",
+      "arquivo": "web_config.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:08.627184"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar config.py: unexpected indent (config.py, line 1)",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:41.488404"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar gerenciar_servidores.py: invalid syntax. Perhaps you forgot a comma? (gerenciar_servidores.py, line 308)",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:41.503124"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Erro ao importar web_config.py: unexpected indent (config.py, line 1)",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:41.515425"
+    }
+  ],
+  "erros_configuracao": [
+    {
+      "categoria": "CONFIGURAÇÃO",
+      "mensagem": "Erro ao importar config.py: unexpected indent (config.py, line 1)",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:41.485597"
+    }
+  ],
+  "erros_dependencias": [
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: argon2-cffi",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:08.664898"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: argon2-cffi-bindings",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:08.666408"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: charset-normalizer",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:09.131380"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Flask",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.123588"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Flask-Login",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.130376"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Jinja2",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.262447"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: MarkupSafe",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.346816"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: more-itertools",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.346816"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: opencv-python",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.368481"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: opencv-python-headless",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.368481"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pillow",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:38.924700"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pyasyncore",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:39.137561"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pycryptodome",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:39.479592"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pycryptodomex",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:39.479592"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pyspnego",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:40.044425"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: python-bidi",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:40.065035"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: python-dotenv",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:40.070222"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pywin32-ctypes",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:40.070222"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: PyYAML",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:40.070222"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: scikit-image",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:40.070222"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: snmpy",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:41.110890"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Werkzeug",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:17:41.468036"
+    }
+  ],
+  "erros_logicos": [],
+  "avisos": [
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 2",
+      "arquivo": "aplicar_correcoes_seguranca.py",
+      "timestamp": "2025-07-29T17:17:41.519671"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "atualizar_dados_background.py",
+      "timestamp": "2025-07-29T17:17:41.519671"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 1",
+      "arquivo": "Chelist.py",
+      "timestamp": "2025-07-29T17:17:41.535977"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "configure.py",
+      "timestamp": "2025-07-29T17:17:41.539818"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "executar_tudo.py",
+      "timestamp": "2025-07-29T17:17:41.555879"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "executar_tudo_v2.py",
+      "timestamp": "2025-07-29T17:17:41.555879"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerar_status_html.py",
+      "timestamp": "2025-07-29T17:17:41.555879"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciador_atualizacoes.py",
+      "timestamp": "2025-07-29T17:17:41.563667"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 1",
+      "arquivo": "gerenciar_servidores.py",
+      "timestamp": "2025-07-29T17:17:41.569068"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciar_servidores.py",
+      "timestamp": "2025-07-29T17:17:41.570065"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciar_switches.py",
+      "timestamp": "2025-07-29T17:17:41.572475"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciar_vms.py",
+      "timestamp": "2025-07-29T17:17:41.572475"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 2",
+      "arquivo": "iLOcheck.py",
+      "timestamp": "2025-07-29T17:17:41.578033"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "iniciar_web.py",
+      "timestamp": "2025-07-29T17:17:41.582088"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "limpar_sistema_legado.py",
+      "timestamp": "2025-07-29T17:17:41.586942"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "menu_principal.py",
+      "timestamp": "2025-07-29T17:17:41.589819"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "Unifi.Py",
+      "timestamp": "2025-07-29T17:17:41.617489"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 1",
+      "arquivo": "verificar_servidores_v2.py",
+      "timestamp": "2025-07-29T17:17:41.634788"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "vm_manager.py",
+      "timestamp": "2025-07-29T17:17:41.637803"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "web_config.py",
+      "timestamp": "2025-07-29T17:17:41.644572"
+    }
+  ],
+  "arquivos_problematicos": [
+    "config.py",
+    "Chelist.py",
+    "gerenciar_servidores.py",
+    "iLOcheck.py"
+  ],
+  "recomendacao": "Correções urgentes necessárias"
+}
