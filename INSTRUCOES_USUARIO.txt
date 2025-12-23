@@ -1,0 +1,127 @@
+========================================
+  SISTEMA DE AUTOMAÇÃO DE INFRAESTRUTURA
+========================================
+
+📋 COMO USAR:
+
+1. Execute o arquivo: SistemaAutomacao.bat
+2. Aguarde o processamento (pode demorar alguns minutos)
+3. O relatório será salvo automaticamente em:
+   Desktop/Relatório Preventiva/YYYY/MM/DD/
+
+📊 O QUE O SISTEMA FAZ:
+
+✅ Monitora servidores físicos (iDRAC/iLO)
+✅ Verifica replicação do Active Directory
+✅ Coleta informações de máquinas virtuais
+✅ Monitora switches de rede via Zabbix
+✅ Verifica status das antenas UniFi
+✅ Monitora links de internet (Fortigate)
+✅ Captura tela do GPS Amigo
+✅ Gera dashboard consolidado em HTML
+
+🖥️ REQUISITOS DO SISTEMA:
+
+- Windows 10 ou superior
+- Python 3.8+ instalado
+- PowerShell habilitado
+- Acesso à rede para conectar aos servidores
+- Permissões administrativas (recomendado)
+
+⚙️ CONFIGURAÇÃO INICIAL:
+
+Na primeira execução, o sistema pode solicitar:
+- Credenciais de acesso aos servidores
+- Configurações de rede
+- Parâmetros de monitoramento
+
+📁 ESTRUTURA DE ARQUIVOS:
+
+SistemaAutomacao.bat     ← EXECUTE ESTE ARQUIVO
+executar_tudo.py         ← Script principal
+config.py                ← Configurações do sistema
+*.ps1                    ← Scripts PowerShell
+templates/               ← Templates HTML
+data/                    ← Dados do sistema
+output/                  ← Arquivos temporários
+logs/                    ← Logs de execução
+
+📈 RELATÓRIOS GERADOS:
+
+Os relatórios são salvos em:
+Desktop/Relatório Preventiva/
+
+Estrutura por data:
+└── 2025/
+    └── 01/
+        └── 29/
+            └── relatorio_preventiva_20250129_143022.html
+
+🔧 EM CASO DE PROBLEMAS:
+
+1. ERRO: "Python não encontrado"
+   → Instale Python 3.8+ do site oficial: python.org
+
+2. ERRO: "Acesso negado"
+   → Execute como administrador (botão direito → "Executar como administrador")
+
+3. ERRO: "Módulo não encontrado"
+   → Execute: pip install requests urllib3
+
+4. ERRO: "PowerShell bloqueado"
+   → Execute: Set-ExecutionPolicy RemoteSigned (como administrador)
+
+5. ERRO: "Antivírus bloqueando"
+   → Adicione exceção no Windows Defender para a pasta do sistema
+
+🧪 DIAGNÓSTICO:
+
+Para verificar se tudo está funcionando:
+1. Abra o Prompt de Comando na pasta do sistema
+2. Execute: python verificar_dependencias.py
+3. Verifique se todas as dependências estão OK
+
+📊 LOGS E DEPURAÇÃO:
+
+- Logs são salvos na pasta: logs/
+- Para mais detalhes, execute: python executar_tudo.py
+- Em caso de erro, verifique o arquivo de log mais recente
+
+🌐 ACESSO AO RELATÓRIO:
+
+Após a execução:
+1. O relatório abrirá automaticamente no navegador
+2. Ou navegue até: Desktop/Relatório Preventiva/
+3. Abra o arquivo HTML mais recente
+
+⏰ TEMPO DE EXECUÇÃO:
+
+- Execução típica: 5-15 minutos
+- Depende da quantidade de servidores configurados
+- Primeira execução pode ser mais lenta
+
+🔄 EXECUÇÃO AUTOMÁTICA:
+
+Para executar automaticamente:
+1. Use o Agendador de Tarefas do Windows
+2. Configure para executar SistemaAutomacao.bat
+3. Defina horário (ex: diariamente às 08:00)
+
+📞 SUPORTE TÉCNICO:
+
+Em caso de problemas persistentes:
+1. Verifique os logs na pasta logs/
+2. Execute o diagnóstico: python verificar_dependencias.py
+3. Documente o erro exato para suporte
+
+🎯 DICAS DE USO:
+
+✅ Execute regularmente para manter histórico
+✅ Verifique se as credenciais estão atualizadas
+✅ Mantenha backup das configurações
+✅ Monitore o espaço em disco (relatórios acumulam)
+
+========================================
+Versão: 2025.01
+Última atualização: Janeiro 2025
+========================================

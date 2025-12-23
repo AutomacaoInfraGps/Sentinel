@@ -1,0 +1,67 @@
+{
+  "nome": "Empresa Grande",
+  "descricao": "Configuração para empresas grandes com múltiplas regionais e filiais",
+  "ambiente": "grande",
+  "configuracao": {
+    "naos_server": {
+      "ip": "172.16.1.10",
+      "usuario": "empresa\\admin.sistema",
+      "senha": "ALTERE_AQUI"
+    },
+    "unifi_controller": {
+      "host": "172.16.1.20",
+      "port": 8443,
+      "username": "admin.rede",
+      "password": "ALTERE_AQUI"
+    },
+    "gps_amigo": {
+      "url": "https://gpsamigo.com.br/login.php"
+    },
+    "timeouts": {
+      "connection_timeout": 8,
+      "max_retries": 5
+    },
+    "cleanup": {
+      "remove_temp_files": true,
+      "keep_logs": true
+    }
+  },
+  "servidores_exemplo": [
+    {
+      "nome": "Datacenter Principal",
+      "tipo": "idrac",
+      "ip": "172.16.1.100",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "datacenter",
+      "descricao": "Servidor principal do datacenter"
+    },
+    {
+      "nome": "Regional Norte",
+      "tipo": "idrac",
+      "ip": "172.16.10.100",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "regionais",
+      "descricao": "Servidor regional Norte"
+    },
+    {
+      "nome": "Regional Sul",
+      "tipo": "ilo",
+      "ip": "172.16.20.100",
+      "usuario": "administrator",
+      "senha": "ALTERE_AQUI",
+      "grupo": "regionais",
+      "descricao": "Servidor regional Sul"
+    },
+    {
+      "nome": "Filial SP Capital",
+      "tipo": "idrac",
+      "ip": "172.16.30.100",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "filiais",
+      "descricao": "Servidor filial São Paulo Capital"
+    }
+  ]
+}

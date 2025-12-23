@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-07-23T15:20:15.676803",
+  "versao": "2.0 - Estrutura Hierárquica",
+  "estatisticas": {
+    "total_regionais": 4,
+    "total_servidores": 4,
+    "estrutura_hierarquica": true
+  },
+  "regionais": [
+    {
+      "codigo": "RG_GLOBAL_SEGURANCA",
+      "nome": "RG_GLOBAL SEGURANÇA",
+      "servidores": 1
+    },
+    {
+      "codigo": "RG_REGIONAL_BH",
+      "nome": "RG_REGIONAL BELO HORIZONTE",
+      "servidores": 1
+    },
+    {
+      "codigo": "RG_MOTUS",
+      "nome": "RG_MOTUS",
+      "servidores": 1
+    },
+    {
+      "codigo": "RG_GALAXIA",
+      "nome": "RG_GALAXIA",
+      "servidores": 1
+    }
+  ]
+}

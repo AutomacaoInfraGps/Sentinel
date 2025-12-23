@@ -1,0 +1,79 @@
+{
+  "timestamp": "2025-07-24T11:19:09.420173",
+  "sistema": {
+    "python_version": "3.12.3 (tags/v3.12.3:f6650f9, Apr  9 2024, 14:05:25) [MSC v.1938 64 bit (AMD64)]",
+    "platform": "win32",
+    "cwd": "C:\\Users\\m.vbatista\\Desktop\\Automa\u00e7\u00e3o",
+    "project_root": "c:\\Users\\m.vbatista\\Desktop\\Automa\u00e7\u00e3o"
+  },
+  "diretorios": {
+    "data": {
+      "existe": true,
+      "caminho": "c:\\Users\\m.vbatista\\Desktop\\Automa\u00e7\u00e3o\\data",
+      "arquivos": 2
+    },
+    "output": {
+      "existe": true,
+      "caminho": "c:\\Users\\m.vbatista\\Desktop\\Automa\u00e7\u00e3o\\output",
+      "arquivos": 14
+    },
+    "logs": {
+      "existe": true,
+      "caminho": "c:\\Users\\m.vbatista\\Desktop\\Automa\u00e7\u00e3o\\logs",
+      "arquivos": 0
+    },
+    "templates": {
+      "existe": true,
+      "caminho": "c:\\Users\\m.vbatista\\Desktop\\Automa\u00e7\u00e3o\\templates",
+      "arquivos": 19
+    }
+  },
+  "arquivos_json": {
+    "replicacao.json": {
+      "erro": "Unexpected UTF-8 BOM (decode using utf-8-sig): line 1 column 1 (char 0)",
+      "valido": false
+    },
+    "unifi.json": {
+      "tamanho": 57492,
+      "ultima_modificacao": "2025-07-24T11:18:19.852746",
+      "valido": true,
+      "chaves": [
+        "total_aps",
+        "aps_online",
+        "aps_offline",
+        "clientes_conectados",
+        "controller",
+        "sites",
+        "aps",
+        "timestamp"
+      ]
+    }
+  },
+  "modulos": {
+    "config.py": {
+      "existe": true,
+      "tamanho": 4816,
+      "ultima_modificacao": "2025-07-23T11:30:22.920877"
+    },
+    "data_store.py": {
+      "existe": true,
+      "tamanho": 2781,
+      "ultima_modificacao": "2025-07-24T11:18:53.147290"
+    },
+    "web_config.py": {
+      "existe": true,
+      "tamanho": 37002,
+      "ultima_modificacao": "2025-07-24T11:18:54.650819"
+    },
+    "Unifi.py": {
+      "existe": true,
+      "tamanho": 5611,
+      "ultima_modificacao": "2025-07-24T11:01:27.163324"
+    },
+    "Replicacao_Servers.ps1": {
+      "existe": true,
+      "tamanho": 4099,
+      "ultima_modificacao": "2025-07-24T10:54:57.461008"
+    }
+  }
+}
