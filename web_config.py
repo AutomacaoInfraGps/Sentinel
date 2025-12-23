@@ -724,6 +724,64 @@ def listar_vms():
         return render_template('vms.html', vms=[], regionais=[])
 
 @app.route('/vms/<vm_id>/relatorio')
+
+# === ROTAS DE VPN ===
+
+@app.route('/vpn')
+@login_required
+def vpn_ipsec():
+    try:
+        # Garante autenticação no Fortigate
+        if not gerenciador_fortigate.autenticar():
+            flash("Falha na autenticação com o Fortigate", "error")
+            return render_template("vpn_ipsec.html", vpns=[])
+
+        # Obtém VPNs
+        resultado = gerenciador_fortigate.obter_vpn_ipsec()
+
+        # Validação defensiva
+        if not resultado or not isinstance(resultado, dict):
+            raise ValueError("Resposta inválida do Fortigate")
+
+        if not resultado.get("success", False):
+            flash(resultado.get("message", "Erro ao consultar VPN IPsec"), "error")
+            return render_template("vpn_ipsec.html", vpns=[])
+
+        vpns = resultado.get("vpns", [])
+
+        # Normaliza campos esperados pelo template
+        for vpn in vpns:
+            vpn.setdefault("tunel", "N/A")
+            vpn.setdefault("interface", "N/A")
+            vpn.setdefault("status", "down")
+            vpn.setdefault("ultima_verificacao", datetime.now().strftime("%H:%M"))
+
+        return render_template("vpn_ipsec.html", vpns=vpns)
+
+    except Exception as e:
+        app.logger.exception("Erro na rota /vpn")
+        flash(f"Erro interno ao carregar VPN: {str(e)}", "error")
+        return render_template("vpn_ipsec.html", vpns=[])
+@app.route('/api/vpn/verificar', methods=['POST'])
+@login_required
+def api_verificar_vpn():
+    try:
+        if not gerenciador_fortigate.autenticar():
+            return jsonify({
+                "success": False,
+                "message": "Falha na autenticação com o Fortigate"
+            })
+
+        return jsonify(gerenciador_fortigate.obter_vpn_ipsec())
+
+    except Exception as e:
+        app.logger.exception("Erro ao verificar VPN")
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        })
+
+
 @login_required
 def vm_relatorio(vm_id):
     """Página de relatório completo de uma VM específica"""

@@ -8,6 +8,8 @@ import time
 import random
 import os
 from pathlib import Path
+import paramiko
+import re
 from datetime import datetime
 
 # Importa o módulo de credenciais e configurações
@@ -224,7 +226,7 @@ class GerenciadorFortigate:
                 
             interfaces = interfaces_result["interfaces"]
             
-            # Filtra apenas as interfaces WAN
+            # Filtra apenas as interfaces ssh.connect
             wan_interfaces = []
             for interface in interfaces:
                 # Verifica se é uma interface WAN (geralmente começa com "wan" ou tem "internet" no nome)
@@ -389,6 +391,65 @@ class GerenciadorFortigate:
             print(f"❌ Erro ao obter informações completas: {str(e)}")
             return {"success": False, "message": str(e)}
 
+    def obter_vpn_ipsec(self):
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            ssh.connect(
+                hostname=self.host,
+                port=2222,
+                username=self.username,
+                password=self.password,
+                timeout=10
+            )
+
+            stdin, stdout, stderr = ssh.exec_command(
+                "get vpn ipsec tunnel summary"
+            )
+
+            output = stdout.read().decode(errors="ignore")
+            ssh.close()
+
+            vpns = []
+
+            for line in output.splitlines():
+                if "selectors" not in line:
+                    continue
+
+                # 'T045_PARA_02' ... selectors(total,up): 1/1
+                name_match = re.search(r"'([^']+)'", line)
+                sel_match = re.search(r"selectors\(total,up\): (\d+)/(\d+)", line)
+
+                if not name_match or not sel_match:
+                    continue
+
+                name = name_match.group(1)
+                total = int(sel_match.group(1))
+                up = int(sel_match.group(2))
+
+                status = "up" if total > 0 and up == total else "down"
+
+                vpns.append({
+                    "tunel": name,
+                    "interface": "N/A",
+                    "status": status,
+                    "ultima_verificacao": datetime.now().strftime("%H:%M:%S")
+                })
+
+            return {
+                "success": True,
+                "vpns": vpns,
+                "total": len(vpns),
+                "ativos": sum(1 for v in vpns if v["status"] == "up"),
+                "inativos": sum(1 for v in vpns if v["status"] == "down")
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Erro SSH Fortigate: {str(e)}"
+            }
 
 # Teste do módulo quando executado diretamente
 if __name__ == "__main__":

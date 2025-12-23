@@ -231,6 +231,7 @@ def novo_servidor_regional(codigo_regional):
 
 # === ROTAS DE INFRAESTRUTURA ===
 
+
 @app.route('/replicacao')
 @login_required
 def replicacao_ad():
@@ -288,6 +289,8 @@ def executar_replicacao():
             'success': False,
             'message': f'Erro interno: {str(e)}'
         })
+
+
 
 @app.route('/api/antenas/verificar', methods=['POST'])
 def verificar_antenas():
