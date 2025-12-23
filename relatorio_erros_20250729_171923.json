@@ -1,0 +1,337 @@
+{
+  "data_verificacao": "2025-07-29T17:19:23.603274",
+  "total_erros": 31,
+  "status": "🔴 CRÍTICO - Muitos erros encontrados",
+  "erros_sintaxe": [
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: '(' was never closed",
+      "arquivo": "iLOcheck.py",
+      "linha": 35,
+      "timestamp": "2025-07-29T17:19:06.252692"
+    },
+    {
+      "categoria": "SINTAXE",
+      "mensagem": "Erro de sintaxe: '(' was never closed",
+      "arquivo": "iLOcheck.py",
+      "linha": 35,
+      "timestamp": "2025-07-29T17:19:06.662991"
+    }
+  ],
+  "erros_importacao": [
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "cadastrar_switch.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:09.208707"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "corrigir_ips_excel.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:10.875067"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "gerenciar_switches.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:10.892644"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "gerenciar_vms.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:10.895637"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "InfSwitches.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:10.898916"
+    },
+    {
+      "categoria": "IMPORTAÇÃO",
+      "mensagem": "Módulo não encontrado: pandas as pd",
+      "arquivo": "testar_ip.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:11.306656"
+    }
+  ],
+  "erros_configuracao": [
+    {
+      "categoria": "CONFIGURAÇÃO",
+      "mensagem": "Variável não definida: ENVIRONMENT_FILE",
+      "arquivo": "config.py",
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:23.266664"
+    }
+  ],
+  "erros_dependencias": [
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: argon2-cffi",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:11.566651"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: argon2-cffi-bindings",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:11.567954"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: charset-normalizer",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:11.842882"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Flask",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.606385"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Flask-Login",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.611980"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Jinja2",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.787229"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: MarkupSafe",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.840767"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: more-itertools",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.840767"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: opencv-python",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.852670"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: opencv-python-headless",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:21.853670"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pillow",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.546503"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pyasyncore",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.633769"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pycryptodome",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.670861"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pycryptodomex",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.673335"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pyspnego",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.842482"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: python-bidi",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.851717"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: python-dotenv",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.855851"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: pywin32-ctypes",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.857856"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: PyYAML",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.857856"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: scikit-image",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:22.860654"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: snmpy",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:23.121684"
+    },
+    {
+      "categoria": "DEPENDÊNCIA",
+      "mensagem": "Pacote não instalado: Werkzeug",
+      "arquivo": null,
+      "linha": null,
+      "timestamp": "2025-07-29T17:19:23.195377"
+    }
+  ],
+  "erros_logicos": [],
+  "avisos": [
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 2",
+      "arquivo": "aplicar_correcoes_seguranca.py",
+      "timestamp": "2025-07-29T17:19:23.516320"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "atualizar_dados_background.py",
+      "timestamp": "2025-07-29T17:19:23.518166"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 1",
+      "arquivo": "Chelist.py",
+      "timestamp": "2025-07-29T17:19:23.520666"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "configure.py",
+      "timestamp": "2025-07-29T17:19:23.526794"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "executar_tudo.py",
+      "timestamp": "2025-07-29T17:19:23.536420"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "executar_tudo_v2.py",
+      "timestamp": "2025-07-29T17:19:23.536420"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerar_status_html.py",
+      "timestamp": "2025-07-29T17:19:23.541292"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciador_atualizacoes.py",
+      "timestamp": "2025-07-29T17:19:23.542244"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 1",
+      "arquivo": "gerenciar_servidores.py",
+      "timestamp": "2025-07-29T17:19:23.547280"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciar_servidores.py",
+      "timestamp": "2025-07-29T17:19:23.547280"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciar_switches.py",
+      "timestamp": "2025-07-29T17:19:23.550704"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "gerenciar_vms.py",
+      "timestamp": "2025-07-29T17:19:23.552773"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 2",
+      "arquivo": "iLOcheck.py",
+      "timestamp": "2025-07-29T17:19:23.553695"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "iniciar_web.py",
+      "timestamp": "2025-07-29T17:19:23.554435"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "limpar_sistema_legado.py",
+      "timestamp": "2025-07-29T17:19:23.555445"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "menu_principal.py",
+      "timestamp": "2025-07-29T17:19:23.555445"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "Unifi.Py",
+      "timestamp": "2025-07-29T17:19:23.571243"
+    },
+    {
+      "mensagem": "TODOs/FIXMEs encontrados: 1",
+      "arquivo": "verificar_servidores_v2.py",
+      "timestamp": "2025-07-29T17:19:23.579504"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "vm_manager.py",
+      "timestamp": "2025-07-29T17:19:23.583442"
+    },
+    {
+      "mensagem": "Except genérico encontrado (pode mascarar erros)",
+      "arquivo": "web_config.py",
+      "timestamp": "2025-07-29T17:19:23.587451"
+    }
+  ],
+  "arquivos_problematicos": [
+    "iLOcheck.py"
+  ],
+  "recomendacao": "Correções urgentes necessárias"
+}

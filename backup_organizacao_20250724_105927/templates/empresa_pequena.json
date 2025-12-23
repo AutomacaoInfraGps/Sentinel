@@ -1,0 +1,40 @@
+{
+  "nome": "Empresa Pequena",
+  "descricao": "Configuração para empresas pequenas com poucos servidores",
+  "ambiente": "pequeno",
+  "configuracao": {
+    "naos_server": {
+      "ip": "192.168.1.10",
+      "usuario": "admin",
+      "senha": "ALTERE_AQUI"
+    },
+    "unifi_controller": {
+      "host": "192.168.1.20",
+      "port": 8443,
+      "username": "admin",
+      "password": "ALTERE_AQUI"
+    },
+    "gps_amigo": {
+      "url": "https://gpsamigo.com.br/login.php"
+    },
+    "timeouts": {
+      "connection_timeout": 15,
+      "max_retries": 2
+    },
+    "cleanup": {
+      "remove_temp_files": true,
+      "keep_logs": false
+    }
+  },
+  "servidores_exemplo": [
+    {
+      "nome": "Servidor Principal",
+      "tipo": "idrac",
+      "ip": "192.168.1.100",
+      "usuario": "root",
+      "senha": "ALTERE_AQUI",
+      "grupo": "principal",
+      "descricao": "Servidor principal da empresa"
+    }
+  ]
+}

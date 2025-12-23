@@ -1,0 +1,247 @@
+{
+  "regionais": {
+    "RG_GLOBAL_SEGURANCA": {
+      "nome": "RG_GLOBAL SEGURANÇA",
+      "descricao": "Regional Global de Segurança",
+      "servidores": [
+        {
+          "id": "srv_seg_01",
+          "nome": "Servidor Segurança 01",
+          "tipo": "idrac",
+          "ip": "10.161.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Firewall/Segurança"
+        }
+      ]
+    },
+    "RG_REGIONAL_BH": {
+      "nome": "RG_REGIONAL BELO HORIZONTE",
+      "descricao": "Regional de Belo Horizonte",
+      "servidores": [
+        {
+          "id": "srv_bh_01",
+          "nome": "Servidor BH 01",
+          "tipo": "idrac",
+          "ip": "10.31.0.12",
+          "usuario": "root",
+          "senha": "0p3nf1r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação"
+        }
+      ]
+    },
+    "RG_MOTUS": {
+      "nome": "RG_MOTUS",
+      "descricao": "Regional MOTUS",
+      "servidores": [
+        {
+          "id": "srv_motus_01",
+          "nome": "Servidor MOTUS 01",
+          "tipo": "idrac",
+          "ip": "10.111.0.11",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação"
+        }
+      ]
+    },
+    "RG_GALAXIA": {
+      "nome": "RG_GALAXIA",
+      "descricao": "Regional GALAXIA - Matriz",
+      "servidores": [
+        {
+          "id": "srv_galaxia_01",
+          "nome": "Servidor GALAXIA 01",
+          "tipo": "ilo",
+          "ip": "10.254.12.18",
+          "usuario": "administrator",
+          "senha": "XSFLX8PD",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Infraestrutura"
+        }
+      ]
+    },
+    "REG_ALAGOAS": {
+      "nome": "REG_ALAGOAS",
+      "descricao": "",
+      "servidores": []
+    },
+    "RG_PERNAMBUCO": {
+      "nome": "RG_PERNAMBUCO",
+      "descricao": "Regional Pernambuco",
+      "servidores": []
+    },
+    "REG_BAHIA": {
+      "nome": "REG_BAHIA",
+      "descricao": "Regional Bahia",
+      "servidores": [
+        {
+          "id": "srv_reg_bahia_01",
+          "nome": "Bahia",
+          "tipo": "ilo",
+          "ip": "10.171.0.10",
+          "usuario": "administrator",
+          "senha": "05891330",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant DL380e Gen8",
+          "funcao": "Virtualização"
+        }
+      ]
+    },
+    "REG_GOIAS": {
+      "nome": "REG_GOIAS",
+      "descricao": "Regional Goiás",
+      "servidores": []
+    },
+    "REG_AMAZONAS": {
+      "nome": "REG_AMAZONAS",
+      "descricao": "Regional Amazonas",
+      "servidores": []
+    },
+    "REG_ESPIRITO_SANTO": {
+      "nome": "REG_ESPIRITO SANTO",
+      "descricao": "Regional Espírito Santo",
+      "servidores": []
+    },
+    "REG_CEARA": {
+      "nome": "REG_CEARA",
+      "descricao": "Regional Ceará",
+      "servidores": []
+    },
+    "REG_RIO_DE_JANEIRO": {
+      "nome": "REG_RIO DE JANEIRO",
+      "descricao": "Regional Rio de Janeiro",
+      "servidores": []
+    },
+    "REG_MARANHAO": {
+      "nome": "REG_MARANHAO",
+      "descricao": "Regional Maranhão",
+      "servidores": []
+    },
+    "REG_ABC": {
+      "nome": "REG_ABC",
+      "descricao": "Regional ABC",
+      "servidores": []
+    },
+    "REG_RUDDER": {
+      "nome": "REG_RUDDER",
+      "descricao": "Regional Rudder",
+      "servidores": []
+    },
+    "REG_SAO_LEOPOLDO": {
+      "nome": "REG_SAO LEOPOLDO",
+      "descricao": "Regional São Leopoldo",
+      "servidores": []
+    },
+    "REG_UBERLANDIA": {
+      "nome": "REG_UBERLANDIA",
+      "descricao": "Regional Uberlandia",
+      "servidores": []
+    },
+    "REG_PARA": {
+      "nome": "REG_PARA",
+      "descricao": "Regional Pará",
+      "servidores": []
+    },
+    "REG_PARANA": {
+      "nome": "REG_PARANA",
+      "descricao": "Regional Paraná",
+      "servidores": []
+    },
+    "REG_MACAE": {
+      "nome": "REG_MACAE",
+      "descricao": "Regional Macaé",
+      "servidores": []
+    },
+    "REG_RHMED": {
+      "nome": "REG_RHMED",
+      "descricao": "Regional RHMED",
+      "servidores": []
+    },
+    "REG_SULZER": {
+      "nome": "REG_SULZER",
+      "descricao": "Regional Sulzer",
+      "servidores": []
+    },
+    "REG_TLSV_POA": {
+      "nome": "REG_TLSV POA",
+      "descricao": "Regional TLSV POA",
+      "servidores": []
+    },
+    "REG_TLSV_CWB": {
+      "nome": "REG_TLSV CWB",
+      "descricao": "Regional TLSV CWB",
+      "servidores": []
+    },
+    "REG_ARARAS": {
+      "nome": "REG_ARARAS",
+      "descricao": "Regional Araras",
+      "servidores": []
+    },
+    "REG_LOGHIS": {
+      "nome": "REG_LOGHIS",
+      "descricao": "Regional Loghis",
+      "servidores": []
+    },
+    "REG_MOTUS": {
+      "nome": "REG_MOTUS",
+      "descricao": "Regional Motus",
+      "servidores": []
+    },
+    "REG_PRAIA_GRANDE": {
+      "nome": "REG_PRAIA GRANDE",
+      "descricao": "Regional Praia Grande",
+      "servidores": []
+    },
+    "REG_CAMPINAS": {
+      "nome": "REG_CAMPINAS",
+      "descricao": "Regional Campinas",
+      "servidores": []
+    },
+    "REG_SJC": {
+      "nome": "REG_SJC",
+      "descricao": "Regional São José dos Campos",
+      "servidores": []
+    },
+    "REG_SOROCABA": {
+      "nome": "REG_SOROCABA",
+      "descricao": "Regional Sorocaba",
+      "servidores": []
+    },
+    "REG_TRADETALENTOS": {
+      "nome": "REG_TRADE&TALENTOS",
+      "descricao": "Regional Trade&Talentos",
+      "servidores": []
+    },
+    "TESTE": {
+      "nome": "teste",
+      "descricao": "",
+      "servidores": []
+    }
+  },
+  "configuracao": {
+    "versao": "2.0",
+    "estrutura": "hierarquica",
+    "ultima_atualizacao": "2025-12-17T11:43:32.002363",
+    "backup_automatico": true,
+    "validacao_automatica": true,
+    "observacoes": "Estrutura hierárquica: Regional > Servidores (iDRAC/ILO)"
+  }
+}

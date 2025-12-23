@@ -1,0 +1,15 @@
+[
+    {
+        "id": "vm-1753466017",
+        "name": "Parana",
+        "ip": "192.168.41.2",
+        "username": "admin.lima",
+        "password": "Akin21@@grupogps",
+        "regional": "RG_PARANA",
+        "description": "M\u00e1quina Virtual Regional do Paran\u00e1",
+        "status": "Unknown",
+        "last_check": null,
+        "grupo": "regionais",
+        "tipo": "vm"
+    }
+]

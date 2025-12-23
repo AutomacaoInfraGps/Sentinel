@@ -1,0 +1,60 @@
+# Arquivos de configuração com credenciais
+environment.json
+Conexoes.txt
+
+# Arquivos de saída
+output/
+*.html
+*.png
+*.jpg
+*.jpeg
+
+# Logs
+logs/
+*.log
+
+# Arquivos temporários
+temp/
+tmp/
+screenshot.*
+
+# Arquivos de sessão do Playwright
+auth_state.json
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ambientes virtuais
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Arquivos específicos do Windows
+*.lnk
+
+# Arquivos de configuração sensíveis
+servidores.json
+*.json.backup
+*.json.bak
+
+# Arquivos temporários de segurança
+*.tmp
+*.temp
+audit_*.json
+
+# Variáveis de ambiente
+.env
