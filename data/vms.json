@@ -11,5 +11,16 @@
         "last_check": null,
         "grupo": "regionais",
         "tipo": "vm"
+    },
+    {
+        "id": "vm-1768835895",
+        "name": "Rigel",
+        "ip": "10.254.12.63",
+        "username": "admin.pimentel",
+        "password": "R##$EVELT19r",
+        "regional": "S\u00e3o Paulo - Jaguar\u00e9",
+        "description": "Teste",
+        "status": "Unknown",
+        "last_check": null
     }
 ]

@@ -15,7 +15,10 @@
           "timeout": 10,
           "ativo": true,
           "modelo": "Dell PowerEdge",
-          "funcao": "Firewall/Segurança"
+          "funcao": "Firewall/Segurança",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:03.371907"
         }
       ]
     },
@@ -24,17 +27,20 @@
       "descricao": "Regional de Belo Horizonte",
       "servidores": [
         {
-          "id": "srv_bh_01",
-          "nome": "Servidor BH 01",
-          "tipo": "idrac",
-          "ip": "10.31.0.12",
+          "id": "srv_rg_regional_bh_02",
+          "nome": "hadar.galaxia.local",
+          "tipo": "ilo",
+          "ip": "10.31.0.10",
           "usuario": "root",
           "senha": "0p3nf1r3",
           "porta": 443,
           "timeout": 10,
           "ativo": true,
-          "modelo": "Dell PowerEdge",
-          "funcao": "Aplicação"
+          "modelo": "HADAR",
+          "funcao": "Web Server",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T15:18:26.979537"
         }
       ]
     },
@@ -53,7 +59,10 @@
           "timeout": 10,
           "ativo": true,
           "modelo": "Dell PowerEdge",
-          "funcao": "Aplicação"
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:03.679424"
         }
       ]
     },
@@ -72,7 +81,91 @@
           "timeout": 10,
           "ativo": true,
           "modelo": "HPE ProLiant",
-          "funcao": "Infraestrutura"
+          "funcao": "Infraestrutura",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:03.682127"
+        },
+        {
+          "id": "srv_rg_galaxia_02",
+          "nome": "HPE DL380",
+          "tipo": "ilo",
+          "ip": "10.254.12.28",
+          "usuario": "administrator",
+          "senha": "5KV7KRBW",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE DL380 Gen10",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T15:18:20.177392"
+        },
+        {
+          "id": "srv_rg_galaxia_03",
+          "nome": "HPE DL380p Gen8",
+          "tipo": "ilo",
+          "ip": "10.254.12.62",
+          "usuario": "administrator",
+          "senha": "77168081",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.041813",
+          "snmp_community": "ZBXFLYING"
+        },
+        {
+          "id": "srv_rg_galaxia_04",
+          "nome": "HPE DL380e Gen8",
+          "tipo": "ilo",
+          "ip": "10.254.12.49",
+          "usuario": "administrator",
+          "senha": "77724518",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.221949"
+        },
+        {
+          "id": "srv_rg_galaxia_05",
+          "nome": "HPE DL380",
+          "tipo": "ilo",
+          "ip": "10.254.12.30",
+          "usuario": "administrator",
+          "senha": "6BJLJGQ9",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.394278"
+        },
+        {
+          "id": "srv_rg_galaxia_06",
+          "nome": "HPE DL380",
+          "tipo": "ilo",
+          "ip": "10.254.12.31",
+          "usuario": "administrator",
+          "senha": "8RDGZ7C7",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.561595"
         }
       ]
     },
@@ -84,7 +177,24 @@
     "RG_PERNAMBUCO": {
       "nome": "RG_PERNAMBUCO",
       "descricao": "Regional Pernambuco",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_rg_pernambuco_01",
+          "nome": "PowerEdge R230",
+          "tipo": "idrac",
+          "ip": "10.181.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:03.691693"
+        }
+      ]
     },
     "REG_BAHIA": {
       "nome": "REG_BAHIA",
@@ -101,7 +211,10 @@
           "timeout": 10,
           "ativo": true,
           "modelo": "HPE ProLiant DL380e Gen8",
-          "funcao": "Virtualização"
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:03.887078"
         }
       ]
     },
@@ -113,12 +226,46 @@
     "REG_AMAZONAS": {
       "nome": "REG_AMAZONAS",
       "descricao": "Regional Amazonas",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_amazonas_01",
+          "nome": "Dell PowerEdge R440",
+          "tipo": "idrac",
+          "ip": "10.192.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.231263"
+        }
+      ]
     },
     "REG_ESPIRITO_SANTO": {
       "nome": "REG_ESPIRITO SANTO",
       "descricao": "Regional Espírito Santo",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_espirito_santo_01",
+          "nome": "DL360p Gen8",
+          "tipo": "ilo",
+          "ip": "10.127.0.10",
+          "usuario": "Administrator",
+          "senha": "97605497",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.233968"
+        }
+      ]
     },
     "REG_CEARA": {
       "nome": "REG_CEARA",
@@ -128,37 +275,156 @@
     "REG_RIO_DE_JANEIRO": {
       "nome": "REG_RIO DE JANEIRO",
       "descricao": "Regional Rio de Janeiro",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_rio_de_janeiro_01",
+          "nome": "R740",
+          "tipo": "idrac",
+          "ip": "192.168.21.26",
+          "usuario": "root",
+          "senha": "Grup0#Gp5&vo55",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "offline",
+          "erro": "Timeout",
+          "ultima_verificacao": "2026-01-20T13:08:04.327743"
+        }
+      ]
     },
     "REG_MARANHAO": {
       "nome": "REG_MARANHAO",
       "descricao": "Regional Maranhão",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_maranhao_01",
+          "nome": "Dell PowerEdge T430",
+          "tipo": "idrac",
+          "ip": "10.198.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.439472"
+        }
+      ]
     },
     "REG_ABC": {
       "nome": "REG_ABC",
       "descricao": "Regional ABC",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_abc_01",
+          "nome": "Dell PowerEdge R410",
+          "tipo": "idrac",
+          "ip": "10.111.10.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.558070"
+        }
+      ]
     },
     "REG_RUDDER": {
       "nome": "REG_RUDDER",
       "descricao": "Regional Rudder",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_rudder_01",
+          "nome": "Servidor Rudder",
+          "tipo": "ilo",
+          "ip": "172.16.112.9",
+          "usuario": "administrator",
+          "senha": "Y5VCG6VJ",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "DL360 Gen10",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.756778"
+        }
+      ]
     },
     "REG_SAO_LEOPOLDO": {
       "nome": "REG_SAO LEOPOLDO",
       "descricao": "Regional São Leopoldo",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_sao_leopoldo_01",
+          "nome": "R710",
+          "tipo": "idrac",
+          "ip": "192.168.52.11",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.794051"
+        }
+      ]
     },
     "REG_UBERLANDIA": {
       "nome": "REG_UBERLANDIA",
       "descricao": "Regional Uberlandia",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_uberlandia_01",
+          "nome": "T620",
+          "tipo": "idrac",
+          "ip": "10.134.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:04.998655"
+        }
+      ]
     },
     "REG_PARA": {
       "nome": "REG_PARA",
       "descricao": "Regional Pará",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_para_01",
+          "nome": "ML110 G7",
+          "tipo": "ilo",
+          "ip": "10.191.0.10",
+          "usuario": "administrator",
+          "senha": "17445877",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:05.049303"
+        }
+      ]
     },
     "REG_PARANA": {
       "nome": "REG_PARANA",
@@ -173,7 +439,24 @@
     "REG_RHMED": {
       "nome": "REG_RHMED",
       "descricao": "Regional RHMED",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_rhmed_01",
+          "nome": "R420",
+          "tipo": "idrac",
+          "ip": "10.121.8.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:05.305376"
+        }
+      ]
     },
     "REG_SULZER": {
       "nome": "REG_SULZER",
@@ -193,32 +476,95 @@
     "REG_ARARAS": {
       "nome": "REG_ARARAS",
       "descricao": "Regional Araras",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_araras_01",
+          "nome": "DL20 Gen10",
+          "tipo": "ilo",
+          "ip": "10.119.14.10",
+          "usuario": "administrator",
+          "senha": "NZWSVBJK",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:05.606798"
+        }
+      ]
     },
     "REG_LOGHIS": {
       "nome": "REG_LOGHIS",
       "descricao": "Regional Loghis",
       "servidores": []
     },
-    "REG_MOTUS": {
-      "nome": "REG_MOTUS",
-      "descricao": "Regional Motus",
-      "servidores": []
-    },
     "REG_PRAIA_GRANDE": {
       "nome": "REG_PRAIA GRANDE",
       "descricao": "Regional Praia Grande",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_praia_grande_01",
+          "nome": "ML30",
+          "tipo": "ilo",
+          "ip": "10.113.0.11",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HP",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:05.805215"
+        }
+      ]
     },
     "REG_CAMPINAS": {
       "nome": "REG_CAMPINAS",
       "descricao": "Regional Campinas",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_campinas_02",
+          "nome": "T330",
+          "tipo": "idrac",
+          "ip": "10.119.0.11",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:05.813211"
+        }
+      ]
     },
     "REG_SJC": {
       "nome": "REG_SJC",
       "descricao": "Regional São José dos Campos",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_sjc_01",
+          "nome": "DL380 Gen7",
+          "tipo": "ilo",
+          "ip": "10.112.0.10",
+          "usuario": "administrator",
+          "senha": "60699522",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:05.893044"
+        }
+      ]
     },
     "REG_SOROCABA": {
       "nome": "REG_SOROCABA",
@@ -230,16 +576,70 @@
       "descricao": "Regional Trade&Talentos",
       "servidores": []
     },
-    "TESTE": {
-      "nome": "teste",
+    "REG_LEOPOLDO_B2": {
+      "nome": "REG_LEOPOLDO B2",
       "descricao": "",
       "servidores": []
+    },
+    "REG_CEARA_2": {
+      "nome": "REG_CEARA 2",
+      "descricao": "",
+      "servidores": []
+    },
+    "REG_RIO_GRANDE_DO_NORTE": {
+      "nome": "REG_RIO GRANDE DO NORTE",
+      "descricao": "",
+      "servidores": []
+    },
+    "REG_CAXIAS": {
+      "nome": "REG_CAXIAS",
+      "descricao": "",
+      "servidores": [
+        {
+          "id": "srv_reg_caxias_01",
+          "nome": "R430",
+          "tipo": "idrac",
+          "ip": "10.154.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:06.394879"
+        }
+      ]
+    },
+    "REG_NUTRICAR": {
+      "nome": "REG_NUTRICAR",
+      "descricao": "",
+      "servidores": [
+        {
+          "id": "srv_reg_nutricar_01",
+          "nome": "ML30GEN9",
+          "tipo": "ilo",
+          "ip": "10.111.14.10",
+          "usuario": "administrator",
+          "senha": "62159952",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-20T13:08:06.601885"
+        }
+      ]
     }
   },
   "configuracao": {
     "versao": "2.0",
     "estrutura": "hierarquica",
-    "ultima_atualizacao": "2025-12-17T11:43:32.002363",
+    "ultima_atualizacao": "2026-01-20T16:11:06.038260",
     "backup_automatico": true,
     "validacao_automatica": true,
     "observacoes": "Estrutura hierárquica: Regional > Servidores (iDRAC/ILO)"
