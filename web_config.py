@@ -10,7 +10,7 @@ import sys
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_from_directory
+from flask import Flask, current_app, render_template, request, jsonify, redirect, url_for, flash, send_from_directory
 from flask_login import LoginManager, login_required, current_user
 
 # Importa o módulo de gerenciamento de VMs
@@ -209,43 +209,30 @@ def detalhar_regional(codigo_regional):
         if not regional_info:
             flash('Regional não encontrada', 'error')
             return redirect(url_for('listar_regionais'))
-        
-        # Verifica status dos servidores da regional
-        resultados_verificacao = verificador_v2.verificar_regional(codigo_regional)
-        
-        # Combina dados da regional com status
+
+        # NÃO verifica automaticamente aqui
         servidores_completos = []
+
         for servidor in regional_info.get('servidores', []):
-            # Busca resultado da verificação
-            resultado = next((r for r in resultados_verificacao if r.get('ip') == servidor.get('ip')), None)
-            
             servidor_completo = servidor.copy()
-            if resultado:
-                servidor_completo.update({
-                    'status': resultado.get('status', 'unknown'),
-                    'tempo_resposta': resultado.get('tempo_resposta'),
-                    'erro': resultado.get('erro'),
-                    'ultima_verificacao': resultado.get('timestamp')
-                })
-            else:
-                servidor_completo.update({
-                    'status': 'unknown',
-                    'tempo_resposta': None,
-                    'erro': 'Não verificado',
-                    'ultima_verificacao': None
-                })
-            
+
+            # garante campos pra não quebrar o template
+            servidor_completo.setdefault("status", "unknown")
+            servidor_completo.setdefault("tempo_resposta", None)
+            servidor_completo.setdefault("erro", None)
+            servidor_completo.setdefault("ultima_verificacao", None)
+
             servidores_completos.append(servidor_completo)
-        
+
         regional_completa = {
             'codigo': codigo_regional,
             'nome': regional_info.get('nome', codigo_regional),
             'descricao': regional_info.get('descricao', ''),
             'servidores': servidores_completos
         }
-        
+
         return render_template('regional_detalhes.html', regional=regional_completa)
-        
+
     except Exception as e:
         flash(f'Erro ao carregar regional: {str(e)}', 'error')
         return redirect(url_for('listar_regionais'))
@@ -287,16 +274,32 @@ def novo_servidor_regional(codigo_regional):
         if not regional_info:
             flash('Regional não encontrada', 'error')
             return redirect(url_for('listar_regionais'))
-        
-        return render_template('servidor_regional_form.html', 
-                             regional_codigo=codigo_regional,
-                             regional_nome=regional_info.get('nome', codigo_regional),
-                             servidor=None, 
-                             acao='Adicionar')
-        
+
+        return render_template(
+            'servidor_regional_form.html',
+            regional_codigo=codigo_regional,
+            regional_nome=regional_info.get('nome', codigo_regional),
+            servidor=None,
+            acao='Adicionar'
+        )
+
     except Exception as e:
         flash(f'Erro: {str(e)}', 'error')
         return redirect(url_for('listar_regionais'))
+
+@app.route('/api/regional/<codigo_regional>', methods=['DELETE'])
+@app.route('/api/regional/<codigo_regional>/excluir', methods=['DELETE'])
+@login_required
+def api_excluir_regional(codigo_regional):
+    try:
+        ok, msg = gerenciador_regionais.remover_regional(codigo_regional)
+
+        if not ok:
+            return jsonify({"success": False, "message": msg}), 404
+
+        return jsonify({"success": True, "message": msg})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # === ROTAS DE INFRAESTRUTURA ===
 
@@ -459,11 +462,20 @@ def cadastrar_switch():
     if request.method == 'POST':
         try:
             # Obtém os dados do formulário
-            host_name = request.form.get('host').strip()
-            ip = request.form.get('ip').strip()
-            regional = request.form.get('regional').strip().upper()
-            modelo = request.form.get('modelo', '').strip()
-            local = request.form.get('local', '').strip()
+            host_name = (request.form.get('host') or '').strip()
+            ip = (request.form.get('ip') or '').strip()
+
+            regional_form = request.form.get('regional')
+            nova_regional = request.form.get('nova-regional')
+
+            if regional_form == 'NOVA':
+                regional = (nova_regional or '').strip().upper()
+            else:
+                regional = (regional_form or '').strip().upper()
+
+            modelo = (request.form.get('modelo') or '').strip()
+            local = (request.form.get('local') or '').strip()
+
             
             # Validações básicas
             if not host_name:
@@ -1333,25 +1345,61 @@ def api_remover_vm(vm_id):
 @app.route('/api/links/verificar', methods=['POST'])
 @login_required
 def api_verificar_links():
-    """API para verificar status dos links de internet"""
+    """API para verificar status dos links de internet (todas as regionais)"""
     try:
-        # Autentica no Fortigate
-        if not gerenciador_fortigate.autenticar():
-            return jsonify({'success': False, 'message': 'Falha na autenticação com o Fortigate'})
-        
-        # Obtém informações dos links
-        resultado = gerenciador_fortigate.obter_informacoes_completas()
-        
-        if not resultado['success']:
-            return jsonify({'success': False, 'message': resultado['message']})
-        
+        from config import ENV_CONFIG
+        from gerenciar_fortigate import GerenciadorFortigate
+        from datetime import datetime
+
+        fortigates = ENV_CONFIG.get("fortigate")
+
+        if not isinstance(fortigates, dict):
+            return jsonify({
+                'success': False,
+                'message': 'Configuração de Fortigate inválida (esperado SP, RJ, etc)'
+            })
+
+        links_por_regional = {}
+        sd_wan_por_regional = {}
+
+        for regional, cfg in fortigates.items():
+            gerenciador = GerenciadorFortigate(
+                host=cfg.get("host"),
+                port=cfg.get("port"),
+                username=cfg.get("username"),
+                password=cfg.get("password"),
+            )
+
+            if not gerenciador.autenticar():
+                links_por_regional[regional] = []
+                sd_wan_por_regional[regional] = {
+                    "error": "Falha na autenticação"
+                }
+                continue
+
+            resultado = gerenciador.obter_informacoes_completas()
+
+            if not resultado.get("success"):
+                links_por_regional[regional] = []
+                sd_wan_por_regional[regional] = {
+                    "error": resultado.get("message", "Erro desconhecido")
+                }
+                continue
+
+            # 🔹 Marca a regional em cada link
+            for link in resultado.get("links", []):
+                link["regional"] = regional
+
+            links_por_regional[regional] = resultado.get("links", [])
+            sd_wan_por_regional[regional] = resultado.get("sd_wan", {})
+
         return jsonify({
             'success': True,
-            'links': resultado['links'],
-            'sd_wan': resultado['sd_wan'],
-            'timestamp': resultado['timestamp']
+            'links_por_regional': links_por_regional,
+            'sd_wan_por_regional': sd_wan_por_regional,
+            'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
@@ -2413,29 +2461,226 @@ def api_salvar_servidor_regional(codigo_regional):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'})
 
-@app.route('/api/regional/<codigo_regional>/verificar')
-def api_verificar_regional(codigo_regional):
-    """API para verificar status de todos os servidores de uma regional"""
+@app.route('/regional/<codigo_regional>/servidor/<id_servidor>/editar')
+@login_required
+def editar_servidor_regional(codigo_regional, id_servidor):
+    """Página para editar um servidor de uma regional"""
     try:
-        resultados = verificador_v2.verificar_regional(codigo_regional)
-        
-        online = len([r for r in resultados if r.get('status') == 'online'])
-        offline = len([r for r in resultados if r.get('status') == 'offline'])
-        warning = len([r for r in resultados if r.get('status') == 'warning'])
-        
+        regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+        if not regional_info:
+            flash('Regional não encontrada', 'error')
+            return redirect(url_for('listar_regionais'))
+
+        servidor = gerenciador_regionais.obter_servidor(codigo_regional, id_servidor)
+        if not servidor:
+            flash('Servidor não encontrado', 'error')
+            return redirect(url_for('detalhar_regional', codigo_regional=codigo_regional))
+
+        return render_template(
+            'servidor_regional_form.html',
+            regional_codigo=codigo_regional,
+            regional_nome=regional_info.get('nome', codigo_regional),
+            servidor=servidor,
+            acao='Editar'
+        )
+
+    except Exception as e:
+        flash(f'Erro ao carregar servidor: {str(e)}', 'error')
+        return redirect(url_for('detalhar_regional', codigo_regional=codigo_regional))
+
+@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>', methods=['DELETE'])
+@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>/excluir', methods=['DELETE'])
+@login_required
+def api_excluir_servidor_regional(codigo_regional, id_servidor):
+    """API para excluir um servidor de uma regional"""
+    try:
+        ok, msg = gerenciador_regionais.remover_servidor(codigo_regional, id_servidor)
+
+        if not ok:
+            return jsonify({"success": False, "message": msg}), 404
+
+        return jsonify({"success": True, "message": msg})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>/testar', methods=['GET'])
+@login_required
+def api_testar_servidor_regional(codigo_regional, id_servidor):
+    try:
+        servidor = gerenciador_regionais.obter_servidor(codigo_regional, id_servidor)
+        if not servidor:
+            return jsonify({"success": False, "message": "Servidor não encontrado"}), 404
+
+        ip = servidor.get("ip")
+        if not ip:
+            return jsonify({"success": False, "message": "Servidor sem IP cadastrado"}), 400
+
+        import subprocess
+        from datetime import datetime
+
+        # Windows ping
+        cmd = ["ping", "-n", "1", "-w", "5000", ip]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        online = "Reply from" in result.stdout
+        novo_status = "online" if online else "offline"
+
+        # ✅ Atualiza os dados do servidor dentro da regional
+        servidor["status"] = novo_status
+        servidor["erro"] = None if online else "Timeout"
+        servidor["ultima_verificacao"] = datetime.now().isoformat()
+
+        # ✅ Salva no JSON (isso é o mais importante)
+        gerenciador_regionais.atualizar_servidor(codigo_regional, id_servidor, servidor)
+
         return jsonify({
-            'success': True,
-            'resultados': resultados,
-            'resumo': {
-                'total': len(resultados),
-                'online': online,
-                'offline': offline,
-                'warning': warning
+            "success": True,
+            "status": novo_status,
+            "message": "Servidor ONLINE" if online else "Servidor OFFLINE"
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>/hardware', methods=['GET'])
+@login_required
+def api_hardware_servidor(codigo_regional, id_servidor):
+    try:
+        servidor = gerenciador_regionais.obter_servidor(codigo_regional, id_servidor)
+        if not servidor:
+            return jsonify({"success": False, "message": "Servidor não encontrado"}), 404
+
+        tipo = servidor.get("tipo", "idrac")
+        ip = servidor.get("ip")
+        community = servidor.get("snmp_community", "public")
+
+        # ✅ 1) tenta Redfish conforme tipo
+        if tipo == "idrac":
+            resultado = verificador_v2.coletar_hardware_idrac(servidor)
+            if resultado and resultado.get("success"):
+                return jsonify(resultado)
+
+        elif tipo == "ilo":
+            # por enquanto reaproveita (depois criamos coletar_hardware_ilo)
+            resultado = verificador_v2.coletar_hardware_idrac(servidor)
+            if resultado and resultado.get("success"):
+                return jsonify(resultado)
+
+        # ✅ 2) fallback via SNMP Worker (para ambos)
+        resultado = coletar_hardware_snmp_worker(ip, community)
+        return jsonify(resultado)
+
+    except Exception as e:
+        current_app.logger.exception("Erro ao buscar hardware")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+def coletar_hardware_snmp_worker(ip, community="public"):
+    python_snmp = r"C:\Automacao\snmp_worker\.venv\Scripts\python.exe"
+    script = r"C:\Automacao\snmp_worker\snmp_worker.py"
+
+    cmd = [python_snmp, script, ip, community]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+
+    if result.returncode != 0:
+        return {
+            "success": False,
+            "message": "Erro executando worker SNMP",
+            "details": result.stderr.strip()
+        }
+
+    try:
+        return json.loads(result.stdout.strip())
+    except Exception:
+        return {
+            "success": False,
+            "message": "Resposta inválida do worker SNMP",
+            "details": result.stdout[:300]
+        }
+
+
+@app.route('/api/regional/<codigo_regional>/verificar')
+@login_required
+def api_verificar_regional(codigo_regional):
+    """API para verificar status de todos os servidores de uma regional (mesma lógica do TESTAR = ping)"""
+    try:
+        regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+        if not regional_info:
+            return jsonify({"success": False, "message": "Regional não encontrada"}), 404
+
+        servidores = regional_info.get("servidores", [])
+        resultados = []
+
+        online_count = 0
+        offline_count = 0
+        warning_count = 0  # mantido por compatibilidade
+
+        import subprocess
+        from datetime import datetime
+
+        for servidor in servidores:
+            servidor_id = servidor.get("id")
+            ip = servidor.get("ip")
+
+            resultado = {
+                "regional": codigo_regional,
+                "servidor": servidor.get("nome", "N/A"),
+                "ip": ip,
+                "tipo": servidor.get("tipo", "idrac"),
+                "status": "offline",
+                "tempo_resposta": None,
+                "erro": None,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            if not ip:
+                resultado["erro"] = "Servidor sem IP"
+                offline_count += 1
+                resultados.append(resultado)
+                continue
+
+            # timeout do ping em ms (usa o timeout cadastrado * 1000, fallback 5000ms)
+            timeout_segundos = int(servidor.get("timeout", 5))
+            timeout_ms = timeout_segundos * 1000
+
+            # Windows ping
+            cmd = ["ping", "-n", "1", "-w", str(timeout_ms), ip]
+            ping_result = subprocess.run(cmd, capture_output=True, text=True)
+
+            online = "Reply from" in ping_result.stdout
+
+            if online:
+                resultado["status"] = "online"
+                online_count += 1
+            else:
+                resultado["status"] = "offline"
+                resultado["erro"] = "Timeout"
+                offline_count += 1
+
+            # ✅ Atualiza o servidor no JSON (igual o TESTAR)
+            servidor["status"] = resultado["status"]
+            servidor["erro"] = resultado["erro"]
+            servidor["ultima_verificacao"] = resultado["timestamp"]
+
+            # ✅ Atualiza no arquivo de forma segura (mantém seu padrão)
+            gerenciador_regionais.atualizar_servidor(codigo_regional, servidor_id, servidor)
+
+            resultados.append(resultado)
+
+        return jsonify({
+            "success": True,
+            "resultados": resultados,
+            "resumo": {
+                "total": len(resultados),
+                "online": online_count,
+                "offline": offline_count,
+                "warning": warning_count
             }
         })
-        
+
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'})
+        return jsonify({"success": False, "message": f"Erro interno: {str(e)}"}), 500
 
 @app.route('/api/dashboard/hierarquico')
 def api_dashboard_hierarquico():
@@ -2609,6 +2854,63 @@ def api_salvar_configuracoes():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro ao salvar: {str(e)}'})
+    
+@app.route('/api/regional/<codigo_regional>/testar_todos', methods=['GET'])
+@login_required
+def api_testar_todos_servidores(codigo_regional):
+    try:
+        regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+        if not regional_info:
+            return jsonify({"success": False, "message": "Regional não encontrada"}), 404
+
+        servidores = regional_info.get("servidores", [])
+        if not servidores:
+            return jsonify({"success": False, "message": "Nenhum servidor cadastrado"}), 400
+
+        resultados = []
+
+        for servidor in servidores:
+            servidor_id = servidor.get("id")
+            ip = servidor.get("ip")
+
+            if not ip:
+                resultados.append({
+                    "id": servidor_id,
+                    "nome": servidor.get("nome", "Sem nome"),
+                    "status": "offline",
+                    "message": "Servidor sem IP"
+                })
+                continue
+
+            import subprocess
+            cmd = ["ping", "-n", "1", "-w", "1000", ip]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            online = "Reply from" in result.stdout
+
+            # ✅ Atualiza o servidor dentro do JSON
+            servidor["status"] = "online" if online else "offline"
+            servidor["erro"] = None if online else "Timeout"
+            servidor["ultima_verificacao"] = datetime.now().isoformat()
+
+            resultados.append({
+                "id": servidor_id,
+                "nome": servidor.get("nome"),
+                "ip": ip,
+                "status": servidor["status"]
+            })
+
+        # ✅ salva no arquivo
+        gerenciador_regionais.salvar_regionais()
+
+        return jsonify({
+            "success": True,
+            "resultados": resultados
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 
 @app.route('/api/backup/exportar')
 def api_exportar_backup():
@@ -2627,6 +2929,13 @@ def api_exportar_backup():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro ao criar backup: {str(e)}'})
+
+@app.route('/api/rotas')
+def listar_rotas():
+    rotas = []
+    for rule in app.url_map.iter_rules():
+        rotas.append(str(rule))
+    return jsonify(sorted(rotas))
 
 if __name__ == '__main__':
     print("🌐 Iniciando Interface Web Hierárquica...")

@@ -77,6 +77,8 @@ html = """
 """
 
 # === PERCORRER SITES ===
+canal_5ghz_map = {}
+
 for site in sites:
     site_id = site.get("name")
     site_desc = site.get("desc", site_id)
@@ -88,7 +90,7 @@ for site in sites:
         aps = [d for d in devices if d.get("type") == "uap"]
         if not aps:
             continue
-            
+
         # Dados do site para JSON
         site_data = {
             "id": site_id,
@@ -96,7 +98,7 @@ for site in sites:
             "total_aps": len(aps)
         }
         sites_data.append(site_data)
-        
+
         # Atualiza contadores
         total_aps += len(aps)
         site_aps_online = sum(1 for ap in aps if ap.get("state") == 1)
@@ -107,11 +109,40 @@ for site in sites:
         html += f"<h2 onclick='toggle(this)'>{site_desc} ({len(aps)} APs)</h2><div style='display:none'><table>"
         html += "<tr><th>Nome</th><th>IP</th><th>MAC</th><th>Modelo</th><th>Firmware</th><th>Status</th><th>Clientes</th><th>Uptime (s)</th></tr>"
 
+        # ========= COLETA 5GHz =========
         for ap in aps:
+            radio_5ghz = next(
+                (r for r in ap.get("radio_table", []) if r.get("radio") == "na"),
+                None
+            )
+
+            if radio_5ghz:
+                print(f"[DEBUG] AP {ap.get('name')} | radio_5ghz keys: {radio_5ghz.keys()}")
+
+            if not radio_5ghz:
+                continue
+
+            canal = radio_5ghz.get("channel")
+            signal = radio_5ghz.get("signal") or radio_5ghz.get("rssi")
+
+            if canal is None:
+                continue
+
+            if canal not in canal_5ghz_map:
+                canal_5ghz_map[canal] = {
+                    "aps": [],
+                    "signal_vals": []
+                }
+
+            canal_5ghz_map[canal]["aps"].append(ap.get("name"))
+
+            if signal is not None:
+                canal_5ghz_map[canal]["signal_vals"].append(signal)
+
+            # ===== HTML NORMAL =====
             status = "Online" if ap.get("state") == 1 else "Offline"
             status_class = "ap-online" if status == "Online" else "ap-offline"
-            
-            # Dados da AP para JSON
+
             ap_data = {
                 "nome": ap.get("name", ""),
                 "ip": ap.get("ip", ""),
@@ -124,7 +155,7 @@ for site in sites:
                 "site": site_desc
             }
             all_aps.append(ap_data)
-            
+
             html += f"""
             <tr>
                 <td>{ap.get("name", "")}</td>
@@ -140,11 +171,44 @@ for site in sites:
 
         html += "</table></div>"
         print(f"Site {site_desc} processado com {len(aps)} APs.")
+
     except Exception as e:
         print(f"Erro ao processar site {site_desc}: {e}")
 
 # === FECHAR HTML ===
 html += "</body></html>"
+
+# === CONSOLIDAÇÃO DE INTERFERÊNCIA POR CANAL (5GHz) ===
+consolidado_canais = []
+
+for canal, dados in canal_5ghz_map.items():
+    qtd_aps = len(dados["aps"])
+    signals = dados["signal_vals"]
+
+    print(f"[TESTE] Canal {canal} | Signals coletados: {signals}")
+
+    avg_signal_dbm = (
+        round(sum(signals) / len(signals), 1)
+        if signals else None
+    )
+
+    risco = "OK"
+    if avg_signal_dbm is not None:
+        if avg_signal_dbm > -80:
+            risco = "CRITICO"
+        elif avg_signal_dbm > -90:
+            risco = "ATENCAO"
+
+    if qtd_aps >= 4:
+        risco = "CONGESTIONADO"
+
+    consolidado_canais.append({
+        "canal": canal,
+        "qtd_aps": qtd_aps,
+        "avg_signal_dbm": avg_signal_dbm,
+        "risco": risco,
+        "aps": dados["aps"]
+    })
 
 # === SALVAR HTML ===
 with open(UNIFI_HTML, "w", encoding="utf-8") as f:
@@ -153,12 +217,12 @@ with open(UNIFI_HTML, "w", encoding="utf-8") as f:
 print(f"\nHTML salvo em: {UNIFI_HTML}")
 
 # === SALVAR DADOS EM JSON ===
-# Prepara dados para JSON
 json_data = {
     "total_aps": total_aps,
     "aps_online": aps_online,
     "aps_offline": total_aps - aps_online,
     "clientes_conectados": total_clientes,
+    "interferencia_5ghz": consolidado_canais,
     "controller": {
         "ip": controller_host,
         "porta": controller_port,
@@ -168,7 +232,6 @@ json_data = {
     "aps": all_aps
 }
 
-# Salva no sistema de armazenamento centralizado
 save_data("unifi", json_data)
 print("Dados JSON salvos no sistema centralizado")
 
