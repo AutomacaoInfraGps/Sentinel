@@ -6,10 +6,22 @@ Estrutura hierárquica: Regional → Servidores (iDRAC/ILO)
 import requests
 import json
 import urllib3
+import socket
 from datetime import datetime
 from typing import Dict, List, Tuple
 import concurrent.futures
 from gerenciar_regionais import GerenciadorRegionais
+try:
+    from pysnmp.hlapi import (
+        SnmpEngine, CommunityData, UdpTransportTarget,
+        ContextData, ObjectType, ObjectIdentity, getCmd
+    )
+    PYSNMP_OK = True
+    PYSNMP_ERROR = None
+except Exception as e:
+    PYSNMP_OK = False
+    PYSNMP_ERROR = str(e)
+
 
 # Desabilita warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -40,13 +52,13 @@ class VerificadorServidoresV2:
             if servidor.get("tipo") == "ilo":
                 url = f"https://{servidor['ip']}/json/login_session"
             else:  # idrac
-                url = f"https://{servidor['ip']}/sysmgmt/2015/bmc/session"
+                url = f"https://{servidor['ip']}/redfish/v1/"
             
             # Faz a requisição
             inicio = datetime.now()
             response = requests.get(
                 url,
-                timeout=servidor.get("timeout", 10),
+                timeout=(5, servidor.get("timeout", 20)),
                 verify=False  # TODO: Implementar verificação de certificado adequada
             )
             fim = datetime.now()
@@ -68,7 +80,146 @@ class VerificadorServidoresV2:
             resultado["erro"] = str(e)
         
         return resultado
-    
+
+    def snmp_get(self, ip: str, oid: str, community: str = "public", timeout: int = 3, retries: int = 1):
+        """Consulta simples SNMP GET (v2c). Retorna valor ou None."""
+
+        if not PYSNMP_OK:
+            return None  # pysnmp não está disponível
+
+        try:
+            iterator = getCmd(
+                SnmpEngine(),
+                CommunityData(community, mpModel=1),
+                UdpTransportTarget((ip, 161), timeout=timeout, retries=retries),
+                ContextData(),
+                ObjectType(ObjectIdentity(oid))
+            )
+
+            errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
+
+            if errorIndication or errorStatus:
+                return None
+
+            for varBind in varBinds:
+                return str(varBind[1])
+
+        except Exception:
+            return None
+
+        return None
+
+
+    def testar_porta(self, ip, porta=443, timeout=2):
+        try:
+            with socket.create_connection((ip, porta), timeout=timeout):
+                return True
+        except:
+            return False
+
+    def redfish_get(self, ip, path, usuario, senha, timeout=60):
+        url = f"https://{ip}{path}"
+        r = requests.get(
+            url,
+            auth=(usuario, senha),
+            verify=False,
+            timeout=(5, timeout)
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def coletar_hardware_idrac(self, servidor: Dict) -> Dict:
+        ip = servidor.get("ip")
+        usuario = servidor.get("usuario")
+        senha = servidor.get("senha")
+        timeout = int(servidor.get("timeout", 60))
+
+        if not ip or not usuario or not senha:
+            return {"success": False, "message": "Servidor sem IP/usuário/senha cadastrados"}
+
+        try:
+            # Root
+            root = self.redfish_get(ip, "/redfish/v1", usuario, senha, timeout=timeout)
+
+            # Systems
+            systems_link = root.get("Systems", {}).get("@odata.id")
+            if not systems_link:
+                return {"success": False, "message": "Redfish não retornou Systems"}
+
+            systems = self.redfish_get(ip, systems_link, usuario, senha, timeout=timeout)
+            members = systems.get("Members", [])
+            if not members:
+                return {"success": False, "message": "Nenhum System encontrado no Redfish"}
+
+            system_id = members[0].get("@odata.id")
+            system = self.redfish_get(ip, system_id, usuario, senha, timeout=timeout)
+
+            memoria_gib = system.get("MemorySummary", {}).get("TotalSystemMemoryGiB")
+
+            cpu_summary = system.get("ProcessorSummary", {})
+            cpu_info = {
+                "count": cpu_summary.get("Count"),
+                "model": cpu_summary.get("Model"),
+                "health": cpu_summary.get("Status", {}).get("Health")
+            }
+
+            temperaturas = []
+            ventoinhas = []
+
+            chassis_link = root.get("Chassis", {}).get("@odata.id")
+            if chassis_link:
+                chassis_list = self.redfish_get(ip, chassis_link, usuario, senha, timeout=timeout)
+                chassis_members = chassis_list.get("Members", [])
+                if chassis_members:
+                    chassis_id = chassis_members[0].get("@odata.id")
+
+                    # Thermal
+                    try:
+                        thermal = self.redfish_get(ip, f"{chassis_id}/Thermal", usuario, senha, timeout=timeout)
+
+                        temps = thermal.get("Temperatures", [])
+                        fans = thermal.get("Fans", [])
+
+                        temperaturas = [
+                            {
+                                "name": t.get("Name"),
+                                "celsius": t.get("ReadingCelsius"),
+                                "health": t.get("Status", {}).get("Health")
+                            }
+                            for t in temps
+                            if t.get("ReadingCelsius") is not None
+                        ]
+
+                        ventoinhas = [
+                            {
+                                "name": f.get("Name"),
+                                "rpm": f.get("Reading"),
+                                "health": f.get("Status", {}).get("Health")
+                            }
+                            for f in fans
+                            if f.get("Reading") is not None
+                        ]
+
+                    except requests.exceptions.Timeout:
+                        pass
+
+            return {
+                "success": True,
+                "hardware": {
+                    "memoria_gib": memoria_gib,
+                    "cpu": cpu_info,
+                    "temperaturas": temperaturas,
+                    "ventoinhas": ventoinhas
+                }
+            }
+
+        except requests.exceptions.Timeout:
+            return {"success": False, "message": "Timeout ao consultar Redfish"}
+        except requests.exceptions.ConnectionError:
+            return {"success": False, "message": "Falha de conexão com iDRAC"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+        
     def verificar_regional(self, codigo_regional: str) -> List[Dict]:
         """Verifica todos os servidores de uma regional"""
         
@@ -328,6 +479,7 @@ class VerificadorServidoresV2:
         
         print(f"[WEB] Página HTML gerada: {arquivo}")
 
+
 def main():
     """Função principal"""
     
@@ -395,6 +547,7 @@ def main():
         
         else:
             print("[ERROR] Opção inválida")
+
 
 if __name__ == "__main__":
     main()

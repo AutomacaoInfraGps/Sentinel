@@ -125,6 +125,7 @@ O sistema irá:
 - ✅ Status de servidores (iDRAC/iLO)
 - ✅ Replicação do Active Directory
 - ✅ Status das antenas UniFi
+- ✅ Status das VPNS(IPSEC) com tuneis 
 - ✅ Screenshot do GPS Amigo
 - ✅ Análise de melhores práticas (BPA)
 

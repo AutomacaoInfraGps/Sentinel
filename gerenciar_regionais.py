@@ -26,7 +26,7 @@ class GerenciadorRegionais:
     def salvar_regionais(self):
         """Salva a estrutura de regionais no arquivo"""
         self.regionais["configuracao"]["ultima_atualizacao"] = datetime.now().isoformat()
-        
+        print("SALVANDO EM:", os.path.abspath(self.arquivo_regionais))  # << ADICIONA ISSO  
         with open(self.arquivo_regionais, 'w', encoding='utf-8') as f:
             json.dump(self.regionais, f, indent=2, ensure_ascii=False)
     
@@ -49,6 +49,23 @@ class GerenciadorRegionais:
             "servidores": []
         }
         self.salvar_regionais()
+
+    def remover_regional(self, codigo_regional: str):
+        """Remove uma regional do sistema e salva no arquivo"""
+        codigo_regional = codigo_regional.upper()
+
+        if codigo_regional not in self.regionais.get("regionais", {}):
+            return False, "Regional não existe"
+
+        # Remove do dicionário em memória
+        del self.regionais["regionais"][codigo_regional]
+
+        # Salva no arquivo estrutura_regionais.json
+        self.salvar_regionais()
+
+        return True, "Regional removida com sucesso"
+    
+    
     
     def adicionar_servidor(self, codigo_regional: str, servidor: Dict):
         """Adiciona um servidor a uma regional"""
@@ -68,6 +85,30 @@ class GerenciadorRegionais:
         
         self.regionais["regionais"][codigo_regional]["servidores"].append(servidor)
         self.salvar_regionais()
+        
+    def remover_servidor(self, codigo_regional: str, id_servidor: str):
+        """Remove um servidor de uma regional"""
+        codigo_regional = codigo_regional.upper()
+
+        regional = self.regionais.get("regionais", {}).get(codigo_regional)
+        if not regional:
+            return False, "Regional não encontrada"
+
+        servidores = regional.get("servidores", [])
+
+        servidor_encontrado = None
+        for s in servidores:
+            if s.get("id") == id_servidor:
+                servidor_encontrado = s
+                break
+
+        if not servidor_encontrado:
+            return False, "Servidor não encontrado"
+
+        servidores.remove(servidor_encontrado)
+        self.salvar_regionais()
+
+        return True, f"Servidor {servidor_encontrado.get('nome')} removido com sucesso"
     
     def listar_servidores_regional(self, codigo_regional: str) -> List[Dict]:
         """Lista todos os servidores de uma regional"""
@@ -84,6 +125,28 @@ class GerenciadorRegionais:
                 return servidor
         return None
     
+    def atualizar_servidor(self, codigo_regional: str, id_servidor: str, novos_dados: Dict):
+        """Atualiza um servidor existente dentro de uma regional e salva no arquivo"""
+        codigo_regional = codigo_regional.upper()
+
+        regional = self.regionais.get("regionais", {}).get(codigo_regional)
+        if not regional:
+            raise ValueError("Regional não encontrada")
+
+        servidores = regional.get("servidores", [])
+
+        for i, servidor in enumerate(servidores):
+            if servidor.get("id") == id_servidor:
+                # Atualiza os campos existentes
+                servidores[i].update(novos_dados)
+
+                # Salva no JSON
+                self.salvar_regionais()
+                return True
+
+        raise ValueError("Servidor não encontrado")
+
+
     def listar_todos_servidores(self) -> List[Dict]:
         """Lista todos os servidores de todas as regionais"""
         todos_servidores = []
@@ -96,6 +159,7 @@ class GerenciadorRegionais:
                 todos_servidores.append(servidor_completo)
         
         return todos_servidores
+    
     
     def migrar_estrutura_antiga(self, arquivo_antigo="servidores.json"):
         """Migra da estrutura antiga (servidores.json) para a nova estrutura"""
@@ -143,7 +207,8 @@ class GerenciadorRegionais:
                 print(f"✅ Migrado: {nome} → {codigo_regional}")
         
         print("✅ Migração concluída!")
-    
+        
+
     def gerar_relatorio(self) -> str:
         """Gera um relatório da estrutura atual"""
         relatorio = []
@@ -264,6 +329,8 @@ def main():
         
         else:
             print("❌ Opção inválida")
+
+    
 
 if __name__ == "__main__":
     main()
