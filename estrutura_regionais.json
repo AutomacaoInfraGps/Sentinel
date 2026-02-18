@@ -3,6 +3,10 @@
     "RG_GLOBAL_SEGURANCA": {
       "nome": "RG_GLOBAL SEGURANÇA",
       "descricao": "Regional Global de Segurança",
+      "fortigate": {
+        "ip": "10.161.0.1",
+        "port": 20443
+      },
       "servidores": [
         {
           "id": "srv_seg_01",
@@ -18,7 +22,27 @@
           "funcao": "Firewall/Segurança",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:03.371907"
+          "ultima_verificacao": "2026-02-03T09:52:25.864796"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_rg_global_seguranca_01",
+          "nome": "WAN1",
+          "ip": "164.163.1.58",
+          "provedor": "CONNECT",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:06:00.920901"
+        },
+        {
+          "id": "link_rg_global_seguranca_02",
+          "nome": "WAN2",
+          "ip": "164.163.3.250",
+          "provedor": "CONNECT",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:10:39.534584"
         }
       ]
     },
@@ -40,7 +64,27 @@
           "funcao": "Web Server",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T15:18:26.979537"
+          "ultima_verificacao": "2026-02-06T11:26:14.857748"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_rg_regional_bh_01",
+          "nome": "WAN1",
+          "ip": "177.107.128.154",
+          "provedor": "VOGEL",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:13:21.126966"
+        },
+        {
+          "id": "link_rg_regional_bh_02",
+          "nome": "WAN2",
+          "ip": "187.111.31.226",
+          "provedor": "MUNDIVOX",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:13:20.346342"
         }
       ]
     },
@@ -62,7 +106,18 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:03.679424"
+          "ultima_verificacao": "2026-01-30T15:50:20.494294"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_rg_motus_01",
+          "nome": "wan1 (LINK_AMERICANET)",
+          "ip": "186.225.101.154",
+          "provedor": "LINK_AMERICANET",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-05T17:04:33.507793"
         }
       ]
     },
@@ -70,22 +125,6 @@
       "nome": "RG_GALAXIA",
       "descricao": "Regional GALAXIA - Matriz",
       "servidores": [
-        {
-          "id": "srv_galaxia_01",
-          "nome": "Servidor GALAXIA 01",
-          "tipo": "ilo",
-          "ip": "10.254.12.18",
-          "usuario": "administrator",
-          "senha": "XSFLX8PD",
-          "porta": 443,
-          "timeout": 10,
-          "ativo": true,
-          "modelo": "HPE ProLiant",
-          "funcao": "Infraestrutura",
-          "status": "online",
-          "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:03.682127"
-        },
         {
           "id": "srv_rg_galaxia_02",
           "nome": "HPE DL380",
@@ -100,7 +139,7 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T15:18:20.177392"
+          "ultima_verificacao": "2026-01-30T15:50:20.497090"
         },
         {
           "id": "srv_rg_galaxia_03",
@@ -116,7 +155,7 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.041813",
+          "ultima_verificacao": "2026-01-30T15:50:20.721425",
           "snmp_community": "ZBXFLYING"
         },
         {
@@ -133,7 +172,7 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.221949"
+          "ultima_verificacao": "2026-01-30T15:50:20.839718"
         },
         {
           "id": "srv_rg_galaxia_05",
@@ -149,7 +188,7 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.394278"
+          "ultima_verificacao": "2026-01-30T15:50:20.960108"
         },
         {
           "id": "srv_rg_galaxia_06",
@@ -165,14 +204,66 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.561595"
+          "ultima_verificacao": "2026-01-30T15:50:21.110749"
+        },
+        {
+          "id": "srv_galaxia_01",
+          "nome": "HPE DL380",
+          "tipo": "ilo",
+          "ip": "10.254.12.18",
+          "usuario": "administrator",
+          "senha": "XSFLX8PD",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "HPE ProLiant",
+          "funcao": "Aplicação",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-01-30T15:50:21.391503"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_rg_galaxia_01",
+          "nome": "WAN1",
+          "ip": "186.231.43.130",
+          "provedor": "TIM",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:14:08.754182"
+        },
+        {
+          "id": "link_rg_galaxia_02",
+          "nome": "WAN2",
+          "ip": "179.175.52.73",
+          "provedor": "VIVO",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:14:09.106308"
         }
       ]
     },
     "REG_ALAGOAS": {
       "nome": "REG_ALAGOAS",
       "descricao": "",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_alagoas_01",
+          "nome": "WAN2",
+          "ip": " 0.0.0.0",
+          "provedor": "CLARO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_alagoas_02",
+          "nome": "WAN1",
+          "ip": "187.44.114.50",
+          "provedor": "ALGAR",
+          "ativo": true
+        }
+      ]
     },
     "RG_PERNAMBUCO": {
       "nome": "RG_PERNAMBUCO",
@@ -192,7 +283,27 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:03.691693"
+          "ultima_verificacao": "2026-01-30T15:50:20.500551"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_rg_pernambuco_01",
+          "nome": "WAN2",
+          "ip": "189.112.184.81",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:15:32.760648"
+        },
+        {
+          "id": "link_rg_pernambuco_02",
+          "nome": "WAN1",
+          "ip": "187.115.144.66",
+          "provedor": "VIVO",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:15:32.000472"
         }
       ]
     },
@@ -202,7 +313,7 @@
       "servidores": [
         {
           "id": "srv_reg_bahia_01",
-          "nome": "Bahia",
+          "nome": "HPE ProLiant",
           "tipo": "ilo",
           "ip": "10.171.0.10",
           "usuario": "administrator",
@@ -210,18 +321,47 @@
           "porta": 443,
           "timeout": 10,
           "ativo": true,
-          "modelo": "HPE ProLiant DL380e Gen8",
+          "modelo": "DL380e Gen8",
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:03.887078"
+          "ultima_verificacao": "2026-01-30T17:20:15.195169"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_bahia_02",
+          "nome": "WAN1",
+          "ip": "187.44.105.186",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:23:12.807360"
+        },
+        {
+          "id": "link_reg_bahia_01",
+          "nome": "WAN2",
+          "ip": "177.135.213.114",
+          "provedor": "VIVO",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:23:13.354342"
         }
       ]
     },
     "REG_GOIAS": {
       "nome": "REG_GOIAS",
       "descricao": "Regional Goiás",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_goias_01",
+          "nome": "WAN1",
+          "ip": "177.11.149.49",
+          "provedor": "APN NETWORK",
+          "ativo": true
+        }
+      ]
     },
     "REG_AMAZONAS": {
       "nome": "REG_AMAZONAS",
@@ -241,7 +381,23 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.231263"
+          "ultima_verificacao": "2026-01-30T15:50:20.823242"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_amazonas_01",
+          "nome": "WAN1",
+          "ip": "186.233.92.129",
+          "provedor": "ENW",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_amazonas_02",
+          "nome": "WAN2",
+          "ip": "179.86.8.129",
+          "provedor": "VIVO",
+          "ativo": true
         }
       ]
     },
@@ -259,18 +415,54 @@
           "porta": 443,
           "timeout": 10,
           "ativo": true,
-          "modelo": "Dell PowerEdge",
+          "modelo": "HPE ProLiant",
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.233968"
+          "ultima_verificacao": "2026-02-06T17:45:47.503753"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_espirito_santo_02",
+          "nome": "WAN2",
+          "ip": "189.50.1.164",
+          "provedor": "VIP REDE",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:20:53.581842"
+        },
+        {
+          "id": "link_reg_espirito_santo_01",
+          "nome": "WAN1",
+          "ip": "187.32.180.76",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:20:41.501814"
         }
       ]
     },
     "REG_CEARA": {
       "nome": "REG_CEARA",
       "descricao": "Regional Ceará",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_ceara_01",
+          "nome": "WAN1",
+          "ip": "187.18.196.128",
+          "provedor": "MULTIPLAYU",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_ceara_02",
+          "nome": "WAN2",
+          "ip": " 177.19.137.121",
+          "provedor": "VIVO",
+          "ativo": true
+        }
+      ]
     },
     "REG_RIO_DE_JANEIRO": {
       "nome": "REG_RIO DE JANEIRO",
@@ -288,9 +480,29 @@
           "ativo": true,
           "modelo": "Dell PowerEdge",
           "funcao": "Virtualização",
-          "status": "offline",
-          "erro": "Timeout",
-          "ultima_verificacao": "2026-01-20T13:08:04.327743"
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-02-03T11:06:09.834755"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_rio_de_janeiro_01",
+          "nome": "WAN2",
+          "ip": "200.201.159.66",
+          "provedor": "TELIUM",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:22:17.205993"
+        },
+        {
+          "id": "link_reg_rio_de_janeiro_02",
+          "nome": "WAN11",
+          "ip": "200.142.104.54",
+          "provedor": "MUNDIVOX ",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:22:17.704424"
         }
       ]
     },
@@ -312,7 +524,27 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.439472"
+          "ultima_verificacao": "2026-01-30T15:50:21.078520"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_maranhao_01",
+          "nome": "WAN2",
+          "ip": "187.51.147.74",
+          "provedor": "VIVO",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:24:36.176059"
+        },
+        {
+          "id": "link_reg_maranhao_02",
+          "nome": "WAN1",
+          "ip": "45.179.239.66",
+          "provedor": "BITAL",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:24:35.800593"
         }
       ]
     },
@@ -334,7 +566,27 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.558070"
+          "ultima_verificacao": "2026-02-06T11:26:51.924291"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_abc_01",
+          "nome": "WAN2",
+          "ip": "67.159.251.54",
+          "provedor": "MUNDIVOX",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:25:37.407973"
+        },
+        {
+          "id": "link_reg_abc_02",
+          "nome": "WAN1",
+          "ip": "189.56.124.122",
+          "provedor": "VIVO",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:25:36.825242"
         }
       ]
     },
@@ -344,7 +596,7 @@
       "servidores": [
         {
           "id": "srv_reg_rudder_01",
-          "nome": "Servidor Rudder",
+          "nome": "DL360 Gen10",
           "tipo": "ilo",
           "ip": "172.16.112.9",
           "usuario": "administrator",
@@ -352,11 +604,27 @@
           "porta": 443,
           "timeout": 10,
           "ativo": true,
-          "modelo": "DL360 Gen10",
+          "modelo": "ProLiant",
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.756778"
+          "ultima_verificacao": "2026-01-30T15:50:21.313793"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_rudder_01",
+          "nome": "WAN1",
+          "ip": "191.32.51.169",
+          "provedor": "VIVO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_rudder_02",
+          "nome": "WAN2",
+          "ip": "191.32.51.169",
+          "provedor": "EMBRATEL",
+          "ativo": true
         }
       ]
     },
@@ -378,7 +646,23 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.794051"
+          "ultima_verificacao": "2026-01-30T15:50:21.428981"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_sao_leopoldo_01",
+          "nome": "WAN1",
+          "ip": "0.0.0.0",
+          "provedor": "CLARO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_sao_leopoldo_02",
+          "nome": "WAN2",
+          "ip": "177.69.53.166",
+          "provedor": "ALGAR",
+          "ativo": true
         }
       ]
     },
@@ -400,7 +684,23 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:04.998655"
+          "ultima_verificacao": "2026-01-30T15:50:21.475024"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_uberlandia_01",
+          "nome": "WAN2",
+          "ip": "191.31.240.73",
+          "provedor": "VIVO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_uberlandia_02",
+          "nome": "WAN1",
+          "ip": "200.170.132.30",
+          "provedor": "ALGAR",
+          "ativo": true
         }
       ]
     },
@@ -422,19 +722,71 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:05.049303"
+          "ultima_verificacao": "2026-01-30T15:50:21.536582"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_para_01",
+          "nome": "WAN2",
+          "ip": "187.8.206.249",
+          "provedor": "VIVO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_para_02",
+          "nome": "WAN1",
+          "ip": "45.160.25.29",
+          "provedor": "CONECTA",
+          "ativo": true
         }
       ]
     },
     "REG_PARANA": {
       "nome": "REG_PARANA",
       "descricao": "Regional Paraná",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_parana_01",
+          "nome": "WAN1",
+          "ip": "169.254.1.0",
+          "provedor": "ONETECH",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:34:12.256562",
+          "status": "online"
+        },
+        {
+          "id": "link_reg_parana_02",
+          "nome": "WAN2",
+          "ip": "45.5.221.46",
+          "provedor": "MEGALINK02",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:34:11.634866",
+          "status": "online"
+        }
+      ]
     },
     "REG_MACAE": {
       "nome": "REG_MACAE",
       "descricao": "Regional Macaé",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_macae_01",
+          "nome": "WAN1",
+          "ip": "177.154.26.181",
+          "provedor": "?",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_macae_02",
+          "nome": "WAN2",
+          "ip": "177.85.48.117",
+          "provedor": "VERO",
+          "ativo": true
+        }
+      ]
     },
     "REG_RHMED": {
       "nome": "REG_RHMED",
@@ -454,24 +806,71 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:05.305376"
+          "ultima_verificacao": "2026-01-30T15:50:21.782026"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_rhmed_01",
+          "nome": "WAN1",
+          "ip": "201.76.172.137",
+          "provedor": "MUNDIVOX ",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_rhmed_02",
+          "nome": "WAN2",
+          "ip": "187.108.47.217",
+          "provedor": "AMERICANET",
+          "ativo": true
         }
       ]
     },
     "REG_SULZER": {
       "nome": "REG_SULZER",
       "descricao": "Regional Sulzer",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_sulzer_01",
+          "nome": "WAN1",
+          "ip": "201.76.118.202",
+          "provedor": "SEBRATEL",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:38:56.379450",
+          "status": "online"
+        },
+        {
+          "id": "link_reg_sulzer_02",
+          "nome": "WAN2",
+          "ip": "200.213.22.242",
+          "provedor": "EMBRATEL",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:38:55.796563",
+          "status": "online"
+        }
+      ]
     },
     "REG_TLSV_POA": {
       "nome": "REG_TLSV POA",
       "descricao": "Regional TLSV POA",
-      "servidores": []
-    },
-    "REG_TLSV_CWB": {
-      "nome": "REG_TLSV CWB",
-      "descricao": "Regional TLSV CWB",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_tlsv_poa_01",
+          "nome": "WAN1",
+          "ip": "192.168.15.1",
+          "provedor": "VIVO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_tlsv_poa_02",
+          "nome": "WAN2",
+          "ip": " 179.152.84.1",
+          "provedor": "NET",
+          "ativo": true
+        }
+      ]
     },
     "REG_ARARAS": {
       "nome": "REG_ARARAS",
@@ -491,14 +890,45 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:05.606798"
+          "ultima_verificacao": "2026-01-30T17:24:12.266383"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_araras_01",
+          "nome": "WAN1",
+          "ip": "201.48.138.13",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:47:15.365808"
         }
       ]
     },
     "REG_LOGHIS": {
       "nome": "REG_LOGHIS",
       "descricao": "Regional Loghis",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_loghis_01",
+          "nome": "WAN1",
+          "ip": "186.236.71.138",
+          "provedor": "NIPBR",
+          "ativo": true,
+          "status": "online",
+          "ultima_verificacao": "2026-02-06T10:49:03.391913"
+        },
+        {
+          "id": "link_reg_loghis_02",
+          "nome": "WAN2",
+          "ip": "189.56.50.178",
+          "provedor": "VIVO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:48:52.681064",
+          "status": "online"
+        }
+      ]
     },
     "REG_PRAIA_GRANDE": {
       "nome": "REG_PRAIA GRANDE",
@@ -518,7 +948,18 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:05.805215"
+          "ultima_verificacao": "2026-01-30T15:50:22.162315"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_praia_grande_01",
+          "nome": "WAN1",
+          "ip": "186.201.119.186",
+          "provedor": "VIVO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:50:54.706813",
+          "status": "online"
         }
       ]
     },
@@ -540,7 +981,23 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:05.813211"
+          "ultima_verificacao": "2026-01-30T15:50:22.172954"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_campinas_01",
+          "nome": "WAN16",
+          "ip": "187.32.139.178",
+          "provedor": "ALGAR",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_campinas_02",
+          "nome": "WAN15",
+          "ip": "189.57.42.201",
+          "provedor": "VIVO",
+          "ativo": true
         }
       ]
     },
@@ -562,34 +1019,163 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:05.893044"
+          "ultima_verificacao": "2026-01-30T15:50:22.243191"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_sjc_01",
+          "nome": "WAN1",
+          "ip": "201.62.112.140",
+          "provedor": "CLARO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T11:00:01.098860",
+          "status": "online"
+        },
+        {
+          "id": "link_reg_sjc_02",
+          "nome": "WAN2",
+          "ip": "189.20.46.162",
+          "provedor": "VIVO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T11:00:00.483178",
+          "status": "online"
         }
       ]
     },
     "REG_SOROCABA": {
       "nome": "REG_SOROCABA",
       "descricao": "Regional Sorocaba",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_sorocaba_01",
+          "nome": "WAN1",
+          "ip": "201.48.89.25",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T11:01:13.681244",
+          "status": "online"
+        },
+        {
+          "id": "link_reg_sorocaba_02",
+          "nome": "WAN2",
+          "ip": "201.63.95.170",
+          "provedor": "VIVO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T11:01:13.957698",
+          "status": "online"
+        }
+      ]
     },
     "REG_TRADETALENTOS": {
       "nome": "REG_TRADE&TALENTOS",
       "descricao": "Regional Trade&Talentos",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_tradetalentos_01",
+          "nome": "WAN15",
+          "ip": "186.201.27.185",
+          "provedor": "VIVO",
+          "ativo": true,
+          "status": "mismatch",
+          "ultima_verificacao": "2026-02-06T11:03:10.887369"
+        },
+        {
+          "id": "link_reg_tradetalentos_02",
+          "nome": "WAN14",
+          "ip": "179.191.121.113",
+          "provedor": "MUNDIVOX",
+          "ativo": true,
+          "status": "mismatch",
+          "ultima_verificacao": "2026-02-06T11:03:11.378688"
+        },
+        {
+          "id": "link_reg_tradetalentos_03",
+          "nome": "WAN16",
+          "ip": "191.240.147.153",
+          "provedor": "WCS",
+          "ativo": true,
+          "status": "mismatch",
+          "ultima_verificacao": "2026-02-06T11:03:15.649597"
+        }
+      ]
     },
     "REG_LEOPOLDO_B2": {
       "nome": "REG_LEOPOLDO B2",
       "descricao": "",
-      "servidores": []
+      "servidores": [
+        {
+          "id": "srv_reg_leopoldo_b2_01",
+          "nome": "R720",
+          "tipo": "idrac",
+          "ip": "10.151.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Virtualização",
+          "status": "online",
+          "erro": null,
+          "ultima_verificacao": "2026-02-02T17:07:12.282674"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_leopoldo_b2_01",
+          "nome": "WAN1",
+          "ip": "187.32.194.190",
+          "provedor": "ALGAR",
+          "ativo": true
+        }
+      ]
     },
     "REG_CEARA_2": {
       "nome": "REG_CEARA 2",
       "descricao": "",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_ceara_2_01",
+          "nome": "wan1 (NAVEGAMAIS)",
+          "ip": "0.0.0.0",
+          "provedor": "NAVEGAMAIS",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_ceara_2_02",
+          "nome": "wan2 (MULTIPLAY)",
+          "ip": "187.18.197.62",
+          "provedor": "MULTIPLAY",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:01:11.684015",
+          "status": "online"
+        }
+      ]
     },
     "REG_RIO_GRANDE_DO_NORTE": {
       "nome": "REG_RIO GRANDE DO NORTE",
       "descricao": "",
-      "servidores": []
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_rio_grande_do_norte_01",
+          "nome": "WAN1",
+          "ip": "200.148.151.81",
+          "provedor": "VIVO",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_rio_grande_do_norte_02",
+          "nome": "WAN2",
+          "ip": "179.190.129.128",
+          "provedor": "TELECOM",
+          "ativo": true
+        }
+      ]
     },
     "REG_CAXIAS": {
       "nome": "REG_CAXIAS",
@@ -609,7 +1195,27 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:06.394879"
+          "ultima_verificacao": "2026-01-30T15:50:22.670799"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_caxias_01",
+          "nome": "WAN2",
+          "ip": "179.184.61.250",
+          "provedor": "VIVO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T11:06:34.226844",
+          "status": "online"
+        },
+        {
+          "id": "link_reg_caxias_02",
+          "nome": "WAN1",
+          "ip": "189.112.224.37",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T11:06:33.680960",
+          "status": "online"
         }
       ]
     },
@@ -619,7 +1225,7 @@
       "servidores": [
         {
           "id": "srv_reg_nutricar_01",
-          "nome": "ML30GEN9",
+          "nome": "ML30",
           "tipo": "ilo",
           "ip": "10.111.14.10",
           "usuario": "administrator",
@@ -631,7 +1237,48 @@
           "funcao": "Virtualização",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-01-20T13:08:06.601885"
+          "ultima_verificacao": "2026-01-30T17:22:22.364237"
+        }
+      ],
+      "links": [
+        {
+          "id": "link_reg_nutricar_01",
+          "nome": "WAN1",
+          "ip": "177.92.82.117",
+          "provedor": "GLOBALTEL",
+          "ativo": true
+        },
+        {
+          "id": "link_reg_nutricar_02",
+          "nome": "WAN2",
+          "ip": "187.102.149.61",
+          "provedor": "MUNDIVOX ",
+          "ativo": true
+        }
+      ]
+    },
+    "REG_CAMPINAS_02": {
+      "nome": "REG_CAMPINAS 02",
+      "descricao": "",
+      "servidores": [],
+      "links": [
+        {
+          "id": "link_reg_campinas_02_01",
+          "nome": "WAN1",
+          "ip": "201.49.120.121",
+          "provedor": "ALGAR",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:54:42.326212",
+          "status": "online"
+        },
+        {
+          "id": "link_reg_campinas_02_02",
+          "nome": "WAN2",
+          "ip": "189.20.240.138",
+          "provedor": "VIVO",
+          "ativo": true,
+          "ultima_verificacao": "2026-02-06T10:54:32.247843",
+          "status": "online"
         }
       ]
     }
@@ -639,7 +1286,7 @@
   "configuracao": {
     "versao": "2.0",
     "estrutura": "hierarquica",
-    "ultima_atualizacao": "2026-01-20T16:11:06.038260",
+    "ultima_atualizacao": "2026-02-06T17:45:47.503836",
     "backup_automatico": true,
     "validacao_automatica": true,
     "observacoes": "Estrutura hierárquica: Regional > Servidores (iDRAC/ILO)"
