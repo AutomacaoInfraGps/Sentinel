@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 # garante que importações peguem C:\Automacao primeiro
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
-
+from web_config import gerenciador_fortigate
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 from config import GPS_HTML
 
@@ -1208,7 +1208,7 @@ def render_bloco_gps():
     """
 
 
-# ... e inclua no HTML final:
+
 
 # --- Garante que o print exista no Public (placeholder + tentativa real) ---
 # --- GPS: garante arquivo e gera print real ---
@@ -1222,6 +1222,50 @@ except Exception as e:
 # Card pronto (usa a função que você já tem na linha 26)
 gps_section = render_bloco_gps()
 
+# --- INÍCIO DA LÓGICA DE VPN ---
+try:
+    # 1. Busca os dados usando seu gerenciador existente
+    dados_vpn = gerenciador_fortigate.obter_vpn_ipsec()
+    lista_vpns = dados_vpn.get("vpns", []) if dados_vpn and dados_vpn.get("success") else []
+
+    # 2. Calcula os contadores para os KPIs e Gráficos
+    vpns_total = len(lista_vpns)
+    # Considera 'up' como online, qualquer outra coisa como offline
+    vpns_online = sum(1 for v in lista_vpns if v.get('status') == 'up')
+    vpns_offline = vpns_total - vpns_online
+
+    # 3. Gera o HTML da lista APENAS para as que estão offline (Status: down)
+    # Filtra os nomes das VPNs com problema
+    lista_nomes_offline = [v.get('tunel', 'Desconhecido') for v in lista_vpns if v.get('status') != 'up']
+
+    if lista_nomes_offline:
+        # Se tiver VPN fora, cria uma lista vermelha
+        itens_li = "".join(f"<li style='margin-bottom: 5px;'><strong>{nome}</strong></li>" for nome in lista_nomes_offline)
+        
+        vpn_html_content = f"""
+        <div class="error-container">
+            <div class="error-icon"><i class="fas fa-unlink"></i></div>
+            <div class="error-title">Atenção: {vpns_offline} Túneis Offline</div>
+            <ul style="list-style: none; padding: 0;">
+                {itens_li}
+            </ul>
+        </div>
+        """
+    else:
+        # Se tudo estiver OK
+        vpn_html_content = """
+        <div style="text-align: center; color: #48bb78; padding: 20px;">
+            <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+            <h3>Todos os túneis estão operacionais</h3>
+        </div>
+        """
+
+except Exception as e:
+    # Caso falhe a conexão com o Fortigate ao gerar o dash
+    vpns_online = 0
+    vpns_offline = 0
+    vpn_html_content = f"<div class='error-container'>Erro ao consultar Fortigate: {str(e)}</div>"
+# --- FIM DA LÓGICA DE VPN ---
 
 # === 10. MONTA DASHBOARD FINAL ===
 # Construct the final HTML dashboard using f-strings for dynamic content insertion.
@@ -1692,6 +1736,20 @@ dashboard_html = f"""
                 </div>
                 <div class="kpi-value">{links_offline}</div>
             </div>
+            <div class="kpi">
+                <div class="kpi-header">
+                    <div class="kpi-icon info">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>VPNs IPSEC</h3>
+                </div>
+                <div class="kpi-status">
+                   <span style="color: #48bb78; font-weight: bold;">Online: {vpns_online}</span>
+                   <span style="margin: 0 5px;">|</span>
+                   <span style="color: #f56565; font-weight: bold;">Offline: {vpns_offline}</span>
+                </div>
+            </div>
+            
         </div>
 
         <!-- GRÁFICOS -->
@@ -1715,6 +1773,9 @@ dashboard_html = f"""
                 </div>
                 <div class="chart-wrapper">
                     <canvas id="chartLinks"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="chartVpn"></canvas>
                 </div>
             </div>
         </div>
@@ -1767,6 +1828,12 @@ dashboard_html = f"""
             <summary>[WEB] Status dos Links de Internet</summary>
             <div class="details-content">
                 {links_html_content}
+            </div>
+        </details>
+        <details id="vpn-details" class="details-section">
+            <summary>[FORTIGATE] Status VPNs IPSEC</summary>
+            <div class="details-content">
+                {vpn_html_content}
             </div>
         </details>
     </div>
@@ -1979,6 +2046,34 @@ new Chart(document.getElementById('chartLinks'), {{
         }}
     }}
 }});
+
+new Chart(document.getElementById('chartVpn'), {{
+    type: 'doughnut',
+    data: {{
+        labels: ['Online', 'Offline'],
+        datasets: [{{
+            data: [{vpns_online}, {vpns_offline}],
+            backgroundColor: ['#4facfe', '#fa709a'],
+            borderColor: '#ffffff',
+            borderWidth: 2
+        }}]
+    }},
+    options: {{
+        plugins: {{
+            title: {{
+                display: true,
+                text: 'Status Túneis VPN',
+                font: {{ size: 16 }},
+                color: '#333'
+            }},
+            legend: {{
+                position: 'bottom',
+                labels: {{ font: {{ size: 14 }}, color: '#555' }}
+            }}
+        }}
+    }}
+}});
+
 </script>
 
 </body>
