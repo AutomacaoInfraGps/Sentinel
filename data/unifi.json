@@ -1,8 +1,8 @@
 {
-  "total_aps": 207,
-  "aps_online": 181,
-  "aps_offline": 26,
-  "clientes_conectados": 1715,
+  "total_aps": 219,
+  "aps_online": 199,
+  "aps_offline": 20,
+  "clientes_conectados": 940,
   "interferencia_5ghz": [
     {
       "canal": 120,
@@ -29,7 +29,7 @@
         "V045_AP_PISO2_OPERACAO",
         "V046_AP_OPERACAO",
         "V048_AP_PeO",
-        "V053_AP - PISO 10 - ENTRADA",
+        "V053_AP - PISO 9 - DIRETORIA",
         "V041_AP_PISO1_RH_DP"
       ]
     },
@@ -66,7 +66,7 @@
     },
     {
       "canal": "auto",
-      "qtd_aps": 85,
+      "qtd_aps": 96,
       "avg_signal_dbm": null,
       "risco": "CONGESTIONADO",
       "aps": [
@@ -77,7 +77,7 @@
         "V025_AP_02_P&O_TERREO",
         "APP_RDD_PISO 1",
         "RGS_AP_REUNIAO",
-        "U6 LR",
+        "V010_AP_BLA",
         "AP_001",
         "V030_SUBSOLO_DESENVOLVIMENTO",
         "V030_PISO1_OPERACAO",
@@ -85,7 +85,6 @@
         "V030_SUBSOLO_TREINAMENTO",
         "V027_PISO1",
         "AP CAMPINAS COFRE",
-        "V034_TLSVPOA_AP_TERREO_ALMOX",
         "V034_TLSVPOA_AP_TREINAMENTO",
         "V032_SUBSOLO_ADM_VIVO",
         "V032_AP_DIRETORIA",
@@ -95,8 +94,8 @@
         "V036_REG_ABC_Recepcao_1° Andar - AP",
         "V036_REG_ABC_2° Andar - AP",
         "Nano HD",
-        "V008_AP_PISO2",
         "V008_AP_PISO3_2",
+        "V008_AP_PISO2",
         "V008_AP_PISO4_COMERCIAL",
         "V008_AP_PISO3_1",
         "V008_AP_PISO1_RH",
@@ -132,7 +131,6 @@
         "DESATIVADO",
         "V046_AP_ADMINISTRACAO",
         "V046_AP_GERENCIA",
-        "V015_PISO17_REUNIAO",
         "V039_AP_COPA",
         "V039_CAMARAFRIA02",
         " V039_SALA_TI",
@@ -145,21 +143,34 @@
         "V051_AP_DP",
         "V051_AP_REUNIAO",
         "V023_TERREO_AP_ADM",
+        "V023_TERREO_AP_SALA_REUNIAO",
         "V055_AP_LOGISTICA",
         "V055_AP_DIRETORIA_GERENCIA",
         "V055_AP_SALAO_ADM",
         "V058_AP - PISO2 - DIRETORIA",
+        "V058_AP - PISO1 - OPERAÇOES",
         "V058_AP - PISO2 - COMERCIAL",
         "V058_AP - PISO1 - QUALIDADE",
         "V058_AP - PISO1 - SISTEMAS",
-        "U6 Mesh Pro",
-        "U6 Mesh Pro",
-        "U6 Mesh Pro"
+        "V058_AP - PISO2 - SUPRIMENTOS",
+        "V059_AP_CAM_FRIA_RECEBIMENTO",
+        "V059_AP_CAM_FRIA_MENOR",
+        "V059_AP_CAM_FRIA_MAIOR_DIREITO",
+        "V059_AP_CAM_GELADA_FUNDO_ESQUERDO",
+        "V059_AP_ADMINISTRATIVO",
+        "V059_AP_CAM_GELADA_LADO_PORTA_ESQUERDO",
+        "V059_AP_CAM_GELADA_LADO_PORTA_DIREITO",
+        "V059_AP_CAM_FRIA_MAIOR_CENTRO",
+        "V059_AP_SALA REUNIAO",
+        "V059_AP_CAM_FRIA_MAIOR_ESQUERDO",
+        "V059_AP_CCO",
+        "V059_AP_CAM_GELADA_FUNDO_DIREITO",
+        "V059_AP_CAM_FRIA_AREA_ABERTA"
       ]
     },
     {
       "canal": 157,
-      "qtd_aps": 7,
+      "qtd_aps": 8,
       "avg_signal_dbm": null,
       "risco": "CONGESTIONADO",
       "aps": [
@@ -169,12 +180,13 @@
         "AP OPERAÇÃO TERREO",
         "V029_AP_ADMINISTRATIVO",
         "V018_AP_SERVIS",
-        "V020_AP_SJC_PISO01_FINANCEIRO"
+        "V020_AP_SJC_PISO01_FINANCEIRO",
+        "V015_PISO17_REUNIAO"
       ]
     },
     {
       "canal": 161,
-      "qtd_aps": 17,
+      "qtd_aps": 16,
       "avg_signal_dbm": null,
       "risco": "CONGESTIONADO",
       "aps": [
@@ -190,16 +202,15 @@
         "V048_AP_OPERACIONAL",
         "V011_SALA_ADM",
         "V015_PISO1_RECEPCAO",
-        "V039_ADM_MERCADO",
         "V039_CD_FUNDO2",
+        "V039_ADM_MERCADO",
         "V039_SALA_TREINAMENTO",
-        "V039_MONITORAMENTO",
-        "V053_AP - PISO 9 - DIRETORIA"
+        "V039_MONITORAMENTO"
       ]
     },
     {
       "canal": 153,
-      "qtd_aps": 6,
+      "qtd_aps": 7,
       "avg_signal_dbm": null,
       "risco": "CONGESTIONADO",
       "aps": [
@@ -207,6 +218,7 @@
         "RGS_AP_OPERACIONAL",
         "V020_AP_SJC_PISO01_SUPRIMENTOS",
         "V043_AP_SALA_REUNIAO1",
+        "V053_AP - PISO 10 - ESCADA",
         "V041_AP_PISO3_CORREDOR_DIRETORIA",
         "V041_AP_PISO2_SUPERVISAO"
       ]
@@ -231,7 +243,7 @@
       "risco": "OK",
       "aps": [
         "RGS_AP_DP",
-        "V053_AP - PISO 9 - SL CORCOVADO"
+        "V053_AP - PISO 10 - FUNDO LADO DIREITO"
       ]
     },
     {
@@ -260,18 +272,17 @@
     },
     {
       "canal": 124,
-      "qtd_aps": 3,
+      "qtd_aps": 2,
       "avg_signal_dbm": null,
       "risco": "OK",
       "aps": [
         "V010_AP_SALAO_PRINCIPAL_novo",
-        "V015_PISO17_SALA_DIRETOR",
-        "V053_AP - PISO 17 - TI"
+        "V015_PISO17_SALA_DIRETOR"
       ]
     },
     {
       "canal": 40,
-      "qtd_aps": 10,
+      "qtd_aps": 11,
       "avg_signal_dbm": null,
       "risco": "CONGESTIONADO",
       "aps": [
@@ -284,18 +295,20 @@
         "V018_AP_DP",
         "V018_AP_JURIDICO",
         "V020_AP_SJC_PISO1_SALA2",
+        "V053_AP - PISO 10 - SL COPACABANA",
         "V041_AP_PISO3_CORREDOR"
       ]
     },
     {
       "canal": 112,
-      "qtd_aps": 3,
+      "qtd_aps": 4,
       "avg_signal_dbm": null,
-      "risco": "OK",
+      "risco": "CONGESTIONADO",
       "aps": [
         "V043_AP_PISO1_CENTRO",
         "V015_PISO4_SALA REUNIAO CENTRO",
-        "V039_ADM_FINANCEIRO"
+        "V039_ADM_FINANCEIRO",
+        "V053_AP - PISO 9 - ESCADA0"
       ]
     },
     {
@@ -322,7 +335,7 @@
       "avg_signal_dbm": null,
       "risco": "OK",
       "aps": [
-        "V015_PISO5_SALA REUNIAO_novo"
+        "V015_PISO5_SALA REUNIAO"
       ]
     },
     {
@@ -341,37 +354,44 @@
       "risco": "OK",
       "aps": [
         "V015_PISO17_ESQUERDO",
-        "V039_DOCA01",
-        "V053_AP - PISO 10 - FUNDO LADO DIREITO"
-      ]
-    },
-    {
-      "canal": 64,
-      "qtd_aps": 2,
-      "avg_signal_dbm": null,
-      "risco": "OK",
-      "aps": [
         "V015_PISO1_TI",
-        "V053_AP - PISO 9 - ESCADA0"
+        "V039_DOCA01"
       ]
     },
     {
       "canal": 100,
-      "qtd_aps": 2,
-      "avg_signal_dbm": null,
-      "risco": "OK",
-      "aps": [
-        "V039_AP_REUNIAO_MONITORAMENTO",
-        "V053_AP - PISO 10 - SL COPACABANA"
-      ]
-    },
-    {
-      "canal": 144,
       "qtd_aps": 1,
       "avg_signal_dbm": null,
       "risco": "OK",
       "aps": [
-        "V053_AP - PISO 10 - ESCADA"
+        "V039_AP_REUNIAO_MONITORAMENTO"
+      ]
+    },
+    {
+      "canal": 128,
+      "qtd_aps": 1,
+      "avg_signal_dbm": null,
+      "risco": "OK",
+      "aps": [
+        "V053_AP - PISO 9 - SL CORCOVADO"
+      ]
+    },
+    {
+      "canal": 64,
+      "qtd_aps": 1,
+      "avg_signal_dbm": null,
+      "risco": "OK",
+      "aps": [
+        "V053_AP - PISO 10 - ENTRADA"
+      ]
+    },
+    {
+      "canal": 108,
+      "qtd_aps": 1,
+      "avg_signal_dbm": null,
+      "risco": "OK",
+      "aps": [
+        "V053_AP - PISO 17 - TI"
       ]
     }
   ],
@@ -434,7 +454,7 @@
     {
       "id": "uvco58tp",
       "nome": "V034_TLSV_PORTO_ALEGRE",
-      "total_aps": 2
+      "total_aps": 1
     },
     {
       "id": "20xaf3hr",
@@ -559,7 +579,7 @@
     {
       "id": "yh26ysyp",
       "nome": "V023_PIAUI",
-      "total_aps": 1
+      "total_aps": 2
     },
     {
       "id": "a11tctpp",
@@ -574,12 +594,12 @@
     {
       "id": "4aaikmy1",
       "nome": "V058_S_LEOPOLDO_2",
-      "total_aps": 4
+      "total_aps": 6
     },
     {
       "id": "brihqlgm",
       "nome": "V059_GRSASP",
-      "total_aps": 3
+      "total_aps": 13
     }
   ],
   "aps": [
@@ -588,10 +608,10 @@
       "ip": "10.254.12.25",
       "mac": "28:70:4e:54:11:c1",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
+      "firmware": "8.4.6.18068",
       "status": "online",
-      "clientes": 9,
-      "uptime": 2138081,
+      "clientes": 4,
+      "uptime": 1754879,
       "site": "GALAXIA"
     },
     {
@@ -601,8 +621,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 10,
-      "uptime": 1597087,
+      "clientes": 2,
+      "uptime": 4017624,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -612,8 +632,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 3,
-      "uptime": 1597084,
+      "clientes": 2,
+      "uptime": 4017628,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -623,8 +643,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 1597030,
+      "clientes": 2,
+      "uptime": 4017630,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -634,8 +654,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 1597076,
+      "clientes": 2,
+      "uptime": 4017690,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -656,8 +676,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 1597045,
+      "clientes": 1,
+      "uptime": 4017656,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -667,8 +687,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 1597036,
+      "clientes": 0,
+      "uptime": 4017690,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -678,8 +698,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 1597027,
+      "clientes": 2,
+      "uptime": 4017637,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -689,8 +709,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 1597090,
+      "clientes": 1,
+      "uptime": 4017633,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -700,8 +720,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 1597062,
+      "clientes": 0,
+      "uptime": 4017626,
       "site": "V025_REG_RIO_DE _JANEIRO"
     },
     {
@@ -711,8 +731,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 11403516,
+      "clientes": 5,
+      "uptime": 13824102,
       "site": "V009_RUDDER"
     },
     {
@@ -722,8 +742,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 15194302,
+      "clientes": 8,
+      "uptime": 17614950,
       "site": "V009_RUDDER"
     },
     {
@@ -734,7 +754,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 1,
-      "uptime": 15196741,
+      "uptime": 17617368,
       "site": "V009_RUDDER"
     },
     {
@@ -744,8 +764,8 @@
       "modelo": "UALR6v2",
       "firmware": "6.6.78.15404",
       "status": "online",
-      "clientes": 7,
-      "uptime": 3172357,
+      "clientes": 1,
+      "uptime": 507829,
       "site": "V009_RUDDER"
     },
     {
@@ -755,8 +775,8 @@
       "modelo": "U7LR",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 13,
-      "uptime": 146485,
+      "clientes": 7,
+      "uptime": 2567124,
       "site": "V019_REG_S_LEOPOLDO"
     },
     {
@@ -766,8 +786,8 @@
       "modelo": "U7LR",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 146483,
+      "clientes": 3,
+      "uptime": 2567134,
       "site": "V019_REG_S_LEOPOLDO"
     },
     {
@@ -777,8 +797,8 @@
       "modelo": "U7LR",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 0,
-      "uptime": 7302,
+      "clientes": 1,
+      "uptime": 499403,
       "site": "V019_REG_S_LEOPOLDO"
     },
     {
@@ -788,19 +808,8 @@
       "modelo": "U7LR",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 17,
-      "uptime": 7332,
-      "site": "V019_REG_S_LEOPOLDO"
-    },
-    {
-      "nome": "RGS_AP_OPERACIONAL",
-      "ip": "192.168.52.35",
-      "mac": "24:5a:4c:29:97:2b",
-      "modelo": "U7LR",
-      "firmware": "6.6.77.15402",
-      "status": "online",
-      "clientes": 13,
-      "uptime": 146535,
+      "clientes": 20,
+      "uptime": 499340,
       "site": "V019_REG_S_LEOPOLDO"
     },
     {
@@ -810,8 +819,19 @@
       "modelo": "U7LR",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 146515,
+      "clientes": 10,
+      "uptime": 2567099,
+      "site": "V019_REG_S_LEOPOLDO"
+    },
+    {
+      "nome": "RGS_AP_OPERACIONAL",
+      "ip": "192.168.52.35",
+      "mac": "24:5a:4c:29:97:2b",
+      "modelo": "U7LR",
+      "firmware": "6.6.77.15402",
+      "status": "online",
+      "clientes": 16,
+      "uptime": 2567071,
       "site": "V019_REG_S_LEOPOLDO"
     },
     {
@@ -821,8 +841,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 11,
-      "uptime": 9316662,
+      "clientes": 5,
+      "uptime": 11737224,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
@@ -833,18 +853,18 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 2,
-      "uptime": 784556,
+      "uptime": 3205106,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
-      "nome": "U6 LR",
+      "nome": "V010_AP_BLA",
       "ip": "10.111.0.41",
       "mac": "60:22:32:99:e1:4c",
       "modelo": "UALR6v2",
       "firmware": "6.7.31.15618",
-      "status": "offline",
-      "clientes": 0,
-      "uptime": 0,
+      "status": "online",
+      "clientes": 1,
+      "uptime": 2096601,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
@@ -855,7 +875,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 2,
-      "uptime": 9316673,
+      "uptime": 11737251,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
@@ -865,8 +885,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 47,
-      "uptime": 604171,
+      "clientes": 19,
+      "uptime": 3024833,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
@@ -888,7 +908,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 1,
-      "uptime": 1851073,
+      "uptime": 2096559,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
@@ -899,7 +919,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 0,
-      "uptime": 13365467,
+      "uptime": 1619314,
       "site": "V010_MOTUS_MATRIZ"
     },
     {
@@ -920,8 +940,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 3,
-      "uptime": 3463866,
+      "clientes": 1,
+      "uptime": 5884444,
       "site": "V006_SULZER_TRIUNFO"
     },
     {
@@ -931,8 +951,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 6,
-      "uptime": 444416,
+      "clientes": 1,
+      "uptime": 2865010,
       "site": "V006_SULZER_TRIUNFO"
     },
     {
@@ -942,8 +962,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 444408,
+      "clientes": 3,
+      "uptime": 2865021,
       "site": "V006_SULZER_TRIUNFO"
     },
     {
@@ -953,8 +973,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 8,
-      "uptime": 3463843,
+      "clientes": 9,
+      "uptime": 5884454,
       "site": "V006_SULZER_TRIUNFO"
     },
     {
@@ -964,8 +984,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 2,
-      "uptime": 3033588,
+      "clientes": 3,
+      "uptime": 5454171,
       "site": "V030_UBERLANDIA"
     },
     {
@@ -975,8 +995,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 5875016,
+      "clientes": 7,
+      "uptime": 1049003,
       "site": "V030_UBERLANDIA"
     },
     {
@@ -986,8 +1006,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 6711258,
+      "clientes": 2,
+      "uptime": 9131849,
       "site": "V030_UBERLANDIA"
     },
     {
@@ -997,8 +1017,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 1385697,
+      "clientes": 6,
+      "uptime": 3806286,
       "site": "V030_UBERLANDIA"
     },
     {
@@ -1008,8 +1028,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 10,
-      "uptime": 3450489,
+      "clientes": 2,
+      "uptime": 510424,
       "site": "V030_UBERLANDIA"
     },
     {
@@ -1030,8 +1050,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 10329970,
+      "clientes": 0,
+      "uptime": 12750599,
       "site": "V031_ESPIRITO_SANTO"
     },
     {
@@ -1041,8 +1061,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 454339,
+      "clientes": 0,
+      "uptime": 278605,
       "site": "V031_ESPIRITO_SANTO"
     },
     {
@@ -1052,8 +1072,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 10329961,
+      "clientes": 3,
+      "uptime": 12750599,
       "site": "V031_ESPIRITO_SANTO"
     },
     {
@@ -1063,8 +1083,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 3,
-      "uptime": 10330027,
+      "clientes": 2,
+      "uptime": 12750593,
       "site": "V031_ESPIRITO_SANTO"
     },
     {
@@ -1074,8 +1094,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 4240461,
+      "clientes": 2,
+      "uptime": 6661072,
       "site": "V031_ESPIRITO_SANTO"
     },
     {
@@ -1085,8 +1105,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 8,
-      "uptime": 3119022,
+      "clientes": 0,
+      "uptime": 5539611,
       "site": "V031_ESPIRITO_SANTO"
     },
     {
@@ -1096,20 +1116,9 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 5,
-      "uptime": 1604949,
-      "site": "V027_SOROCABA"
-    },
-    {
-      "nome": "AP RECEPÇÃO SUB SOLO",
-      "ip": "10.119.0.31",
-      "mac": "e4:38:83:18:43:01",
-      "modelo": "UAP6MP",
-      "firmware": "6.6.77.15402",
-      "status": "online",
       "clientes": 3,
-      "uptime": 27274993,
-      "site": "V026_CAMPINAS"
+      "uptime": 177224,
+      "site": "V027_SOROCABA"
     },
     {
       "nome": "AP SALA DE REUNIÃO TERREO",
@@ -1118,8 +1127,19 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 32536324,
+      "clientes": 5,
+      "uptime": 34956937,
+      "site": "V026_CAMPINAS"
+    },
+    {
+      "nome": "AP RECEPÇÃO SUB SOLO",
+      "ip": "10.119.0.31",
+      "mac": "e4:38:83:18:43:01",
+      "modelo": "UAP6MP",
+      "firmware": "6.6.77.15402",
+      "status": "online",
+      "clientes": 2,
+      "uptime": 29695555,
       "site": "V026_CAMPINAS"
     },
     {
@@ -1129,8 +1149,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 15,
-      "uptime": 32536315,
+      "clientes": 11,
+      "uptime": 34956916,
       "site": "V026_CAMPINAS"
     },
     {
@@ -1140,8 +1160,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 14,
-      "uptime": 32536330,
+      "clientes": 15,
+      "uptime": 1112027,
       "site": "V026_CAMPINAS"
     },
     {
@@ -1151,8 +1171,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 32536340,
+      "clientes": 3,
+      "uptime": 34956894,
       "site": "V026_CAMPINAS"
     },
     {
@@ -1173,8 +1193,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 10,
-      "uptime": 32536326,
+      "clientes": 21,
+      "uptime": 34956962,
       "site": "V026_CAMPINAS"
     },
     {
@@ -1184,8 +1204,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 32536344,
+      "clientes": 0,
+      "uptime": 34956913,
       "site": "V026_CAMPINAS"
     },
     {
@@ -1195,20 +1215,9 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 19,
-      "uptime": 26276709,
+      "clientes": 15,
+      "uptime": 28697253,
       "site": "V026_CAMPINAS"
-    },
-    {
-      "nome": "V034_TLSVPOA_AP_TERREO_ALMOX",
-      "ip": "10.152.0.31",
-      "mac": "60:22:32:87:07:c5",
-      "modelo": "UALR6v2",
-      "firmware": "6.5.64.14808",
-      "status": "offline",
-      "clientes": 0,
-      "uptime": 0,
-      "site": "V034_TLSV_PORTO_ALEGRE"
     },
     {
       "nome": "V034_TLSVPOA_AP_TREINAMENTO",
@@ -1217,8 +1226,8 @@
       "modelo": "UALR6v2",
       "firmware": "6.7.17.15512",
       "status": "online",
-      "clientes": 3,
-      "uptime": 695003,
+      "clientes": 4,
+      "uptime": 3115562,
       "site": "V034_TLSV_PORTO_ALEGRE"
     },
     {
@@ -1239,8 +1248,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 13,
-      "uptime": 7478527,
+      "clientes": 0,
+      "uptime": 1821023,
       "site": "V032_REGMARANHAO"
     },
     {
@@ -1250,8 +1259,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 7478563,
+      "clientes": 1,
+      "uptime": 1821005,
       "site": "V032_REGMARANHAO"
     },
     {
@@ -1261,8 +1270,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 10,
-      "uptime": 11065506,
+      "clientes": 11,
+      "uptime": 13486070,
       "site": "V029_GOIAS"
     },
     {
@@ -1272,8 +1281,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 11066077,
+      "clientes": 7,
+      "uptime": 13486707,
       "site": "V029_GOIAS"
     },
     {
@@ -1283,8 +1292,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 28,
-      "uptime": 12698131,
+      "clientes": 21,
+      "uptime": 15118799,
       "site": "V029_GOIAS"
     },
     {
@@ -1294,8 +1303,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 0,
-      "uptime": 18842017,
+      "clientes": 1,
+      "uptime": 2314745,
       "site": "V018_CEARA1"
     },
     {
@@ -1305,8 +1314,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 2,
-      "uptime": 50983,
+      "clientes": 1,
+      "uptime": 1127715,
       "site": "V018_CEARA1"
     },
     {
@@ -1315,9 +1324,9 @@
       "mac": "60:22:32:72:3d:5d",
       "modelo": "UALR6v2",
       "firmware": "6.6.78.15404",
-      "status": "online",
-      "clientes": 3,
-      "uptime": 77347,
+      "status": "offline",
+      "clientes": 0,
+      "uptime": 0,
       "site": "V018_CEARA1"
     },
     {
@@ -1327,8 +1336,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 50979,
+      "clientes": 1,
+      "uptime": 1127729,
       "site": "V018_CEARA1"
     },
     {
@@ -1338,8 +1347,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 51018,
+      "clientes": 0,
+      "uptime": 1127724,
       "site": "V018_CEARA1"
     },
     {
@@ -1349,8 +1358,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 2,
-      "uptime": 50972,
+      "clientes": 1,
+      "uptime": 1127667,
       "site": "V018_CEARA1"
     },
     {
@@ -1360,8 +1369,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 3528214,
+      "clientes": 6,
+      "uptime": 5948883,
       "site": "V036_REG SANTO ANDRE"
     },
     {
@@ -1371,8 +1380,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 23,
-      "uptime": 3528282,
+      "clientes": 16,
+      "uptime": 5948831,
       "site": "V036_REG SANTO ANDRE"
     },
     {
@@ -1382,8 +1391,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 10,
-      "uptime": 1512726,
+      "clientes": 9,
+      "uptime": 3933317,
       "site": "V036_REG SANTO ANDRE"
     },
     {
@@ -1394,7 +1403,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 1,
-      "uptime": 3204680,
+      "uptime": 5625240,
       "site": "V036_REG SANTO ANDRE"
     },
     {
@@ -1409,25 +1418,25 @@
       "site": "API_TESTE"
     },
     {
-      "nome": "V008_AP_PISO2",
-      "ip": "10.31.0.59",
-      "mac": "fc:ec:da:31:e3:f2",
-      "modelo": "U7LT",
-      "firmware": "6.6.77.15402",
-      "status": "online",
-      "clientes": 17,
-      "uptime": 3515536,
-      "site": "V008_REGIONAL BH"
-    },
-    {
       "nome": "V008_AP_PISO3_2",
       "ip": "10.31.0.50",
       "mac": "68:d7:9a:8c:db:86",
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 36,
-      "uptime": 21383793,
+      "clientes": 33,
+      "uptime": 23804387,
+      "site": "V008_REGIONAL BH"
+    },
+    {
+      "nome": "V008_AP_PISO2",
+      "ip": "10.31.0.59",
+      "mac": "fc:ec:da:31:e3:f2",
+      "modelo": "U7LT",
+      "firmware": "6.6.77.15402",
+      "status": "online",
+      "clientes": 18,
+      "uptime": 5936140,
       "site": "V008_REGIONAL BH"
     },
     {
@@ -1437,8 +1446,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 14,
-      "uptime": 1743935,
+      "clientes": 7,
+      "uptime": 4164494,
       "site": "V008_REGIONAL BH"
     },
     {
@@ -1448,8 +1457,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 24989364,
+      "clientes": 5,
+      "uptime": 27409947,
       "site": "V008_REGIONAL BH"
     },
     {
@@ -1459,8 +1468,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 11,
-      "uptime": 6337202,
+      "clientes": 13,
+      "uptime": 8757804,
       "site": "V008_REGIONAL BH"
     },
     {
@@ -1470,8 +1479,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 30,
-      "uptime": 7240133,
+      "clientes": 11,
+      "uptime": 9660737,
       "site": "V008_REGIONAL BH"
     },
     {
@@ -1482,7 +1491,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 2,
-      "uptime": 9664450,
+      "uptime": 2257777,
       "site": "V008_REGIONAL BH"
     },
     {
@@ -1492,8 +1501,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 57951,
+      "clientes": 0,
+      "uptime": 1395672,
       "site": "V020_SÃO JOSE DOS CAMPOS "
     },
     {
@@ -1503,8 +1512,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 5022273,
+      "clientes": 1,
+      "uptime": 7442817,
       "site": "V020_SÃO JOSE DOS CAMPOS "
     },
     {
@@ -1515,7 +1524,7 @@
       "firmware": "6.7.17.15512",
       "status": "online",
       "clientes": 2,
-      "uptime": 57914,
+      "uptime": 1395639,
       "site": "V020_SÃO JOSE DOS CAMPOS "
     },
     {
@@ -1525,8 +1534,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 7,
-      "uptime": 57910,
+      "clientes": 0,
+      "uptime": 1395664,
       "site": "V020_SÃO JOSE DOS CAMPOS "
     },
     {
@@ -1536,8 +1545,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 57944,
+      "clientes": 5,
+      "uptime": 1395653,
       "site": "V020_SÃO JOSE DOS CAMPOS "
     },
     {
@@ -1569,8 +1578,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 13,
-      "uptime": 7741177,
+      "clientes": 16,
+      "uptime": 10161755,
       "site": "V022_LOGHIS"
     },
     {
@@ -1580,8 +1589,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 175916,
+      "clientes": 3,
+      "uptime": 778416,
       "site": "V037_AMAZONAS"
     },
     {
@@ -1592,7 +1601,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 1,
-      "uptime": 1548477,
+      "uptime": 419276,
       "site": "V037_AMAZONAS"
     },
     {
@@ -1602,19 +1611,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 6,
-      "uptime": 1548500,
-      "site": "V037_AMAZONAS"
-    },
-    {
-      "nome": "V037_AP_DIRETORIA",
-      "ip": "10.192.0.34",
-      "mac": "d8:b3:70:35:a1:c7",
-      "modelo": "UAP6MP",
-      "firmware": "6.6.77.15402",
-      "status": "online",
-      "clientes": 5,
-      "uptime": 175920,
+      "clientes": 2,
+      "uptime": 419282,
       "site": "V037_AMAZONAS"
     },
     {
@@ -1624,8 +1622,19 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 11,
-      "uptime": 3329675,
+      "clientes": 6,
+      "uptime": 778454,
+      "site": "V037_AMAZONAS"
+    },
+    {
+      "nome": "V037_AP_DIRETORIA",
+      "ip": "10.192.0.34",
+      "mac": "d8:b3:70:35:a1:c7",
+      "modelo": "UAP6MP",
+      "firmware": "6.6.77.15402",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 778473,
       "site": "V037_AMAZONAS"
     },
     {
@@ -1635,8 +1644,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 4660185,
+      "clientes": 2,
+      "uptime": 7080801,
       "site": "V021_BAHIA"
     },
     {
@@ -1646,8 +1655,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 10,
-      "uptime": 4659889,
+      "clientes": 0,
+      "uptime": 7080541,
       "site": "V021_BAHIA"
     },
     {
@@ -1668,8 +1677,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 4659936,
+      "clientes": 0,
+      "uptime": 7080555,
       "site": "V021_BAHIA"
     },
     {
@@ -1679,8 +1688,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 32,
-      "uptime": 28959181,
+      "clientes": 25,
+      "uptime": 31379790,
       "site": "V044_ARARAS"
     },
     {
@@ -1690,8 +1699,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 28959209,
+      "clientes": 10,
+      "uptime": 31379816,
       "site": "V044_ARARAS"
     },
     {
@@ -1701,8 +1710,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 89337,
+      "clientes": 0,
+      "uptime": 1575352,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1712,8 +1721,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 10,
-      "uptime": 4538942,
+      "clientes": 1,
+      "uptime": 6959608,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1723,8 +1732,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 4538986,
+      "clientes": 4,
+      "uptime": 6959585,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1734,8 +1743,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 13,
-      "uptime": 3119371,
+      "clientes": 0,
+      "uptime": 1903001,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1745,8 +1754,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 38,
-      "uptime": 4539004,
+      "clientes": 3,
+      "uptime": 6959558,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1756,8 +1765,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 11,
-      "uptime": 1920355,
+      "clientes": 2,
+      "uptime": 4340912,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1767,8 +1776,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 8,
-      "uptime": 4539011,
+      "clientes": 1,
+      "uptime": 6959574,
       "site": "V043_REGIONAL PERNAMBUCO"
     },
     {
@@ -1800,8 +1809,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 7,
-      "uptime": 8410084,
+      "clientes": 13,
+      "uptime": 10830630,
       "site": "V001_PARANÁ"
     },
     {
@@ -1811,8 +1820,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 16035522,
+      "clientes": 4,
+      "uptime": 18456117,
       "site": "V001_PARANÁ"
     },
     {
@@ -1821,9 +1830,9 @@
       "mac": "60:22:32:77:8d:75",
       "modelo": "UALR6v2",
       "firmware": "6.6.78.15404",
-      "status": "offline",
+      "status": "online",
       "clientes": 0,
-      "uptime": 0,
+      "uptime": 16023,
       "site": "V001_PARANÁ"
     },
     {
@@ -1833,8 +1842,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 13,
-      "uptime": 1826633,
+      "clientes": 7,
+      "uptime": 1456899,
       "site": "V001_PARANÁ"
     },
     {
@@ -1844,8 +1853,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 5,
-      "uptime": 8409346,
+      "clientes": 8,
+      "uptime": 10829965,
       "site": "V001_PARANÁ"
     },
     {
@@ -1855,8 +1864,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 17,
-      "uptime": 21705075,
+      "clientes": 16,
+      "uptime": 1192361,
       "site": "V001_PARANÁ"
     },
     {
@@ -1866,8 +1875,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 1826583,
+      "clientes": 2,
+      "uptime": 1456903,
       "site": "V001_PARANÁ"
     },
     {
@@ -1878,7 +1887,7 @@
       "firmware": "6.7.31.15618",
       "status": "online",
       "clientes": 0,
-      "uptime": 10310826,
+      "uptime": 12731383,
       "site": "V001_PARANÁ"
     },
     {
@@ -1888,8 +1897,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 9,
-      "uptime": 8409846,
+      "clientes": 12,
+      "uptime": 1194941,
       "site": "V001_PARANÁ"
     },
     {
@@ -1899,8 +1908,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 2790053,
+      "clientes": 3,
+      "uptime": 5210636,
       "site": "V045_PARA"
     },
     {
@@ -1911,7 +1920,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 1,
-      "uptime": 2790069,
+      "uptime": 5210686,
       "site": "V045_PARA"
     },
     {
@@ -1921,8 +1930,8 @@
       "modelo": "UAL6",
       "firmware": "6.6.78.15404",
       "status": "online",
-      "clientes": 2,
-      "uptime": 2790035,
+      "clientes": 1,
+      "uptime": 5210686,
       "site": "V045_PARA"
     },
     {
@@ -1932,8 +1941,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 2790040,
+      "clientes": 14,
+      "uptime": 5210687,
       "site": "V045_PARA"
     },
     {
@@ -1943,8 +1952,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 6,
-      "uptime": 2790038,
+      "clientes": 7,
+      "uptime": 5210639,
       "site": "V045_PARA"
     },
     {
@@ -1954,8 +1963,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 2790064,
+      "clientes": 6,
+      "uptime": 5210648,
       "site": "V045_PARA"
     },
     {
@@ -1965,8 +1974,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 2790074,
+      "clientes": 7,
+      "uptime": 5210650,
       "site": "V045_PARA"
     },
     {
@@ -1976,8 +1985,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 3,
-      "uptime": 1698012,
+      "clientes": 2,
+      "uptime": 1985922,
       "site": "V017_GLOBAL_SEGURANÇA"
     },
     {
@@ -1988,7 +1997,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 0,
-      "uptime": 1697989,
+      "uptime": 1985913,
       "site": "V017_GLOBAL_SEGURANÇA"
     },
     {
@@ -1998,8 +2007,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 5,
-      "uptime": 8078200,
+      "clientes": 6,
+      "uptime": 10498772,
       "site": "V017_GLOBAL_SEGURANÇA"
     },
     {
@@ -2009,8 +2018,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 161735,
+      "clientes": 2,
+      "uptime": 2582301,
       "site": "V017_GLOBAL_SEGURANÇA"
     },
     {
@@ -2032,7 +2041,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 2,
-      "uptime": 8078203,
+      "uptime": 10498768,
       "site": "V017_GLOBAL_SEGURANÇA"
     },
     {
@@ -2054,7 +2063,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 0,
-      "uptime": 107627,
+      "uptime": 615707,
       "site": "V046_RIO_GRANDE_DO_NORTE"
     },
     {
@@ -2065,7 +2074,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 0,
-      "uptime": 107684,
+      "uptime": 615743,
       "site": "V046_RIO_GRANDE_DO_NORTE"
     },
     {
@@ -2075,8 +2084,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 9,
-      "uptime": 107668,
+      "clientes": 1,
+      "uptime": 615719,
       "site": "V046_RIO_GRANDE_DO_NORTE"
     },
     {
@@ -2086,8 +2095,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 3,
-      "uptime": 107634,
+      "clientes": 0,
+      "uptime": 615747,
       "site": "V046_RIO_GRANDE_DO_NORTE"
     },
     {
@@ -2097,8 +2106,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 7,
-      "uptime": 8409260,
+      "clientes": 2,
+      "uptime": 10829832,
       "site": "V048_PRAIA_GRANDE"
     },
     {
@@ -2108,8 +2117,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 10,
-      "uptime": 8409758,
+      "clientes": 5,
+      "uptime": 10830360,
       "site": "V048_PRAIA_GRANDE"
     },
     {
@@ -2120,7 +2129,7 @@
       "firmware": "6.7.33.15578",
       "status": "online",
       "clientes": 0,
-      "uptime": 8409567,
+      "uptime": 10830101,
       "site": "V048_PRAIA_GRANDE"
     },
     {
@@ -2130,8 +2139,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 2,
-      "uptime": 8409998,
+      "clientes": 5,
+      "uptime": 10830642,
       "site": "V048_PRAIA_GRANDE"
     },
     {
@@ -2141,8 +2150,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 9,
-      "uptime": 331303,
+      "clientes": 1,
+      "uptime": 2751890,
       "site": "V049_MACAE_MARFOOD"
     },
     {
@@ -2152,8 +2161,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 15,
-      "uptime": 331188,
+      "clientes": 4,
+      "uptime": 2751781,
       "site": "V049_MACAE_MARFOOD"
     },
     {
@@ -2174,8 +2183,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 35,
-      "uptime": 3023945,
+      "clientes": 2,
+      "uptime": 91384,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2185,8 +2194,8 @@
       "modelo": "U7PG2",
       "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 33,
-      "uptime": 182589,
+      "clientes": 1,
+      "uptime": 612209,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2196,8 +2205,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 15,
-      "uptime": 11397753,
+      "clientes": 0,
+      "uptime": 13818327,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2207,8 +2216,8 @@
       "modelo": "U7PG2",
       "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 3,
-      "uptime": 612044,
+      "clientes": 0,
+      "uptime": 91291,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2218,8 +2227,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 4,
-      "uptime": 3023344,
+      "clientes": 0,
+      "uptime": 612133,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2227,10 +2236,10 @@
       "ip": "10.111.24.43",
       "mac": "9c:05:d6:4e:40:cd",
       "modelo": "UAP6MP",
-      "firmware": "6.6.77.15402",
+      "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 23,
-      "uptime": 5609000,
+      "clientes": 0,
+      "uptime": 361761,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2240,8 +2249,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 40,
-      "uptime": 9668143,
+      "clientes": 1,
+      "uptime": 12088745,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2251,19 +2260,19 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 9,
-      "uptime": 4354429,
+      "clientes": 0,
+      "uptime": 91302,
       "site": "V015_T&T_MATRIZ"
     },
     {
-      "nome": "V015_PISO5_SALA REUNIAO_novo",
+      "nome": "V015_PISO5_SALA REUNIAO",
       "ip": "10.111.24.58",
       "mac": "e4:38:83:18:22:7d",
       "modelo": "UAP6MP",
-      "firmware": "6.6.77.15402",
+      "firmware": "6.8.2.15592",
       "status": "online",
-      "clientes": 16,
-      "uptime": 13296666,
+      "clientes": 3,
+      "uptime": 438704,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2273,8 +2282,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 7,
-      "uptime": 3392499,
+      "clientes": 0,
+      "uptime": 91346,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2284,8 +2293,8 @@
       "modelo": "U7PG2",
       "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 13,
-      "uptime": 1217800,
+      "clientes": 0,
+      "uptime": 3638388,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2295,8 +2304,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 39,
-      "uptime": 4354454,
+      "clientes": 8,
+      "uptime": 91333,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2306,8 +2315,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.65.15248",
       "status": "online",
-      "clientes": 35,
-      "uptime": 3720817,
+      "clientes": 8,
+      "uptime": 6141414,
       "site": "V015_T&T_MATRIZ"
     },
     {
@@ -2317,8 +2326,8 @@
       "modelo": "U7HD",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 2,
-      "uptime": 691138,
+      "clientes": 4,
+      "uptime": 3111759,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2328,8 +2337,8 @@
       "modelo": "U7MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 22,
-      "uptime": 692830,
+      "clientes": 11,
+      "uptime": 3113422,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2339,8 +2348,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 23,
-      "uptime": 781772,
+      "clientes": 34,
+      "uptime": 3202388,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2350,19 +2359,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 29,
-      "uptime": 94006,
-      "site": "V039_NUTRICAR"
-    },
-    {
-      "nome": "V039_ADM_MERCADO",
-      "ip": "10.111.14.27",
-      "mac": "9c:05:d6:e7:3d:20",
-      "modelo": "UAP6MP",
-      "firmware": "6.7.33.15578",
-      "status": "online",
-      "clientes": 23,
-      "uptime": 781757,
+      "clientes": 42,
+      "uptime": 89498,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2372,8 +2370,19 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 2,
-      "uptime": 781796,
+      "clientes": 1,
+      "uptime": 3202336,
+      "site": "V039_NUTRICAR"
+    },
+    {
+      "nome": "V039_ADM_MERCADO",
+      "ip": "10.111.14.27",
+      "mac": "9c:05:d6:e7:3d:20",
+      "modelo": "UAP6MP",
+      "firmware": "6.7.33.15578",
+      "status": "online",
+      "clientes": 18,
+      "uptime": 3202362,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2383,19 +2392,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 17,
-      "uptime": 781776,
-      "site": "V039_NUTRICAR"
-    },
-    {
-      "nome": "V039_DOCA01",
-      "ip": "10.111.14.37",
-      "mac": "9c:05:d6:4e:f9:0d",
-      "modelo": "UAP6MP",
-      "firmware": "6.7.33.15578",
-      "status": "online",
-      "clientes": 14,
-      "uptime": 693674,
+      "clientes": 3,
+      "uptime": 3202367,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2406,7 +2404,18 @@
       "firmware": "6.7.33.15578",
       "status": "online",
       "clientes": 2,
-      "uptime": 781804,
+      "uptime": 3202394,
+      "site": "V039_NUTRICAR"
+    },
+    {
+      "nome": "V039_DOCA01",
+      "ip": "10.111.14.37",
+      "mac": "9c:05:d6:4e:f9:0d",
+      "modelo": "UAP6MP",
+      "firmware": "6.7.33.15578",
+      "status": "online",
+      "clientes": 17,
+      "uptime": 1212074,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2416,8 +2425,8 @@
       "modelo": "U7MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 12,
-      "uptime": 694516,
+      "clientes": 20,
+      "uptime": 3115045,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2427,8 +2436,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 5,
-      "uptime": 691753,
+      "clientes": 8,
+      "uptime": 2359136,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2439,7 +2448,7 @@
       "firmware": "6.7.33.15578",
       "status": "online",
       "clientes": 0,
-      "uptime": 690545,
+      "uptime": 3111155,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2449,8 +2458,8 @@
       "modelo": "U7MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 6,
-      "uptime": 693044,
+      "clientes": 17,
+      "uptime": 3113643,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2460,8 +2469,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 10,
-      "uptime": 526253,
+      "clientes": 7,
+      "uptime": 2946879,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2471,8 +2480,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.35.15586",
       "status": "online",
-      "clientes": 11,
-      "uptime": 692031,
+      "clientes": 12,
+      "uptime": 3112615,
       "site": "V039_NUTRICAR"
     },
     {
@@ -2480,10 +2489,10 @@
       "ip": "10.182.0.30",
       "mac": "9c:05:d6:d3:d1:bb",
       "modelo": "UAP6MP",
-      "firmware": "6.7.35.15586",
+      "firmware": "6.8.2.15592",
       "status": "online",
       "clientes": 0,
-      "uptime": 5212870,
+      "uptime": 548824,
       "site": "V051_REGALAGOAS"
     },
     {
@@ -2491,10 +2500,10 @@
       "ip": "10.182.0.34",
       "mac": "9c:05:d6:d4:53:f1",
       "modelo": "UAP6MP",
-      "firmware": "6.7.35.15586",
+      "firmware": "6.8.2.15592",
       "status": "online",
-      "clientes": 2,
-      "uptime": 5213163,
+      "clientes": 0,
+      "uptime": 548590,
       "site": "V051_REGALAGOAS"
     },
     {
@@ -2502,10 +2511,10 @@
       "ip": "10.182.0.32",
       "mac": "9c:05:d6:d3:8e:eb",
       "modelo": "UAP6MP",
-      "firmware": "6.7.35.15586",
+      "firmware": "6.8.2.15592",
       "status": "online",
-      "clientes": 1,
-      "uptime": 5212470,
+      "clientes": 0,
+      "uptime": 548295,
       "site": "V051_REGALAGOAS"
     },
     {
@@ -2513,10 +2522,10 @@
       "ip": "10.182.0.33",
       "mac": "9c:05:d6:d3:b3:a3",
       "modelo": "UAP6MP",
-      "firmware": "6.7.35.15586",
+      "firmware": "6.8.2.15592",
       "status": "online",
-      "clientes": 1,
-      "uptime": 5212992,
+      "clientes": 0,
+      "uptime": 549010,
       "site": "V051_REGALAGOAS"
     },
     {
@@ -2524,10 +2533,10 @@
       "ip": "10.182.0.31",
       "mac": "9c:05:d6:d3:aa:83",
       "modelo": "UAP6MP",
-      "firmware": "6.7.35.15586",
+      "firmware": "6.8.2.15592",
       "status": "online",
       "clientes": 1,
-      "uptime": 5212606,
+      "uptime": 548457,
       "site": "V051_REGALAGOAS"
     },
     {
@@ -2537,8 +2546,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 8,
-      "uptime": 8408500,
+      "clientes": 0,
+      "uptime": 10829098,
       "site": "V053_RHMED"
     },
     {
@@ -2548,8 +2557,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 10,
-      "uptime": 2515347,
+      "clientes": 1,
+      "uptime": 4935933,
       "site": "V053_RHMED"
     },
     {
@@ -2559,8 +2568,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 13,
-      "uptime": 8408709,
+      "clientes": 1,
+      "uptime": 10829330,
       "site": "V053_RHMED"
     },
     {
@@ -2570,8 +2579,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 19,
-      "uptime": 2515382,
+      "clientes": 3,
+      "uptime": 844409,
       "site": "V053_RHMED"
     },
     {
@@ -2581,8 +2590,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 8,
-      "uptime": 2515002,
+      "clientes": 1,
+      "uptime": 4935605,
       "site": "V053_RHMED"
     },
     {
@@ -2592,8 +2601,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 20,
-      "uptime": 2515336,
+      "clientes": 2,
+      "uptime": 4935976,
       "site": "V053_RHMED"
     },
     {
@@ -2603,8 +2612,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 10,
-      "uptime": 8409170,
+      "clientes": 0,
+      "uptime": 10829764,
       "site": "V053_RHMED"
     },
     {
@@ -2614,8 +2623,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.7.33.15578",
       "status": "online",
-      "clientes": 19,
-      "uptime": 8408951,
+      "clientes": 0,
+      "uptime": 10829586,
       "site": "V053_RHMED"
     },
     {
@@ -2623,10 +2632,21 @@
       "ip": "10.186.0.30",
       "mac": "f4:e2:c6:f5:84:c5",
       "modelo": "UAP6MP",
-      "firmware": "6.7.33.15578",
+      "firmware": "6.7.35.15586",
       "status": "online",
       "clientes": 0,
-      "uptime": 438947,
+      "uptime": 1113816,
+      "site": "V023_PIAUI"
+    },
+    {
+      "nome": "V023_TERREO_AP_SALA_REUNIAO",
+      "ip": "10.186.0.31",
+      "mac": "9c:05:d6:b3:0e:49",
+      "modelo": "UAP6MP",
+      "firmware": "6.7.35.15586",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 1114506,
       "site": "V023_PIAUI"
     },
     {
@@ -2636,8 +2656,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 10288930,
+      "clientes": 2,
+      "uptime": 12709549,
       "site": "V041_CAXIAS_DO_SUL"
     },
     {
@@ -2647,8 +2667,8 @@
       "modelo": "UAP6MP",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 4,
-      "uptime": 12077871,
+      "clientes": 0,
+      "uptime": 14498470,
       "site": "V041_CAXIAS_DO_SUL"
     },
     {
@@ -2659,7 +2679,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 0,
-      "uptime": 10288990,
+      "uptime": 12709549,
       "site": "V041_CAXIAS_DO_SUL"
     },
     {
@@ -2669,8 +2689,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 12077650,
+      "clientes": 0,
+      "uptime": 14498219,
       "site": "V041_CAXIAS_DO_SUL"
     },
     {
@@ -2681,7 +2701,7 @@
       "firmware": "6.6.77.15402",
       "status": "online",
       "clientes": 0,
-      "uptime": 12077535,
+      "uptime": 14498078,
       "site": "V041_CAXIAS_DO_SUL"
     },
     {
@@ -2691,8 +2711,8 @@
       "modelo": "U7PG2",
       "firmware": "6.6.77.15402",
       "status": "online",
-      "clientes": 1,
-      "uptime": 12077714,
+      "clientes": 4,
+      "uptime": 14498359,
       "site": "V041_CAXIAS_DO_SUL"
     },
     {
@@ -2700,10 +2720,10 @@
       "ip": "10.121.13.32",
       "mac": "84:78:48:d2:f3:f4",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
+      "firmware": "8.4.6.18068",
       "status": "online",
-      "clientes": 10,
-      "uptime": 268136,
+      "clientes": 9,
+      "uptime": 179896,
       "site": "V055_MACAE_LC"
     },
     {
@@ -2711,10 +2731,10 @@
       "ip": "10.121.12.30",
       "mac": "84:78:48:d2:f7:fc",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
+      "firmware": "8.4.6.18068",
       "status": "online",
-      "clientes": 34,
-      "uptime": 7665,
+      "clientes": 11,
+      "uptime": 799661,
       "site": "V055_MACAE_LC"
     },
     {
@@ -2722,10 +2742,10 @@
       "ip": "10.121.12.31",
       "mac": "84:78:48:d2:e3:a0",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
+      "firmware": "8.4.6.18068",
       "status": "online",
-      "clientes": 77,
-      "uptime": 238572,
+      "clientes": 24,
+      "uptime": 799611,
       "site": "V055_MACAE_LC"
     },
     {
@@ -2733,10 +2753,21 @@
       "ip": "10.151.0.30",
       "mac": "84:78:48:d4:1d:ec",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
-      "status": "offline",
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 4,
+      "uptime": 980615,
+      "site": "V058_S_LEOPOLDO_2"
+    },
+    {
+      "nome": "V058_AP - PISO1 - OPERAÇOES",
+      "ip": "10.151.0.35",
+      "mac": "94:2a:6f:e2:11:58",
+      "modelo": "U7PROMAX",
+      "firmware": "8.4.6.18068",
+      "status": "online",
       "clientes": 0,
-      "uptime": 0,
+      "uptime": 1015351,
       "site": "V058_S_LEOPOLDO_2"
     },
     {
@@ -2744,10 +2775,10 @@
       "ip": "10.151.0.31",
       "mac": "84:78:48:d2:e8:00",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
-      "status": "offline",
-      "clientes": 0,
-      "uptime": 0,
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 4,
+      "uptime": 980343,
       "site": "V058_S_LEOPOLDO_2"
     },
     {
@@ -2755,10 +2786,10 @@
       "ip": "10.151.0.32",
       "mac": "84:78:48:d4:58:28",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
-      "status": "offline",
+      "firmware": "8.4.6.18068",
+      "status": "online",
       "clientes": 0,
-      "uptime": 0,
+      "uptime": 981025,
       "site": "V058_S_LEOPOLDO_2"
     },
     {
@@ -2766,45 +2797,166 @@
       "ip": "10.151.0.33",
       "mac": "84:78:48:ec:c8:50",
       "modelo": "U7PRO",
-      "firmware": "8.3.2.18064",
-      "status": "offline",
-      "clientes": 0,
-      "uptime": 0,
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 2,
+      "uptime": 980819,
       "site": "V058_S_LEOPOLDO_2"
     },
     {
-      "nome": "U6 Mesh Pro",
-      "ip": "10.254.10.27",
-      "mac": "1c:6a:1b:9d:f2:c6",
-      "modelo": "U6MP",
-      "firmware": "7.0.103.16014",
-      "status": "offline",
-      "clientes": 0,
-      "uptime": 0,
-      "site": "V059_GRSASP"
+      "nome": "V058_AP - PISO2 - SUPRIMENTOS",
+      "ip": "10.151.0.34",
+      "mac": "1c:0b:8b:92:8e:da",
+      "modelo": "U7PROMAX",
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 4,
+      "uptime": 1015353,
+      "site": "V058_S_LEOPOLDO_2"
     },
     {
-      "nome": "U6 Mesh Pro",
-      "ip": "10.254.10.26",
+      "nome": "V059_AP_CAM_FRIA_RECEBIMENTO",
+      "ip": "10.111.36.33",
       "mac": "1c:6a:1b:9d:ec:4e",
       "modelo": "U6MP",
       "firmware": "7.0.103.16014",
+      "status": "online",
+      "clientes": 1,
+      "uptime": 1206813,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_FRIA_MENOR",
+      "ip": "10.111.36.37",
+      "mac": "1c:6a:1b:9d:f2:c6",
+      "modelo": "U6MP",
+      "firmware": "7.0.103.16014",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 768296,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_FRIA_MAIOR_DIREITO",
+      "ip": "10.111.36.41",
+      "mac": "1c:6a:1b:ef:dd:f1",
+      "modelo": "U6MP",
+      "firmware": "7.0.103.16014",
+      "status": "online",
+      "clientes": 1,
+      "uptime": 768341,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_GELADA_FUNDO_ESQUERDO",
+      "ip": "10.111.36.36",
+      "mac": "1c:6a:1b:98:1c:53",
+      "modelo": "UKPW",
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 768297,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_ADMINISTRATIVO",
+      "ip": "10.111.36.30",
+      "mac": "d8:b3:70:17:4a:d1",
+      "modelo": "UAP6MP",
+      "firmware": "6.8.2.15592",
+      "status": "online",
+      "clientes": 4,
+      "uptime": 547427,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_GELADA_LADO_PORTA_ESQUERDO",
+      "ip": "10.111.36.40",
+      "mac": "1c:6a:1b:98:2f:be",
+      "modelo": "UKPW",
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 768314,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_GELADA_LADO_PORTA_DIREITO",
+      "ip": "10.111.36.39",
+      "mac": "1c:6a:1b:98:19:fe",
+      "modelo": "UKPW",
+      "firmware": "8.4.6.18068",
       "status": "offline",
       "clientes": 0,
       "uptime": 0,
       "site": "V059_GRSASP"
     },
     {
-      "nome": "U6 Mesh Pro",
-      "ip": "10.254.10.25",
+      "nome": "V059_AP_CAM_FRIA_MAIOR_CENTRO",
+      "ip": "10.111.36.38",
+      "mac": "1c:6a:1b:9d:f7:cd",
+      "modelo": "U6MP",
+      "firmware": "7.0.103.16014",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 768305,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_SALA REUNIAO",
+      "ip": "10.111.36.31",
+      "mac": "d8:b3:70:17:4f:0d",
+      "modelo": "UAP6MP",
+      "firmware": "6.8.2.15592",
+      "status": "online",
+      "clientes": 3,
+      "uptime": 548177,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_FRIA_MAIOR_ESQUERDO",
+      "ip": "10.111.36.42",
       "mac": "1c:6a:1b:9d:ef:96",
       "modelo": "U6MP",
       "firmware": "7.0.103.16014",
-      "status": "offline",
+      "status": "online",
       "clientes": 0,
-      "uptime": 0,
+      "uptime": 768328,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CCO",
+      "ip": "10.111.36.32",
+      "mac": "84:78:48:ea:f3:fc",
+      "modelo": "U7PRO",
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 16,
+      "uptime": 589352,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_GELADA_FUNDO_DIREITO",
+      "ip": "10.111.36.34",
+      "mac": "1c:6a:1b:98:1b:de",
+      "modelo": "UKPW",
+      "firmware": "8.4.6.18068",
+      "status": "online",
+      "clientes": 0,
+      "uptime": 768288,
+      "site": "V059_GRSASP"
+    },
+    {
+      "nome": "V059_AP_CAM_FRIA_AREA_ABERTA",
+      "ip": "10.111.36.35",
+      "mac": "1c:6a:1b:ef:dd:a0",
+      "modelo": "U6MP",
+      "firmware": "7.0.103.16014",
+      "status": "online",
+      "clientes": 2,
+      "uptime": 768350,
       "site": "V059_GRSASP"
     }
   ],
-  "timestamp": "2026-01-21T11:10:03.878659"
+  "timestamp": "2026-02-18T11:33:21.512476"
 }
