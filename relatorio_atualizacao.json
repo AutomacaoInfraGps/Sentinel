@@ -1,9 +1,9 @@
 {
-  "timestamp": "2025-07-23T15:20:15.676803",
+  "timestamp": "2026-02-03T08:26:42.168625",
   "versao": "2.0 - Estrutura Hierárquica",
   "estatisticas": {
-    "total_regionais": 4,
-    "total_servidores": 4,
+    "total_regionais": 36,
+    "total_servidores": 28,
     "estrutura_hierarquica": true
   },
   "regionais": [
@@ -25,6 +25,166 @@
     {
       "codigo": "RG_GALAXIA",
       "nome": "RG_GALAXIA",
+      "servidores": 6
+    },
+    {
+      "codigo": "REG_ALAGOAS",
+      "nome": "REG_ALAGOAS",
+      "servidores": 0
+    },
+    {
+      "codigo": "RG_PERNAMBUCO",
+      "nome": "RG_PERNAMBUCO",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_BAHIA",
+      "nome": "REG_BAHIA",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_GOIAS",
+      "nome": "REG_GOIAS",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_AMAZONAS",
+      "nome": "REG_AMAZONAS",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_ESPIRITO_SANTO",
+      "nome": "REG_ESPIRITO SANTO",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_CEARA",
+      "nome": "REG_CEARA",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_RIO_DE_JANEIRO",
+      "nome": "REG_RIO DE JANEIRO",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_MARANHAO",
+      "nome": "REG_MARANHAO",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_ABC",
+      "nome": "REG_ABC",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_RUDDER",
+      "nome": "REG_RUDDER",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_SAO_LEOPOLDO",
+      "nome": "REG_SAO LEOPOLDO",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_UBERLANDIA",
+      "nome": "REG_UBERLANDIA",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_PARA",
+      "nome": "REG_PARA",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_PARANA",
+      "nome": "REG_PARANA",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_MACAE",
+      "nome": "REG_MACAE",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_RHMED",
+      "nome": "REG_RHMED",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_SULZER",
+      "nome": "REG_SULZER",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_TLSV_POA",
+      "nome": "REG_TLSV POA",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_TLSV_CWB",
+      "nome": "REG_TLSV CWB",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_ARARAS",
+      "nome": "REG_ARARAS",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_LOGHIS",
+      "nome": "REG_LOGHIS",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_PRAIA_GRANDE",
+      "nome": "REG_PRAIA GRANDE",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_CAMPINAS",
+      "nome": "REG_CAMPINAS",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_SJC",
+      "nome": "REG_SJC",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_SOROCABA",
+      "nome": "REG_SOROCABA",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_TRADETALENTOS",
+      "nome": "REG_TRADE&TALENTOS",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_LEOPOLDO_B2",
+      "nome": "REG_LEOPOLDO B2",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_CEARA_2",
+      "nome": "REG_CEARA 2",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_RIO_GRANDE_DO_NORTE",
+      "nome": "REG_RIO GRANDE DO NORTE",
+      "servidores": 0
+    },
+    {
+      "codigo": "REG_CAXIAS",
+      "nome": "REG_CAXIAS",
+      "servidores": 1
+    },
+    {
+      "codigo": "REG_NUTRICAR",
+      "nome": "REG_NUTRICAR",
       "servidores": 1
     }
   ]
