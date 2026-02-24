@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from gerenciar_fortigate import GerenciadorFortigate
 from fortimanager_client import FortiManagerClient
 from config import ENV_CONFIG
-from flask import Flask, current_app, render_template, request, jsonify, redirect, url_for, flash, send_from_directory
+from flask import Flask, current_app, render_template, request, jsonify, redirect, url_for, flash, send_from_directory, Response
 from flask_login import LoginManager, login_required, current_user
 
 try:
@@ -969,6 +969,28 @@ def listar_vms():
         return render_template('vms.html', vms=[], regionais=[])
 
 @app.route('/vms/<vm_id>/relatorio')
+@login_required
+def vm_relatorio(vm_id):
+    """Página de relatório completo de uma VM específica"""
+    try:
+        # Carrega as VMs cadastradas
+        vms = carregar_vms_cadastradas()
+        
+        # Procura a VM específica
+        vm = None
+        for v in vms:
+            if v.get("id") == vm_id:
+                vm = v
+                break
+        
+        if not vm:
+            flash("VM não encontrada", "danger")
+            return redirect(url_for('listar_vms'))
+        
+        return render_template('vm_relatorio_simples.html', vm=vm, vm_id=vm_id)
+    except Exception as e:
+        flash(f"Erro ao carregar relatório da VM: {str(e)}", "danger")
+        return redirect(url_for('listar_vms'))
 
 # === ROTAS DE VPN ===
 
@@ -1025,31 +1047,6 @@ def api_verificar_vpn():
             "success": False,
             "message": str(e)
         })
-
-
-@login_required
-def vm_relatorio(vm_id):
-    """Página de relatório completo de uma VM específica"""
-    try:
-        # Carrega as VMs cadastradas
-        vms = carregar_vms_cadastradas()
-        
-        # Procura a VM específica
-        vm = None
-        for v in vms:
-            if v.get("id") == vm_id:
-                vm = v
-                break
-        
-        if not vm:
-            flash("VM não encontrada", "danger")
-            return redirect(url_for('listar_vms'))
-        
-        return render_template('vm_relatorio_simples.html', vm=vm, vm_id=vm_id)
-    except Exception as e:
-        flash(f"Erro ao carregar relatório da VM: {str(e)}", "danger")
-        return redirect(url_for('listar_vms'))
-
 @app.route('/vms/cadastrar', methods=['GET', 'POST'])
 @login_required
 def cadastrar_vm():
@@ -1116,6 +1113,62 @@ def carregar_vms_cadastradas():
     except Exception as e:
         print(f"Erro ao carregar VMs cadastradas: {str(e)}")
         return []
+
+def _sanitize_vm(vm: dict) -> dict:
+    """Remove dados sensiveis antes de retornar ao cliente."""
+    if not isinstance(vm, dict):
+        return {}
+    clean = dict(vm)
+    clean.pop("password", None)
+    return clean
+
+def _ensure_trusted_host(ip: str):
+    """Garante que o IP esteja em TrustedHosts (WinRM)."""
+    if os.name != "nt":
+        return True, None
+
+    if not ip:
+        return False, "IP vazio"
+
+    try:
+        get_cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "(Get-Item WSMan:\\localhost\\Client\\TrustedHosts).Value"
+        ]
+        result = subprocess.run(get_cmd, capture_output=True, text=True)
+        current = (result.stdout or "").strip()
+
+        if current == "*" or ip in [item.strip() for item in current.split(",") if item.strip()]:
+            return True, None
+
+        new_value = ip if not current else f"{current},{ip}"
+        set_cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f"Set-Item WSMan:\\localhost\\Client\\TrustedHosts -Value '{new_value}' -Force"
+        ]
+        set_result = subprocess.run(set_cmd, capture_output=True, text=True)
+        if set_result.returncode != 0:
+            return False, (set_result.stderr or "Falha ao configurar TrustedHosts").strip()
+
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+def _get_vm_credentials(vm: dict) -> tuple:
+    """Retorna credenciais padrao do server_manager com fallback da VM."""
+    sm_cfg = ENV_CONFIG.get("server_manager", {}) if isinstance(ENV_CONFIG.get("server_manager", {}), dict) else {}
+    username = sm_cfg.get("username")
+    password = sm_cfg.get("password")
+
+    if not username or not password:
+        username = vm.get("username") if isinstance(vm, dict) else None
+        password = vm.get("password") if isinstance(vm, dict) else None
+
+    return username, password
 
 def cadastrar_vm_no_sistema(nome, ip, usuario, senha, regional, descricao=""):
     """Cadastra uma VM no sistema"""
@@ -1312,7 +1365,7 @@ def api_listar_vms():
     try:
         # Carrega as VMs cadastradas
         vms = carregar_vms_cadastradas()
-        return jsonify({"success": True, "vms": vms})
+        return jsonify({"success": True, "vms": [_sanitize_vm(vm) for vm in vms]})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao listar VMs: {str(e)}"})
 
@@ -1327,7 +1380,7 @@ def api_listar_vms_regional(regional):
         # Filtra as VMs da regional
         vms_regional = [vm for vm in todas_vms if vm.get("regional") == regional]
         
-        return jsonify({"success": True, "vms": vms_regional, "regional": regional})
+        return jsonify({"success": True, "vms": [_sanitize_vm(vm) for vm in vms_regional], "regional": regional})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao listar VMs da regional {regional}: {str(e)}"})
 
@@ -1349,10 +1402,34 @@ def api_detalhes_vm(vm_id):
         if not vm:
             return jsonify({"success": False, "message": "VM não encontrada"})
         
-        # Aqui você pode implementar a lógica para se conectar à VM e obter detalhes adicionais
-        # Por enquanto, vamos apenas retornar os dados cadastrados
-        
-        return jsonify({"success": True, "vm": vm})
+        ip = vm.get("ip")
+        if not ip and vm.get("ipAddresses"):
+            ip = vm.get("ipAddresses")[0]
+
+        username, password = _get_vm_credentials(vm)
+        if not ip or not username or not password:
+            return jsonify({"success": False, "message": "Credenciais incompletas para a VM"})
+
+        ok, err = _ensure_trusted_host(ip)
+        if not ok:
+            return jsonify({
+                "success": False,
+                "message": f"Nao foi possivel configurar TrustedHosts para {ip}: {err}"
+            })
+
+        detalhes = obter_detalhes_vm(ip, username, password)
+        if not detalhes.get("success"):
+            return jsonify({"success": False, "message": detalhes.get("message", "Erro ao obter detalhes")})
+
+        vm_info = _sanitize_vm(vm)
+        info = detalhes.get("details", {})
+        vm_info["operatingSystem"] = info.get("operatingSystem", "-")
+        vm_info["uptime"] = info.get("uptime", "-")
+        vm_info["processors"] = info.get("processors", "-")
+        vm_info["memory"] = info.get("memory", "-")
+        vm_info["ipAddresses"] = [ip]
+
+        return jsonify({"success": True, "vm": vm_info})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao obter detalhes da VM: {str(e)}"})
 
@@ -1376,17 +1453,26 @@ def api_servicos_vm(vm_id):
         
         # Obtém as credenciais da VM
         ip = vm.get("ip")
-        username = vm.get("username")
-        password = vm.get("password")
+        username, password = _get_vm_credentials(vm)
         
+        if not ip and vm.get("ipAddresses"):
+            ip = vm.get("ipAddresses")[0]
+
         if not ip or not username or not password:
             return jsonify({"success": False, "message": "Credenciais incompletas para a VM"})
         
+        ok, err = _ensure_trusted_host(ip)
+        if not ok:
+            return jsonify({
+                "success": False,
+                "message": f"Nao foi possivel configurar TrustedHosts para {ip}: {err}"
+            })
+
         # Obtém os serviços da VM usando o novo módulo
         result = obter_servicos_vm(ip, username, password)
         
         # Adiciona a VM ao resultado
-        result["vm"] = vm
+        result["vm"] = _sanitize_vm(vm)
         
         return jsonify(result)
     except Exception as e:
@@ -1412,11 +1498,20 @@ def api_relatorio_vm(vm_id):
         
         # Obtém as credenciais da VM
         ip = vm.get("ip")
-        username = vm.get("username")
-        password = vm.get("password")
+        username, password = _get_vm_credentials(vm)
         
+        if not ip and vm.get("ipAddresses"):
+            ip = vm.get("ipAddresses")[0]
+
         if not ip or not username or not password:
             return jsonify({"success": False, "message": "Credenciais incompletas para a VM"})
+
+        ok, err = _ensure_trusted_host(ip)
+        if not ok:
+            return jsonify({
+                "success": False,
+                "message": f"Nao foi possivel configurar TrustedHosts para {ip}: {err}"
+            })
         
         # Adiciona log para depuração
         app.logger.info(f"Gerando relatório para VM: {ip}")
@@ -1431,7 +1526,7 @@ def api_relatorio_vm(vm_id):
                 app.logger.error(f"Saída bruta: {relatorio['raw_output'][:500]}...")
         
         # Adiciona informações da VM
-        relatorio["vm"] = vm
+        relatorio["vm"] = _sanitize_vm(vm)
         
         return jsonify(relatorio)
     except Exception as e:
@@ -1458,21 +1553,113 @@ def api_logs_vm(vm_id):
         
         # Obtém as credenciais da VM
         ip = vm.get("ip")
-        username = vm.get("username")
-        password = vm.get("password")
+        username, password = _get_vm_credentials(vm)
         
+        if not ip and vm.get("ipAddresses"):
+            ip = vm.get("ipAddresses")[0]
+
         if not ip or not username or not password:
             return jsonify({"success": False, "message": "Credenciais incompletas para a VM"})
         
+        ok, err = _ensure_trusted_host(ip)
+        if not ok:
+            return jsonify({
+                "success": False,
+                "message": f"Nao foi possivel configurar TrustedHosts para {ip}: {err}"
+            })
+
         # Obtém os logs da VM usando o novo módulo
         result = obter_logs_vm(ip, username, password)
         
         # Adiciona a VM ao resultado
-        result["vm"] = vm
+        result["vm"] = _sanitize_vm(vm)
         
         return jsonify(result)
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao obter logs da VM: {str(e)}"})
+
+@app.route('/api/vms/<vm_id>/conectar', methods=['POST'])
+@login_required
+def api_conectar_vm(vm_id):
+    """API para iniciar conexao RDP (mstsc) para uma VM"""
+    try:
+        # Carrega as VMs cadastradas
+        vms = carregar_vms_cadastradas()
+
+        # Procura a VM especifica
+        vm = None
+        for v in vms:
+            if v.get("id") == vm_id:
+                vm = v
+                break
+
+        if not vm:
+            return jsonify({"success": False, "message": "VM nao encontrada"})
+
+        ip = vm.get("ip")
+        if not ip and vm.get("ipAddresses"):
+            ip = vm.get("ipAddresses")[0]
+
+        if not ip:
+            return jsonify({"success": False, "message": "IP da VM nao encontrado"})
+
+        if os.name != "nt":
+            return jsonify({"success": False, "message": "RDP so esta disponivel no Windows"})
+
+        # Valida formato basico de IPv4
+        if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+            return jsonify({"success": False, "message": "IP invalido para RDP"})
+
+        partes = ip.split(".")
+        if any(not 0 <= int(p) <= 255 for p in partes):
+            return jsonify({"success": False, "message": "IP invalido para RDP"})
+
+        # Determina se o acesso e local (servidor) ou remoto
+        server_ip = ""
+        if isinstance(ENV_CONFIG, dict):
+            server_ip = (ENV_CONFIG.get("app_host_ip") or "").strip()
+        if not server_ip:
+            server_ip = (request.host.split(":")[0] or "").strip()
+
+        client_ip = (request.remote_addr or "").strip()
+        is_local = client_ip in {server_ip, "127.0.0.1", "::1"}
+
+        # Credenciais padrao do server_manager (environment.json)
+        sm_cfg = ENV_CONFIG.get("server_manager", {}) if isinstance(ENV_CONFIG.get("server_manager", {}), dict) else {}
+        sm_user = sm_cfg.get("username")
+        sm_pass = sm_cfg.get("password")
+
+        # Fallback para credenciais da VM, se necessário
+        if not sm_user or not sm_pass:
+            sm_user = vm.get("username")
+            sm_pass = vm.get("password")
+
+        if sm_user and sm_pass:
+            subprocess.run(
+                ["cmdkey", f"/generic:TERMSRV/{ip}", f"/user:{sm_user}", f"/pass:{sm_pass}"],
+                capture_output=True,
+                text=True
+            )
+
+        if not is_local:
+            # Para acesso remoto, retorna um arquivo .rdp para o cliente baixar
+            rdp_user = sm_user or ""
+            rdp_lines = [
+                f"full address:s:{ip}",
+                "prompt for credentials:i:1",
+            ]
+            if rdp_user:
+                rdp_lines.append(f"username:s:{rdp_user}")
+            rdp_content = "\r\n".join(rdp_lines) + "\r\n"
+
+            response = Response(rdp_content, mimetype="application/rdp")
+            response.headers["Content-Disposition"] = f"attachment; filename={vm_id}.rdp"
+            return response
+
+        subprocess.Popen(["mstsc", f"/v:{ip}"])
+        return jsonify({"success": True, "message": f"Conexao RDP iniciada para {ip}"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro ao iniciar RDP: {str(e)}"})
 
 @app.route('/api/vms/<vm_id>/verificar', methods=['POST'])
 @login_required
@@ -1563,7 +1750,7 @@ def api_cadastrar_vm():
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao cadastrar VM: {str(e)}"})
 
-@app.route('/api/vms/remover/<vm_id>', methods=['DELETE'])
+@app.route('/api/vms/remover/<vm_id>', methods=['DELETE', 'POST'])
 @login_required
 def api_remover_vm(vm_id):
     """API para remover uma VM"""
