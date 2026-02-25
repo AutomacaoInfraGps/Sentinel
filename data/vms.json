@@ -1,1 +1,13 @@
-[]
+[
+    {
+        "id": "vm-1772028162",
+        "name": "tteste",
+        "ip": "192.168.21.26",
+        "username": "Administrator",
+        "password": "kasjdkashjkdt",
+        "regional": "Espirito Santo",
+        "description": "teste",
+        "status": "Unknown",
+        "last_check": null
+    }
+]
