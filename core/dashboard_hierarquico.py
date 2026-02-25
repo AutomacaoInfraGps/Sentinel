@@ -334,10 +334,11 @@ class DashboardHierarquico:
             cursor: pointer;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             transition: transform 0.3s ease;
+            transform: none;
         }
         
         .refresh-btn:hover {
-            transform: scale(1.1) rotate(180deg);
+            transform: scale(1.05);
         }
         
         @media (max-width: 768px) {
@@ -440,7 +441,7 @@ class DashboardHierarquico:
     </div>
     
     <button class="refresh-btn" onclick="location.reload()" title="Atualizar">
-        🔄
+        Update
     </button>
     
     <script>

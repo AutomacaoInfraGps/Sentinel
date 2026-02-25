@@ -43,7 +43,7 @@ except ImportError:
     pd = None
 
 # Configuração do projeto
-from config import PROJECT_ROOT
+from config import PROJECT_ROOT, REPLICACAO_JSON
 from data_store import load_data, is_data_fresh
 
 # Módulos hierárquicos
@@ -1863,8 +1863,11 @@ def api_fortimanager_adoms():
 @login_required
 def replicacao_ad():
     """Página de replicação Active Directory"""
-    # Carrega os dados de replicação
-    replicacao_data = load_data("replicacao") or {}
+    # Carrega os dados locais e o caminho público, escolhendo o mais completo
+    local_data = load_data("replicacao")
+    public_data = _load_public_replicacao_json()
+    replicacao_data = _choose_replicacao_data(local_data, public_data)
+    replicacao_data = _normalize_replicacao_data(replicacao_data)
     
     # Renderiza o template com os dados
     return render_template('replicacao_simples.html', replicacao_data=replicacao_data)
@@ -1879,54 +1882,63 @@ def executar_repadmin():
     from config import PROJECT_ROOT
     
     try:
-        # Caminho para o script PowerShell
-        script_path = PROJECT_ROOT / "Replicacao_Final.ps1"
-        
-        # Verifica se o script existe
-        if not script_path.exists():
+        # Tenta obter os dados direto do repadmin (sem gerar arquivos extras)
+        direct_data, direct_error = _run_repadmin_direct()
+        if direct_data:
+            return {
+                "success": True,
+                "data": direct_data
+            }
+        if direct_error:
             return {
                 "success": False,
-                "error": f"Script não encontrado: {script_path}"
+                "error": direct_error
             }
-        
-        # Executa o script PowerShell
-        print(f"Executando script: {script_path}")
+
+        # Fallback opcional: tenta o script simples
+        script_path_final = PROJECT_ROOT / "Replicacao_Final.ps1"
+        if not script_path_final.exists():
+            return {
+                "success": False,
+                "error": "Script Replicacao_Final.ps1 não encontrado"
+            }
+
+        print(f"Executando script: {script_path_final}")
         process = subprocess.run(
-            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script_path_final)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
             errors='replace'
         )
-        
-        # Verifica se o comando foi executado com sucesso
+
         if process.returncode != 0:
             print(f"Erro ao executar PowerShell: {process.stderr}")
             return {
                 "success": False,
                 "error": f"Erro ao executar PowerShell: {process.stderr}"
             }
-        
-        # Caminho para o arquivo JSON
+
         json_path = os.path.join(os.environ["USERPROFILE"], "Desktop", "replicacao.json")
-        
-        # Verifica se o arquivo JSON foi criado
+
         if not os.path.exists(json_path):
             print(f"Arquivo JSON não encontrado: {json_path}")
             return {
                 "success": False,
                 "error": f"Arquivo JSON não encontrado: {json_path}"
             }
-        
-        # Lê o arquivo JSON
+
         try:
-            with open(json_path, 'r', encoding='ascii') as f:
-                replicacao_data = json.load(f)
+            replicacao_data = _load_json_with_fallback(json_path)
+            if replicacao_data is None:
+                return {
+                    "success": False,
+                    "error": "Falha ao ler o JSON de replicação com as codificações conhecidas"
+                }
             
-            # Verifica se os dados estão no formato esperado
-            if "servidores" not in replicacao_data:
-                replicacao_data["servidores"] = []
+            # Normaliza para o formato esperado pela página
+            replicacao_data = _normalize_replicacao_data(replicacao_data)
             
             # Garante que todos os servidores têm os campos necessários
             for servidor in replicacao_data["servidores"]:
@@ -1996,6 +2008,220 @@ def executar_repadmin():
             "traceback": traceback.format_exc()
         }
 
+
+def _run_repadmin_direct():
+    try:
+        process = subprocess.run(
+            ["repadmin", "/replsummary"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace'
+        )
+    except FileNotFoundError as e:
+        return None, f"repadmin não encontrado: {e}"
+
+    output = (process.stdout or "") + "\n" + (process.stderr or "")
+    data = _parse_repadmin_output(output)
+
+    if data["servidores"] or data["erros_operacionais"]:
+        return data, None
+
+    if process.returncode != 0:
+        return None, f"Erro ao executar repadmin: {process.stderr.strip()}"
+
+    return None, "Saída do repadmin não contém dados reconhecíveis"
+
+
+def _parse_repadmin_output(text):
+    linhas = text.splitlines()
+    servidores = []
+    erros_operacionais = []
+    secao = ""
+
+    for linha in linhas:
+        if re.search(r"^\s*Source DSA", linha, re.IGNORECASE) or re.search(r"^\s*DSA Origem", linha, re.IGNORECASE):
+            secao = "Origem"
+            continue
+        if re.search(r"^\s*Destination DSA", linha, re.IGNORECASE) or re.search(r"^\s*DSA Destino", linha, re.IGNORECASE):
+            secao = "Destino"
+            continue
+
+        if re.search(r"^\s*\d+\s+-\s+.+", linha):
+            erros_operacionais.append(linha.strip())
+            continue
+
+        if secao in ("Origem", "Destino"):
+            match = re.match(r"^\s*(\S+)\s+([\d\.:hms]+)\s+(\d+\s*/\s*\d+)?\s+(\d+)\s*$", linha)
+            if not match:
+                continue
+
+            servidor, latencia, sucesso_total, erros = match.groups()
+            parceiros = 0
+            if sucesso_total:
+                total_match = re.search(r"/\s*(\d+)", sucesso_total)
+                if total_match:
+                    parceiros = int(total_match.group(1))
+
+            erros_int = int(erros)
+            status = "OK" if erros_int == 0 else ("Warning" if erros_int < 3 else "Error")
+
+            servidores.append({
+                "nome": servidor,
+                "status": status,
+                "parceiros": parceiros,
+                "falhas": erros_int,
+                "erros": erros_int,
+                "replicacoes": parceiros,
+                "ultima_replicacao": datetime.now().isoformat(),
+                "detalhes": "",
+                "delta": latencia,
+                "tipo": secao,
+            })
+
+    error_names = _extract_error_names(erros_operacionais)
+    servidores = _apply_error_flags(servidores, error_names)
+
+    all_names = { _normalize_host(s["nome"]) for s in servidores }
+    total_servidores = len(all_names.union(error_names))
+    servidores_problemas = len({ _normalize_host(s["nome"]) for s in servidores if s["status"] != "OK" }.union(error_names))
+    servidores_saudaveis = max(total_servidores - servidores_problemas, 0)
+
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "total_servidores": total_servidores,
+        "servidores_saudaveis": servidores_saudaveis,
+        "servidores_problemas": servidores_problemas,
+        "servidores": servidores,
+        "erros_operacionais": erros_operacionais,
+    }
+
+
+def _load_public_replicacao_json():
+    fallback_path = Path(REPLICACAO_JSON)
+    if not fallback_path.exists():
+        return None
+    return _load_json_with_fallback(fallback_path)
+
+
+def _load_json_with_fallback(file_path):
+    encodings = ['utf-8', 'utf-8-sig', 'latin1']
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                return json.load(f)
+        except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+            continue
+    return None
+
+
+def _get_replicacao_total(data):
+    if not data:
+        return 0
+    if isinstance(data, dict):
+        if "total_servidores" in data and data.get("total_servidores") is not None:
+            return int(data.get("total_servidores") or 0)
+        if "controladores" in data and data.get("controladores") is not None:
+            return int(data.get("controladores") or 0)
+        detalhes = data.get("detalhes") or {}
+        controladores = detalhes.get("controladores") or []
+        return len(controladores)
+    return 0
+
+
+def _choose_replicacao_data(local_data, public_data):
+    if not local_data and not public_data:
+        return {}
+    if not local_data:
+        return public_data
+    if not public_data:
+        return local_data
+
+    local_total = _get_replicacao_total(local_data)
+    public_total = _get_replicacao_total(public_data)
+    return public_data if public_total > local_total else local_data
+
+
+def _normalize_replicacao_data(replicacao_data):
+    replicacao_data = replicacao_data or {}
+    if "servidores" in replicacao_data:
+        return replicacao_data
+
+    detalhes = replicacao_data.get("detalhes") or {}
+    controladores = detalhes.get("controladores") or []
+    servidores = []
+    for ctrl in controladores:
+        sucesso_total = str(ctrl.get("sucesso_total") or "0 / 0")
+        parceiros = 0
+        match = re.search(r"/\s*(\d+)", sucesso_total)
+        if match:
+            parceiros = int(match.group(1))
+
+        erros = int(ctrl.get("erros") or 0)
+        status = "OK" if erros == 0 else "Error"
+
+        servidores.append({
+            "nome": ctrl.get("nome") or "Desconhecido",
+            "status": status,
+            "parceiros": parceiros,
+            "falhas": erros,
+            "erros": erros,
+            "replicacoes": parceiros,
+            "ultima_replicacao": replicacao_data.get("timestamp") or datetime.now().isoformat(),
+            "detalhes": "",
+            "delta": ctrl.get("latencia") or "N/A",
+            "tipo": "Destino",
+        })
+
+    error_names = _extract_error_names(detalhes.get("erros_operacionais") or [])
+    servidores = _apply_error_flags(servidores, error_names)
+
+    all_names = { _normalize_host(s["nome"]) for s in servidores }
+    total_servidores = len(all_names.union(error_names))
+    servidores_problemas = len({ _normalize_host(s["nome"]) for s in servidores if s["status"] != "OK" }.union(error_names))
+    servidores_saudaveis = max(total_servidores - servidores_problemas, 0)
+
+    return {
+        "timestamp": replicacao_data.get("timestamp") or datetime.now().isoformat(),
+        "total_servidores": replicacao_data.get("controladores", total_servidores),
+        "servidores_saudaveis": replicacao_data.get("replicacao_ok", servidores_saudaveis),
+        "servidores_problemas": replicacao_data.get("replicacao_erro", servidores_problemas),
+        "servidores": servidores,
+        "erros_operacionais": detalhes.get("erros_operacionais") or [],
+    }
+
+
+def _normalize_host(value):
+    if not value:
+        return ""
+    value = value.strip().lower()
+    if "." in value:
+        value = value.split(".")[0]
+    return value
+
+
+def _extract_error_names(erros_operacionais):
+    nomes = set()
+    for erro in erros_operacionais:
+        match = re.search(r"-\s*([^\s]+)", str(erro))
+        if match:
+            nomes.add(_normalize_host(match.group(1)))
+    return {n for n in nomes if n}
+
+
+def _apply_error_flags(servidores, error_names):
+    if not error_names:
+        return servidores
+
+    for servidor in servidores:
+        nome_norm = _normalize_host(servidor.get("nome"))
+        if nome_norm in error_names:
+            servidor["status"] = "Error"
+            servidor["erros"] = max(int(servidor.get("erros") or 0), 1)
+            servidor["falhas"] = max(int(servidor.get("falhas") or 0), 1)
+    return servidores
+
 @app.route('/executar_replicacao_direto', methods=['POST'])
 def executar_replicacao_direto():
     """Executa o comando repadmin diretamente e redireciona para a página de replicação"""
@@ -2023,6 +2249,16 @@ def executar_replicacao_direto():
         json_path = data_dir / "replicacao.json"
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(replicacao_data, f, indent=2, ensure_ascii=False)
+
+        # Mantém também o JSON público usado por outros fluxos (executar_tudo.py)
+        public_json_path = Path(REPLICACAO_JSON)
+        try:
+            if public_json_path.resolve() != json_path.resolve():
+                public_json_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(public_json_path, 'w', encoding='utf-8') as f:
+                    json.dump(replicacao_data, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
         
         # Mensagem de sucesso
         servidores_total = replicacao_data["total_servidores"]
@@ -2824,7 +3060,7 @@ def dashboard_hierarquico_web():
         arquivo_dashboard = dashboard_hierarquico.gerar_todos_dashboards()
         
         # Redireciona para o arquivo HTML gerado
-        return redirect(f'/static/dashboard_hierarquico.html')
+        return redirect('/output/dashboard_hierarquico.html')
         
     except Exception as e:
         flash(f'Erro ao gerar dashboard: {str(e)}', 'error')

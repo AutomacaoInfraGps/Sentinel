@@ -261,32 +261,46 @@ class GerenciadorSwitches:
             print(f"🔑 Autenticando no Zabbix: {self.zabbix_url}")
             print(f"👤 Usuário: {self.username}")
             
-            payload = {
-                "jsonrpc": "2.0",
-                "method": "user.login",
-                "params": {"user": self.username, "password": self.password},
-                "id": 1
-            }
-            headers = {"Content-Type": "application/json-rpc"}
-            
-            # Aumenta o timeout para 10 segundos
-            response = requests.post(self.zabbix_url, headers=headers, json=payload, timeout=10)
-            
+            def _post_auth(params_key):
+                payload = {
+                    "jsonrpc": "2.0",
+                    "method": "user.login",
+                    "params": {params_key: self.username, "password": self.password},
+                    "id": 1
+                }
+                headers = {"Content-Type": "application/json-rpc"}
+                return requests.post(self.zabbix_url, headers=headers, json=payload, timeout=10)
+
+            # Primeiro tenta com "user" (compatibilidade), e faz fallback para "username" se necessário
+            response = _post_auth("user")
+
             if response.status_code == 200:
                 result = response.json()
                 if "result" in result:
                     self.auth_token = result["result"]
                     print("✅ Autenticação no Zabbix bem-sucedida!")
                     return True
-                else:
-                    error_msg = result.get('error', {}).get('message', 'Desconhecido')
-                    error_data = result.get('error', {}).get('data', '')
-                    print(f"❌ Erro de autenticação: {error_msg}")
-                    print(f"   Detalhes: {error_data}")
+
+                error_msg = result.get('error', {}).get('message', 'Desconhecido')
+                error_data = result.get('error', {}).get('data', '')
+
+                if "unexpected parameter \"user\"" in str(error_data):
+                    response = _post_auth("username")
+                    if response.status_code == 200:
+                        result = response.json()
+                        if "result" in result:
+                            self.auth_token = result["result"]
+                            print("✅ Autenticação no Zabbix bem-sucedida!")
+                            return True
+                        error_msg = result.get('error', {}).get('message', 'Desconhecido')
+                        error_data = result.get('error', {}).get('data', '')
+
+                print(f"❌ Erro de autenticação: {error_msg}")
+                print(f"   Detalhes: {error_data}")
             else:
                 print(f"❌ Erro HTTP: {response.status_code}")
                 print(f"   Resposta: {response.text}")
-            
+
             return False
         except requests.exceptions.ConnectTimeout:
             print(f"❌ Timeout ao conectar ao Zabbix: {self.zabbix_url}")
