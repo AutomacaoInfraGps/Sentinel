@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-02-25T11:34:27.081080",
-  "total_servidores": 33,
-  "servidores_saudaveis": 32,
+  "timestamp": "2026-03-02T13:44:28.212866",
+  "total_servidores": 32,
+  "servidores_saudaveis": 31,
   "servidores_problemas": 1,
   "servidores": [
     {
@@ -11,21 +11,21 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 110,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.209872",
       "detalhes": "",
-      "delta": "14m:30s",
+      "delta": "14m:31s",
       "tipo": "Origem"
     },
     {
       "nome": "SHAULA",
       "status": "OK",
-      "parceiros": 75,
+      "parceiros": 70,
       "falhas": 0,
       "erros": 0,
-      "replicacoes": 75,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "replicacoes": 70,
+      "ultima_replicacao": "2026-03-02T13:44:28.209872",
       "detalhes": "",
-      "delta": "36m:04s",
+      "delta": "45m:52s",
       "tipo": "Origem"
     },
     {
@@ -35,9 +35,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 82,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.209872",
       "detalhes": "",
-      "delta": "37m:54s",
+      "delta": "47m:43s",
       "tipo": "Origem"
     },
     {
@@ -47,9 +47,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "14m:59s",
+      "delta": "09m:30s",
       "tipo": "Destino"
     },
     {
@@ -59,9 +59,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "01m:22s",
+      "delta": "11m:23s",
       "tipo": "Destino"
     },
     {
@@ -71,9 +71,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "05m:23s",
+      "delta": "14m:59s",
       "tipo": "Destino"
     },
     {
@@ -83,9 +83,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "14m:49s",
+      "delta": "09m:25s",
       "tipo": "Destino"
     },
     {
@@ -95,9 +95,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "11m:24s",
+      "delta": "05m:48s",
       "tipo": "Destino"
     },
     {
@@ -107,9 +107,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "12m:28s",
+      "delta": "06m:58s",
       "tipo": "Destino"
     },
     {
@@ -119,9 +119,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "03m:33s",
+      "delta": "11m:33s",
       "tipo": "Destino"
     },
     {
@@ -131,9 +131,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "04m:22s",
+      "delta": "14m:03s",
       "tipo": "Destino"
     },
     {
@@ -143,9 +143,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 2,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "06m:48s",
+      "delta": "12m:31s",
       "tipo": "Destino"
     },
     {
@@ -155,9 +155,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.079084",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "02m:52s",
+      "delta": "12m:48s",
       "tipo": "Destino"
     },
     {
@@ -167,9 +167,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": ":43s",
+      "delta": "10m:06s",
       "tipo": "Destino"
     },
     {
@@ -179,9 +179,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "03m:34s",
+      "delta": "13m:05s",
       "tipo": "Destino"
     },
     {
@@ -191,9 +191,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "01m:18s",
+      "delta": "11m:26s",
       "tipo": "Destino"
     },
     {
@@ -203,9 +203,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "04m:23s",
+      "delta": "14m:13s",
       "tipo": "Destino"
     },
     {
@@ -215,9 +215,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.210887",
       "detalhes": "",
-      "delta": "10m:02s",
+      "delta": "10m:26s",
       "tipo": "Destino"
     },
     {
@@ -227,9 +227,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "08m:38s",
+      "delta": "11m:18s",
       "tipo": "Destino"
     },
     {
@@ -239,9 +239,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "14m:14s",
+      "delta": "08m:50s",
       "tipo": "Destino"
     },
     {
@@ -251,9 +251,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": ":40s",
+      "delta": "10m:18s",
       "tipo": "Destino"
     },
     {
@@ -263,9 +263,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "11m:14s",
+      "delta": "05m:47s",
       "tipo": "Destino"
     },
     {
@@ -275,9 +275,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "03m:51s",
+      "delta": "13m:48s",
       "tipo": "Destino"
     },
     {
@@ -287,21 +287,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "14m:00s",
-      "tipo": "Destino"
-    },
-    {
-      "nome": "MIRA",
-      "status": "OK",
-      "parceiros": 5,
-      "falhas": 0,
-      "erros": 0,
-      "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
-      "detalhes": "",
-      "delta": "04m:12s",
+      "delta": "12m:59s",
       "tipo": "Destino"
     },
     {
@@ -311,9 +299,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "03m:04s",
+      "delta": "12m:27s",
       "tipo": "Destino"
     },
     {
@@ -323,9 +311,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "08m:01s",
+      "delta": "09m:38s",
       "tipo": "Destino"
     },
     {
@@ -335,9 +323,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "09m:47s",
+      "delta": "04m:31s",
       "tipo": "Destino"
     },
     {
@@ -347,9 +335,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "11m:42s",
+      "delta": "07m:37s",
       "tipo": "Destino"
     },
     {
@@ -359,9 +347,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "05m:47s",
+      "delta": "14m:40s",
       "tipo": "Destino"
     },
     {
@@ -371,9 +359,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.080082",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "03m:56s",
+      "delta": "13m:32s",
       "tipo": "Destino"
     },
     {
@@ -383,9 +371,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 5,
-      "ultima_replicacao": "2026-02-25T11:34:27.081080",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "38m:24s",
+      "delta": "47m:52s",
       "tipo": "Destino"
     },
     {
@@ -395,9 +383,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.081080",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "36m:04s",
+      "delta": "45m:52s",
       "tipo": "Destino"
     },
     {
@@ -407,9 +395,9 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.081080",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "10m:40s",
+      "delta": "05m:38s",
       "tipo": "Destino"
     },
     {
@@ -419,13 +407,13 @@
       "falhas": 0,
       "erros": 0,
       "replicacoes": 10,
-      "ultima_replicacao": "2026-02-25T11:34:27.081080",
+      "ultima_replicacao": "2026-03-02T13:44:28.211867",
       "detalhes": "",
-      "delta": "06m:28s",
+      "delta": "01m:19s",
       "tipo": "Destino"
     }
   ],
   "erros_operacionais": [
-    "58 - MUHILFAIN.Galaxia.local"
+    "58 - MIRA.Galaxia.local"
   ]
 }
