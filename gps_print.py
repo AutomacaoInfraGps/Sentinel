@@ -1,3 +1,177 @@
+def gerar_print_rede_universo(timeout: int = 30) -> None:
+    # Gera um "print" do portal Rede Universo no Public:
+    #   - C:/Users/Public/Automacao/output/public/rede_universo.png
+    #   - C:/Users/Public/Automacao/output/public/rede_universo.html (HTML com a imagem em base64)
+    #
+    # Sem Selenium: usa Edge/Chrome headless por CLI (subprocess). Com Selenium instalado, usa Selenium.
+    # Logs do navegador são silenciados.
+    # Se não gerar imagem, cria placeholder HTML igual GPS
+    def criar_placeholder():
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        UNIVERSO_HTML.write_text(
+            f"""<!doctype html>\n<html lang='pt-br'>\n<head>\n  <meta charset='utf-8'>\n  <title>Rede Universo</title>\n  <style>body{{font-family:Segoe UI,Arial;margin:16px}}.note{{color:#666}}</style>\n</head>\n<body>\n  <div class='note'>Prévia indisponível no momento. ({ts})</div>\n  <p><a href='{url}' target='_blank'>Abrir Rede Universo</a></p>\n</body>\n</html>""",
+            encoding="utf-8",
+        )
+    """Gera o print do portal Rede Universo."""
+    from pathlib import Path
+    import time
+    import os
+    ensure_directories()
+    OUTPUT_DIR_PUBLIC.mkdir(parents=True, exist_ok=True)
+    # Garante criação do diretório output/public
+    from datetime import datetime
+    now = datetime.now()
+    ano = str(now.year)
+    mes = f"{now.month:02d}"
+    dia = f"{now.day:02d}"
+    public_base = Path(r"C:/Users/Public/Automacao/output/public")
+    public_dir = public_base / ano / mes / dia
+    public_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[DEBUG] public_dir: {public_dir}")
+    # Atualiza caminhos dos prints
+    UNIVERSO_IMG = public_dir / "rede_universo.png"
+    UNIVERSO_HTML = public_dir / "rede_universo.html"
+    # Caminho absoluto para debug
+    UNIVERSO_IMG = Path(r"C:/Users/Public/Automacao/output/public/rede_universo.png")
+    UNIVERSO_HTML = Path(r"C:/Users/Public/Automacao/output/public/rede_universo.html")
+    print(f"[DEBUG] UNIVERSO_IMG: {UNIVERSO_IMG}")
+    print(f"[DEBUG] UNIVERSO_HTML: {UNIVERSO_HTML}")
+    print(f"[DEBUG] OUTPUT_DIR_PUBLIC exists: {OUTPUT_DIR_PUBLIC.exists()}")
+    print(f"[DEBUG] Current working dir: {os.getcwd()}")
+    url = "https://www.gpsamigo.com.br/guest/s/default/?ap=28:70:4e:54:11:c1&id=d4:1b:81:8a:4e:13&t=1772215964&url=http://www.msftconnecttest.com%2Fredirect&ssid=SATURNO"
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        opts = webdriver.EdgeOptions()
+        opts.add_argument("--headless=new")
+        opts.add_argument("--disable-gpu")
+        opts.add_argument("--no-first-run")
+        opts.add_argument("--no-default-browser-check")
+        opts.add_argument("--window-size=1366,768")
+        opts.add_argument(f"--user-data-dir={PUBLIC_BASE / 'browser_profile'}")
+        drv = webdriver.Edge(options=opts)
+        try:
+            drv.get(url)
+            WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            time.sleep(2)
+            # Captura WI-FI
+            try:
+                wifi_clicked = False
+                for xpath in [
+                    "//button[contains(.,'WI-FI')]",
+                    "//a[contains(.,'WI-FI')]",
+                    "//div[contains(.,'WI-FI')]",
+                    "//span[contains(.,'WI-FI')]",
+                    "//*[contains(text(),'WI-FI')]"
+                ]:
+                    btns = drv.find_elements(By.XPATH, xpath)
+                    for btn in btns:
+                        if btn.is_displayed():
+                            btn.click()
+                            print(f"[DEBUG] Clique WI-FI realizado via {xpath}")
+                            wifi_clicked = True
+                            time.sleep(1)
+                            break
+                    if wifi_clicked:
+                        break
+            except Exception as e:
+                print(f"[DEBUG] Falha ao clicar WI-FI: {e}")
+            wifi_img = public_dir / "rede_universo_wifi.png"
+            drv.save_screenshot(str(wifi_img))
+            wifi_html = public_dir / "rede_universo_wifi.html"
+            wifi_html.write_text(_html_from_image_base64(wifi_img), encoding="utf-8")
+            print(f"[DEBUG] Screenshot WI-FI salvo: {wifi_img.exists()} tamanho: {wifi_img.stat().st_size if wifi_img.exists() else 0}")
+            print(f"[DEBUG] HTML WI-FI gerado: {wifi_html.exists()} tamanho: {wifi_html.stat().st_size if wifi_html.exists() else 0}")
+
+            # Captura DIRETORIA
+            try:
+                # Clica diretamente no botão da aba DIRETORIA
+                btn = drv.find_element(By.CSS_SELECTOR, '.switcher-signup')
+                drv.execute_script('arguments[0].click();', btn)
+                # Força visualmente a ativação da aba DIRETORIA
+                js_force_active = '''
+                    var wrappers = document.querySelectorAll('.form-wrapper');
+                    wrappers.forEach(function(w, i) {
+                        w.classList.remove('is-active');
+                    });
+                    var btns = document.querySelectorAll('.switcher');
+                    btns.forEach(function(b, i) {
+                        b.classList.remove('active');
+                    });
+                    // Ativa a segunda aba (DIRETORIA)
+                    if (wrappers.length > 1) {
+                        wrappers[1].classList.add('is-active');
+                        btns[1].classList.add('active');
+                    }
+                '''
+                drv.execute_script(js_force_active)
+                print("[DEBUG] Forçou ativação visual da aba DIRETORIA")
+                time.sleep(2)
+            except Exception as e:
+                print(f"[DEBUG] Falha ao ativar DIRETORIA: {e}")
+            # Loga HTML da página para depuração
+            page_html = drv.page_source
+            with open(str(public_dir / "debug_diretoria.html"), "w", encoding="utf-8") as f:
+                f.write(page_html)
+            print(f"[DEBUG] HTML da aba DIRETORIA salvo em debug_diretoria.html (tamanho: {len(page_html)})")
+            diretoria_img = public_dir / "rede_universo_diretoria.png"
+            drv.save_screenshot(str(diretoria_img))
+            diretoria_html = public_dir / "rede_universo_diretoria.html"
+            diretoria_html.write_text(_html_from_image_base64(diretoria_img), encoding="utf-8")
+            print(f"[DEBUG] Screenshot DIRETORIA salvo: {diretoria_img.exists()} tamanho: {diretoria_img.stat().st_size if diretoria_img.exists() else 0}")
+            print(f"[DEBUG] HTML DIRETORIA gerado: {diretoria_html.exists()} tamanho: {diretoria_html.stat().st_size if diretoria_html.exists() else 0}")
+
+            # Captura geral (default)
+            drv.save_screenshot(str(UNIVERSO_IMG))
+            UNIVERSO_HTML.write_text(_html_from_image_base64(UNIVERSO_IMG), encoding="utf-8")
+            print(f"[DEBUG] Screenshot geral salvo: {UNIVERSO_IMG.exists()} tamanho: {UNIVERSO_IMG.stat().st_size if UNIVERSO_IMG.exists() else 0}")
+            print(f"[DEBUG] HTML geral gerado: {UNIVERSO_HTML.exists()} tamanho: {UNIVERSO_HTML.stat().st_size if UNIVERSO_HTML.exists() else 0}")
+            return
+        finally:
+            drv.quit()
+    except Exception as e:
+        print(f"[DEBUG] Selenium falhou: {e}")
+        browser = _find_browser_exe()
+        if not browser:
+            raise RuntimeError("Não encontrei msedge.exe nem chrome.exe. Instale Edge ou Chrome no servidor.")
+        screenshot_name = "screenshot_universo.png"
+        screenshot_path = Path(r"C:/Users/Public/Automacao/output/public/screenshot_universo.png")
+        try:
+            if screenshot_path.exists():
+                screenshot_path.unlink()
+        except Exception:
+            pass
+        args_base = [
+            browser,
+            "--disable-gpu",
+            "--disable-software-rasterizer",
+            "--hide-scrollbars",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--no-service-autorun",
+            "--disable-logging",
+            "--log-level=3",
+            "--window-size=1366,768",
+            f"--user-data-dir={PUBLIC_BASE / 'browser_profile'}",
+            "--screenshot",
+            url,
+        ]
+        try:
+            _silent_run(args_base + ["--headless=new"], cwd=OUTPUT_DIR_PUBLIC, timeout=90)
+        except Exception as e:
+            print(f"[DEBUG] Headless CLI falhou: {e}")
+            _silent_run(args_base + ["--headless"], cwd=OUTPUT_DIR_PUBLIC, timeout=90)
+        print(f"[DEBUG] Screenshot CLI salvo: {screenshot_path.exists()} tamanho: {screenshot_path.stat().st_size if screenshot_path.exists() else 0}")
+        try:
+            if UNIVERSO_IMG.exists():
+                UNIVERSO_IMG.unlink()
+        except Exception:
+            pass
+        screenshot_path.rename(UNIVERSO_IMG)
+        UNIVERSO_HTML.write_text(_html_from_image_base64(UNIVERSO_IMG), encoding="utf-8")
+        print(f"[DEBUG] HTML gerado: {UNIVERSO_HTML.exists()} tamanho: {UNIVERSO_HTML.stat().st_size if UNIVERSO_HTML.exists() else 0}")
 # gps_print.py
 # Gera um "print" do GPS Amigo no Public:
 #   - C:\Users\Public\Automacao\output\gps_amigo.png
@@ -18,6 +192,8 @@ from config import (
     OUTPUT_DIR_PUBLIC,
     GPS_HTML,
     GPS_CONFIG,
+    SATURNO_PORTAL,
+    SATURNO_OUTPUT_BASE,
     ensure_directories,
     PUBLIC_BASE,
 )
@@ -198,9 +374,164 @@ def gerar_print_gps_amigo(timeout: int = 30) -> None:
         _gerar_print_via_headless_cli()
 
 
+def _month_abbr_pt(month: int) -> str:
+    months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+    return months[month - 1]
+
+
+def _saturno_output_dir(base_dir: Path, now: datetime) -> Path:
+    month_dir = _month_abbr_pt(now.month)
+    return base_dir / f"{now.year}" / month_dir / f"{now.day:02d}"
+
+
+def _click_by_text(drv, text: str) -> bool:
+    script = """
+    const text = arguments[0].toLowerCase();
+    const elements = Array.from(document.querySelectorAll('button, a, div, span, li, label'));
+    for (const el of elements) {
+        const t = (el.innerText || '').trim().toLowerCase();
+        if (t === text) { el.click(); return true; }
+    }
+    return false;
+    """
+    return bool(drv.execute_script(script, text))
+
+
+def _find_input(drv, xpaths: list[str]):
+    from selenium.webdriver.common.by import By
+    for xpath in xpaths:
+        try:
+            return drv.find_element(By.XPATH, xpath)
+        except Exception:
+            continue
+    return None
+
+
+def _wait_for_text(drv, texts: list[str], timeout: int):
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    lowered = [t.lower() for t in texts]
+
+    def _predicate(_):
+        body = (drv.page_source or "").lower()
+        return any(t in body for t in lowered)
+
+    WebDriverWait(drv, timeout).until(_predicate)
+
+
+def _capture_step(drv, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    drv.save_screenshot(str(path))
+
+
+def gerar_print_saturno_portal(timeout: int = 30) -> list[Path]:
+    """Gera prints do portal SATURNO em modo Wi-Fi e Diretoria (passo a passo)."""
+    ensure_directories()
+
+    url = SATURNO_PORTAL.get("url") or ""
+    cpf = SATURNO_PORTAL.get("cpf") or ""
+    data_nascimento = SATURNO_PORTAL.get("data_nascimento") or ""
+
+    if not url or not cpf or not data_nascimento:
+        raise RuntimeError("saturno_portal.url/cpf/data_nascimento nao configurados no environment.json")
+
+    now = datetime.now()
+    out_dir = _saturno_output_dir(SATURNO_OUTPUT_BASE, now)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Selenium e Edge headless (necessario para preencher o formulario)
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
+    opts = webdriver.EdgeOptions()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    opts.add_argument("--window-size=1366,768")
+    opts.add_argument(f"--user-data-dir={PUBLIC_BASE / 'browser_profile_saturno'}")
+
+    drv = webdriver.Edge(options=opts)
+    paths = []
+
+    try:
+        drv.get(url)
+        WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(2)
+
+        def preencher_e_capturar(prefix: str, aba_texto: str):
+            if aba_texto:
+                _click_by_text(drv, aba_texto)
+                time.sleep(1)
+
+            step1 = out_dir / f"{prefix}_1_abertura.png"
+            _capture_step(drv, step1)
+            paths.append(step1)
+
+            cpf_input = _find_input(drv, [
+                "//input[contains(@placeholder,'CPF') or contains(@aria-label,'CPF') or contains(translate(@name,'CPF','cpf'),'cpf') or contains(translate(@id,'CPF','cpf'),'cpf')]",
+            ])
+            data_input = _find_input(drv, [
+                "//input[contains(@placeholder,'Nascimento') or contains(@placeholder,'Data') or contains(translate(@name,'DATA','data'),'data') or contains(translate(@id,'DATA','data'),'data')]",
+            ])
+
+            if not cpf_input or not data_input:
+                raise RuntimeError("Campos de CPF/Data nao encontrados na pagina do Saturno")
+
+            cpf_input.clear()
+            cpf_input.send_keys(cpf)
+            data_input.clear()
+            data_input.send_keys(data_nascimento)
+
+            try:
+                termos = _find_input(drv, [
+                    "//label[contains(translate(.,'TERMO','termo'),'termo')]//input[@type='checkbox']",
+                    "//input[@type='checkbox']",
+                ])
+                if termos and not termos.is_selected():
+                    termos.click()
+            except Exception:
+                pass
+
+            step2 = out_dir / f"{prefix}_2_preenchido.png"
+            _capture_step(drv, step2)
+            paths.append(step2)
+
+            try:
+                botao = drv.find_element(By.XPATH, "//button[contains(.,'Conectar') or contains(.,'CONECTAR')]")
+                botao.click()
+            except Exception:
+                _click_by_text(drv, "conectar")
+
+            _wait_for_text(drv, ["pendente", "aprovacao", "autorizado", "autorizacao"], timeout)
+            time.sleep(1)
+
+            step3 = out_dir / f"{prefix}_3_resultado.png"
+            _capture_step(drv, step3)
+            paths.append(step3)
+
+        preencher_e_capturar("wifi", "WI-FI")
+        preencher_e_capturar("diretoria", "DIRETORIA")
+
+        return paths
+    finally:
+        drv.quit()
+
+
 if __name__ == "__main__":
     ensure_gps_placeholder()
     gerar_print_gps_amigo()
     print("OK - print gerado em:")
     print("  ", GPS_IMG)
     print("  ", GPS_HTML)
+
+    # Gera print do Rede Universo
+    try:
+        gerar_print_rede_universo()
+        print("OK - print Rede Universo gerado em:")
+        print("  C:/Users/Public/Automacao/output/public/rede_universo.png")
+        print("  C:/Users/Public/Automacao/output/public/rede_universo.html")
+    except Exception as e:
+        print("Falha ao gerar print Rede Universo:", e)

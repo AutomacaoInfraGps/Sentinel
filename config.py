@@ -151,6 +151,15 @@ GPS_CONFIG = ENV_CONFIG.get("gps_amigo", {
     "url": "https://gpsamigo.com.br/login.php"
 })
 
+# Configurações do portal SATURNO (Wi-Fi/Diretoria)
+SATURNO_PORTAL = ENV_CONFIG.get("saturno_portal", {
+    "url": "https://www.gpsamigo.com.br/guest/s/default/?ap=28:70:4e:54:11:c1&id=d4:1b:81:8a:4e:13&t=1772110744&url=http://www.msftconnecttest.com%2Fredirect&ssid=SATURNO",
+    "cpf": "",
+    "data_nascimento": "",
+})
+
+SATURNO_OUTPUT_BASE = OUTPUT_DIR_PUBLIC / "saturno"
+
 # === CONFIGURAÇÕES DE EXECUÇÃO ===
 # Configurações de timeout e execução
 TIMEOUTS = ENV_CONFIG.get("timeouts", {
