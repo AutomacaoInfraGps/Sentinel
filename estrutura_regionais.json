@@ -22,7 +22,20 @@
           "funcao": "Firewall/Segurança",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-02-25T10:18:19.974193"
+          "ultima_verificacao": "2026-02-25T15:54:09.801020"
+        },
+        {
+          "id": "srv_seg_01",
+          "nome": "Idrac Dell PowerEdge R540",
+          "tipo": "idrac",
+          "ip": "10.161.0.10",
+          "usuario": "root",
+          "senha": "0p3nf!r3",
+          "porta": 443,
+          "timeout": 10,
+          "ativo": true,
+          "modelo": "Dell PowerEdge",
+          "funcao": "Aplicação"
         }
       ],
       "links": [
@@ -64,7 +77,7 @@
           "funcao": "Web Server",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-02-06T11:26:14.857748"
+          "ultima_verificacao": "2026-02-25T15:42:12.362835"
         }
       ],
       "links": [
@@ -480,9 +493,9 @@
           "ativo": true,
           "modelo": "Dell PowerEdge",
           "funcao": "Virtualização",
-          "status": "online",
-          "erro": null,
-          "ultima_verificacao": "2026-02-03T11:06:09.834755"
+          "status": "offline",
+          "erro": "Timeout",
+          "ultima_verificacao": "2026-02-25T15:17:02.911848"
         }
       ],
       "links": [
@@ -1286,7 +1299,7 @@
   "configuracao": {
     "versao": "2.0",
     "estrutura": "hierarquica",
-    "ultima_atualizacao": "2026-02-25T10:18:19.974193",
+    "ultima_atualizacao": "2026-02-25T15:58:23.463913",
     "backup_automatico": true,
     "validacao_automatica": true,
     "observacoes": "Estrutura hierárquica: Regional > Servidores (iDRAC/ILO)"
