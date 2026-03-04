@@ -3274,6 +3274,8 @@ def api_excluir_link_regional(codigo_regional, id_link):
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>', methods=['DELETE'])
 @app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>/excluir', methods=['DELETE'])
 @login_required
 def api_excluir_servidor_regional(codigo_regional, id_servidor):
