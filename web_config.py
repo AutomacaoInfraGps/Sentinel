@@ -4005,10 +4005,13 @@ def api_executar_completo():
                 'message': 'Script executar_tudo.py não encontrado'
             })
         
-        # Executa o script
+        # Executa o script em modo automático/headless
+        env = os.environ.copy()
+        env['AUTOMACAO_NO_BROWSER'] = '1'
+
         result = subprocess.run([
-            'python', str(script_path)
-        ], capture_output=True, text=True, cwd=str(PROJECT_ROOT))
+            sys.executable, str(script_path), '--no-browser'
+        ], capture_output=True, text=True, cwd=str(PROJECT_ROOT), env=env)
         
         if result.returncode == 0:
             # Verifica se o dashboard foi gerado
