@@ -158,7 +158,7 @@ SATURNO_PORTAL = ENV_CONFIG.get("saturno_portal", {
     "data_nascimento": "",
 })
 
-SATURNO_OUTPUT_BASE = OUTPUT_DIR_PUBLIC / "saturno"
+SATURNO_OUTPUT_BASE = OUTPUT_DIR_PUBLIC / "print-rede"
 
 # === CONFIGURAÇÕES DE EXECUÇÃO ===
 # Configurações de timeout e execução

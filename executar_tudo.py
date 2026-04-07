@@ -16,6 +16,8 @@ from datetime import datetime
 import sys
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import json, html
+
+AUTO_NO_BROWSER = "--no-browser" in sys.argv or os.environ.get("AUTOMACAO_NO_BROWSER", "").strip().lower() in {"1", "true", "yes", "on"}
 from config import REPLICACAO_HTML, REPLICACAO_JSON
 try:
     from config import REPLICACAO_HTML_FRAGMENT
@@ -71,6 +73,55 @@ def render_bloco_gps():
       </div>
     </section>
     """
+
+
+def _month_abbr_pt_local(month: int) -> str:
+    months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+    return months[month - 1]
+
+
+def _montar_print_rede_html():
+    """Monta o HTML com os 3 prints do portal de rede gerados no dia atual."""
+    try:
+        from config import SATURNO_OUTPUT_BASE
+
+        now = datetime.now()
+        out_dir = SATURNO_OUTPUT_BASE / f"{now.year}" / _month_abbr_pt_local(now.month) / f"{now.day:02d}"
+        images = [
+            ("WI-FI", out_dir / "saturno_wifi.png"),
+            ("DIRETORIA", out_dir / "saturno_diretoria.png"),
+            ("APROVACAO WI-FI", out_dir / "saturno_wifi_aprovacao.png"),
+        ]
+
+        cards = []
+        for title, path in images:
+            if not path.exists() or path.stat().st_size == 0:
+                cards.append(
+                    f"""
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 10px;">{title}</h3>
+                        <div class='error'>Print não encontrado: {path}</div>
+                    </div>
+                    """
+                )
+                continue
+
+            b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+            updated = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+            cards.append(
+                f"""
+                <div style="margin-bottom: 28px;">
+                    <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 10px;">{title}</h3>
+                    <img alt="{title}" style="max-width:100%;height:auto;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.08)" src="data:image/png;base64,{b64}">
+                    <div class="small" style="color:#666;margin-top:6px">Atualizado: {updated}</div>
+                </div>
+                """
+            )
+
+        return "".join(cards)
+    except Exception as e:
+        print("[PRINT-REDE] Falha montando HTML:", e)
+        return f"<div class='error'>Falha ao montar Print Rede: {e}</div>"
 
 
 def render_replicacao_card():
@@ -1013,13 +1064,19 @@ except Exception as e:
 # === 8. CARREGA HTMLs GERADOS ===
 # Carrega o conteúdo dos arquivos HTML gerados. Se um arquivo não existir, fornece uma mensagem de erro.
 # --- GPS: garante placeholder e tenta gerar o print ANTES de ler o arquivo ---
-from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
+from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo, gerar_print_saturno_portal
 ensure_gps_placeholder()
 try:
     gerar_print_gps_amigo()
     print("[GPS] Print gerado com sucesso.")
 except Exception as e:
     print("[GPS] Falha ao gerar print:", e)
+
+try:
+    gerar_print_saturno_portal()
+    print("[PRINT-REDE] Prints gerados com sucesso.")
+except Exception as e:
+    print("[PRINT-REDE] Falha ao gerar prints:", e)
 
 # (opcional) monta o card para uso em outros lugares, se precisar
 gps_section = render_bloco_gps()
@@ -1031,6 +1088,7 @@ gps_section = render_bloco_gps()
 
 # Use sempre o helper que garante imagem inline (HTML ou PNG)
 gps_html = _montar_gps_html()
+print_rede_html = _montar_print_rede_html()
 
 
 rep_html = REPLICACAO_HTML.read_text(encoding="utf-8") if REPLICACAO_HTML.exists() else """
@@ -1796,6 +1854,13 @@ dashboard_html = f"""
             </div>
         </details>
 
+        <details id="print-rede" class="details-section">
+            <summary>[URL] Print Rede</summary>
+            <div class="details-content">
+                {print_rede_html}
+            </div>
+        </details>
+
         <details id="replicacao" class="details-section">
             <summary>[UPDATE] Status de Replicação do Active Directory</summary>
             <div class="details-content">
@@ -2120,10 +2185,14 @@ if vms_temp_file.exists():
     vms_temp_file.unlink() # Remove o arquivo HTML temporário das VMs
 
 # === 12. ABRE NO NAVEGADOR ===
-# Abre o arquivo HTML do dashboard gerado no navegador padrão
-print(f"\n[WEB] Abrindo relatório no navegador...")
-print(f"[URL] Local: {DASHBOARD_FINAL}")
-webbrowser.open(DASHBOARD_FINAL.resolve().as_uri())
+# Abre o arquivo HTML do dashboard gerado no navegador padrão, exceto em modo automático
+if AUTO_NO_BROWSER:
+    print(f"\n[AUTO] Execução automática concluída. Navegador não será aberto.")
+    print(f"[URL] Relatório gerado em: {DASHBOARD_FINAL}")
+else:
+    print(f"\n[WEB] Abrindo relatório no navegador...")
+    print(f"[URL] Local: {DASHBOARD_FINAL}")
+    webbrowser.open(DASHBOARD_FINAL.resolve().as_uri())
 
 print(f"\n[SUCCESS] Relatório Preventiva gerado com sucesso!")
 print(f" Localização: {DASHBOARD_FINAL}")

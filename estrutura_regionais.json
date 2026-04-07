@@ -22,7 +22,7 @@
           "funcao": "Aplicação",
           "status": "online",
           "erro": null,
-          "ultima_verificacao": "2026-03-02T16:31:54.560116"
+          "ultima_verificacao": "2026-03-15T00:38:18.657604"
         }
       ],
       "links": [
@@ -33,7 +33,7 @@
           "provedor": "CONNECT",
           "ativo": true,
           "status": "online",
-          "ultima_verificacao": "2026-02-25T10:18:12.928314"
+          "ultima_verificacao": "2026-03-15T00:38:43.178607"
         },
         {
           "id": "link_rg_global_seguranca_02",
@@ -1286,7 +1286,7 @@
   "configuracao": {
     "versao": "2.0",
     "estrutura": "hierarquica",
-    "ultima_atualizacao": "2026-03-03T15:49:51.883360",
+    "ultima_atualizacao": "2026-03-15T00:38:43.178607",
     "backup_automatico": true,
     "validacao_automatica": true,
     "observacoes": "Estrutura hierárquica: Regional > Servidores (iDRAC/ILO)"
