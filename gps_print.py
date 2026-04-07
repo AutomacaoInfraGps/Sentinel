@@ -424,8 +424,68 @@ def _capture_step(drv, path: Path) -> None:
     drv.save_screenshot(str(path))
 
 
+def _click_saturno_tab(drv, tab_name: str) -> bool:
+    """Alterna entre as abas WI-FI e DIRETORIA do portal SATURNO."""
+    tab_name = (tab_name or "").strip().lower()
+
+    script = """
+    const tabName = arguments[0];
+    const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+
+    const clickIfFound = (selectors) => {
+        for (const selector of selectors) {
+            const elements = Array.from(document.querySelectorAll(selector));
+            for (const el of elements) {
+                const text = normalize(el.innerText || el.textContent);
+                if (text === tabName) {
+                    el.click();
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    if (tabName === 'wi-fi' || tabName === 'wifi') {
+        const wifiButton = document.querySelector('.switcher-login');
+        if (wifiButton) {
+            wifiButton.click();
+            return true;
+        }
+    }
+
+    if (tabName === 'diretoria') {
+        const diretoriaButton = document.querySelector('.switcher-signup');
+        if (diretoriaButton) {
+            diretoriaButton.click();
+            return true;
+        }
+    }
+
+    return clickIfFound(['button', 'a', 'div', 'span', 'li', 'label']);
+    """
+
+    return bool(drv.execute_script(script, tab_name))
+
+
+def _wait_for_saturno_tab(drv, tab_name: str, timeout: int):
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    tab_name = (tab_name or "").strip().lower()
+
+    def _predicate(_):
+        body = (drv.page_source or "").lower()
+        if tab_name in {"wi-fi", "wifi"}:
+            return "cpf" in body and "data nascimento" in body
+        if tab_name == "diretoria":
+            return "login" in body and "senha" in body
+        return False
+
+    WebDriverWait(drv, timeout).until(_predicate)
+
+
 def gerar_print_saturno_portal(timeout: int = 30) -> list[Path]:
-    """Gera prints do portal SATURNO em modo Wi-Fi e Diretoria (passo a passo)."""
+    """Gera 3 prints do portal SATURNO: WI-FI, DIRETORIA e aprovação do WI-FI."""
     ensure_directories()
 
     url = SATURNO_PORTAL.get("url") or ""
@@ -461,59 +521,67 @@ def gerar_print_saturno_portal(timeout: int = 30) -> list[Path]:
         WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
         time.sleep(2)
 
-        def preencher_e_capturar(prefix: str, aba_texto: str):
-            if aba_texto:
-                _click_by_text(drv, aba_texto)
-                time.sleep(1)
+        if not _click_saturno_tab(drv, "wi-fi"):
+            raise RuntimeError("Nao foi possivel abrir a aba WI-FI do portal SATURNO")
+        _wait_for_saturno_tab(drv, "wi-fi", timeout)
+        time.sleep(1)
 
-            step1 = out_dir / f"{prefix}_1_abertura.png"
-            _capture_step(drv, step1)
-            paths.append(step1)
+        wifi_path = out_dir / "saturno_wifi.png"
+        _capture_step(drv, wifi_path)
+        paths.append(wifi_path)
 
-            cpf_input = _find_input(drv, [
-                "//input[contains(@placeholder,'CPF') or contains(@aria-label,'CPF') or contains(translate(@name,'CPF','cpf'),'cpf') or contains(translate(@id,'CPF','cpf'),'cpf')]",
+        if not _click_saturno_tab(drv, "diretoria"):
+            raise RuntimeError("Nao foi possivel abrir a aba DIRETORIA do portal SATURNO")
+        _wait_for_saturno_tab(drv, "diretoria", timeout)
+        time.sleep(1)
+
+        diretoria_path = out_dir / "saturno_diretoria.png"
+        _capture_step(drv, diretoria_path)
+        paths.append(diretoria_path)
+
+        if not _click_saturno_tab(drv, "wi-fi"):
+            raise RuntimeError("Nao foi possivel retornar para a aba WI-FI do portal SATURNO")
+        _wait_for_saturno_tab(drv, "wi-fi", timeout)
+        time.sleep(1)
+
+        cpf_input = _find_input(drv, [
+            "//input[contains(@placeholder,'CPF') or contains(@aria-label,'CPF') or contains(translate(@name,'CPF','cpf'),'cpf') or contains(translate(@id,'CPF','cpf'),'cpf')]",
+        ])
+        data_input = _find_input(drv, [
+            "//input[contains(@placeholder,'Nascimento') or contains(@placeholder,'Data') or contains(translate(@name,'DATA','data'),'data') or contains(translate(@id,'DATA','data'),'data')]",
+        ])
+
+        if not cpf_input or not data_input:
+            raise RuntimeError("Campos de CPF/Data nao encontrados na aba WI-FI do Saturno")
+
+        cpf_input.clear()
+        cpf_input.send_keys(cpf)
+        data_input.clear()
+        data_input.send_keys(data_nascimento)
+
+        try:
+            termos = _find_input(drv, [
+                "//label[contains(translate(.,'TERMO','termo'),'termo')]//input[@type='checkbox']",
+                "//input[@type='checkbox']",
             ])
-            data_input = _find_input(drv, [
-                "//input[contains(@placeholder,'Nascimento') or contains(@placeholder,'Data') or contains(translate(@name,'DATA','data'),'data') or contains(translate(@id,'DATA','data'),'data')]",
-            ])
+            if termos and not termos.is_selected():
+                termos.click()
+        except Exception:
+            pass
 
-            if not cpf_input or not data_input:
-                raise RuntimeError("Campos de CPF/Data nao encontrados na pagina do Saturno")
+        try:
+            botao = drv.find_element(By.XPATH, "//button[contains(.,'Conectar') or contains(.,'CONECTAR')]")
+            botao.click()
+        except Exception:
+            if not _click_by_text(drv, "conectar"):
+                raise RuntimeError("Nao foi possivel clicar no botao Conectar da aba WI-FI")
 
-            cpf_input.clear()
-            cpf_input.send_keys(cpf)
-            data_input.clear()
-            data_input.send_keys(data_nascimento)
+        _wait_for_text(drv, ["aguardando", "aprovação", "aprovacao", "solicitação foi enviada", "solicitacao foi enviada"], timeout)
+        time.sleep(1)
 
-            try:
-                termos = _find_input(drv, [
-                    "//label[contains(translate(.,'TERMO','termo'),'termo')]//input[@type='checkbox']",
-                    "//input[@type='checkbox']",
-                ])
-                if termos and not termos.is_selected():
-                    termos.click()
-            except Exception:
-                pass
-
-            step2 = out_dir / f"{prefix}_2_preenchido.png"
-            _capture_step(drv, step2)
-            paths.append(step2)
-
-            try:
-                botao = drv.find_element(By.XPATH, "//button[contains(.,'Conectar') or contains(.,'CONECTAR')]")
-                botao.click()
-            except Exception:
-                _click_by_text(drv, "conectar")
-
-            _wait_for_text(drv, ["pendente", "aprovacao", "autorizado", "autorizacao"], timeout)
-            time.sleep(1)
-
-            step3 = out_dir / f"{prefix}_3_resultado.png"
-            _capture_step(drv, step3)
-            paths.append(step3)
-
-        preencher_e_capturar("wifi", "WI-FI")
-        preencher_e_capturar("diretoria", "DIRETORIA")
+        aprovacao_path = out_dir / "saturno_wifi_aprovacao.png"
+        _capture_step(drv, aprovacao_path)
+        paths.append(aprovacao_path)
 
         return paths
     finally:
