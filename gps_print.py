@@ -38,7 +38,7 @@ def gerar_print_rede_universo(timeout: int = 30) -> None:
     print(f"[DEBUG] UNIVERSO_HTML: {UNIVERSO_HTML}")
     print(f"[DEBUG] OUTPUT_DIR_PUBLIC exists: {OUTPUT_DIR_PUBLIC.exists()}")
     print(f"[DEBUG] Current working dir: {os.getcwd()}")
-    url = "https://www.gpsamigo.com.br/guest/s/default/?ap=28:70:4e:54:11:c1&id=d4:1b:81:8a:4e:13&t=1772215964&url=http://www.msftconnecttest.com%2Fredirect&ssid=SATURNO"
+    url = SATURNO_PORTAL.get("url", "https://portal.exemplo.local/guest")
     try:
         from selenium import webdriver
         from selenium.webdriver.common.by import By
@@ -191,7 +191,10 @@ from datetime import datetime
 from config import (
     OUTPUT_DIR_PUBLIC,
     GPS_HTML,
+    APPGATE_HTML,
+    APPGATE_IMG,
     GPS_CONFIG,
+    APPGATE_CONFIG,
     SATURNO_PORTAL,
     SATURNO_OUTPUT_BASE,
     ensure_directories,
@@ -241,6 +244,16 @@ def _html_from_image_base64(png_path: Path) -> str:
 <style>body{{font-family:Segoe UI,Arial;margin:16px}}</style></head>
 <body>
   <img alt="GPS Amigo" style="max-width:100%; height:auto;" src="data:image/png;base64,{b64}">
+</body></html>"""
+
+
+def _html_from_named_image_base64(png_path: Path, title: str) -> str:
+        b64 = base64.b64encode(png_path.read_bytes()).decode("ascii")
+        return f"""<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8"><title>{title}</title>
+<style>body{{font-family:Segoe UI,Arial;margin:16px}}</style></head>
+<body>
+    <img alt="{title}" style="max-width:100%; height:auto;" src="data:image/png;base64,{b64}">
 </body></html>"""
 
 
@@ -372,6 +385,106 @@ def gerar_print_gps_amigo(timeout: int = 30) -> None:
     except Exception:
         # Fallback automático sem Selenium
         _gerar_print_via_headless_cli()
+
+
+def gerar_print_appgate(timeout: int = 45) -> Path:
+    """Gera um print autenticado do dashboard do AppGate."""
+    ensure_directories()
+    OUTPUT_DIR_PUBLIC.mkdir(parents=True, exist_ok=True)
+    APPGATE_HTML.parent.mkdir(parents=True, exist_ok=True)
+
+    url = (APPGATE_CONFIG.get("url") or "").strip()
+    username = (APPGATE_CONFIG.get("username") or "admin").strip()
+    password = APPGATE_CONFIG.get("password") or ""
+
+    if not url:
+        raise RuntimeError("appgate.url nao configurado no environment.json")
+    if not password:
+        raise RuntimeError("appgate.password nao configurado no environment.json")
+
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
+    opts = webdriver.EdgeOptions()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    opts.add_argument("--ignore-certificate-errors")
+    opts.add_argument("--allow-insecure-localhost")
+    opts.add_argument("--window-size=1600,1200")
+    opts.add_argument(f"--user-data-dir={PUBLIC_BASE / 'browser_profile_appgate'}")
+    opts.set_capability("acceptInsecureCerts", True)
+
+    drv = webdriver.Edge(options=opts)
+
+    try:
+        def _dashboard_loaded() -> bool:
+            current_url = (drv.current_url or "").lower()
+            body_text = drv.find_element(By.TAG_NAME, "body").text.lower()
+            return "/ng/system/dashboard/" in current_url and "dashboard" in body_text
+
+        drv.get(url)
+        WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(3)
+
+        password_input = _find_input(drv, [
+            "//input[@type='password']",
+            "//input[contains(translate(@name,'PASSWORDSENHA','passwordsenha'),'password') or contains(translate(@id,'PASSWORDSENHA','passwordsenha'),'password') or contains(translate(@placeholder,'PASSWORDSENHA','passwordsenha'),'password') or contains(translate(@placeholder,'PASSWORDSENHA','passwordsenha'),'senha')]",
+        ])
+
+        if password_input:
+            username_input = _find_input(drv, [
+                "//input[@type='text' or @type='email'][1]",
+                "//input[contains(translate(@name,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'user') or contains(translate(@name,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'usuario') or contains(translate(@name,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'login')]",
+                "//input[contains(translate(@id,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'user') or contains(translate(@id,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'usuario') or contains(translate(@id,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'login')]",
+                "//input[contains(translate(@placeholder,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'user') or contains(translate(@placeholder,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'usuario') or contains(translate(@placeholder,'USERNAMEUSUARIOLOGIN','usernameusuariologin'),'login')]",
+            ])
+
+            if username_input:
+                username_input.clear()
+                username_input.send_keys(username)
+
+            password_input.clear()
+            password_input.send_keys(password)
+
+            submitted = False
+            for xpath in [
+                "//button[@type='submit']",
+                "//input[@type='submit']",
+                "//button[@type='button' and contains(normalize-space(.), 'Login')]",
+                "//button[contains(@onclick, 'try_login')]",
+                "//button[contains(translate(normalize-space(.),'ENTRARLOGINACCESSSIGN IN','entrarloginaccesssign in'),'login')]",
+            ]:
+                try:
+                    button = drv.find_element(By.XPATH, xpath)
+                    drv.execute_script("arguments[0].click();", button)
+                    submitted = True
+                    break
+                except Exception:
+                    continue
+
+            if not submitted:
+                password_input.send_keys(Keys.ENTER)
+
+        for _ in range(10):
+            drv.get(url)
+            WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            time.sleep(5)
+            if _dashboard_loaded():
+                break
+        else:
+            raise RuntimeError("Nao foi possivel abrir o dashboard do AppGate apos o login")
+
+        time.sleep(3)
+        drv.save_screenshot(str(APPGATE_IMG))
+        APPGATE_HTML.write_text(_html_from_named_image_base64(APPGATE_IMG, "Firewall Rio de Janeiro"), encoding="utf-8")
+        return APPGATE_IMG
+    finally:
+        drv.quit()
 
 
 def _month_abbr_pt(month: int) -> str:

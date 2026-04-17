@@ -48,8 +48,23 @@ desktop.ini
 
 # Arquivos de configuração sensíveis
 servidores.json
+estrutura_regionais.json
+zabbix_config.json
 *.json.backup
 *.json.bak
+api_response_test.json
+diagnostico.json
+auth_state.json
+data/*.json
+auditoria_*.json
+relatorio_*.json
+
+# Backups e snapshots locais
+backup_*/
+backup_limpeza_*/
+backup_organizacao_*/
+backup_projeto_*/
+automacao_gps/
 
 # Arquivos temporários de segurança
 *.tmp

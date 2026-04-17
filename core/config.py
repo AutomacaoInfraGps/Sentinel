@@ -60,17 +60,17 @@ ENV_CONFIG = load_environment_config()
 # === CONFIGURAÇÕES DE SERVIDOR ===
 # Configurações do servidor NAOS
 NAOS_CONFIG = ENV_CONFIG.get("naos_server", {
-    "ip": "192.168.21.27",
-    "usuario": "galaxia\\admin.lima",
-    "senha": "Akin21@@grupogps",
+    "ip": "192.0.2.10",
+    "usuario": "EXEMPLO\\admin",
+    "senha": "",
 })
 
 # Configurações do controlador UniFi
 UNIFI_CONFIG = ENV_CONFIG.get("unifi_controller", {
-    "host": "192.168.21.28",
+    "host": "198.51.100.10",
     "port": 8443,
-    "username": "admin.lima",
-    "password": "Akin21@@grupogps"
+    "username": "admin",
+    "password": ""
 })
 
 # Configurações do GPS Amigo

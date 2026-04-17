@@ -56,6 +56,36 @@ class GerenciadorRegionais:
         }
         self.salvar_regionais()
 
+    def editar_regional(self, codigo: str, nome: str, descricao: str = ""):
+        """Edita nome e descricao de uma regional, preservando servidores e links"""
+        codigo = codigo.upper()
+        if codigo not in self.regionais.get("regionais", {}):
+            raise ValueError(f"Regional {codigo} não encontrada")
+        self.regionais["regionais"][codigo]["nome"] = nome
+        self.regionais["regionais"][codigo]["descricao"] = descricao
+        self.salvar_regionais()
+
+    def atualizar_regional(self, codigo_atual: str, novo_codigo: str, nome: str, descricao: str = ""):
+        """Atualiza uma regional preservando servidores e links, com suporte a renomear o código."""
+        codigo_atual = codigo_atual.upper()
+        novo_codigo = (novo_codigo or codigo_atual).upper()
+
+        regionais = self.regionais.get("regionais", {})
+        if codigo_atual not in regionais:
+            raise ValueError(f"Regional {codigo_atual} não encontrada")
+
+        if novo_codigo != codigo_atual and novo_codigo in regionais:
+            raise ValueError(f"Regional {novo_codigo} já existe")
+
+        regional = regionais.pop(codigo_atual)
+        regional["nome"] = nome
+        regional["descricao"] = descricao
+        regional.setdefault("servidores", [])
+        regional.setdefault("links", [])
+        regionais[novo_codigo] = regional
+        self.salvar_regionais()
+        return novo_codigo
+
     def adicionar_link(self, codigo_regional: str, link: Dict):
         """Adiciona um link (URL/Conexão) a uma regional"""
         codigo_regional = codigo_regional.upper()

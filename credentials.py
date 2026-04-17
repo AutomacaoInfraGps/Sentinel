@@ -32,6 +32,8 @@ SALT_FILE = CREDENTIALS_DIR / 'salt.bin'
 
 # Senha mestra para criptografia (pode ser definida como variável de ambiente)
 MASTER_PASSWORD = os.environ.get('AUTOMATION_MASTER_PASSWORD', 'default_password_change_me')
+DOCS_FORTIGATE_HOST = 'fortigate.example.local'
+DOCS_ZABBIX_URL = 'https://zabbix.example.local/zabbix'
 
 def get_encryption_key(password=None):
     """Gera uma chave de criptografia a partir da senha mestra"""
@@ -107,7 +109,7 @@ def get_credentials(service, prompt_if_missing=False):
         print(f"\n🔐 Configuração de credenciais para {service}")
         
         if service == 'fortigate':
-            host = input("Host (default: 10.254.12.1): ") or "10.254.12.1"
+            host = input(f"Host (default: {DOCS_FORTIGATE_HOST}): ") or DOCS_FORTIGATE_HOST
             port = input("Porta (default: 20443): ") or "20443"
             username = input("Usuário (default: admin): ") or "admin"
             password = getpass.getpass("Senha: ")
@@ -119,7 +121,7 @@ def get_credentials(service, prompt_if_missing=False):
                 'password': password
             }
         elif service == 'zabbix':
-            url = input("URL (default: http://10.254.12.1/zabbix): ") or "http://10.254.12.1/zabbix"
+            url = input(f"URL (default: {DOCS_ZABBIX_URL}): ") or DOCS_ZABBIX_URL
             username = input("Usuário (default: Admin): ") or "Admin"
             password = getpass.getpass("Senha: ")
             
@@ -146,14 +148,14 @@ def get_credentials(service, prompt_if_missing=False):
         # Retorna valores vazios se não encontrar
         if service == 'fortigate':
             return {
-                'host': '10.254.12.1',
+                'host': DOCS_FORTIGATE_HOST,
                 'port': 20443,
                 'username': 'admin',
                 'password': ''
             }
         elif service == 'zabbix':
             return {
-                'url': 'http://10.254.12.1/zabbix',
+                'url': DOCS_ZABBIX_URL,
                 'username': 'Admin',
                 'password': ''
             }
