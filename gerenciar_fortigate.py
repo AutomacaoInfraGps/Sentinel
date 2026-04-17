@@ -20,7 +20,7 @@ except ImportError:
     def get_credentials(service, prompt_if_missing=False):
         if service == 'fortigate':
             return {
-                'host': '10.254.12.1',
+                'host': 'fortigate.example.local',
                 'port': 20443,
                 'username': 'admin',
                 'password': ''
@@ -66,7 +66,7 @@ class GerenciadorFortigate:
         creds = get_credentials('fortigate')
         
         # Usa os parâmetros fornecidos ou as credenciais das fontes disponíveis
-        self.host = host or env_creds.get('host') or creds.get('host') or '10.254.12.1'
+        self.host = host or env_creds.get('host') or creds.get('host') or 'fortigate.example.local'
         self.port = port or env_creds.get('port') or creds.get('port') or 20443
         self.username = username or env_creds.get('username') or creds.get('username') or 'admin'
         self.password = password or env_creds.get('password') or creds.get('password') or ''
@@ -89,7 +89,7 @@ class GerenciadorFortigate:
     def autenticar(self):
         """Autentica no Fortigate usando autenticação básica"""
         try:
-            print(f"🔑 Autenticando no Fortigate {self.host}:{self.port}...")
+            print(f"[AUTH] Autenticando no Fortigate {self.host}:{self.port}...")
             print(f"   Usuário: {self.username}")
             
             # Cria uma nova sessão
@@ -118,14 +118,14 @@ class GerenciadorFortigate:
                 # Verifica se a autenticação foi bem-sucedida
                 if response.status_code == 200:
                     self.last_login = time.time()
-                    print(f"✅ Autenticação bem-sucedida no Fortigate {self.host}")
+                    print(f"[OK] Autenticação bem-sucedida no Fortigate {self.host}")
                     return True
                 else:
-                    print(f"❌ Falha na autenticação: {response.status_code}")
+                    print(f"[ERROR] Falha na autenticação: {response.status_code}")
                     print(f"   Resposta: {response.text[:200]}")
                     
                     # Tenta método alternativo se o primeiro falhar
-                    print("🔄 Tentando método alternativo de autenticação...")
+                    print("[INFO] Tentando método alternativo de autenticação...")
                     
                     # URL para login via API
                     login_url = f"https://{self.host}:{self.port}/logincheck"
@@ -146,24 +146,24 @@ class GerenciadorFortigate:
                     
                     if 'APSCOOKIE_' in cookies:
                         self.last_login = time.time()
-                        print(f"✅ Autenticação alternativa bem-sucedida no Fortigate {self.host}")
+                        print(f"[OK] Autenticação alternativa bem-sucedida no Fortigate {self.host}")
                         return True
                     else:
-                        print(f"❌ Falha na autenticação alternativa")
+                        print(f"[ERROR] Falha na autenticação alternativa")
                         print(f"   Status: {login_response.status_code}")
                         print(f"   Resposta: {login_response.text[:200]}")
                         return False
             except requests.exceptions.Timeout:
-                print(f"❌ Timeout ao conectar ao Fortigate: {test_url}")
+                print(f"[ERROR] Timeout ao conectar ao Fortigate: {test_url}")
                 print("   Verifique se o host e a porta estão corretos e se o Fortigate está acessível")
                 return False
             except requests.exceptions.ConnectionError as e:
-                print(f"❌ Erro de conexão com o Fortigate: {str(e)}")
+                print(f"[ERROR] Erro de conexão com o Fortigate: {str(e)}")
                 print("   Verifique se o host e a porta estão corretos e se o Fortigate está acessível")
                 return False
                 
         except Exception as e:
-            print(f"❌ Erro ao autenticar no Fortigate: {str(e)}")
+            print(f"[ERROR] Erro ao autenticar no Fortigate: {str(e)}")
             return False
     
     def verificar_sessao(self):
@@ -177,6 +177,81 @@ class GerenciadorFortigate:
             return self.autenticar()
             
         return True
+
+    def _obter_snapshot_monitor_interfaces(self):
+        """Obtém o snapshot bruto das interfaces do endpoint de monitoramento."""
+        url = f"https://{self.host}:{self.port}/api/v2/monitor/system/interface"
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        response = self.session.get(url, headers=headers)
+        if response.status_code != 200:
+            return {
+                "success": False,
+                "message": f"Erro {response.status_code}: {response.text}"
+            }
+
+        try:
+            data = response.json()
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Erro ao parsear resposta: {e}"
+            }
+
+        return {
+            "success": True,
+            "results": data.get("results", {})
+        }
+
+    @staticmethod
+    def _calcular_bandwidth_por_delta(snapshot_inicial, snapshot_final, intervalo_segundos):
+        if intervalo_segundos <= 0:
+            return 0, 0
+
+        rx_inicial = snapshot_inicial.get("rx_bytes", 0) or 0
+        tx_inicial = snapshot_inicial.get("tx_bytes", 0) or 0
+        rx_final = snapshot_final.get("rx_bytes", 0) or 0
+        tx_final = snapshot_final.get("tx_bytes", 0) or 0
+
+        bandwidth_in = max((rx_final - rx_inicial) * 8 / intervalo_segundos, 0)
+        bandwidth_out = max((tx_final - tx_inicial) * 8 / intervalo_segundos, 0)
+        return int(bandwidth_in), int(bandwidth_out)
+
+    @staticmethod
+    def _formatar_bandwidth(bandwidth_bps):
+        if bandwidth_bps >= 1000000:
+            return f"{bandwidth_bps / 1000000:.2f} Mbps"
+        return f"{bandwidth_bps / 1000:.2f} Kbps"
+
+    def _extrair_estatisticas_interface(self, interface_stats, interface_stats_final=None, intervalo_segundos=1.0):
+        estatisticas = {
+            "rx_bytes": interface_stats.get("rx_bytes", 0),
+            "tx_bytes": interface_stats.get("tx_bytes", 0),
+            "rx_packets": interface_stats.get("rx_packets", 0),
+            "tx_packets": interface_stats.get("tx_packets", 0),
+            "bandwidth_in": interface_stats.get("bandwidth_in", 0) or 0,
+            "bandwidth_out": interface_stats.get("bandwidth_out", 0) or 0,
+        }
+
+        if (
+            estatisticas["bandwidth_in"] <= 0
+            and estatisticas["bandwidth_out"] <= 0
+            and interface_stats_final is not None
+        ):
+            bandwidth_in, bandwidth_out = self._calcular_bandwidth_por_delta(
+                interface_stats,
+                interface_stats_final,
+                intervalo_segundos,
+            )
+            estatisticas["bandwidth_in"] = bandwidth_in
+            estatisticas["bandwidth_out"] = bandwidth_out
+
+        estatisticas["bandwidth_in_readable"] = self._formatar_bandwidth(estatisticas["bandwidth_in"])
+        estatisticas["bandwidth_out_readable"] = self._formatar_bandwidth(estatisticas["bandwidth_out"])
+        return estatisticas
     
     def obter_interfaces(self):
         """Obtém informações sobre as interfaces de rede do Fortigate"""
@@ -184,7 +259,7 @@ class GerenciadorFortigate:
             if not self.verificar_sessao():
                 return {"success": False, "message": "Falha na autenticação"}
                 
-            print("🔍 Obtendo interfaces de rede do Fortigate...")
+            print("[INFO] Obtendo interfaces de rede do Fortigate...")
             
             # Endpoint para obter interfaces
             url = f"https://{self.host}:{self.port}/api/v2/cmdb/system/interface"
@@ -201,7 +276,7 @@ class GerenciadorFortigate:
             if response.status_code == 200:
                 data = response.json()
                 interfaces = data.get("results", [])
-                print(f"✅ Interfaces obtidas com sucesso: {len(interfaces)} interfaces encontradas")
+                print(f"[OK] Interfaces obtidas com sucesso: {len(interfaces)} interfaces encontradas")
                 
                 # Processa as interfaces para obter informações adicionais
                 for interface in interfaces:
@@ -215,11 +290,11 @@ class GerenciadorFortigate:
                 
                 return {"success": True, "interfaces": interfaces}
             else:
-                print(f"❌ Falha ao obter interfaces: {response.status_code} - {response.text}")
+                print(f"[ERROR] Falha ao obter interfaces: {response.status_code} - {response.text}")
                 return {"success": False, "message": f"Erro {response.status_code}: {response.text}"}
                 
         except Exception as e:
-            print(f"❌ Erro ao obter interfaces: {str(e)}")
+            print(f"[ERROR] Erro ao obter interfaces: {str(e)}")
             return {"success": False, "message": str(e)}
     
     def obter_links_internet(self):
@@ -264,51 +339,34 @@ class GerenciadorFortigate:
                 return {"success": False, "message": "Falha na autenticação"}
                 
             print(f"🔍 Obtendo estatísticas da interface {interface_name}...")
-            
-            # Endpoint para obter estatísticas de todas as interfaces
-            url = f"https://{self.host}:{self.port}/api/v2/monitor/system/interface"
-            
-            # Adiciona cabeçalhos necessários
-            headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
-            }
-            
-            # Faz a requisição
-            response = self.session.get(url, headers=headers)
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    print(f"JSON parsed successfully: {type(data)}")
-                except Exception as e:
-                    print(f"❌ Erro ao parsear JSON: {e}")
-                    return {"success": False, "message": f"Erro ao parsear resposta: {e}"}
-                
-                results = data.get("results", {})
-                
-                # results é um dict com nomes de interface como chaves
-                if interface_name in results:
-                    interface_stats = results[interface_name]
-                    # Extrai estatísticas relevantes
-                    estatisticas = {
-                        "rx_bytes": interface_stats.get("rx_bytes", 0),
-                        "tx_bytes": interface_stats.get("tx_bytes", 0),
-                        "rx_packets": interface_stats.get("rx_packets", 0),
-                        "tx_packets": interface_stats.get("tx_packets", 0),
-                        "bandwidth_in": interface_stats.get("bandwidth_in", 0),  # em bits/s
-                        "bandwidth_out": interface_stats.get("bandwidth_out", 0)  # em bits/s
-                    }
-                    
-                    print(f"✅ Estatísticas obtidas para {interface_name}")
-                    return {"success": True, "estatisticas": estatisticas}
-                
-                # Interface não encontrada
+
+            snapshot_inicial = self._obter_snapshot_monitor_interfaces()
+            if not snapshot_inicial["success"]:
+                print(f"❌ Falha ao obter estatísticas das interfaces: {snapshot_inicial['message']}")
+                return snapshot_inicial
+
+            results_iniciais = snapshot_inicial.get("results", {})
+            if interface_name not in results_iniciais:
                 print(f"⚠️ Interface {interface_name} não encontrada nas estatísticas")
                 return {"success": False, "message": f"Interface {interface_name} não encontrada"}
-            else:
-                print(f"❌ Falha ao obter estatísticas das interfaces: {response.status_code} - {response.text}")
-                return {"success": False, "message": f"Erro {response.status_code}: {response.text}"}
+
+            interface_stats = results_iniciais[interface_name]
+            interface_stats_final = None
+
+            if (interface_stats.get("bandwidth_in", 0) or 0) <= 0 and (interface_stats.get("bandwidth_out", 0) or 0) <= 0:
+                time.sleep(1)
+                snapshot_final = self._obter_snapshot_monitor_interfaces()
+                if snapshot_final["success"]:
+                    interface_stats_final = snapshot_final.get("results", {}).get(interface_name)
+
+            estatisticas = self._extrair_estatisticas_interface(
+                interface_stats,
+                interface_stats_final=interface_stats_final,
+                intervalo_segundos=1.0,
+            )
+
+            print(f"✅ Estatísticas obtidas para {interface_name}")
+            return {"success": True, "estatisticas": estatisticas}
                 
         except Exception as e:
             print(f"❌ Erro ao obter estatísticas da interface {interface_name}: {str(e)}")
@@ -363,18 +421,8 @@ class GerenciadorFortigate:
                 # Converte para unidades mais legíveis
                 bw_in = link["estatisticas"]["bandwidth_in"]
                 bw_out = link["estatisticas"]["bandwidth_out"]
-                
-                # Entrada
-                if bw_in >= 1000000:
-                    link["estatisticas"]["bandwidth_in_readable"] = f"{bw_in/1000000:.2f} Mbps"
-                else:
-                    link["estatisticas"]["bandwidth_in_readable"] = f"{bw_in/1000:.2f} Kbps"
-                
-                # Saída
-                if bw_out >= 1000000:
-                    link["estatisticas"]["bandwidth_out_readable"] = f"{bw_out/1000000:.2f} Mbps"
-                else:
-                    link["estatisticas"]["bandwidth_out_readable"] = f"{bw_out/1000:.2f} Kbps"
+                link["estatisticas"]["bandwidth_in_readable"] = self._formatar_bandwidth(bw_in)
+                link["estatisticas"]["bandwidth_out_readable"] = self._formatar_bandwidth(bw_out)
                 
                 print(f"✅ Estatísticas obtidas para o link {interface_name}")
             
@@ -450,9 +498,9 @@ class GerenciadorFortigate:
                 "sd_wan": sd_wan_result.get("sd_wan") if sd_wan_result.get("success") else None,
                 "timestamp": datetime.now().isoformat()
             }
-            
+
             return resultado
-            
+
         except Exception as e:
             print(f"❌ Erro ao obter informações completas: {str(e)}")
             return {"success": False, "message": str(e)}
@@ -516,7 +564,7 @@ class GerenciadorFortigate:
                 "success": False,
                 "message": f"Erro SSH Fortigate: {str(e)}"
             }
-    
+
     def testar_link(self, interface_name, ip_link=None):
         """Testa a conectividade de um link específico através do Fortigate"""
         try:

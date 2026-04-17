@@ -82,7 +82,7 @@ body { font-family: Segoe UI, Arial, sans-serif; margin: 16px; }
 h2   { color: #0078D7; margin-bottom: 8px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-th { background-color: #0078D7; color: white; }
+th { background-color: #dbeafe; color: #000; font-weight: 700; }
 tr:nth-child(even) { background-color: #f7f7f7; }
 pre { background:#f7f7f7; padding:12px; overflow:auto; }
 .erros-operacionais { margin-top: 18px; font-family: monospace; color: #b00; }
@@ -93,6 +93,8 @@ pre { background:#f7f7f7; padding:12px; overflow:auto; }
 # Table fragment
 if ($dados.Count -gt 0) {
     $htmlTabela = $dados | ConvertTo-Html -Property Servidor, 'Latência', SucessoTotal, Erros -Fragment
+    # O campo retornado pelo repadmin aqui representa "Falhas/Total".
+    $htmlTabela = $htmlTabela -replace '>SucessoTotal<', '>Falhas/Total<'
 } else {
     $htmlTabela = "<div class='small'>Nenhuma linha parseada. Verifique permissões/firewall do repadmin.</div>"
 }
@@ -127,6 +129,7 @@ $estilo
 <body>
   <h2>Resumo de Replicação AD (repadmin /replsummary)</h2>
   <div class="small">Gerado em: $timestamp</div>
+    <div class="small"><strong>Falhas/Total</strong>: número de falhas de replicação sobre o total de parceiros para cada servidor.</div>
   $htmlTabela
   $htmlErros
 </body>
@@ -170,6 +173,6 @@ Write-Host "✅ HTML salvo em: $HtmlPath"
 Write-Host "✅ Fragmento salvo em: $HtmlFragmentPath"
 
 # Não abrir navegador se rodando como serviço
-if ([Environment]::UserInteractive) {
+if ([Environment]::UserInteractive -and -not $env:AUTOMACAO_SKIP_REPL_BROWSER) {
     Start-Process $HtmlPath
 }

@@ -9,6 +9,7 @@ import time
 import sys
 import subprocess
 import re
+import difflib
 import unicodedata
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -143,6 +144,68 @@ def _expand_aliases(tokens: set) -> set:
     return expanded
 
 
+def _suggest_regionais(codigo_regional: str, limit: int = 5) -> list:
+    regionais = gerenciador_regionais.listar_regionais()
+    if not regionais:
+        return []
+
+    normalized_target = _normalize_text(codigo_regional)
+    normalized_map = {codigo: _normalize_text(codigo) for codigo in regionais}
+    suggestions = []
+
+    for normalized_match in difflib.get_close_matches(normalized_target, list(normalized_map.values()), n=limit, cutoff=0.45):
+        for codigo, normalized in normalized_map.items():
+            if normalized == normalized_match and codigo not in suggestions:
+                suggestions.append(codigo)
+
+    return suggestions[:limit]
+
+
+def _rank_fortimanager_devices(codigo_regional: str, regional_info: dict, devices: list, limit: int = 5) -> list:
+    if not devices:
+        return []
+
+    regional_name = regional_info.get("nome", "") if regional_info else ""
+    base = f"{codigo_regional} {regional_name}"
+    regional_tokens = _expand_aliases(_tokenize(base))
+    ranked = []
+
+    for device in devices:
+        device_label = f"{device.get('name', '')} {device.get('hostname', '')}"
+        device_norm = _normalize_text(device_label)
+        device_tokens = set(device_norm.split())
+
+        score = 0
+        for token in regional_tokens:
+            if token in device_tokens:
+                score += 3
+            elif token and token in device_norm:
+                score += 1
+
+        if score > 0:
+            ranked.append({
+                "name": device.get("name", ""),
+                "hostname": device.get("hostname", ""),
+                "ip": device.get("ip", ""),
+                "score": score
+            })
+
+    ranked.sort(key=lambda item: (-item["score"], str(item.get("name", ""))))
+    return ranked[:limit]
+
+
+def _extract_interface_ip(ip_value) -> str:
+    ip_text = str(ip_value or "").strip()
+    if not ip_text:
+        return ""
+    ip_text = ip_text.split()[0].strip()
+    if "/" in ip_text:
+        ip_text = ip_text.split("/", 1)[0].strip()
+    if ip_text in {"0", "0.0.0.0", "::", "N/A", "None"}:
+        return ""
+    return ip_text
+
+
 def _resolve_fortigate_credentials() -> dict:
     env_fg = ENV_CONFIG.get("fortigate", {})
     if isinstance(env_fg, dict) and env_fg.get("host"):
@@ -235,6 +298,7 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
 
     adom = _get_fortimanager_adom()
     devices = _list_fortimanager_devices(adom)
+    candidate_devices = _rank_fortimanager_devices(codigo_regional, regional_info or {}, devices)
 
     if not target_ip and target_name:
         for device in devices:
@@ -250,7 +314,9 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
         return {
             "manager": None,
             "device": None,
-            "adom": adom
+            "adom": adom,
+            "fortimanager_devices": devices,
+            "candidate_devices": candidate_devices
         }
 
     device_info = {}
@@ -276,7 +342,8 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
         ),
         "device": device_info,
         "adom": adom,
-        "fortimanager_devices": devices
+        "fortimanager_devices": devices,
+        "candidate_devices": candidate_devices
     }
 
 # === ROTAS PRINCIPAIS ===
@@ -3087,6 +3154,7 @@ def api_salvar_regional():
             return jsonify({'success': False, 'message': 'Nome da regional é obrigatório'})
         
         codigo = data.get('codigo', '').upper()
+        codigo_original = (data.get('codigo_original') or codigo).upper()
         nome = data['nome']
         descricao = data.get('descricao', '')
         
@@ -3099,12 +3167,19 @@ def api_salvar_regional():
         
         # Verifica se é edição ou nova
         regional_existente = gerenciador_regionais.obter_regional(codigo)
-        
+        regional_original = gerenciador_regionais.obter_regional(codigo_original) if data.get('editando') else None
+
         if regional_existente and not data.get('editando'):
             return jsonify({'success': False, 'message': 'Regional com este código já existe'})
-        
-        # Adiciona ou atualiza regional
-        gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
+
+        if data.get('editando'):
+            if not regional_original:
+                return jsonify({'success': False, 'message': 'Regional original não encontrada'})
+            if codigo != codigo_original and regional_existente:
+                return jsonify({'success': False, 'message': 'Já existe outra regional com este código'})
+            codigo = gerenciador_regionais.atualizar_regional(codigo_original, codigo, nome, descricao)
+        else:
+            gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
         
         return jsonify({'success': True, 'message': 'Regional salva com sucesso!', 'codigo': codigo})
         
@@ -3174,7 +3249,13 @@ def api_salvar_link_regional(codigo_regional):
             'provedor': data['provedor'],
             'ativo': data.get('ativo', True)
         }
-        
+
+        link_existente = gerenciador_regionais.obter_link(codigo_regional, link['id']) if data.get('id') else None
+
+        if link_existente:
+            gerenciador_regionais.atualizar_link(codigo_regional, link['id'], link)
+            return jsonify({'success': True, 'message': 'Link atualizado com sucesso!'})
+
         # Adiciona link à regional
         gerenciador_regionais.adicionar_link(codigo_regional, link)
         
@@ -3393,7 +3474,13 @@ def api_testar_link_regional(codigo_regional, id_link):
     try:
         regional_info = gerenciador_regionais.obter_regional(codigo_regional)
         if not regional_info:
-            return jsonify({"success": False, "message": "Regional não encontrada"}), 404
+            return jsonify({
+                "success": False,
+                "message": "Regional não encontrada",
+                "status": "regional_not_found",
+                "regional": codigo_regional,
+                "regionais_sugeridas": _suggest_regionais(codigo_regional)
+            }), 404
 
         # Obtém informações do link da regional
         link = gerenciador_regionais.obter_link(codigo_regional, id_link)
@@ -3421,7 +3508,12 @@ def api_testar_link_regional(codigo_regional, id_link):
                 "message": "Fortigate da regional não identificado no FortiManager",
                 "link": id_link,
                 "status": "fortigate_not_mapped",
-                "adom": adom
+                "adom": adom,
+                "regional": codigo_regional,
+                "regional_nome": regional_info.get("nome"),
+                "fortigate_ip_cadastrado": regional_info.get("fortigate_ip") or ((regional_info.get("fortigate") or {}).get("ip") if isinstance(regional_info.get("fortigate"), dict) else None),
+                "fortigate_device_cadastrado": regional_info.get("fortigate_device") or ((regional_info.get("fortigate") or {}).get("name") if isinstance(regional_info.get("fortigate"), dict) else None),
+                "candidate_devices": resolved.get("candidate_devices", []) if resolved else []
             }), 404
 
         # Autentica no Fortigate (ou usa FortiManager proxy)
@@ -3461,7 +3553,37 @@ def api_testar_link_regional(codigo_regional, id_link):
             interfaces_result = fm.list_device_interfaces(adom, device_info.get("name"))
             interfaces_data = interfaces_result.get("result", [])
             interfaces = interfaces_data[0].get("data", []) if interfaces_data else []
+            if not interfaces:
+                use_proxy = False
         else:
+            interfaces = []
+
+        if not use_proxy:
+            if not gerenciador_regional.autenticar():
+                fallback_manager = None
+                fallback_port = 443
+                if getattr(gerenciador_regional, "port", None) != fallback_port:
+                    fallback_manager = GerenciadorFortigate(
+                        host=getattr(gerenciador_regional, "host", None),
+                        port=fallback_port,
+                        username=getattr(gerenciador_regional, "username", None),
+                        password=getattr(gerenciador_regional, "password", None)
+                    )
+                    if fallback_manager.autenticar():
+                        gerenciador_regional = fallback_manager
+                    else:
+                        fallback_manager = None
+
+                if fallback_manager is None:
+                    return jsonify({
+                        "success": False,
+                        "message": "Falha na autenticação com o Fortigate",
+                        "fortigate_ip": getattr(gerenciador_regional, "host", None),
+                        "fortigate_device": device_info,
+                        "adom": adom,
+                        "port": getattr(gerenciador_regional, "port", None)
+                    }), 500
+
             interfaces_result = gerenciador_regional.obter_interfaces()
             if not interfaces_result["success"]:
                 return jsonify({
@@ -3475,7 +3597,7 @@ def api_testar_link_regional(codigo_regional, id_link):
         # Procura a interface que tem o IP do link
         interface_encontrada = None
         for interface in interfaces:
-            ip_interface = (interface.get("ip", "") or "").split()[0].strip()  # Remove máscara de rede
+            ip_interface = _extract_interface_ip(interface.get("ip", ""))
             if ip_interface == link_ip:
                 interface_encontrada = interface
                 break
@@ -3566,8 +3688,8 @@ def api_testar_link_regional(codigo_regional, id_link):
 
         # ✅ Validação do IP: deve bater com o IP da interface
         interface_ip_full = interface_obj.get("ip", "") if interface_obj else ""
-        interface_ip = interface_ip_full.split()[0] if interface_ip_full else ""
-        ip_confere = (interface_ip == link_ip)
+        interface_ip = _extract_interface_ip(interface_ip_full)
+        ip_confere = (interface_ip == link_ip) if interface_ip else use_proxy
         if not ip_confere:
             resultado = {
                 "success": True,
@@ -3587,19 +3709,24 @@ def api_testar_link_regional(codigo_regional, id_link):
 
             return jsonify(resultado)
 
-        if sla_status == "unknown":
-            # Fallback: usa status físico quando SLA não estiver disponível
-            sla_status = "active" if link_up else "inactive"
-
-        if sla_status == "active":
-            status = "online"
-            message = f"Link {interface_name} com SLA ativo"
-        elif sla_status == "inactive":
-            status = "offline"
-            message = f"Link {interface_name} com SLA inativo"
+        if use_proxy:
+            status = "online" if link_up else "offline"
+            sla_status = "unavailable"
+            message = f"Link {interface_name} {'ativo' if link_up else 'inativo'} no FortiGate"
         else:
-            status = "unknown"
-            message = f"Status SLA indisponível para {interface_name}"
+            if sla_status == "unknown":
+                # Fallback: usa status físico quando SLA não estiver disponível
+                sla_status = "active" if link_up else "inactive"
+
+            if sla_status == "active":
+                status = "online"
+                message = f"Link {interface_name} com SLA ativo"
+            elif sla_status == "inactive":
+                status = "offline"
+                message = f"Link {interface_name} com SLA inativo"
+            else:
+                status = "unknown"
+                message = f"Status SLA indisponível para {interface_name}"
 
         resultado = {
             "success": True,
@@ -3608,6 +3735,7 @@ def api_testar_link_regional(codigo_regional, id_link):
             "status": status,
             "sla_status": sla_status,
             "sla_data": sdwan_data.get("sla_data", {}),
+            "modo_verificacao": "interface" if use_proxy else "sla",
             "message": message,
             "ultima_verificacao": datetime.now().isoformat()
         }
@@ -3744,7 +3872,7 @@ def api_sincronizar_links_regional(codigo_regional):
                 continue
 
             interface_ip_full = interface_encontrada.get("ip", "") or ""
-            interface_ip = interface_ip_full.split()[0].strip() if interface_ip_full else ""
+            interface_ip = _extract_interface_ip(interface_ip_full)
             if not interface_ip:
                 continue
 
@@ -3816,7 +3944,7 @@ def api_fortigate_wan_status():
             name = wan.get("name", "").upper()
             name_lower = wan.get("name", "").lower()
             ip_full = wan.get("ip", "")
-            ip = ip_full.split()[0] if ip_full else "N/A"
+            ip = _extract_interface_ip(ip_full) if ip_full else "N/A"
             mascara = ip_full.split()[1] if len(ip_full.split()) > 1 else "N/A"
 
             # Status físico
@@ -4062,19 +4190,19 @@ def api_salvar_configuracoes():
                 "password": data.get('unifi_senha', '')
             },
             "fortigate": {
-                "host": data.get('fortigate_host', '10.254.12.1'),
+                "host": data.get('fortigate_host', 'fortigate.example.local'),
                 "port": int(data.get('fortigate_porta', 20443)),
                 "username": data.get('fortigate_usuario', 'admin'),
                 "password": data.get('fortigate_senha', '')
             },
             "zabbix": {
-                "url": data.get('zabbix_url', 'http://10.254.12.15/zabbix/api_jsonrpc.php'),
+                "url": data.get('zabbix_url', 'https://zabbix.example.local/zabbix/api_jsonrpc.php'),
                 "username": data.get('zabbix_usuario', 'admin'),
                 "password": data.get('zabbix_senha', ''),
                 "excel_file": data.get('zabbix_arquivo_excel', 'switches_zabbix.xlsx')
             },
             "server_manager": {
-                "host": data.get('server_manager_host', '192.168.41.2'),
+                "host": data.get('server_manager_host', '203.0.113.20'),
                 "username": data.get('server_manager_usuario', 'admin'),
                 "password": data.get('server_manager_senha', ''),
                 "regional": data.get('server_manager_regional', 'Paraná')
@@ -4101,7 +4229,7 @@ def api_salvar_configuracoes():
             
             # Atualiza as credenciais do Fortigate
             credentials['fortigate'] = {
-                'host': data.get('fortigate_host', '10.254.12.1'),
+                'host': data.get('fortigate_host', 'fortigate.example.local'),
                 'port': int(data.get('fortigate_porta', 20443)),
                 'username': data.get('fortigate_usuario', 'admin'),
                 'password': data.get('fortigate_senha', '')
@@ -4109,7 +4237,7 @@ def api_salvar_configuracoes():
             
             # Atualiza as credenciais do Zabbix
             credentials['zabbix'] = {
-                'url': data.get('zabbix_url', 'http://10.254.12.15/zabbix/api_jsonrpc.php'),
+                'url': data.get('zabbix_url', 'https://zabbix.example.local/zabbix/api_jsonrpc.php'),
                 'username': data.get('zabbix_usuario', 'admin'),
                 'password': data.get('zabbix_senha', ''),
                 'excel_file': data.get('zabbix_arquivo_excel', 'switches_zabbix.xlsx')
@@ -4132,7 +4260,7 @@ def api_salvar_configuracoes():
             
             # Atualiza as credenciais do Server Manager
             credentials['server_manager'] = {
-                'host': data.get('server_manager_host', '192.168.41.2'),
+                'host': data.get('server_manager_host', '203.0.113.20'),
                 'username': data.get('server_manager_usuario', 'admin'),
                 'password': data.get('server_manager_senha', ''),
                 'regional': data.get('server_manager_regional', 'Paraná')

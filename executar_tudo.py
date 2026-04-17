@@ -5,13 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 from web_config import gerenciador_fortigate
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
-from config import GPS_HTML
+from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG
 
 import subprocess
 from pathlib import Path
 import webbrowser
 import os
 import re
+import unicodedata
 from datetime import datetime
 import sys
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
@@ -39,7 +40,8 @@ def _montar_gps_html():
             body = (m.group(1) if m else txt).strip()
             # Se já tem imagem embedada ou <img>, usa direto
             if "data:image/png" in body or "<img" in body:
-                return body
+                updated = datetime.fromtimestamp(GPS_HTML.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+                return body + f'<div class="small" style="color:#666;margin-top:6px">Atualizado: {updated}</div>'
         # 2) Se não, embute o PNG
         png_path = GPS_HTML.with_name("gps_amigo.png")
         if png_path.exists() and png_path.stat().st_size > 10_000:  # >10KB evita falso-positivo
@@ -122,6 +124,36 @@ def _montar_print_rede_html():
     except Exception as e:
         print("[PRINT-REDE] Falha montando HTML:", e)
         return f"<div class='error'>Falha ao montar Print Rede: {e}</div>"
+
+
+def _montar_appgate_html():
+    try:
+        if APPGATE_IMG.exists() and APPGATE_IMG.stat().st_size > 10_000:
+            b64 = base64.b64encode(APPGATE_IMG.read_bytes()).decode("ascii")
+            updated = datetime.fromtimestamp(APPGATE_IMG.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+            return (
+                f'<img alt="Firewall Rio de Janeiro" '
+                f'style="max-width:100%;height:auto;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.08)" '
+                f'src="data:image/png;base64,{b64}">'
+                f'<div class="small" style="color:#666;margin-top:6px">Atualizado: {updated}</div>'
+            )
+
+        if APPGATE_HTML.exists():
+            txt = APPGATE_HTML.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"<body[^>]*>(.*?)</body>", txt, flags=re.IGNORECASE | re.DOTALL)
+            body = (m.group(1) if m else txt).strip()
+            if "data:image/png" in body or "<img" in body:
+                updated = datetime.fromtimestamp(APPGATE_HTML.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+                return body + f'<div class="small" style="color:#666;margin-top:6px">Atualizado: {updated}</div>'
+    except Exception as e:
+        print("[APPGATE] Falha montando HTML:", e)
+
+    url = APPGATE_CONFIG.get("url", "https://firewall.example.local/ng/system/dashboard/1")
+    ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    return (
+        f'<div class="note" style="color:#666">Prévia indisponível no momento. ({ts})</div>'
+        f'<p><a href="{url}" target="_blank">Abrir Firewall Rio de Janeiro</a></p>'
+    )
 
 
 def render_replicacao_card():
@@ -220,38 +252,414 @@ print()
 data_execucao = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
 
 # === 1. EXECUTA CHEKLISTS DAS REGIONAIS ===
-# Carrega servidores do novo sistema de gerenciamento
-try:
-    from gerenciar_servidores import GerenciadorServidores
-    gerenciador = GerenciadorServidores()
-    servidores_configurados = gerenciador.listar_servidores()
-    print(f"[INFO] {len(servidores_configurados)} servidores carregados do sistema de gerenciamento")
-except Exception as e:
-    print(f"[AVISO] Erro ao carregar gerenciador de servidores: {e}")
-    print("[INFO] Usando método legado...")
-    # Fallback para método antigo
+def _carregar_servidores_do_txt_legado():
     conteudo = CONEXOES_FILE.read_text(encoding="utf-8")
     blocos = re.split(r"\n\s*\n", conteudo.strip())
-    servidores_configurados = []
-    
+    servidores = []
+
     for bloco in blocos:
         nome_match = re.search(r"Nome:\s*(.+)", bloco, re.IGNORECASE)
         tipo_match = re.search(r"Tipo:\s*(\w+)", bloco, re.IGNORECASE)
         ip_match = re.search(r"IP:\s*([\d\.]+)", bloco, re.IGNORECASE)
         user_match = re.search(r"Usuario:\s*(\S+)", bloco, re.IGNORECASE)
         pass_match = re.search(r"Senha:\s*(\S+)", bloco, re.IGNORECASE)
-        
+
         if all([nome_match, tipo_match, ip_match, user_match, pass_match]):
-            servidores_configurados.append({
+            servidores.append({
                 'nome': nome_match.group(1).strip(),
                 'tipo': tipo_match.group(1).strip().lower(),
                 'ip': ip_match.group(1).strip(),
                 'usuario': user_match.group(1).strip(),
                 'senha': pass_match.group(1).strip(),
-                'ativo': True
+                'ativo': True,
             })
 
-blocos_html_regionais_with_status = [] # Armazena (html_bloco_string, tem_erro)
+    return servidores
+
+
+def _carregar_servidores_da_estrutura():
+    estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
+    if not estrutura_path.exists():
+        return []
+
+    data = json.loads(estrutura_path.read_text(encoding="utf-8"))
+    servidores = []
+
+    for regional in (data.get("regionais") or {}).values():
+        regional_nome = (regional.get("nome") or "").strip()
+        if not regional_nome:
+            continue
+
+        for servidor in regional.get("servidores", []):
+            if not servidor.get("ativo", True):
+                continue
+
+            tipo = (servidor.get("tipo") or "").strip().lower()
+            ip = (servidor.get("ip") or "").strip()
+            usuario = (servidor.get("usuario") or "").strip()
+            senha = str(servidor.get("senha") or "").strip()
+
+            if not all([tipo, ip, usuario, senha]):
+                continue
+
+            servidores.append({
+                'nome': regional_nome,
+                'tipo': tipo,
+                'ip': ip,
+                'usuario': usuario,
+                'senha': senha,
+                'ativo': True,
+                'servidor_nome': (servidor.get('nome') or '').strip(),
+                'regional_codigo': (regional.get('codigo') or '').strip(),
+            })
+
+    return servidores
+
+
+def _carregar_servidores_configurados():
+    try:
+        servidores_estrutura = _carregar_servidores_da_estrutura()
+        if servidores_estrutura:
+            print(f"[INFO] {len(servidores_estrutura)} servidores carregados de estrutura_regionais.json")
+            return servidores_estrutura
+        print("[INFO] estrutura_regionais.json encontrado, mas sem servidores ativos válidos")
+    except Exception as e:
+        print(f"[AVISO] Erro ao carregar estrutura_regionais.json: {e}")
+
+    try:
+        from gerenciar_servidores import GerenciadorServidores
+        gerenciador = GerenciadorServidores()
+        servidores_sistema = gerenciador.listar_servidores()
+        if servidores_sistema:
+            print(f"[INFO] {len(servidores_sistema)} servidores carregados do sistema de gerenciamento")
+            return servidores_sistema
+    except Exception as e:
+        print(f"[AVISO] Erro ao carregar gerenciador de servidores: {e}")
+
+    print("[INFO] Usando método legado via Conexoes.txt...")
+    return _carregar_servidores_do_txt_legado()
+
+
+def _contar_total_regionais_cadastradas():
+    estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
+    if estrutura_path.exists():
+        try:
+            data = json.loads(estrutura_path.read_text(encoding="utf-8"))
+            return len((data.get("regionais") or {}).keys())
+        except Exception as e:
+            print(f"[AVISO] Erro ao contar regionais em estrutura_regionais.json: {e}")
+
+    return len({(servidor.get("nome") or "").strip().upper() for servidor in servidores_configurados if (servidor.get("nome") or "").strip()})
+
+
+def _normalizar_link_texto(valor):
+    return re.sub(r"[^A-Z0-9]+", "", str(valor or "").strip().upper())
+
+
+def _normalizar_link_ip(valor):
+    return str(valor or "").strip().split()[0]
+
+
+def _extrair_chave_regional(valor):
+    texto = str(valor or "").strip().upper()
+    if not texto:
+        return "N/A"
+
+    # Padrão mais comum nas regionais/sedes: V030, T018, RGS, etc.
+    match = re.search(r"\b([A-Z]\d{3})\b", texto)
+    if match:
+        return match.group(1)
+
+    return texto
+
+
+def _extrair_regional_vpn(nome_tunel):
+    texto = str(nome_tunel or "").strip().upper()
+    if not texto:
+        return "N/A"
+
+    # Exemplos:
+    # T010_MOTUS_01 -> T010
+    # T043_PERNAMB01 -> T043
+    # Agrupa por código regional para consolidar todos os túneis da mesma regional.
+    match = re.match(r"^([A-Z]\d{3})", texto)
+    if match:
+        return match.group(1)
+
+    return _extrair_chave_regional(texto)
+
+
+def _extrair_nome_exibicao_regional_vpn(nome_tunel):
+    texto = str(nome_tunel or "").strip().upper()
+    if not texto:
+        return "REGIONAL"
+
+    # Exemplo: V049_MACAELC_01 -> MACAELC
+    # Exemplo: T043_PERNAMB01 -> PERNAMB
+    match = re.match(r"^[A-Z]\d{3}_?(.+)$", texto)
+    sufixo = match.group(1) if match else texto
+    sufixo = sufixo.strip("_-")
+    if not sufixo:
+        return "REGIONAL"
+
+    partes = [p for p in sufixo.split("_") if p]
+    if not partes:
+        return "REGIONAL"
+
+    # Remove marcador genérico de início (REG/REGIONAL), ex.: REG_RJ -> RJ
+    if partes[0] in {"REG", "REGIONAL"} and len(partes) > 1:
+        partes = partes[1:]
+
+    primeira_parte = partes[0]
+    nome_limpo = re.sub(r"\d+$", "", primeira_parte).strip("_-")
+    return nome_limpo or primeira_parte or "REGIONAL"
+
+
+def _normalizar_texto_regional(valor):
+    texto = str(valor or "").strip().upper()
+    if not texto:
+        return ""
+
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = re.sub(r"[^A-Z0-9]+", "", texto)
+    return texto
+
+
+def _remover_prefixo_regional(valor):
+    texto = str(valor or "").strip().upper()
+    return re.sub(r"^(RG|REG|REGIONAL)[_\s\-]*", "", texto).strip()
+
+
+def _gerar_tokens_regional(valor):
+    texto = str(valor or "").strip().upper()
+    if not texto:
+        return set()
+
+    tokens = set()
+    candidatos = [texto, _remover_prefixo_regional(texto)]
+    for candidato in candidatos:
+        normalizado = _normalizar_texto_regional(candidato)
+        if normalizado:
+            tokens.add(normalizado)
+
+        partes = [p for p in re.split(r"[_\s\-/&]+", candidato) if p]
+        partes = [p for p in partes if p not in {"RG", "REG", "REGIONAL", "DE", "DO", "DA", "DOS", "DAS", "E"}]
+
+        for parte in partes:
+            parte_norm = _normalizar_texto_regional(parte)
+            if parte_norm:
+                tokens.add(parte_norm)
+
+        if partes:
+            sigla = "".join(p[0] for p in partes if p and p[0].isalpha())
+            sigla_norm = _normalizar_texto_regional(sigla)
+            if len(sigla_norm) >= 2:
+                tokens.add(sigla_norm)
+
+    return {t for t in tokens if t}
+
+
+def _carregar_indice_regionais():
+    estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
+    if not estrutura_path.exists():
+        return []
+
+    try:
+        data = json.loads(estrutura_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    indice = []
+    for chave, dados in (data.get("regionais") or {}).items():
+        nome = str((dados or {}).get("nome") or chave).strip()
+        nome_sem_prefixo = _remover_prefixo_regional(nome).replace("_", " ").strip()
+        nome_exibicao = nome_sem_prefixo or nome
+
+        tokens = set()
+        tokens.update(_gerar_tokens_regional(chave))
+        tokens.update(_gerar_tokens_regional(nome))
+
+        indice.append({
+            "chave": chave,
+            "nome_exibicao": nome_exibicao,
+            "tokens": tokens,
+        })
+
+    return indice
+
+
+def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
+    if not indice_regionais:
+        return None
+
+    candidatos = []
+    candidatos.extend(_gerar_tokens_regional(nome_exibicao_vpn))
+    candidatos.extend(_gerar_tokens_regional(codigo_vpn))
+    candidatos = [c for c in candidatos if c]
+
+    # 1) Match exato por token
+    for cand in candidatos:
+        for reg in indice_regionais:
+            if cand in reg["tokens"]:
+                return reg
+
+    # 2) Match aproximado por contenção (evita perder abreviações simples)
+    melhor = None
+    melhor_score = 0
+    for cand in candidatos:
+        if len(cand) < 3:
+            continue
+        for reg in indice_regionais:
+            for token in reg["tokens"]:
+                if len(token) < 3:
+                    continue
+                if cand in token or token in cand:
+                    score = min(len(cand), len(token))
+                    if score > melhor_score:
+                        melhor = reg
+                        melhor_score = score
+
+    return melhor
+
+
+def _mapear_interface_preferida(link_cadastrado):
+    """Mapeia nomes lógicos/provedores para nomes reais de interface no Fortigate."""
+    interface_explicita = str(link_cadastrado.get("interface_fortigate") or "").strip().lower()
+    if interface_explicita:
+        return interface_explicita
+
+    nome = _normalizar_link_texto(link_cadastrado.get("nome"))
+    provedor = _normalizar_link_texto(link_cadastrado.get("provedor"))
+
+    # WAN11 costuma ser nomenclatura lógica no cadastro; no Fortigate geralmente é wan2.
+    mapeamento_nome = {
+        "WAN11": "wan2",
+        "WAN2": "wan2",
+        "WAN1": "wan1",
+    }
+    if nome in mapeamento_nome:
+        return mapeamento_nome[nome]
+
+    mapeamento_provedor = {
+        "MUNDIVOX": "wan2",
+    }
+    return mapeamento_provedor.get(provedor)
+
+
+def _carregar_links_cadastrados_fortigate(regiao):
+    estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
+    regional_por_regiao = {
+        "RJ": "REG_RIO_DE_JANEIRO",
+    }
+
+    regional_codigo = regional_por_regiao.get((regiao or "").strip().upper())
+    if not regional_codigo or not estrutura_path.exists():
+        return []
+
+    try:
+        data = json.loads(estrutura_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[AVISO] Erro ao carregar links cadastrados de {regiao}: {e}")
+        return []
+
+    regional = (data.get("regionais") or {}).get(regional_codigo) or {}
+    return [link for link in regional.get("links", []) if link.get("ativo", True)]
+
+
+def _mesclar_links_fortigate_com_cadastro(regiao, links_fortigate):
+    links_cadastrados = _carregar_links_cadastrados_fortigate(regiao)
+    if not links_cadastrados:
+        return links_fortigate
+
+    links_fortigate_todos = [dict(link) for link in links_fortigate]
+    links_disponiveis = [dict(link) for link in links_fortigate]
+    links_mesclados = []
+
+    for link_cadastrado in links_cadastrados:
+        indice_match = None
+        nome_cadastrado = _normalizar_link_texto(link_cadastrado.get("nome"))
+        provedor_cadastrado = _normalizar_link_texto(link_cadastrado.get("provedor"))
+        ip_cadastrado = _normalizar_link_ip(link_cadastrado.get("ip"))
+        interface_preferida = _mapear_interface_preferida(link_cadastrado)
+
+        if interface_preferida:
+            for indice, link_fortigate in enumerate(links_disponiveis):
+                if str(link_fortigate.get("nome") or "").strip().lower() == interface_preferida:
+                    indice_match = indice
+                    break
+
+        for indice, link_fortigate in enumerate(links_disponiveis):
+            if _normalizar_link_texto(link_fortigate.get("nome")) == nome_cadastrado:
+                indice_match = indice
+                break
+
+        if indice_match is None:
+            for indice, link_fortigate in enumerate(links_disponiveis):
+                if _normalizar_link_texto(link_fortigate.get("alias")) == provedor_cadastrado:
+                    indice_match = indice
+                    break
+
+        if indice_match is None:
+            for indice, link_fortigate in enumerate(links_disponiveis):
+                if _normalizar_link_ip(link_fortigate.get("ip")) == ip_cadastrado:
+                    indice_match = indice
+                    break
+
+        link_fortigate = links_disponiveis.pop(indice_match) if indice_match is not None else {}
+        if not link_fortigate and interface_preferida:
+            for item in links_fortigate_todos:
+                if str(item.get("nome") or "").strip().lower() == interface_preferida:
+                    # Reuso intencional para links lógicos (ex.: WAN11) que compartilham interface física.
+                    link_fortigate = dict(item)
+                    break
+
+        link_mesclado = dict(link_fortigate)
+        link_mesclado["interface_monitorada"] = link_fortigate.get("nome")
+        link_mesclado["interface_esperada"] = interface_preferida
+        link_mesclado["match_confiavel"] = bool(link_fortigate)
+        link_mesclado["nome"] = (link_cadastrado.get("nome") or link_fortigate.get("nome") or "N/A").strip()
+        link_mesclado["alias"] = (link_cadastrado.get("provedor") or link_fortigate.get("alias") or "").strip()
+        link_mesclado["ip"] = ip_cadastrado or link_fortigate.get("ip", "N/A")
+        link_mesclado["status"] = link_fortigate.get("status", link_cadastrado.get("status", "offline"))
+        link_mesclado["velocidade"] = link_fortigate.get("velocidade", "N/A")
+        link_mesclado["tipo"] = link_fortigate.get("tipo", "N/A")
+        link_mesclado["estatisticas"] = link_fortigate.get("estatisticas") or {}
+        link_mesclado["ultima_verificacao"] = link_fortigate.get("ultima_verificacao") or link_cadastrado.get("ultima_verificacao")
+        links_mesclados.append(link_mesclado)
+
+    # Com cadastro definido, priorizamos o conjunto cadastrado para evitar duplicações no dashboard.
+    return links_mesclados
+
+
+def _formatar_nome_link_dashboard(link):
+    nome = str(link.get("nome") or "").strip()
+    alias = str(link.get("alias") or "").strip()
+    if nome and alias and _normalizar_link_texto(nome) != _normalizar_link_texto(alias):
+        return f"{nome} - {alias}"
+    return nome or alias or "N/A"
+
+
+servidores_configurados = _carregar_servidores_configurados()
+
+regionais_processadas = {}
+
+
+def _regional_html_indicates_error(file_content):
+    lowered = file_content.lower()
+    error_markers = [
+        "[error]",
+        "erro ao ",
+        "erro no ",
+        "erro inesperado",
+        "arquivo não encontrado",
+        "falha ao ",
+        "timed out",
+        "connection to",
+        "connection aborted",
+        "connectionreseterror",
+    ]
+    return any(marker in lowered for marker in error_markers)
 
 # Processa cada servidor configurado
 for servidor in servidores_configurados:
@@ -331,8 +739,8 @@ for servidor in servidores_configurados:
     # Este passo é crucial para capturar erros escritos pelos próprios Chelist.py/iLOcheck.py.
     if html_path.exists():
         file_content = html_path.read_text(encoding="utf-8")
-        # Verifica indicadores comuns de erro no conteúdo do arquivo, incluindo o erro específico do iDRAC
-        if "[ERROR] Erro" in file_content or "Error" in file_content or "timed out" in file_content or "Connection to" in file_content:
+        # Verifica indicadores de falha operacional no conteúdo do arquivo gerado.
+        if _regional_html_indicates_error(file_content):
             has_error_for_regional = True
         current_regional_html_content = file_content
     else:
@@ -346,22 +754,64 @@ for servidor in servidores_configurados:
         """
         has_error_for_regional = True
 
-    # Constrói o bloco HTML para esta regional
+    regional_key = nome.strip().upper()
+    regional_data = regionais_processadas.setdefault(
+        regional_key,
+        {
+            "nome": nome,
+            "has_error": False,
+            "server_blocks": [],
+        },
+    )
+    regional_data["has_error"] = regional_data["has_error"] or has_error_for_regional
+    regional_data["server_blocks"].append(
+        f"""
+        <div class="regional-server-block" style="margin-bottom: 24px;">
+            <div style="font-size: 0.95rem; font-weight: 700; color: #4a5568; margin-bottom: 12px;">
+                {html.escape(tipo.upper())} - {html.escape(ip)}
+            </div>
+            {current_regional_html_content}
+        </div>
+        """
+    )
+
+blocos_html_regionais_with_status = []
+servidores_online_total = 0
+servidores_offline_total = 0
+regionais_servidor_status = {}
+for regional_data in regionais_processadas.values():
+    dados_regional = regionais_servidor_status.setdefault(regional_data["nome"].strip().upper(), {"online": 0, "offline": 0})
+    for bloco in regional_data.get("server_blocks", []):
+        if _regional_html_indicates_error(bloco):
+            servidores_offline_total += 1
+            dados_regional["offline"] += 1
+        else:
+            servidores_online_total += 1
+            dados_regional["online"] += 1
+
+    regional_open_attr = ""
+    regional_status = "offline" if regional_data["has_error"] else "online"
     regional_html_block = f"""
-    <details class="regional-item">
-      <summary><strong>{nome}</strong></summary>
-      <div class="regional-content">
-        {current_regional_html_content}
-      </div>
+    <details class="regional-item" data-status="{regional_status}"{regional_open_attr}>
+        <summary><strong>{regional_data['nome']}</strong></summary>
+        <div class="regional-content">
+            {''.join(regional_data['server_blocks'])}
+        </div>
     </details>
     """
-    blocos_html_regionais_with_status.append((regional_html_block, has_error_for_regional))
+    blocos_html_regionais_with_status.append((regional_html_block, regional_data["has_error"]))
 
 # === 3. EXECUTA REPLICAÇÃO AD ===
 print("[EXEC] Executando verificação de replicação AD...")
 try:
     # Executa o script PowerShell para verificação de replicação AD
-    subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", "Replicacao_Servers.ps1"], check=True)
+    env_replicacao = os.environ.copy()
+    env_replicacao["AUTOMACAO_SKIP_REPL_BROWSER"] = "1"
+    subprocess.run(
+        ["powershell", "-ExecutionPolicy", "Bypass", "-File", "Replicacao_Servers.ps1"],
+        check=True,
+        env=env_replicacao,
+    )
 except subprocess.CalledProcessError:
     print("[ERRO] Erro ao executar Replicacao_Servers.ps1")
 
@@ -452,7 +902,7 @@ try:
         status_class = "success" if vm['status'] == 'online' else "danger"
         
         relatorio_vms += f"""
-        <div class="vm-item mb-4">
+        <div class="vm-item mb-4" data-status="{vm['status']}">
             <div class="card">
                 <div class="card-header bg-{status_class} text-white">
                     <h4 class="mb-0">[SERVER] {vm['name']}</h4>
@@ -820,18 +1270,20 @@ try:
         total_switches = len(gerenciador_switches.switches)
         switches_html_content = f"""
         <div class='switches-container'>
-            <div class='alert alert-success mb-3'>
+            <div class='switches-summary'>
                 <h5>[DATA] Relatório Completo dos Switches</h5>
-                <p><strong>Total de switches cadastrados:</strong> {total_switches}</p>
-                <p><strong>Switches verificados nesta execução:</strong> {len(switches_data)}</p>
-                <p><strong>Switches Online:</strong> {switches_online}</p>
-                <p><strong>Switches Offline/Warning:</strong> {switches_offline}</p>
-                <p><strong>Taxa de disponibilidade:</strong> {(switches_online/(switches_online+switches_offline)*100):.1f}% ({switches_online}/{switches_online+switches_offline})</p>
+                <div class='switches-metrics'>
+                    <div><strong>Total de switches cadastrados:</strong> {total_switches}</div>
+                    <div><strong>Switches verificados nesta execução:</strong> {len(switches_data)}</div>
+                    <div><strong>Switches Online:</strong> {switches_online}</div>
+                    <div><strong>Switches Offline/Warning:</strong> {switches_offline}</div>
+                    <div><strong>Cobertura da coleta:</strong> {len(switches_data)}/{total_switches}</div>
+                </div>
             </div>
             
-            <div class='alert alert-info mb-3'>
+            <div class='switches-regionals-panel'>
                 <h6>[URL] Resumo por Regional:</h6>
-                <div class="row">
+                <div class="switches-regionals">
         """
         
         # Agrupa switches por regional
@@ -850,15 +1302,36 @@ try:
         # Adiciona resumo por regional
         for regional, dados in regionais_resumo.items():
             taxa = (dados['online']/dados['total']*100) if dados['total'] > 0 else 0
+            status_class = "regional-badge-danger" if dados['offline'] > 0 else "regional-badge-success"
             switches_html_content += f"""
-                    <div class="col-md-4 mb-2">
-                        <strong>{regional}:</strong> {dados['online']}/{dados['total']} ({taxa:.0f}%)
+                    <div class="regional-badge {status_class}">
+                        <strong>{regional}</strong><br>{dados['online']}/{dados['total']} ({taxa:.0f}%)
                     </div>
+            """
+
+        regionais_com_switch_offline = sorted(
+            [regional for regional, dados in regionais_resumo.items() if dados['offline'] > 0]
+        )
+
+        if regionais_com_switch_offline:
+            itens_regionais_offline = "".join(
+                [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['offline']} offline)</li>" for regional in regionais_com_switch_offline]
+            )
+            switches_html_content += f"""
+                </div>
+                <div id="switches-offline-regionais" class="regional-badge" style="grid-column: 1 / -1; border-left: 6px solid #dd6b20;">
+                    <strong>[WARN] Regionais com switch offline:</strong>
+                    <ul style="margin:10px 0 0 18px;">
+                        {itens_regionais_offline}
+                    </ul>
+                </div>
+                <div class="switches-regionals">
             """
         
         switches_html_content += """
                 </div>
             </div>
+            <div class="switches-items">
         """
         for switch in switches_data:
             status = switch.get('status', 'offline')
@@ -895,15 +1368,17 @@ try:
                 """
             
             switches_html_content += f"""
-            <div class="switch-item mb-3">
+            <div class="switch-item mb-3" data-status="{status}" data-regional="{switch.get('regional', 'N/A')}">
                 <div class="card">
-                    <div class="card-header bg-{status_class} text-white">
-                        <h5 class="mb-0">{switch['name']}</h5>
-                        <small>ID Zabbix: {detalhes.get('host_id', 'N/A') if isinstance(detalhes, dict) else 'N/A'}</small>
+                    <div class="card-header">
+                        <div>
+                            <h5 class="mb-0">{switch['name']}</h5>
+                            <small>ID Zabbix: {detalhes.get('host_id', 'N/A') if isinstance(detalhes, dict) else 'N/A'}</small>
+                        </div>
+                        <span class="status-badge {status_class}">{status.title()}</span>
                     </div>
                     <div class="card-body">
                         <p><strong>IP:</strong> {switch['ip']}</p>
-                        <p><strong>Status:</strong> {status.title()}</p>
                         <p><strong>Status Zabbix:</strong> {zabbix_status.title()}</p>
                         <p><strong>Regional:</strong> {switch['regional']}</p>
                         <p><strong>Última verificação:</strong> {switch['last_check']}</p>
@@ -913,7 +1388,7 @@ try:
                 </div>
             </div>
             """
-        switches_html_content += "</div>"
+        switches_html_content += "</div></div>"
         
         if not switches_data:
             switches_html_content = """
@@ -999,7 +1474,9 @@ try:
         if not links_info.get("success"):
             continue
 
-        for link in links_info.get("links", []):
+        links_processados = _mesclar_links_fortigate_com_cadastro(regiao, links_info.get("links", []))
+
+        for link in links_processados:
             status = link.get("status", "offline")
             if status == "online":
                 links_online += 1
@@ -1008,47 +1485,122 @@ try:
 
             links_data.append({
                 "regiao": regiao,
-                "nome": link.get("alias") or link.get("nome"),
+                "nome": _formatar_nome_link_dashboard(link),
                 "ip": link.get("ip", "N/A"),
                 "status": status,
                 "velocidade": link.get("velocidade", "N/A"),
                 "tipo": link.get("tipo", "N/A"),
                 "estatisticas": link.get("estatisticas") or {},
+                "interface_monitorada": link.get("interface_monitorada"),
+                "interface_esperada": link.get("interface_esperada"),
+                "match_confiavel": bool(link.get("match_confiavel", True)),
                 "ultima_verificacao": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
 
 
 
     # ===== HTML =====
+    links_por_regiao = {}
+    for link in links_data:
+        regiao = str(link.get("regiao") or "N/A").strip().upper()
+        links_por_regiao.setdefault(regiao, []).append(link)
+
+    ordem_preferida_regioes = ["SP", "RJ"]
+    regioes_ordenadas = [reg for reg in ordem_preferida_regioes if reg in links_por_regiao]
+    regioes_ordenadas.extend(sorted(reg for reg in links_por_regiao if reg not in ordem_preferida_regioes))
+
     links_html_content = "<div class='links-container'>"
 
-    for link in links_data:
-        status_class = "success" if link["status"] == "online" else "danger"
-        estat = link["estatisticas"]
-
-        links_html_content += f"""
-        <div class="link-item mb-3">
-            <div class="card">
-                <div class="card-header bg-{status_class}">
-                    <h5 class="mb-0">{link['nome']}</h5>
-                    <small>Região: {link['regiao']}</small>
-                </div>
-                <div class="card-body">
-                    <p><strong>IP:</strong> {link['ip']}</p>
-                    <p><strong>Status:</strong> {link['status'].title()}</p>
-                    <p><strong>Velocidade:</strong> {link['velocidade']} Mbps</p>
-                    <p><strong>Tipo:</strong> {link['tipo']}</p>
-
-                    <hr>
-
-                    <p><strong>Download:</strong> {estat.get('bandwidth_in_readable','N/A')}</p>
-                    <p><strong>Upload:</strong> {estat.get('bandwidth_out_readable','N/A')}</p>
-
-                    <p><strong>Última verificação:</strong> {link['ultima_verificacao']}</p>
-                </div>
-            </div>
+    if not links_data:
+        links_html_content += """
+        <div class="error-container">
+            <div class="error-title">Sem dados de links</div>
+            <div class="error-message">Nenhum link foi retornado pelos Fortigates no momento.</div>
         </div>
         """
+    else:
+        links_html_content += "<div class='links-overview'>"
+        for regiao in regioes_ordenadas:
+            links_regiao = links_por_regiao[regiao]
+            online_regiao = sum(1 for item in links_regiao if item.get("status") == "online")
+            offline_regiao = len(links_regiao) - online_regiao
+            classe_regional = "sp" if regiao == "SP" else "rj" if regiao == "RJ" else "other"
+            links_html_content += f"""
+            <div class="regional-chip {classe_regional}">
+                <div class="regional-chip-header">Regional {regiao}</div>
+                <div class="regional-chip-stats">
+                    <span class="ok">Online: {online_regiao}</span>
+                    <span class="sep">|</span>
+                    <span class="alert">Offline: {offline_regiao}</span>
+                </div>
+            </div>
+            """
+        links_html_content += "</div>"
+
+        links_html_content += "<div class='links-regions-grid'>"
+        for regiao in regioes_ordenadas:
+            links_regiao = links_por_regiao[regiao]
+            online_regiao = sum(1 for item in links_regiao if item.get("status") == "online")
+            offline_regiao = len(links_regiao) - online_regiao
+
+            links_html_content += f"""
+            <section class="links-region-block" id="links-{regiao.lower()}">
+                <header class="links-region-header">
+                    <h4>{regiao}</h4>
+                    <div class="links-region-counts">
+                        <span class="ok">Online: {online_regiao}</span>
+                        <span class="alert">Offline: {offline_regiao}</span>
+                    </div>
+                </header>
+                <div class="links-region-items">
+            """
+
+            for link in links_regiao:
+                status_class = "success" if link["status"] == "online" else "danger"
+                estat = link["estatisticas"]
+                match_confiavel = bool(link.get("match_confiavel", True))
+                monitorada = link.get("interface_monitorada") or "N/A"
+                esperada = link.get("interface_esperada") or "não definida"
+                download = estat.get('bandwidth_in_readable', 'N/A')
+                upload = estat.get('bandwidth_out_readable', 'N/A')
+
+                if not match_confiavel:
+                    download = "N/A (sem correspondência da interface)"
+                    upload = "N/A (sem correspondência da interface)"
+
+                links_html_content += f"""
+                    <div class="link-item" data-status="{link['status']}">
+                        <div class="card">
+                            <div class="card-header bg-{status_class}">
+                                <div>
+                                    <h5 class="mb-0">{link['nome']}</h5>
+                                    <small>IP: {link['ip']}</small>
+                                </div>
+                                <span class="status-pill {status_class}">{link['status'].title()}</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="link-monitor"><strong>Interface monitorada:</strong> {monitorada} <span class="link-monitor-note">(esperada: {esperada})</span></p>
+                                <div class="link-meta-grid">
+                                    <p><strong>Tipo:</strong> {link['tipo']}</p>
+                                    <p><strong>Velocidade:</strong> {link['velocidade']}</p>
+                                </div>
+                                <hr>
+                                <div class="link-bandwidth-grid">
+                                    <p><strong>Download:</strong> {download}</p>
+                                    <p><strong>Upload:</strong> {upload}</p>
+                                </div>
+                                <p class="link-last-check"><strong>Última verificação:</strong> {link['ultima_verificacao']}</p>
+                            </div>
+                        </div>
+                    </div>
+                """
+
+            links_html_content += """
+                </div>
+            </section>
+            """
+
+        links_html_content += "</div>"
 
     links_html_content += "</div>"
 
@@ -1064,7 +1616,7 @@ except Exception as e:
 # === 8. CARREGA HTMLs GERADOS ===
 # Carrega o conteúdo dos arquivos HTML gerados. Se um arquivo não existir, fornece uma mensagem de erro.
 # --- GPS: garante placeholder e tenta gerar o print ANTES de ler o arquivo ---
-from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo, gerar_print_saturno_portal
+from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo, gerar_print_saturno_portal, gerar_print_appgate
 ensure_gps_placeholder()
 try:
     gerar_print_gps_amigo()
@@ -1078,6 +1630,12 @@ try:
 except Exception as e:
     print("[PRINT-REDE] Falha ao gerar prints:", e)
 
+try:
+    gerar_print_appgate()
+    print("[APPGATE] Print gerado com sucesso.")
+except Exception as e:
+    print("[APPGATE] Falha ao gerar print:", e)
+
 # (opcional) monta o card para uso em outros lugares, se precisar
 gps_section = render_bloco_gps()
 
@@ -1089,6 +1647,7 @@ gps_section = render_bloco_gps()
 # Use sempre o helper que garante imagem inline (HTML ou PNG)
 gps_html = _montar_gps_html()
 print_rede_html = _montar_print_rede_html()
+appgate_html = _montar_appgate_html()
 
 
 rep_html = REPLICACAO_HTML.read_text(encoding="utf-8") if REPLICACAO_HTML.exists() else """
@@ -1105,7 +1664,7 @@ if not blocos_html_regionais_with_status:
     <div class="error-container">
         <div class="error-icon">[ERROR]</div>
         <div class="error-title">Nenhuma regional processada</div>
-        <div class="error-message">Verifique o arquivo de conexões</div>
+        <div class="error-message">Verifique o cadastro das regionais e os servidores ativos em estrutura_regionais.json</div>
     </div>
     """
 unifi_html = UNIFI_HTML.read_text(encoding="utf-8") if UNIFI_HTML.exists() else """
@@ -1118,12 +1677,18 @@ unifi_html = UNIFI_HTML.read_text(encoding="utf-8") if UNIFI_HTML.exists() else 
 
 # === 9. KPIs e dados para os gráficos ===
 # Calcula KPIs para verificações regionais baseado no status de erro armazenado
+total_regionais_cadastradas = _contar_total_regionais_cadastradas()
 regionais_ok = sum(1 for _, has_error in blocos_html_regionais_with_status if not has_error)
 regionais_erro = sum(1 for _, has_error in blocos_html_regionais_with_status if has_error)
+regionais_sem_erro = max(total_regionais_cadastradas - regionais_erro, 0)
+regionais_disponibilidade = (regionais_sem_erro / total_regionais_cadastradas * 100) if total_regionais_cadastradas else 0
+regionais_servidor_com_offline = regionais_erro
+regionais_servidor_sem_offline = regionais_sem_erro
 
 
 # Debug Regionais
 print(f"[CHECK] Debug Regionais:")
+print(f"   - Regionais cadastradas: {total_regionais_cadastradas}")
 print(f"   - Regionais OK: {regionais_ok}")
 print(f"   - Regionais com erro: {regionais_erro}")
 print(f"   - Total de blocos processados: {len(blocos_html_regionais_with_status)}")
@@ -1147,9 +1712,36 @@ def _gps_ok():
         pass
     return False
 
+gps_ok = _gps_ok()
+gps_amigo_ok = gps_ok
+
+def _print_rede_ok():
+    try:
+        from config import SATURNO_OUTPUT_BASE
+        now = datetime.now()
+        out_dir = SATURNO_OUTPUT_BASE / f"{now.year}" / _month_abbr_pt_local(now.month) / f"{now.day:02d}"
+        png = out_dir / "saturno_wifi.png"
+        return png.exists() and png.stat().st_size > 10_000
+    except Exception:
+        return False
+
+def _print_firewall_ok():
+    try:
+        if APPGATE_IMG.exists() and APPGATE_IMG.stat().st_size > 10_000:
+            return True
+        if APPGATE_HTML.exists():
+            txt = APPGATE_HTML.read_text(encoding="utf-8", errors="ignore")
+            if "data:image/png" in txt or "<img" in txt:
+                return True
+    except Exception:
+        pass
+    return False
+
+print_rede_ok = _print_rede_ok()
+print_firewall_ok = _print_firewall_ok()
 gps_status_display = (
     "<i class='fas fa-check-circle text-green-500'></i> Sucesso"
-    if _gps_ok() else
+    if gps_ok else
     "<i class='fas fa-times-circle text-red-500'></i> Erro"
 )
 
@@ -1158,10 +1750,36 @@ gps_status_display = (
 aps_online = unifi_html.count("Online") if "[ERROR]" not in unifi_html else 0
 aps_offline = unifi_html.count("Offline") if "[ERROR]" not in unifi_html else 0
 
+# Métrica regional das APs: quantas regionais têm ao menos 1 AP offline
+aps_regionais_status = {}
+try:
+    unifi_json_path = PROJECT_ROOT / "data" / "unifi.json"
+    if unifi_json_path.exists():
+        unifi_json_data = json.loads(unifi_json_path.read_text(encoding="utf-8"))
+        for ap in unifi_json_data.get("aps", []):
+            regional_ap = _extrair_chave_regional(ap.get("site"))
+            if regional_ap == "N/A":
+                continue
+
+            status_ap = str(ap.get("status") or "offline").strip().lower()
+            dados_regional = aps_regionais_status.setdefault(regional_ap, {"online": 0, "offline": 0})
+            if status_ap == "online":
+                dados_regional["online"] += 1
+            else:
+                dados_regional["offline"] += 1
+except Exception as e:
+    print(f"[AVISO] Não foi possível calcular APs por regional: {e}")
+
+aps_regionais_total = len(aps_regionais_status)
+aps_regionais_com_offline = sum(1 for dados in aps_regionais_status.values() if dados["offline"] > 0)
+aps_regionais_sem_offline = max(aps_regionais_total - aps_regionais_com_offline, 0)
+
 # Debug UniFi
 print(f"[CHECK] Debug UniFi:")
 print(f"   - APs Online: {aps_online}")
 print(f"   - APs Offline: {aps_offline}")
+print(f"   - Regionais com AP offline: {aps_regionais_com_offline}")
+print(f"   - Regionais sem AP offline: {aps_regionais_sem_offline}")
 print(f"   - HTML UniFi existe: {UNIFI_HTML.exists()}")
 if "[ERROR]" in unifi_html:
     print(f"   - Erro detectado no HTML UniFi")
@@ -1198,6 +1816,7 @@ for servidor, latencia, sucesso_total, erros in table_rows:
 # Total de erros = erros operacionais + erros da tabela
 rep_fail = len(replication_errors_list) + table_errors
 rep_total = rep_ok + rep_fail
+rep_taxa_ok = (rep_ok / rep_total * 100) if rep_total else 0
 
 # Debug: adiciona informações para troubleshooting
 print(f"[CHECK] Debug Replicação AD:")
@@ -1225,16 +1844,67 @@ print(f"[CHECK] Debug VMs:")
 print(f"   - VMs Online: {vms_online}")
 print(f"   - VMs Offline: {vms_offline}")
 print(f"   - Total de VMs: {len(vms_data)}")
+vms_total = len(vms_data)
+vms_disponibilidade = (vms_online / vms_total * 100) if vms_total else 0
+vms_regionais_status = {}
+for vm in vms_data:
+    regional_vm = _extrair_chave_regional(vm.get("regional"))
+    if regional_vm == "N/A":
+        continue
+    dados_regional_vm = vms_regionais_status.setdefault(regional_vm, {"online": 0, "offline": 0})
+    if vm.get("status") == "online":
+        dados_regional_vm["online"] += 1
+    else:
+        dados_regional_vm["offline"] += 1
+
+vms_regionais_total = len(vms_regionais_status)
+vms_regionais_com_offline = sum(1 for dados in vms_regionais_status.values() if dados["offline"] > 0)
+vms_regionais_sem_offline = max(vms_regionais_total - vms_regionais_com_offline, 0)
 
 print(f"[CHECK] Debug Switches:")
 print(f"   - Switches Online: {switches_online}")
 print(f"   - Switches Offline: {switches_offline}")
 print(f"   - Total de Switches: {len(switches_data)}")
 
+switches_regionais_status = {}
+for switch in switches_data:
+    regional_switch = _extrair_chave_regional(switch.get("regional"))
+    if regional_switch == "N/A":
+        continue
+
+    dados_regional = switches_regionais_status.setdefault(regional_switch, {"online": 0, "offline": 0})
+    if switch.get("status") == "online":
+        dados_regional["online"] += 1
+    else:
+        dados_regional["offline"] += 1
+
+switches_regionais_total = len(switches_regionais_status)
+switches_regionais_com_offline = sum(1 for dados in switches_regionais_status.values() if dados["offline"] > 0)
+switches_regionais_sem_offline = max(switches_regionais_total - switches_regionais_com_offline, 0)
+print(f"   - Regionais com switch offline: {switches_regionais_com_offline}")
+print(f"   - Regionais sem switch offline: {switches_regionais_sem_offline}")
+
 print(f"[CHECK] Debug Links de Internet:")
 print(f"   - Links Online: {links_online}")
 print(f"   - Links Offline: {links_offline}")
 print(f"   - Total de Links: {len(links_data)}")
+links_regionais_monitoradas = len({str(link.get('regiao') or '').strip().upper() for link in links_data if str(link.get('regiao') or '').strip()})
+links_total = len(links_data)
+links_disponibilidade = (links_online / links_total * 100) if links_total else 0
+links_regionais_status = {}
+for link in links_data:
+    regional_link = _extrair_chave_regional(link.get("regiao"))
+    if regional_link == "N/A":
+        continue
+    dados_regional_link = links_regionais_status.setdefault(regional_link, {"online": 0, "offline": 0})
+    if link.get("status") == "online":
+        dados_regional_link["online"] += 1
+    else:
+        dados_regional_link["offline"] += 1
+
+links_regionais_total = len(links_regionais_status)
+links_regionais_com_offline = sum(1 for dados in links_regionais_status.values() if dados["offline"] > 0)
+links_regionais_sem_offline = max(links_regionais_total - links_regionais_com_offline, 0)
 
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 ensure_gps_placeholder()
@@ -1285,6 +1955,7 @@ try:
     # 1. Busca os dados usando seu gerenciador existente
     dados_vpn = gerenciador_fortigate.obter_vpn_ipsec()
     lista_vpns = dados_vpn.get("vpns", []) if dados_vpn and dados_vpn.get("success") else []
+    indice_regionais = _carregar_indice_regionais()
 
     # 2. Calcula os contadores para os KPIs e Gráficos
     vpns_total = len(lista_vpns)
@@ -1292,29 +1963,110 @@ try:
     vpns_online = sum(1 for v in lista_vpns if v.get('status') == 'up')
     vpns_offline = vpns_total - vpns_online
 
-    # 3. Gera o HTML da lista APENAS para as que estão offline (Status: down)
-    # Filtra os nomes das VPNs com problema
-    lista_nomes_offline = [v.get('tunel', 'Desconhecido') for v in lista_vpns if v.get('status') != 'up']
+    # 3. Estrutura por regional usando o nome do túnel (ex.: T010_MOTUS_01)
+    vpns_por_regional = {}
+    for vpn in lista_vpns:
+        tunel = str(vpn.get('tunel') or 'Desconhecido').strip()
+        status = 'online' if vpn.get('status') == 'up' else 'offline'
+        regional_vpn = _extrair_regional_vpn(tunel)
+        nome_exibicao_vpn = _extrair_nome_exibicao_regional_vpn(tunel)
 
-    if lista_nomes_offline:
-        # Se tiver VPN fora, cria uma lista vermelha
-        itens_li = "".join(f"<li style='margin-bottom: 5px;'><strong>{nome}</strong></li>" for nome in lista_nomes_offline)
-        
-        vpn_html_content = f"""
+        regional_mapeada = _mapear_regional_vpn(nome_exibicao_vpn, regional_vpn, indice_regionais)
+        if regional_mapeada:
+            regional = regional_mapeada["chave"]
+            nome_exibicao = regional_mapeada["nome_exibicao"]
+        else:
+            regional = regional_vpn
+            nome_exibicao = nome_exibicao_vpn
+
+        dados_regional = vpns_por_regional.setdefault(
+            regional,
+            {"online": 0, "offline": 0, "tunels": [], "nome_exibicao": nome_exibicao}
+        )
+        dados_regional[status] += 1
+        if not dados_regional.get("nome_exibicao"):
+            dados_regional["nome_exibicao"] = nome_exibicao
+        dados_regional["tunels"].append({"nome": tunel, "status": status})
+
+    regionais_vpn_ordenadas = sorted(vpns_por_regional.keys())
+    regionais_vpn_com_offline = [reg for reg in regionais_vpn_ordenadas if vpns_por_regional[reg]["offline"] > 0]
+    regionais_cadastradas_set = {item.get("chave") for item in indice_regionais}
+    regionais_vpn_mapeadas = [reg for reg in regionais_vpn_ordenadas if reg in regionais_cadastradas_set]
+    regionais_vpn_mapeadas_com_offline = [reg for reg in regionais_vpn_mapeadas if vpns_por_regional[reg]["offline"] > 0]
+
+    vpn_regionais_total = len(regionais_vpn_mapeadas)
+    vpn_regionais_com_offline = len(regionais_vpn_mapeadas_com_offline)
+    vpn_regionais_sem_offline = max(vpn_regionais_total - vpn_regionais_com_offline, 0)
+
+    if not lista_vpns:
+        vpn_html_content = """
         <div class="error-container">
             <div class="error-icon"><i class="fas fa-unlink"></i></div>
-            <div class="error-title">Atenção: {vpns_offline} Túneis Offline</div>
-            <ul style="list-style: none; padding: 0;">
-                {itens_li}
-            </ul>
+            <div class="error-title">Sem dados de túneis VPN</div>
+            <div class="error-message">Nenhum túnel foi retornado pelo Fortigate.</div>
         </div>
         """
     else:
-        # Se tudo estiver OK
-        vpn_html_content = """
-        <div style="text-align: center; color: #48bb78; padding: 20px;">
-            <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 10px;"></i>
-            <h3>Todos os túneis estão operacionais</h3>
+        regionais_vpn_exibicao = regionais_vpn_mapeadas if regionais_vpn_mapeadas else regionais_vpn_ordenadas
+        resumo_regionais_html = ""
+        for regional in regionais_vpn_exibicao:
+            dados = vpns_por_regional[regional]
+            nome_regional = dados.get("nome_exibicao") or regional
+            resumo_regionais_html += f"""
+                <div class="vpn-regional-badge {'vpn-regional-alert' if dados['offline'] > 0 else ''}">
+                    <strong>{nome_regional}</strong><br>
+                    <span class="ok">Online: {dados['online']}</span> |
+                    <span class="alert">Offline: {dados['offline']}</span>
+                </div>
+            """
+
+        cards_tuneis_html = ""
+        for regional in regionais_vpn_exibicao:
+            dados = vpns_por_regional[regional]
+            nome_regional = dados.get("nome_exibicao") or regional
+            cards_tuneis_html += f"""
+            <div class="vpn-regional-group">
+                <h4>{nome_regional}</h4>
+            """
+            for tunel in dados["tunels"]:
+                status_class = 'online' if tunel['status'] == 'online' else 'offline'
+                cards_tuneis_html += f"""
+                <div class="vpn-tunnel-card vpn-{status_class}" data-status="{status_class}" data-regional="{regional}">
+                    <strong>{tunel['nome']}</strong>
+                    <span class="vpn-status-pill {status_class}">{status_class.upper()}</span>
+                </div>
+                """
+            cards_tuneis_html += "</div>"
+
+        regionais_offline_html = ""
+        regionais_offline_exibicao = [reg for reg in regionais_vpn_exibicao if vpns_por_regional[reg]["offline"] > 0]
+        if regionais_offline_exibicao:
+            itens = "".join([
+                f"<li><strong>{vpns_por_regional[reg].get('nome_exibicao') or reg}</strong> ({vpns_por_regional[reg]['offline']} túnel(is) offline)</li>"
+                for reg in regionais_offline_exibicao
+            ])
+            regionais_offline_html = f"""
+            <div id="vpn-offline-regionais" class="vpn-offline-box">
+                <strong>[WARN] Regionais com túnel VPN offline:</strong>
+                <ul>{itens}</ul>
+            </div>
+            """
+
+        vpn_html_content = f"""
+        <div class="vpn-container">
+            <div class="vpn-summary-box">
+                <div><strong>Total de túneis:</strong> {vpns_total}</div>
+                <div><strong>Online:</strong> {vpns_online}</div>
+                <div><strong>Offline:</strong> {vpns_offline}</div>
+                <div><strong>Regionais com VPN offline:</strong> {len(regionais_offline_exibicao)}</div>
+            </div>
+            <div id="vpn-regionais-summary" class="vpn-regionals-grid">
+                {resumo_regionais_html}
+            </div>
+            {regionais_offline_html}
+            <div id="vpn-tunels-grid" class="vpn-tunels-grid">
+                {cards_tuneis_html}
+            </div>
         </div>
         """
 
@@ -1322,6 +2074,9 @@ except Exception as e:
     # Caso falhe a conexão com o Fortigate ao gerar o dash
     vpns_online = 0
     vpns_offline = 0
+    vpn_regionais_total = 0
+    vpn_regionais_com_offline = 0
+    vpn_regionais_sem_offline = 0
     vpn_html_content = f"<div class='error-container'>Erro ao consultar Fortigate: {str(e)}</div>"
 # --- FIM DA LÓGICA DE VPN ---
 
@@ -1380,10 +2135,7 @@ dashboard_html = f"""
         }}
         
         .page-title {{
-            background: var(--primary-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #ffffff;
             font-size: 3.5rem;
             font-weight: 800;
             text-align: center;
@@ -1401,9 +2153,10 @@ dashboard_html = f"""
         
         .kpi-container {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin-bottom: 40px;
+            align-items: stretch;
         }}
         
         .kpi {{
@@ -1415,6 +2168,9 @@ dashboard_html = f"""
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }}
         
         .kpi::before {{
@@ -1464,6 +2220,10 @@ dashboard_html = f"""
             color: #4a5568;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            line-height: 1.25;
+            overflow-wrap: normal;
+            word-break: keep-all;
+            hyphens: none;
         }}
         
         .kpi-value {{
@@ -1471,6 +2231,7 @@ dashboard_html = f"""
             font-weight: 700;
             color: #2d3748;
             margin-bottom: 8px;
+            line-height: 1.05;
         }}
         
         .kpi-status {{
@@ -1479,6 +2240,7 @@ dashboard_html = f"""
             gap: 8px;
             font-size: 0.9rem;
             font-weight: 500;
+            flex-wrap: wrap;
         }}
         
         .kpi ul {{
@@ -1486,6 +2248,190 @@ dashboard_html = f"""
             margin-top: 12px;
             padding-left: 20px;
             color: #e53e3e;
+        }}
+
+        .kpi-combo-grid {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 6px;
+        }}
+
+        .kpi-combo-item {{
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid #dbe3f2;
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: grid;
+            gap: 2px;
+        }}
+
+        .kpi-combo-item.status-online {{
+            background: #f0fff4;
+            border-color: #9ae6b4;
+        }}
+
+        .kpi-combo-item.status-offline {{
+            background: #fff5f5;
+            border-color: #feb2b2;
+        }}
+
+        .kpi-combo-item.status-neutral {{
+            background: #f8fafc;
+            border-color: #cbd5e0;
+        }}
+
+        .kpi-combo-item span {{
+            font-size: 0.72rem;
+            color: #4a5568;
+            text-transform: none;
+            letter-spacing: 0.01em;
+            font-weight: 700;
+            line-height: 1.2;
+            overflow-wrap: normal;
+            word-break: keep-all;
+            hyphens: none;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+        }}
+
+        .kpi-groups {{
+            display: grid;
+            gap: 10px;
+        }}
+
+        .kpi-group {{
+            border: 1px solid #dbe3f2;
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.72);
+        }}
+
+        .kpi-group-title {{
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 800;
+            color: #4a5568;
+            margin-bottom: 8px;
+        }}
+
+        .kpi-group-grid {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }}
+
+        .kpi-combo-item strong {{
+            font-size: 1.15rem;
+            line-height: 1.1;
+            color: #1f2937;
+        }}
+
+        .regionais-parent {{
+            background: linear-gradient(135deg, rgba(240, 255, 244, 0.95) 0%, rgba(255, 255, 255, 0.92) 100%);
+            border: 1px solid #9ae6b4;
+            border-left: 8px solid #38a169;
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 22px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
+        }}
+
+        .regionais-parent-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }}
+
+        .regionais-parent-title {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .regionais-parent-badge {{
+            background: linear-gradient(135deg, #e6fffa 0%, #d9fbe9 100%);
+            border: 1px solid #9ae6b4;
+            color: #1f6f43;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }}
+
+        .vm-item .card {{
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 16px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }}
+
+        .vm-item .card-header {{
+            padding: 14px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            color: #ffffff;
+        }}
+
+        .vm-item .card-header.bg-success {{
+            background: linear-gradient(90deg, #2f855a, #38a169);
+        }}
+
+        .vm-item .card-header.bg-danger {{
+            background: linear-gradient(90deg, #c53030, #e53e3e);
+        }}
+
+        .vm-item .card-header h4 {{
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #ffffff;
+        }}
+
+        .vm-item .card-header small {{
+            color: rgba(255, 255, 255, 0.9);
+        }}
+
+        .vm-item .card-body {{
+            padding: 18px 20px;
+            color: #2d3748;
+        }}
+
+        .vm-item .card-body h6 {{
+            margin-bottom: 10px;
+            color: #1f2937;
+            font-weight: 700;
+        }}
+
+        .vm-item .card-body p {{
+            margin-bottom: 8px;
+        }}
+
+        .regionais-parent h2 {{
+            margin: 0;
+            padding: 0;
+            font-size: 1.05rem;
+            color: #1f6f43 !important;
+            background: none !important;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            border-radius: 0;
+            cursor: default;
+        }}
+
+        .regionais-parent p {{
+            margin: 8px 0 0;
+            color: #4a5568;
+            font-size: 0.95rem;
         }}
         
         .charts-section {{
@@ -1497,10 +2443,7 @@ dashboard_html = f"""
             font-weight: 700;
             text-align: center;
             margin-bottom: 30px;
-            background: var(--primary-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #ffffff;
         }}
         
         .charts-grid {{
@@ -1563,6 +2506,63 @@ dashboard_html = f"""
             transition: all 0.3s ease;
             position: relative;
         }}
+
+        .section-close-btn {{
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 32px;
+            border: 1px solid #cbd5e0;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #4a5568;
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+        }}
+
+        .section-close-btn:hover {{
+            background: #f7fafc;
+            color: #2d3748;
+        }}
+
+        /* Floating back-to-top button */
+        .back-to-top {{
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            z-index: 9999;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            width: 52px;
+            height: 52px;
+            font-size: 1.6rem;
+            cursor: pointer;
+            box-shadow: 0 4px 18px rgba(102,126,234,0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s, transform 0.3s;
+        }}
+        .back-to-top.visible {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+        .back-to-top:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(102,126,234,0.6);
+        }}
         
         .details-section summary:hover {{
             background: rgba(255, 255, 255, 0.2);
@@ -1591,7 +2591,104 @@ dashboard_html = f"""
             padding: 30px;
             background: rgba(255, 255, 255, 0.05);
         }}
-        
+
+        .switches-container {{
+            display: grid;
+            gap: 18px;
+        }}
+
+        .switches-summary,
+        .switches-regionals-panel {{
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 16px;
+            padding: 22px;
+            box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+        }}
+
+        .switches-metrics {{
+            display: grid;
+            gap: 12px;
+        }}
+
+        .switches-regionals {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }}
+
+        .regional-badge {{
+            background: #ffffff;
+            border: 1px solid #d2d6dc;
+            border-radius: 14px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            color: #2d3748;
+            line-height: 1.45;
+        }}
+
+        .regional-badge-success {{
+            border-left: 6px solid #2f855a;
+            background: #f0fff4;
+        }}
+
+        .regional-badge-danger {{
+            border-left: 6px solid #c53030;
+            background: #fff5f5;
+        }}
+
+        .switches-items {{
+            display: grid;
+            gap: 16px;
+        }}
+
+        .switch-item .card {{
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 16px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+        }}
+
+        .switch-item .card-header {{
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88));
+        }}
+
+        .switch-item .card-header h5 {{
+            margin: 0;
+            font-size: 1rem;
+        }}
+
+        .switch-item .card-header small {{
+            color: #4a5568;
+            display: block;
+            margin-top: 4px;
+        }}
+
+        .switch-item .card-body {{
+            padding: 20px;
+            color: #2d3748;
+        }}
+
+        .status-badge {{
+            padding: 7px 14px;
+            border-radius: 999px;
+            color: #ffffff;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }}
+
+        .status-badge.success {{ background: #38a169; }}
+        .status-badge.danger {{ background: #e53e3e; }}
+        .status-badge.warning {{ background: #dd6b20; }}
+
         .regional-item {{
             background: rgba(255, 255, 255, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1611,6 +2708,16 @@ dashboard_html = f"""
         .regional-content {{
             padding: 20px;
             background: rgba(255, 255, 255, 0.9);
+        }}
+
+        #replicacao table th {{
+            color: #000 !important;
+            background-color: #dbeafe !important;
+            font-weight: 700;
+        }}
+
+        #replicacao table td {{
+            color: #1f2937 !important;
         }}
         
         .error-container {{
@@ -1638,6 +2745,10 @@ dashboard_html = f"""
             font-size: 0.9rem;
             opacity: 0.9;
         }}
+
+        .nav-detail-trigger {{
+            cursor: pointer;
+        }}
         
         /* Responsive adjustments */
         @media (max-width: 768px) {{
@@ -1659,20 +2770,269 @@ dashboard_html = f"""
             }}
         }}
 
-        /* Força texto preto nos cards de links de Internet */
-    .links-container,
-    .links-container p,
-    .links-container span,
-    .links-container strong,
-    .link-item .card-body,
-    .link-item .card-body p {{
-        color: #000 !important;
-    }}
+        .links-container {{
+            display: grid;
+            gap: 18px;
+        }}
 
-    /* Mantém o título (WAN1, WAN2) preto */
-    .link-item .card-header h5 {{
-        color: #000 !important;
-    }}
+        .links-overview {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }}
+
+        .regional-chip {{
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #d2d6dc;
+            border-left: 6px solid #718096;
+            border-radius: 14px;
+            padding: 14px 16px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+            color: #2d3748;
+        }}
+
+        .regional-chip.sp {{ border-left-color: #3182ce; }}
+        .regional-chip.rj {{ border-left-color: #dd6b20; }}
+        .regional-chip.other {{ border-left-color: #4a5568; }}
+
+        .regional-chip-header {{
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }}
+
+        .regional-chip-stats {{
+            margin-top: 8px;
+            font-weight: 600;
+        }}
+
+        .regional-chip-stats .ok,
+        .links-region-counts .ok {{ color: #2f855a; }}
+
+        .regional-chip-stats .alert,
+        .links-region-counts .alert {{ color: #c53030; }}
+
+        .regional-chip-stats .sep {{
+            margin: 0 6px;
+            color: #718096;
+        }}
+
+        .links-regions-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
+        }}
+
+        .links-region-block {{
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+        }}
+
+        .links-region-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: linear-gradient(90deg, rgba(247, 250, 252, 0.95), rgba(237, 242, 247, 0.92));
+            border-bottom: 1px solid #dfe6ef;
+            color: #1a202c;
+        }}
+
+        .links-region-header h4 {{
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+        }}
+
+        .links-region-counts {{
+            display: flex;
+            gap: 10px;
+            font-size: 0.88rem;
+            font-weight: 700;
+        }}
+
+        .links-region-items {{
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+        }}
+
+        .link-item .card {{
+            border: 1px solid #d9e2ec;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+        }}
+
+        .link-item .card-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+        }}
+
+        .link-item .card-header h5 {{
+            color: #000 !important;
+            font-size: 1rem;
+        }}
+
+        .link-item .card-header small {{
+            color: #1a202c !important;
+            opacity: 0.85;
+        }}
+
+        .status-pill {{
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #ffffff;
+            white-space: nowrap;
+        }}
+
+        .status-pill.success {{ background: #2f855a; }}
+        .status-pill.danger {{ background: #c53030; }}
+
+        .link-item .card-body {{
+            padding: 14px 16px;
+        }}
+
+        .link-item .card-body,
+        .link-item .card-body p,
+        .link-item .card-body strong {{
+            color: #000 !important;
+        }}
+
+        .link-meta-grid,
+        .link-bandwidth-grid {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
+            gap: 8px 14px;
+        }}
+
+        .link-last-check {{
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #1a202c !important;
+        }}
+
+        .link-monitor {{
+            margin-bottom: 8px;
+            color: #1a202c !important;
+            font-size: 0.9rem;
+        }}
+
+        .link-monitor-note {{
+            color: #4a5568;
+            font-size: 0.82rem;
+        }}
+
+        .vpn-container {{
+            display: grid;
+            gap: 14px;
+        }}
+
+        .vpn-summary-box {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #dbe3f2;
+            border-radius: 14px;
+            padding: 14px 16px;
+            color: #1f2937;
+        }}
+
+        .vpn-regionals-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }}
+
+        .vpn-regional-badge {{
+            background: #ffffff;
+            border: 1px solid #d5dfef;
+            border-left: 5px solid #3b82f6;
+            border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+            color: #1f2937;
+        }}
+
+        .vpn-regional-badge .ok {{ color: #2f855a; }}
+        .vpn-regional-badge .alert {{ color: #c53030; }}
+        .vpn-regional-badge.vpn-regional-alert {{ border-left-color: #dd6b20; }}
+
+        .vpn-offline-box {{
+            background: #fff7ed;
+            border: 1px solid #fbd38d;
+            border-left: 6px solid #dd6b20;
+            border-radius: 12px;
+            padding: 12px 14px;
+            color: #7b341e;
+        }}
+
+        .vpn-offline-box ul {{
+            margin: 8px 0 0 18px;
+        }}
+
+        .vpn-tunels-grid {{
+            display: grid;
+            gap: 12px;
+        }}
+
+        .vpn-regional-group {{
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #dbe3f2;
+            border-radius: 12px;
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+        }}
+
+        .vpn-regional-group h4 {{
+            margin: 0 0 4px;
+            font-size: 1rem;
+            color: #1e293b;
+        }}
+
+        .vpn-tunnel-card {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            color: #1f2937;
+        }}
+
+        .vpn-status-pill {{
+            border-radius: 999px;
+            padding: 5px 10px;
+            color: #fff;
+            font-size: 0.74rem;
+            font-weight: 700;
+        }}
+
+        .vpn-status-pill.online {{ background: #2f855a; }}
+        .vpn-status-pill.offline {{ background: #c53030; }}
+
+        @media (max-width: 640px) {{
+            .link-meta-grid,
+            .link-bandwidth-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
     </style>
 </head>
 <body>
@@ -1680,131 +3040,192 @@ dashboard_html = f"""
         <h1 class="page-title">Dashboard Consolidado</h1>
         <p class="page-subtitle"><strong>Executado em:</strong> {data_execucao}</p>
 
-        <div class="kpi-container">
-            <div class="kpi">
-                <div class="kpi-header">
-                    <div class="kpi-icon success">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <h3>Regionais OK</h3>
+        <div class="regionais-parent nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
+            <div class="regionais-parent-top">
+                <div class="regionais-parent-title">
+                    <h2 style="background:none!important;color:#1f6f43!important;padding:0!important;border-radius:0!important;cursor:default!important"><strong>Base de Monitoramento: Regionais</strong></h2>
                 </div>
-                <div class="kpi-value">{regionais_ok}</div>
+                <div class="regionais-parent-badge">{total_regionais_cadastradas} regionais monitoradas</div>
             </div>
-            <div class="kpi">
+            <p>Este painel mostra, de forma simples, a situação das regionais: antenas, switches, servidores e links.</p>
+        </div>
+
+        <div class="kpi-container">
+            <div class="kpi nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon error">
                         <i class="fas fa-times-circle"></i>
                     </div>
-                    <h3>Regionais com Erro</h3>
+                    <h3>Regionais com Problema no Servidor</h3>
                 </div>
-                <div class="kpi-value">{regionais_erro}</div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Servidores</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Online</span><strong>{servidores_online_total}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Offline</span><strong>{servidores_offline_total}</strong></div>
+                        </div>
+                    </div>
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Sem offline</span><strong>{regionais_servidor_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Com offline</span><strong>{regionais_servidor_com_offline}</strong></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="unifi" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon info">
                         <i class="fas fa-wifi"></i>
                     </div>
-                    <h3>APs Online</h3>
+                    <h3>APs (Regionais)</h3>
                 </div>
-                <div class="kpi-value">{aps_online}</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi-header">
-                    <div class="kpi-icon neutral">
-                        <i class="fas fa-exclamation-triangle"></i>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Dispositivos</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="unifi-online" role="button" tabindex="0"><span>APs Online</span><strong>{aps_online}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="unifi-offline" role="button" tabindex="0"><span>APs Offline</span><strong>{aps_offline}</strong></div>
+                        </div>
                     </div>
-                    <h3>APs Offline</h3>
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="unifi-online" role="button" tabindex="0"><span>Sem AP Offline</span><strong>{aps_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="unifi-offline" role="button" tabindex="0"><span>Com AP Offline</span><strong>{aps_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="kpi-value">{aps_offline}</div>
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="gps" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon warning">
-                        <i class="fas fa-map-marker-alt"></i>
+                        <i class="fas fa-camera"></i>
                     </div>
-                    <h3>Status do GPS</h3>
+                    <h3>Prints GPS</h3>
                 </div>
-                <div class="kpi-status">
-                    {gps_status_display}
+                <div class="kpi-combo-grid">
+                    <div class="kpi-combo-item {'status-online' if gps_amigo_ok else 'status-offline'} nav-detail-trigger" data-detail-target="gps" role="button" tabindex="0"><span>GPS Amigo</span><strong>{'OK' if gps_amigo_ok else 'Falha'}</strong></div>
+                    <div class="kpi-combo-item {'status-online' if print_rede_ok else 'status-offline'} nav-detail-trigger" data-detail-target="print-rede" role="button" tabindex="0"><span>Rede Saturno</span><strong>{'OK' if print_rede_ok else 'Falha'}</strong></div>
+                    <div class="kpi-combo-item {'status-online' if print_firewall_ok else 'status-offline'} nav-detail-trigger" data-detail-target="appgate" role="button" tabindex="0"><span>Firewall RJ</span><strong>{'OK' if print_firewall_ok else 'Falha'}</strong></div>
                 </div>
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon info">
                         <i class="fas fa-sync-alt"></i>
                     </div>
                     <h3>Replicação AD</h3>
                 </div>
-                <div class="kpi-status">
-                    {rep_status_display}
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Dispositivos</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Servidores OK</span><strong>{rep_ok}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Com falha</span><strong>{rep_fail}</strong></div>
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Total</span><strong>{rep_total}</strong></div>
+                            <div class="kpi-combo-item {'status-online' if rep_fail == 0 else 'status-offline'} nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Sem falha</span><strong>{rep_ok}</strong></div>
+                        </div>
+                    </div>
                 </div>
                 {"<ul>" + ''.join(f"<li>{srv}</li>" for srv in replication_errors_list) + "</ul>" if replication_errors_list else ""}
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="vms" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon success">
                         <i class="fas fa-desktop"></i>
                     </div>
-                    <h3>VMs Online</h3>
+                    <h3>VMs (Regionais)</h3>
                 </div>
-                <div class="kpi-value">{vms_online}</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi-header">
-                    <div class="kpi-icon error">
-                        <i class="fas fa-desktop"></i>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Dispositivos</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vms-online" role="button" tabindex="0"><span>VMs online</span><strong>{vms_online}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vms-offline" role="button" tabindex="0"><span>VMs offline</span><strong>{vms_offline}</strong></div>
+                        </div>
                     </div>
-                    <h3>VMs Offline</h3>
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vms-online" role="button" tabindex="0"><span>Sem offline</span><strong>{vms_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vms-offline" role="button" tabindex="0"><span>Com offline</span><strong>{vms_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="kpi-value">{vms_offline}</div>
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="switches" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon success">
                         <i class="fas fa-network-wired"></i>
                     </div>
-                    <h3>Switches Online</h3>
+                    <h3>Switches (Regionais)</h3>
                 </div>
-                <div class="kpi-value">{switches_online}</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi-header">
-                    <div class="kpi-icon error">
-                        <i class="fas fa-network-wired"></i>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Dispositivos</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Switches Online</span><strong>{switches_online}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Switches Offline</span><strong>{switches_offline}</strong></div>
+                        </div>
                     </div>
-                    <h3>Switches Offline</h3>
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Sem Switch Offline</span><strong>{switches_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Com Switch Offline</span><strong>{switches_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="kpi-value">{switches_offline}</div>
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="links" role="button" tabindex="0">
                 <div class="kpi-header">
-                    <div class="kpi-icon success">
+                    <div class="kpi-icon info">
                         <i class="fas fa-globe"></i>
                     </div>
-                    <h3>Links Online</h3>
+                    <h3>Links (Regionais)</h3>
                 </div>
-                <div class="kpi-value">{links_online}</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi-header">
-                    <div class="kpi-icon error">
-                        <i class="fas fa-globe"></i>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Links</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-online" role="button" tabindex="0"><span>Online</span><strong>{links_online}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-offline" role="button" tabindex="0"><span>Offline</span><strong>{links_offline}</strong></div>
+                        </div>
                     </div>
-                    <h3>Links Offline</h3>
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Cobertura Regional</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-online" role="button" tabindex="0"><span>Sem offline</span><strong>{links_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-offline" role="button" tabindex="0"><span>Com offline</span><strong>{links_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="kpi-value">{links_offline}</div>
             </div>
-            <div class="kpi">
+            <div class="kpi nav-detail-trigger" data-detail-target="vpn-details" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon info">
                         <i class="fas fa-shield-alt"></i>
                     </div>
                     <h3>VPNs IPSEC</h3>
                 </div>
-                <div class="kpi-status">
-                   <span style="color: #48bb78; font-weight: bold;">Online: {vpns_online}</span>
-                   <span style="margin: 0 5px;">|</span>
-                   <span style="color: #f56565; font-weight: bold;">Offline: {vpns_offline}</span>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Dispositivos</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vpn-details-online" role="button" tabindex="0"><span>Túneis online</span><strong>{vpns_online}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vpn-details-offline" role="button" tabindex="0"><span>Túneis offline</span><strong>{vpns_offline}</strong></div>
+                        </div>
+                    </div>
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vpn-details-online" role="button" tabindex="0"><span>Sem offline</span><strong>{vpn_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vpn-details-offline" role="button" tabindex="0"><span>Com offline</span><strong>{vpn_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -1812,27 +3233,27 @@ dashboard_html = f"""
 
         <!-- GRÁFICOS -->
         <div class="charts-section">
-            <h2 class="section-title">[DATA] Visão Geral em Gráficos</h2>
+            <h2 class="section-title" style="background:none!important;color:#ffffff!important;padding:0!important;border-radius:0!important;cursor:default!important">[DATA] Visão Geral em Gráficos</h2>
             <div class="charts-grid">
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
                     <canvas id="chartRegionais"></canvas>
                 </div>
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="unifi" role="button" tabindex="0">
                     <canvas id="chartUnifi"></canvas>
                 </div>
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0">
                     <canvas id="chartReplicacao"></canvas>
                 </div>
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="vms" role="button" tabindex="0">
                     <canvas id="chartVMs"></canvas>
                 </div>
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="switches" role="button" tabindex="0">
                     <canvas id="chartSwitches"></canvas>
                 </div>
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="links" role="button" tabindex="0">
                     <canvas id="chartLinks"></canvas>
                 </div>
-                <div class="chart-wrapper">
+                <div class="chart-wrapper nav-detail-trigger" data-detail-target="vpn-details" role="button" tabindex="0">
                     <canvas id="chartVpn"></canvas>
                 </div>
             </div>
@@ -1840,7 +3261,7 @@ dashboard_html = f"""
 
         <hr class="divider">
 
-        <details open id="regionais" class="details-section">
+        <details id="regionais" class="details-section">
             <summary>[SERVER] Status das Regionais (iDRAC/iLO)</summary>
             <div class="details-content">
                 {regionais_html}
@@ -1858,6 +3279,13 @@ dashboard_html = f"""
             <summary>[URL] Print Rede</summary>
             <div class="details-content">
                 {print_rede_html}
+            </div>
+        </details>
+
+        <details id="appgate" class="details-section">
+            <summary>[URL] Print Firewall Rio de Janeiro</summary>
+            <div class="details-content">
+                {appgate_html}
             </div>
         </details>
 
@@ -1908,22 +3336,282 @@ dashboard_html = f"""
 Chart.defaults.responsive = true;
 Chart.defaults.maintainAspectRatio = false; // Important to allow the container to control the aspect ratio
 
+function resetUnifiSections(detail) {{
+    const content = detail.querySelector('.details-content');
+    if (!content) return;
+
+    const sectionHeaders = content.querySelectorAll('h2');
+    sectionHeaders.forEach((header) => {{
+        const next = header.nextElementSibling;
+        header.style.display = '';
+        if (next) {{
+            next.style.display = 'none';
+            next.querySelectorAll('tr').forEach((tr) => {{ tr.style.display = ''; }});
+        }}
+    }});
+}}
+
+function filtrarUnifiSections(detail, action) {{
+    const content = detail.querySelector('.details-content');
+    if (!content) return;
+
+    const sectionHeaders = content.querySelectorAll('h2');
+    sectionHeaders.forEach((header) => {{
+        const next = header.nextElementSibling;
+        if (!next) return;
+
+        const hasOffline = !!next.querySelector('.ap-offline');
+        const hasOnline = !!next.querySelector('.ap-online');
+        let showSection = true;
+
+        if (action === 'offline') {{
+            showSection = hasOffline;
+        }} else if (action === 'online') {{
+            // "Online" = regional sem AP offline (somente APs online)
+            showSection = hasOnline && !hasOffline;
+        }}
+
+        header.style.display = showSection ? '' : 'none';
+        next.style.display = showSection ? 'block' : 'none';
+
+        if (showSection && action === 'offline') {{
+            // Dentro da seção, ocultar linhas que NÃO têm AP offline
+            next.querySelectorAll('tr').forEach((tr) => {{
+                const isOfflineRow = !!tr.querySelector('.ap-offline');
+                tr.style.display = isOfflineRow ? '' : 'none';
+            }});
+        }} else if (showSection) {{
+            next.querySelectorAll('tr').forEach((tr) => {{ tr.style.display = ''; }});
+        }}
+    }});
+}}
+
+function resetSwitchesSection(detail) {{
+    detail.querySelectorAll('.switch-item').forEach((item) => {{
+        item.style.display = '';
+    }});
+}}
+
+function resetVmsSection(detail) {{
+    detail.querySelectorAll('.vm-item').forEach((item) => {{
+        item.style.display = '';
+    }});
+}}
+
+function resetRegionaisSection(detail) {{
+    detail.querySelectorAll('.regional-item').forEach((item) => {{
+        item.style.display = '';
+    }});
+}}
+
+function resetLinksSection(detail) {{
+    detail.querySelectorAll('.link-item').forEach((item) => {{
+        item.style.display = '';
+    }});
+}}
+
+function resetVpnSection(detail) {{
+    detail.querySelectorAll('.vpn-tunnel-card').forEach((card) => {{
+        card.style.display = '';
+    }});
+}}
+
+function resetSectionFilters(detail) {{
+    if (!detail) return;
+    if (detail.id === 'regionais') resetRegionaisSection(detail);
+    if (detail.id === 'unifi') resetUnifiSections(detail);
+    if (detail.id === 'switches') resetSwitchesSection(detail);
+    if (detail.id === 'vms') resetVmsSection(detail);
+    if (detail.id === 'links') resetLinksSection(detail);
+    if (detail.id === 'vpn-details') resetVpnSection(detail);
+}}
+
+function abrirEIrParaDetalhe(detailTarget) {{
+    const parts = String(detailTarget || '').split('-');
+    let detailId = detailTarget;
+    let action = '';
+
+    // Suporta IDs com hífen (ex.: vpn-details) + ação opcional (ex.: vpn-details-offline)
+    for (let i = parts.length; i >= 1; i--) {{
+        const candidate = parts.slice(0, i).join('-');
+        if (document.getElementById(candidate)) {{
+            detailId = candidate;
+            action = parts.slice(i).join('-');
+            break;
+        }}
+    }}
+
+    const detail = document.getElementById(detailId);
+    if (!detail) {{
+        return;
+    }}
+
+    detail.open = true;
+
+    if (detailId === 'regionais') {{
+        const regionalItems = detail.querySelectorAll('.regional-item');
+        if (action === 'offline' || action === 'online') {{
+            regionalItems.forEach((item) => {{
+                const match = item.dataset.status === action;
+                item.style.display = match ? '' : 'none';
+                item.open = match;
+            }});
+        }} else {{
+            resetRegionaisSection(detail);
+        }}
+    }}
+
+    if (detailId === 'unifi') {{
+        if (action === 'offline' || action === 'online') {{
+            filtrarUnifiSections(detail, action);
+        }} else {{
+            resetUnifiSections(detail);
+        }}
+    }}
+
+    if (detailId === 'switches') {{
+        const switchItems = detail.querySelectorAll('.switch-item');
+        if (action === 'offline' || action === 'online') {{
+            switchItems.forEach((item) => {{
+                item.style.display = item.dataset.status === action ? '' : 'none';
+            }});
+        }} else {{
+            resetSwitchesSection(detail);
+        }}
+
+        if (action === 'offline') {{
+            const offlinePanel = detail.querySelector('#switches-offline-regionais');
+            if (offlinePanel) {{
+                offlinePanel.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+            }}
+        }}
+    }}
+
+    if (detailId === 'vms') {{
+        const vmItems = detail.querySelectorAll('.vm-item');
+        if (action === 'offline' || action === 'online') {{
+            vmItems.forEach((item) => {{
+                item.style.display = item.dataset.status === action ? '' : 'none';
+            }});
+        }} else {{
+            resetVmsSection(detail);
+        }}
+    }}
+
+    if (detailId === 'links') {{
+        const linkItems = detail.querySelectorAll('.link-item');
+        if (action === 'offline' || action === 'online') {{
+            linkItems.forEach((item) => {{
+                item.style.display = item.dataset.status === action ? '' : 'none';
+            }});
+        }} else {{
+            resetLinksSection(detail);
+        }}
+    }}
+
+    if (detailId === 'vpn-details') {{
+        const tunnelCards = detail.querySelectorAll('.vpn-tunnel-card');
+        if (action === 'offline' || action === 'online') {{
+            tunnelCards.forEach((card) => {{
+                card.style.display = card.dataset.status === action ? '' : 'none';
+            }});
+        }} else {{
+            resetVpnSection(detail);
+        }}
+
+        if (action === 'offline') {{
+            const offlineVpnBox = detail.querySelector('#vpn-offline-regionais');
+            if (offlineVpnBox) {{
+                offlineVpnBox.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+            }}
+        }}
+    }}
+
+    setTimeout(function() {{
+        detail.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+    }}, 80);
+}}
+
+function navegarPeloGrafico(chartId, datasetIndex) {{
+    const rotas = {{
+        chartRegionais: ['regionais-online', 'regionais-offline'],
+        chartUnifi: ['unifi-online', 'unifi-offline'],
+        chartReplicacao: ['replicacao', 'replicacao'],
+        chartVMs: ['vms-online', 'vms-offline'],
+        chartSwitches: ['switches-online', 'switches-offline'],
+        chartLinks: ['links-online', 'links-offline'],
+        chartVpn: ['vpn-details-online', 'vpn-details-offline'],
+    }};
+
+    const rota = (rotas[chartId] && rotas[chartId][datasetIndex]) || null;
+    if (rota) {{
+        abrirEIrParaDetalhe(rota);
+    }}
+}}
+
+document.querySelectorAll('[data-detail-target]').forEach((elemento) => {{
+    const navegar = (event) => {{
+        if (event) event.stopPropagation();
+        abrirEIrParaDetalhe(elemento.dataset.detailTarget);
+    }};
+    elemento.addEventListener('click', navegar);
+    elemento.addEventListener('keydown', (event) => {{
+        if (event.key === 'Enter' || event.key === ' ') {{
+            event.preventDefault();
+            navegar(event);
+        }}
+    }});
+}});
+
+document.querySelectorAll('details.details-section').forEach((detail) => {{
+    const summary = detail.querySelector('summary');
+    if (!summary || summary.querySelector('.section-close-btn')) return;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'section-close-btn';
+    closeBtn.title = 'Fechar seção';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', (event) => {{
+        event.preventDefault();
+        event.stopPropagation();
+        // Fecha TODAS as seções e rola para o topo
+        document.querySelectorAll('details.details-section').forEach((d) => {{
+            d.open = false;
+            resetSectionFilters(d);
+        }});
+        document.querySelectorAll('.regional-item').forEach((item) => {{
+            item.open = false;
+            item.style.display = '';
+        }});
+        window.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }});
+    summary.appendChild(closeBtn);
+}});
+
 new Chart(document.getElementById('chartRegionais'), {{
     type: 'doughnut',
     data: {{
-        labels: ['OK', 'Erro'],
+        labels: ['Sem Erro em Servidores', 'Com Erro em Servidores'],
         datasets: [{{
-            data: [{regionais_ok}, {regionais_erro}],
+            data: [{regionais_sem_erro}, {regionais_erro}],
             backgroundColor: ['#4CAF50', '#F44336'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
     }},
     options: {{
+        onClick: function(_event, elements) {{
+            if (elements && elements.length > 0) {{
+                navegarPeloGrafico('chartRegionais', elements[0].index);
+            }} else {{
+                abrirEIrParaDetalhe('regionais');
+            }}
+        }},
         plugins: {{
             title: {{
                 display: true,
-                text: 'Status Servidores iDRAC/iLO',
+                text: 'Status das Regionais por Servidores',
                 font: {{
                     size: 16
                 }},
@@ -1945,19 +3633,26 @@ new Chart(document.getElementById('chartRegionais'), {{
 new Chart(document.getElementById('chartUnifi'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline'],
+        labels: ['Regionais sem AP offline', 'Regionais com AP offline'],
         datasets: [{{
-            data: [{aps_online}, {aps_offline}],
+            data: [{aps_regionais_sem_offline}, {aps_regionais_com_offline}],
             backgroundColor: ['#2196F3', '#B0BEC5'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
     }},
     options: {{
+        onClick: function(_event, elements) {{
+            if (elements && elements.length > 0) {{
+                navegarPeloGrafico('chartUnifi', elements[0].index);
+            }} else {{
+                abrirEIrParaDetalhe('unifi');
+            }}
+        }},
         plugins: {{
             title: {{
                 display: true,
-                text: 'APs Online vs Offline',
+                text: 'APs por Regional',
                 font: {{
                     size: 16
                 }},
@@ -1988,6 +3683,9 @@ new Chart(document.getElementById('chartReplicacao'), {{
         }}]
     }},
     options: {{
+        onClick: function() {{
+            abrirEIrParaDetalhe('replicacao');
+        }},
         plugins: {{
             title: {{
                 display: true,
@@ -2022,6 +3720,9 @@ new Chart(document.getElementById('chartVMs'), {{
         }}]
     }},
     options: {{
+        onClick: function() {{
+            abrirEIrParaDetalhe('vms');
+        }},
         plugins: {{
             title: {{
                 display: true,
@@ -2047,19 +3748,26 @@ new Chart(document.getElementById('chartVMs'), {{
 new Chart(document.getElementById('chartSwitches'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline'],
+        labels: ['Regionais sem switch offline', 'Regionais com switch offline'],
         datasets: [{{
-            data: [{switches_online}, {switches_offline}],
+            data: [{switches_regionais_sem_offline}, {switches_regionais_com_offline}],
             backgroundColor: ['#2196F3', '#FF9800'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
     }},
     options: {{
+        onClick: function(_event, elements) {{
+            if (elements && elements.length > 0) {{
+                navegarPeloGrafico('chartSwitches', elements[0].index);
+            }} else {{
+                abrirEIrParaDetalhe('switches');
+            }}
+        }},
         plugins: {{
             title: {{
                 display: true,
-                text: 'Status dos Switches',
+                text: 'Switches por Regional',
                 font: {{
                     size: 16
                 }},
@@ -2090,6 +3798,13 @@ new Chart(document.getElementById('chartLinks'), {{
         }}]
     }},
     options: {{
+        onClick: function(_event, elements) {{
+            if (elements && elements.length > 0) {{
+                navegarPeloGrafico('chartLinks', elements[0].index);
+            }} else {{
+                abrirEIrParaDetalhe('links');
+            }}
+        }},
         plugins: {{
             title: {{
                 display: true,
@@ -2124,6 +3839,13 @@ new Chart(document.getElementById('chartVpn'), {{
         }}]
     }},
     options: {{
+        onClick: function(_event, elements) {{
+            if (elements && elements.length > 0) {{
+                navegarPeloGrafico('chartVpn', elements[0].index);
+            }} else {{
+                abrirEIrParaDetalhe('vpn-details');
+            }}
+        }},
         plugins: {{
             title: {{
                 display: true,
@@ -2139,7 +3861,27 @@ new Chart(document.getElementById('chartVpn'), {{
     }}
 }});
 
+// Botão flutuante: fechar tudo e voltar ao topo
+const backToTopBtn = document.getElementById('backToTopBtn');
+window.addEventListener('scroll', () => {{
+    if (backToTopBtn) backToTopBtn.classList.toggle('visible', window.scrollY > 300);
+}});
+if (backToTopBtn) {{
+    backToTopBtn.addEventListener('click', () => {{
+        document.querySelectorAll('details.details-section').forEach((d) => {{
+            d.open = false;
+            resetSectionFilters(d);
+        }});
+        document.querySelectorAll('.regional-item').forEach((item) => {{
+            item.open = false;
+            item.style.display = '';
+        }});
+        window.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }});
+}}
 </script>
+
+<button id="backToTopBtn" class="back-to-top" title="Fechar tudo e voltar ao topo">&#8679;</button>
 
 </body>
 </html>
@@ -2192,7 +3934,13 @@ if AUTO_NO_BROWSER:
 else:
     print(f"\n[WEB] Abrindo relatório no navegador...")
     print(f"[URL] Local: {DASHBOARD_FINAL}")
-    webbrowser.open(DASHBOARD_FINAL.resolve().as_uri())
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(DASHBOARD_FINAL.resolve()))
+        else:
+            webbrowser.open(DASHBOARD_FINAL.resolve().as_uri())
+    except Exception:
+        webbrowser.open(DASHBOARD_FINAL.resolve().as_uri())
 
 print(f"\n[SUCCESS] Relatório Preventiva gerado com sucesso!")
 print(f" Localização: {DASHBOARD_FINAL}")

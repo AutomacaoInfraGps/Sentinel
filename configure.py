@@ -97,13 +97,13 @@ class WizardConfiguracao:
         print("\n🖥️ Servidor NAOS:")
         naos_config = self.configuracao.get("naos_server", {})
         
-        ip_naos = input(f"   IP [{naos_config.get('ip', '192.168.21.27')}]: ").strip()
+        ip_naos = input(f"   IP [{naos_config.get('ip', '192.0.2.10')}]: ").strip()
         if not ip_naos:
-            ip_naos = naos_config.get('ip', '192.168.21.27')
+            ip_naos = naos_config.get('ip', '192.0.2.10')
         
-        usuario_naos = input(f"   Usuário [{naos_config.get('usuario', 'galaxia\\\\admin.lima')}]: ").strip()
+        usuario_naos = input(f"   Usuário [{naos_config.get('usuario', 'EXEMPLO\\\\admin')}]: ").strip()
         if not usuario_naos:
-            usuario_naos = naos_config.get('usuario', 'galaxia\\admin.lima')
+            usuario_naos = naos_config.get('usuario', 'EXEMPLO\\admin')
         
         senha_naos = input("   Senha: ").strip()
         if not senha_naos:
@@ -113,9 +113,9 @@ class WizardConfiguracao:
         print("\n📡 UniFi Controller:")
         unifi_config = self.configuracao.get("unifi_controller", {})
         
-        host_unifi = input(f"   Host [{unifi_config.get('host', '192.168.21.28')}]: ").strip()
+        host_unifi = input(f"   Host [{unifi_config.get('host', '198.51.100.10')}]: ").strip()
         if not host_unifi:
-            host_unifi = unifi_config.get('host', '192.168.21.28')
+            host_unifi = unifi_config.get('host', '198.51.100.10')
         
         porta_unifi = input(f"   Porta [{unifi_config.get('port', 8443)}]: ").strip()
         if not porta_unifi:
@@ -123,9 +123,9 @@ class WizardConfiguracao:
         else:
             porta_unifi = int(porta_unifi)
         
-        usuario_unifi = input(f"   Usuário [{unifi_config.get('username', 'admin.lima')}]: ").strip()
+        usuario_unifi = input(f"   Usuário [{unifi_config.get('username', 'admin')}]: ").strip()
         if not usuario_unifi:
-            usuario_unifi = unifi_config.get('username', 'admin.lima')
+            usuario_unifi = unifi_config.get('username', 'admin')
         
         senha_unifi = input("   Senha: ").strip()
         if not senha_unifi:

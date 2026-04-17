@@ -26,7 +26,7 @@ except ImportError:
     def get_credentials(service, prompt_if_missing=False):
         if service == 'zabbix':
             return {
-                'url': 'http://10.254.12.15/zabbix/api_jsonrpc.php',
+                'url': 'https://zabbix.example.local/zabbix/api_jsonrpc.php',
                 'username': 'admin',
                 'password': ''
             }
@@ -49,15 +49,24 @@ class GerenciadorSwitches:
                     ENV_CONFIG = json.load(f)
                     zabbix_config = ENV_CONFIG.get('zabbix', {})
                     arquivo_excel_env = zabbix_config.get('excel_file')
+                    zabbix_url_env = zabbix_config.get('url')
+                    zabbix_username_env = zabbix_config.get('username')
+                    zabbix_password_env = zabbix_config.get('password')
             else:
                 ENV_CONFIG = {}
                 zabbix_config = {}
                 arquivo_excel_env = None
+                zabbix_url_env = None
+                zabbix_username_env = None
+                zabbix_password_env = None
         except Exception as e:
             print(f"⚠️ Erro ao carregar environment.json: {e}")
             ENV_CONFIG = {}
             zabbix_config = {}
             arquivo_excel_env = None
+            zabbix_url_env = None
+            zabbix_username_env = None
+            zabbix_password_env = None
         
         # Define o arquivo Excel (prioridade: parâmetro > environment.json > padrão)
         self.arquivo_excel = arquivo_excel or arquivo_excel_env or "switches_zabbix.xlsx"
@@ -68,6 +77,9 @@ class GerenciadorSwitches:
         self.auth_token = None
         self.switches = []
         self.regionais = {}
+        self.zabbix_url_env = zabbix_url_env
+        self.zabbix_username_env = zabbix_username_env
+        self.zabbix_password_env = zabbix_password_env
         
         # Carrega configurações
         self._carregar_config()
@@ -195,13 +207,18 @@ class GerenciadorSwitches:
     def _carregar_config(self):
         """Carrega configurações do Zabbix"""
         try:
-            # Primeiro tenta carregar do arquivo de configuração
-            if os.path.exists(self.config_file):
+            # Primeiro tenta carregar do environment.json
+            self.zabbix_url = self.zabbix_url_env or self.zabbix_url
+            self.username = self.zabbix_username_env or self.username
+            self.password = self.zabbix_password_env or self.password
+
+            # Depois tenta carregar do arquivo de configuração legado
+            if (not self.zabbix_url or not self.username or not self.password) and os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.zabbix_url = config.get('zabbix_url')
-                    self.username = config.get('username')
-                    self.password = config.get('password')
+                    self.zabbix_url = self.zabbix_url or config.get('zabbix_url')
+                    self.username = self.username or config.get('username')
+                    self.password = self.password or config.get('password')
             
             # Se não encontrou no arquivo ou se algum valor estiver faltando,
             # tenta obter do módulo de credenciais
@@ -211,12 +228,12 @@ class GerenciadorSwitches:
                 self.username = self.username or creds.get('username')
                 self.password = self.password or creds.get('password')
                 
-                # Salva as configurações no arquivo
-                self.salvar_config()
+                if self.zabbix_url and self.username and self.password:
+                    self.salvar_config()
             
             # Se ainda estiver faltando algum valor, usa valores padrão
             if not self.zabbix_url:
-                self.zabbix_url = "http://10.254.12.15/zabbix/api_jsonrpc.php"
+                self.zabbix_url = "https://zabbix.example.local/zabbix/api_jsonrpc.php"
             if not self.username:
                 self.username = "admin"
             if not self.password:
@@ -226,7 +243,7 @@ class GerenciadorSwitches:
         except Exception as e:
             print(f"Erro ao carregar configurações: {str(e)}")
             # Configurações padrão em caso de erro
-            self.zabbix_url = "http://10.254.12.15/zabbix/api_jsonrpc.php"
+            self.zabbix_url = "https://zabbix.example.local/zabbix/api_jsonrpc.php"
             self.username = "admin"
             self.password = ""
     

@@ -394,8 +394,12 @@ def api_salvar_regional():
         if regional_existente and not data.get('editando'):
             return jsonify({'success': False, 'message': 'Regional com este código já existe'})
         
-        # Adiciona ou atualiza regional
-        gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
+        if data.get('editando') and regional_existente:
+            # Edição: preserva servidores e links, atualiza apenas nome e descrição
+            gerenciador_regionais.editar_regional(codigo, nome, descricao)
+        else:
+            # Nova regional
+            gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
         
         return jsonify({'success': True, 'message': 'Regional salva com sucesso!', 'codigo': codigo})
         
@@ -409,7 +413,7 @@ def api_salvar_servidor_regional(codigo_regional):
         data = request.get_json()
         
         # Validação básica
-        campos_obrigatorios = ['nome', 'tipo', 'ip', 'usuario', 'senha']
+        campos_obrigatorios = ['nome', 'tipo_monitoramento', 'ip', 'usuario', 'senha']
         for campo in campos_obrigatorios:
             if not data.get(campo):
                 return jsonify({'success': False, 'message': f'Campo {campo} é obrigatório'})
@@ -422,20 +426,26 @@ def api_salvar_servidor_regional(codigo_regional):
         servidor = {
             'id': data.get('id') or f"srv_{codigo_regional.lower()}_{len(gerenciador_regionais.listar_servidores_regional(codigo_regional)) + 1:02d}",
             'nome': data['nome'],
-            'tipo': data['tipo'],
+            'tipo': data['tipo_monitoramento'],
+            'sistema_operacional': data.get('sistema_operacional', ''),
             'ip': data['ip'],
             'usuario': data['usuario'],
             'senha': data['senha'],
             'porta': int(data.get('porta', 443)),
             'timeout': int(data.get('timeout', 10)),
             'ativo': data.get('ativo', True),
-            'modelo': data.get('modelo', 'Dell PowerEdge' if data['tipo'] == 'idrac' else 'HPE ProLiant'),
+            'modelo': data.get('modelo') or 'Servidor Virtual',
             'funcao': data.get('funcao', 'Aplicação')
         }
-        
-        # Adiciona servidor à regional
+
+        servidor_existente = gerenciador_regionais.obter_servidor(codigo_regional, servidor['id']) if data.get('id') else None
+
+        if servidor_existente:
+            gerenciador_regionais.atualizar_servidor(codigo_regional, servidor['id'], servidor)
+            return jsonify({'success': True, 'message': 'Servidor atualizado com sucesso!'})
+
         gerenciador_regionais.adicionar_servidor(codigo_regional, servidor)
-        
+
         return jsonify({'success': True, 'message': 'Servidor adicionado com sucesso!'})
         
     except Exception as e:

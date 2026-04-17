@@ -81,7 +81,7 @@ class AuthAD:
             )
             
             # Usa apenas o formato NetBIOS que funciona melhor com NTLM
-            # Baseado nos testes: GALAXIA\admin.lima é o formato correto
+            # Baseado nos testes: DOMINIO\usuario é o formato correto
             user_format = f"{self.domain_netbios}\\{username}"
             
             conn = None
