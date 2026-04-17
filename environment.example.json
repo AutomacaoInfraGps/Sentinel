@@ -1,0 +1,69 @@
+{
+  "naos_server": {
+    "ip": "192.0.2.10",
+    "usuario": "EXEMPLO\\admin",
+    "senha": "ALTERE_AQUI"
+  },
+  "unifi_controller": {
+    "host": "198.51.100.10",
+    "port": 8443,
+    "username": "admin",
+    "password": "ALTERE_AQUI"
+  },
+  "fortigate": {
+    "SP": {
+      "host": "fortigate-sp.example.local",
+      "port": 20443,
+      "username": "admin",
+      "password": "ALTERE_AQUI"
+    },
+    "RJ": {
+      "host": "fortigate-rj.example.local",
+      "port": 20443,
+      "username": "admin",
+      "password": "ALTERE_AQUI"
+    }
+  },
+  "fortimanager": {
+    "host": "fortimanager.example.local",
+    "port": 20443,
+    "username": "admin.exemplo",
+    "password": "ALTERE_AQUI",
+    "adom": "ADOM_EXEMPLO",
+    "use_proxy_for_links": true
+  },
+  "zabbix": {
+    "url": "https://zabbix.example.local/zabbix/api_jsonrpc.php",
+    "username": "Admin",
+    "password": "ALTERE_AQUI",
+    "excel_file": "switches_zabbix.xlsx"
+  },
+  "server_manager": {
+    "host": "203.0.113.20",
+    "username": "admin",
+    "password": "ALTERE_AQUI",
+    "regional": "Regional Exemplo"
+  },
+  "gps_amigo": {
+    "url": "https://gpsamigo.com.br/login.php"
+  },
+  "saturno_portal": {
+    "url": "https://portal.exemplo.local/guest",
+    "cpf": "000.000.000-00",
+    "data_nascimento": "01/01/1970"
+  },
+  "appgate": {
+    "url": "https://firewall.example.local/ng/system/dashboard/1",
+    "username": "admin",
+    "password": "ALTERE_AQUI"
+  },
+  "app_host_ip": "203.0.113.63",
+  "timeouts": {
+    "connection_timeout": 10,
+    "max_retries": 3
+  },
+  "cleanup": {
+    "remove_temp_files": true,
+    "keep_logs": true
+  }
+}

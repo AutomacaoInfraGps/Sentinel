@@ -89,6 +89,8 @@ STATUS_NAOS_HTML = OUTPUT_DIR / "status_Naos.html"
 # Arquivos temporários gerados pelos scripts
 GPS_HTML  = OUTPUT_DIR_PUBLIC / "print_temp.html"          # <-- no Public!
 GPS_IMG   = OUTPUT_DIR_PUBLIC / "gps_amigo.png"            # opcional (salva screenshot)
+APPGATE_HTML = OUTPUT_DIR_PUBLIC / "appgate.html"
+APPGATE_IMG = OUTPUT_DIR_PUBLIC / "appgate.png"
 UNIFI_HTML = OUTPUT_DIR / "dados_aps_unifi.html"
 
 
@@ -129,20 +131,26 @@ except ImportError:
     def get_credentials(service, prompt_if_missing=False):
         return {}
 
+DOCS_NAOS_IP = "192.0.2.10"
+DOCS_UNIFI_HOST = "198.51.100.10"
+DOCS_APPGATE_HOST = "203.0.113.10"
+DOCS_NAOS_USER = "EXEMPLO\\admin"
+DOCS_UNIFI_USER = "admin"
+
 # Configurações do servidor NAOS
 naos_creds = get_credentials('naos')
 NAOS_CONFIG = ENV_CONFIG.get("naos_server", {
-    "ip": naos_creds.get('host', "192.168.21.27"),
-    "usuario": naos_creds.get('username', "galaxia\\admin"),
+    "ip": naos_creds.get('host', DOCS_NAOS_IP),
+    "usuario": naos_creds.get('username', DOCS_NAOS_USER),
     "senha": naos_creds.get('password', ""),
 })
 
 # Configurações do controlador UniFi
 unifi_creds = get_credentials('unifi')
 UNIFI_CONFIG = ENV_CONFIG.get("unifi_controller", {
-    "host": unifi_creds.get('host', "192.168.21.28"),
+    "host": unifi_creds.get('host', DOCS_UNIFI_HOST),
     "port": unifi_creds.get('port', 8443),
-    "username": unifi_creds.get('username', "admin"),
+    "username": unifi_creds.get('username', DOCS_UNIFI_USER),
     "password": unifi_creds.get('password', "")
 })
 
@@ -159,6 +167,15 @@ SATURNO_PORTAL = ENV_CONFIG.get("saturno_portal", {
 })
 
 SATURNO_OUTPUT_BASE = OUTPUT_DIR_PUBLIC / "print-rede"
+
+fortigate_rj_config = (ENV_CONFIG.get("fortigate") or {}).get("RJ", {})
+_appgate_host = fortigate_rj_config.get("host", DOCS_APPGATE_HOST)
+_appgate_port = fortigate_rj_config.get("port", 20443)
+APPGATE_CONFIG = ENV_CONFIG.get("appgate", {
+    "url": f"https://{_appgate_host}:{_appgate_port}/ng/system/dashboard/1",
+    "username": fortigate_rj_config.get("username", DOCS_UNIFI_USER),
+    "password": fortigate_rj_config.get("password", ""),
+})
 
 # === CONFIGURAÇÕES DE EXECUÇÃO ===
 # Configurações de timeout e execução

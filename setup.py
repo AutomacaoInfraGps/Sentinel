@@ -21,14 +21,14 @@ def create_environment_template():
     
     template = {
         "naos_server": {
-            "ip": "192.168.21.27",
-            "usuario": "galaxia\\admin.lima",
+            "ip": "192.0.2.10",
+            "usuario": "EXEMPLO\\admin",
             "senha": "ALTERE_AQUI"
         },
         "unifi_controller": {
-            "host": "192.168.21.28",
+            "host": "198.51.100.10",
             "port": 8443,
-            "username": "admin.lima",
+            "username": "admin",
             "password": "ALTERE_AQUI"
         },
         "gps_amigo": {

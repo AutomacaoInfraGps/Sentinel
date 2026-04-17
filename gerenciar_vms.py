@@ -51,10 +51,10 @@ except ImportError:
     def get_credentials(service, prompt_if_missing=False):
         if service == 'server_manager':
             return {
-                'host': '192.168.41.2',
+                'host': '203.0.113.20',
                 'username': 'admin',
                 'password': '',
-                'regional': 'Paraná'
+                'regional': 'Regional Exemplo'
             }
         return {'username': '', 'password': ''}
 
@@ -86,10 +86,10 @@ class GerenciadorVMs:
         creds = get_credentials('server_manager')
         
         # Usa os parâmetros fornecidos ou as credenciais das fontes disponíveis
-        self.host = host or env_creds.get('host') or creds.get('host') or '192.168.41.2'
+        self.host = host or env_creds.get('host') or creds.get('host') or '203.0.113.20'
         self.username = username or env_creds.get('username') or creds.get('username') or 'admin'
         self.password = password or env_creds.get('password') or creds.get('password') or ''
-        self.regional = regional or env_creds.get('regional') or creds.get('regional') or 'Paraná'
+        self.regional = regional or env_creds.get('regional') or creds.get('regional') or 'Regional Exemplo'
         
         # Log das configurações (sem a senha)
         print(f"🔧 Configurações do Server Manager:")

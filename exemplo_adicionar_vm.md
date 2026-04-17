@@ -20,9 +20,9 @@ python manage_vms.py list
 ```bash
 python manage_vms.py add \
   --name "VM_SAO_PAULO" \
-  --ip "192.168.50.10" \
-  --username "admin.lima" \
-  --password "senha123" \
+  --ip "192.0.2.50" \
+  --username "usuario.exemplo" \
+  --password "ALTERE_AQUI" \
   --regional "SAO_PAULO" \
   --description "VM Regional de São Paulo"
 ```
@@ -49,9 +49,9 @@ python manage_vms.py cli
     {
         "id": "vm-1753466017",
         "name": "Parana",
-        "ip": "192.168.41.2",
-        "username": "admin.lima",
-        "password": "Akin21@@grupogps",
+      "ip": "192.0.2.40",
+      "username": "usuario.exemplo",
+      "password": "ALTERE_AQUI",
         "regional": "RG_PARANA",
         "description": "Máquina Virtual Regional do Paraná",
         "status": "Unknown",
@@ -77,7 +77,7 @@ Para manter consistência, use as mesmas regionais dos servidores iDRAC/iLO:
 Com essa configuração, as VMs aparecerão no dashboard com a regional correta:
 
 ```
-📱 VM: Parana (192.168.41.2)
+📱 VM: Parana (192.0.2.40)
    Regional: RG_PARANA
    Status: Online
 ```

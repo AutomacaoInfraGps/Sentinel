@@ -3,20 +3,13 @@
 ## Configuração Implementada
 
 ### Configurações do AD
-- **Domínio DNS**: GALAXIA.LOCAL
-- **Domínio NetBIOS**: GALAXIA
-- **Servidor Principal**: SIRIUS (10.254.12.11)
-- **OU Autorizada**: `OU=Usuarios Administrativos,OU=Galaxia,DC=Galaxia,DC=local`
+- **Domínio DNS**: DOMINIO.LOCAL
+- **Domínio NetBIOS**: DOMINIO
+- **Servidor Principal**: DC01 (192.0.2.11)
+- **OU Autorizada**: `OU=Usuarios Administrativos,OU=Empresa,DC=Dominio,DC=local`
 
 ### Usuários Autorizados
-Baseado na consulta `dsquery`, os usuários na OU administrativa são:
-- Marcus Vinicius Batista Lima (admin.lima)
-- Michel Pereira dos Santos
-- Kleyton Leopoldo e Silva Eleuterio
-- Felipe Barbosa Oliveira
-- Ricardo Orquisa
-- Joao Paulo Da Gama Neto
-- Nelio Alves De Oliveira Santos
+Baseado na consulta `dsquery`, os usuários na OU administrativa devem ser validados sem expor nomes reais na documentação.
 
 ## Como Usar
 
@@ -25,7 +18,7 @@ Baseado na consulta `dsquery`, os usuários na OU administrativa são:
 from auth_ad import verificar_usuario_ad
 
 # Autentica usuário
-sucesso, user_info, mensagem = verificar_usuario_ad('admin.lima', 'senha')
+sucesso, user_info, mensagem = verificar_usuario_ad('usuario.exemplo', 'senha')
 
 if sucesso:
     print(f"Usuário autenticado: {user_info['displayName']}")
@@ -35,9 +28,9 @@ else:
 ```
 
 ### Formato de Usuário
-- **Formato usado**: `GALAXIA\username`
+- **Formato usado**: `DOMINIO\username`
 - **Autenticação**: NTLM (padrão Windows AD)
-- **Exemplo**: `GALAXIA\admin.lima`
+- **Exemplo**: `DOMINIO\usuario.exemplo`
 
 ## Validações Implementadas
 
@@ -50,10 +43,10 @@ else:
 ```python
 # Sucesso
 (True, {
-    'username': 'admin.lima',
-    'displayName': 'Marcus Vinicius Batista Lima',
-    'dn': 'CN=Marcus Vinicius Batista Lima,OU=Usuarios Administrativos,OU=Galaxia,DC=Galaxia,DC=local',
-    'email': 'admin.lima@Galaxia.local'
+    'username': 'usuario.exemplo',
+    'displayName': 'Usuario Exemplo',
+    'dn': 'CN=Usuario Exemplo,OU=Usuarios Administrativos,OU=Empresa,DC=Dominio,DC=local',
+    'email': 'usuario.exemplo@dominio.local'
 }, 'Usuário autenticado com sucesso')
 
 # Falha

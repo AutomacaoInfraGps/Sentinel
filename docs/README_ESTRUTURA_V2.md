@@ -45,7 +45,7 @@ Regional (RG_GLOBAL SEGURANÇA)
 ### RG_GALAXIA
 - **Descrição**: Regional GALAXIA - Matriz
 - **Servidores**: 1 (HPE ProLiant ILO)
-- **IP**: 10.254.12.18
+- **IP**: 192.0.2.18
 
 ## 🚀 Como Usar
 

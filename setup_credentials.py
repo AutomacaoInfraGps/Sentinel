@@ -41,7 +41,7 @@ def setup_fortigate():
     """Configura as credenciais do Fortigate"""
     print("\n--- CONFIGURAÇÃO DO FORTIGATE ---\n")
     
-    host = input("Host do Fortigate [10.254.12.1]: ") or "10.254.12.1"
+    host = input("Host do Fortigate [fortigate.example.local]: ") or "fortigate.example.local"
     port = input("Porta da API do Fortigate [20443]: ") or "20443"
     username = input("Usuário do Fortigate [admin]: ") or "admin"
     password = getpass.getpass("Senha do Fortigate: ")
@@ -66,7 +66,7 @@ def setup_zabbix():
     """Configura as credenciais do Zabbix"""
     print("\n--- CONFIGURAÇÃO DO ZABBIX ---\n")
     
-    url = input("URL da API do Zabbix [http://10.254.12.15/zabbix/api_jsonrpc.php]: ") or "http://10.254.12.15/zabbix/api_jsonrpc.php"
+    url = input("URL da API do Zabbix [https://zabbix.example.local/zabbix/api_jsonrpc.php]: ") or "https://zabbix.example.local/zabbix/api_jsonrpc.php"
     username = input("Usuário do Zabbix [admin]: ") or "admin"
     password = getpass.getpass("Senha do Zabbix: ")
     
@@ -89,7 +89,7 @@ def setup_unifi():
     """Configura as credenciais do UniFi Controller"""
     print("\n--- CONFIGURAÇÃO DO UNIFI CONTROLLER ---\n")
     
-    host = input("Host do UniFi Controller [192.168.21.28]: ") or "192.168.21.28"
+    host = input("Host do UniFi Controller [198.51.100.10]: ") or "198.51.100.10"
     port = input("Porta do UniFi Controller [8443]: ") or "8443"
     username = input("Usuário do UniFi Controller [admin]: ") or "admin"
     password = getpass.getpass("Senha do UniFi Controller: ")
@@ -114,8 +114,8 @@ def setup_naos():
     """Configura as credenciais do servidor NAOS"""
     print("\n--- CONFIGURAÇÃO DO SERVIDOR NAOS ---\n")
     
-    host = input("IP do servidor NAOS [192.168.21.27]: ") or "192.168.21.27"
-    username = input("Usuário do servidor NAOS [galaxia\\admin]: ") or "galaxia\\admin"
+    host = input("IP do servidor NAOS [192.0.2.10]: ") or "192.0.2.10"
+    username = input("Usuário do servidor NAOS [EXEMPLO\\admin]: ") or "EXEMPLO\\admin"
     password = getpass.getpass("Senha do servidor NAOS: ")
     
     # Obtém as credenciais atuais

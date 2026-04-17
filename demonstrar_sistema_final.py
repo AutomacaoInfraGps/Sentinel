@@ -28,8 +28,8 @@ def mostrar_sistema_final():
             "categoria": "🔐 Autenticação",
             "itens": [
                 "✅ Active Directory completo",
-                "✅ Domínio: GALAXIA.LOCAL",
-                "✅ Servidor: SIRIUS (10.254.12.11)",
+                "✅ Domínio: DOMINIO.LOCAL",
+                "✅ Servidor: DC01 (192.0.2.11)",
                 "✅ OU: Usuarios Administrativos",
                 "✅ Interface de login original"
             ]
