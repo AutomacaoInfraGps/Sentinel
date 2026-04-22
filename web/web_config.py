@@ -368,7 +368,7 @@ def api_public_status_replicacao():
         table_rows = re.findall(r"<tr[^>]*>.*?<td[^>]*>([A-Z0-9\-]+)</td>.*?<td[^>]*>([^<]+)</td>.*?<td[^>]*>([^<]+)</td>.*?<td[^>]*>(\d+)</td>.*?</tr>", content, re.IGNORECASE | re.DOTALL)
         
         # Busca por erros operacionais
-        replication_errors = re.findall(r"\d+\s*-\s*([A-Z0-9\.\-]+\.(?:Galaxia\.)?local)", content, re.IGNORECASE)
+        replication_errors = re.findall(r"\d+\s*-\s*([A-Z0-9\.\-]+\.(?:[A-Z0-9\-]+\.)?local)", content, re.IGNORECASE)
         
         controladores = len(table_rows)
         erros_tabela = sum(1 for _, _, _, erros in table_rows if int(erros.strip()) > 0)

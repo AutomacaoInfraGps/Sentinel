@@ -26,8 +26,17 @@ def get_project_root():
         # Quando compilado, sys.executable aponta para o .exe
         return Path(sys.executable).parent.absolute()
     else:
-        # Quando rodando como script Python normal
-        return Path(__file__).parent.absolute()
+        # Quando rodando como script Python normal, prefere a raiz real do workspace
+        current_dir = Path(__file__).parent.absolute()
+        parent_dir = current_dir.parent
+        parent_markers = [
+            parent_dir / "environment.json",
+            parent_dir / "Conexoes.txt",
+            parent_dir / "servidores.json",
+        ]
+        if any(marker.exists() for marker in parent_markers):
+            return parent_dir
+        return current_dir
 
 PROJECT_ROOT = get_project_root()
 
@@ -67,7 +76,18 @@ CONEXOES_FILE = PROJECT_ROOT / "Conexoes.txt"
 SERVIDORES_FILE = PROJECT_ROOT / "servidores.json"
 
 # Arquivo de configuração do ambiente
-ENVIRONMENT_FILE = PROJECT_ROOT / "environment.json"
+def get_environment_file() -> Path:
+    candidates = [
+        PROJECT_ROOT / "environment.json",
+        PROJECT_ROOT.parent / "environment.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+ENVIRONMENT_FILE = get_environment_file()
 
 # === ARQUIVOS DE SAÍDA ===
 # Função para gerar nome do arquivo com timestamp
@@ -107,7 +127,7 @@ REPLICACAO_JSON = DATA_DIR_PUBLIC / "replicacao.json"
 # === CARREGAMENTO DE CONFIGURAÇÕES DO AMBIENTE ===
 def load_environment_config():
     """Carrega as configurações do arquivo environment.json"""
-    env_file = PROJECT_ROOT / "environment.json"
+    env_file = ENVIRONMENT_FILE
     if env_file.exists():
         try:
             with open(env_file, 'r', encoding='utf-8') as f:

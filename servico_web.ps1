@@ -3,10 +3,13 @@ param(
     [string]$Action = "status",
 
     [string]$ServiceName = "AutomacaoWeb",
+    [string]$TaskName = "AutomacaoWebStartup",
     [string]$DisplayName = "Automacao Web",
     [string]$Description = "Sistema de Automacao Web (Flask + Waitress)",
     [string]$PythonPath = "C:\Automacao\.venv\Scripts\python.exe",
-    [string]$RunnerPath = "C:\Automacao\run_web_service.py"
+    [string]$RunnerPath = "C:\Automacao\run_web_service.py",
+    [string]$StarterPath = "C:\Automacao\start_web_background.ps1",
+    [string]$MonitorPath = "C:\Automacao\monitor_web_background.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,81 +20,127 @@ function Test-Admin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Ensure-Exists([string]$Path, [string]$Label) {
+function Assert-PathExists([string]$Path, [string]$Label) {
     if (-not (Test-Path $Path)) {
         throw "$Label não encontrado: $Path"
     }
 }
 
-function Install-Service {
-    if (-not (Test-Admin)) {
-        throw "Execute o PowerShell como Administrador para instalar o serviço."
+function Invoke-RequiringAdmin([string]$InnerAction) {
+    if (Test-Admin) {
+        return $false
     }
 
-    Ensure-Exists $PythonPath "Python do venv"
-    Ensure-Exists $RunnerPath "Runner do serviço"
+    $scriptPath = $MyInvocation.MyCommand.Path
+    $escapedAction = $InnerAction.Replace("'", "''")
+    Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File '$scriptPath' -Action '$escapedAction'"
+    Write-Host "Solicitação elevada aberta. Confirme o UAC para concluir '$InnerAction'."
+    return $true
+}
+
+function Stop-WebProcesses {
+    $processes = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq 'python.exe' -and $_.CommandLine -like '*run_web_service.py*'
+    }
+
+    foreach ($process in $processes) {
+        try {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+            Write-Host "Processo web encerrado: $($process.ProcessId)"
+        } catch {
+            Write-Host "Falha ao encerrar processo $($process.ProcessId): $($_.Exception.Message)"
+        }
+    }
+}
+
+function Install-Service {
+    if (Invoke-RequiringAdmin 'install') {
+        return
+    }
+
+    Assert-PathExists $PythonPath "Python do venv"
+    Assert-PathExists $RunnerPath "Runner do serviço"
+    Assert-PathExists $StarterPath "Starter do processo em background"
+    Assert-PathExists $MonitorPath "Monitor da aplicação web"
 
     & $PythonPath -m pip install --disable-pip-version-check waitress | Out-Null
 
-    $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    $binPath = '"' + $PythonPath + '" "' + $RunnerPath + '"'
-    if ($existing) {
-        Write-Host "Serviço '$ServiceName' já existe. Atualizando configuração..."
-    } else {
-        sc.exe create $ServiceName binPath= $binPath start= auto DisplayName= $DisplayName | Out-Null
+    schtasks /delete /tn $TaskName /f 2>$null | Out-Null
+    schtasks /create /tn $TaskName /sc onstart /ru SYSTEM /rl HIGHEST /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MonitorPath" /f | Out-Null
+
+    if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        sc.exe config $ServiceName start= demand | Out-Null
     }
 
-    sc.exe config $ServiceName binPath= $binPath | Out-Null
-    sc.exe description $ServiceName $Description | Out-Null
-    sc.exe config $ServiceName start= auto | Out-Null
-    sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/5000/restart/5000 | Out-Null
-    sc.exe failureflag $ServiceName 1 | Out-Null
-
-    Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    Write-Host "Serviço '$ServiceName' instalado/configurado e iniciado."
+    Write-Host "Tarefa '$TaskName' instalada para manter a automação web ativa no boot."
+    Start-WebService
 }
 
 function Start-WebService {
-    Start-Service -Name $ServiceName
-    Write-Host "Serviço '$ServiceName' iniciado."
+    if (Invoke-RequiringAdmin 'start') {
+        return
+    }
+
+    schtasks /run /tn $TaskName | Out-Null
+    Write-Host "Tarefa '$TaskName' acionada."
 }
 
 function Stop-WebService {
-    Stop-Service -Name $ServiceName -Force
-    Write-Host "Serviço '$ServiceName' parado."
+    if (Invoke-RequiringAdmin 'stop') {
+        return
+    }
+
+    schtasks /end /tn $TaskName 2>$null | Out-Null
+    Stop-WebProcesses
+    Write-Host "Automação web parada."
 }
 
 function Restart-WebService {
-    Restart-Service -Name $ServiceName -Force
-    Write-Host "Serviço '$ServiceName' reiniciado."
+    if (Invoke-RequiringAdmin 'restart') {
+        return
+    }
+
+    Stop-WebService
+    Start-WebService
 }
 
 function Show-Status {
-    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if (-not $svc) {
-        Write-Host "Serviço '$ServiceName' não encontrado."
-        return
+    $taskOutput = cmd /c "schtasks /query /tn $TaskName /fo LIST /v 2>nul"
+    if ($LASTEXITCODE -ne 0) {
+        $taskOutput = $null
     }
-    Write-Host "Nome: $($svc.Name)"
-    Write-Host "Status: $($svc.Status)"
-    Write-Host "Tipo de inicialização: $(Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" | Select-Object -ExpandProperty StartMode)"
+    $listener = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue
+    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
+    if ($taskOutput) {
+        Write-Host "Tarefa: $TaskName"
+        ($taskOutput | Select-String 'Status:|Task To Run:|Last Run Time:|Last Result:') | ForEach-Object { Write-Host $_.Line }
+    } else {
+        Write-Host "Tarefa '$TaskName' não encontrada."
+    }
+
+    if ($svc) {
+        Write-Host "Serviço legado '$ServiceName': $($svc.Status) / $($svc.StartType)"
+    }
+
+    if ($listener) {
+        Write-Host "Porta 5000 ativa no PID $($listener.OwningProcess)"
+    } else {
+        Write-Host "Porta 5000 sem listener."
+    }
 }
 
 function Uninstall-Service {
-    if (-not (Test-Admin)) {
-        throw "Execute o PowerShell como Administrador para remover o serviço."
+    if (Invoke-RequiringAdmin 'uninstall') {
+        return
     }
 
-    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($svc) {
-        if ($svc.Status -ne 'Stopped') {
-            Stop-Service -Name $ServiceName -Force
-        }
-        sc.exe delete $ServiceName | Out-Null
-        Write-Host "Serviço '$ServiceName' removido."
-    } else {
-        Write-Host "Serviço '$ServiceName' não existe."
+    Stop-WebProcesses
+    schtasks /delete /tn $TaskName /f 2>$null | Out-Null
+    if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        sc.exe config $ServiceName start= demand | Out-Null
     }
+    Write-Host "Automação automática removida."
 }
 
 switch ($Action) {

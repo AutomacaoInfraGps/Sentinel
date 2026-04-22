@@ -66,10 +66,10 @@ python manage.py status                  # Status geral do sistema
 python manage.py add
 
 # Modo direto
-python manage.py add --nome "Servidor SP" --tipo idrac --ip "10.1.1.100" --usuario root --senha "senha123"
+python manage.py add --nome "Servidor Exemplo" --tipo idrac --ip "198.51.100.10" --usuario "<USUARIO>" --senha "<SENHA>"
 
 # Com teste de conectividade
-python manage.py add --nome "Servidor RJ" --tipo ilo --ip "10.2.1.100" --usuario admin --senha "senha456" --testar
+python manage.py add --nome "Servidor Filial" --tipo ilo --ip "203.0.113.10" --usuario "<USUARIO>" --senha "<SENHA>" --testar
 ```
 
 ### Remover Servidor
@@ -87,7 +87,7 @@ python manage.py remove servidor_sp --force
 ### Editar Servidor
 ```bash
 # Alterar IP
-python manage.py edit servidor_sp --ip "10.1.1.101"
+python manage.py edit servidor_exemplo --ip "198.51.100.11"
 
 # Alterar credenciais
 python manage.py edit servidor_sp --usuario admin --senha "nova_senha"
@@ -165,7 +165,7 @@ python executar_tudo.py
 ### 2️⃣ Adicionando Novos Servidores
 ```bash
 # Adicione o servidor
-python manage.py add --nome "Novo Servidor" --tipo idrac --ip "10.3.1.100" --usuario root --senha "senha"
+python manage.py add --nome "Novo Servidor" --tipo idrac --ip "192.0.2.10" --usuario "<USUARIO>" --senha "<SENHA>"
 
 # Teste a conectividade
 python manage.py test novo_servidor
@@ -224,9 +224,9 @@ python -c "from gerenciar_servidores import GerenciadorServidores; GerenciadorSe
     {
       "nome": "Servidor Principal",
       "tipo": "idrac",
-      "ip": "192.168.1.100",
-      "usuario": "root",
-      "senha": "senha_segura"
+      "ip": "198.51.100.100",
+      "usuario": "<USUARIO>",
+      "senha": "<SENHA>"
     }
   ]
 }
@@ -239,13 +239,13 @@ python -c "from gerenciar_servidores import GerenciadorServidores; GerenciadorSe
     {
       "nome": "Matriz SP",
       "tipo": "idrac",
-      "ip": "10.1.1.100",
+      "ip": "198.51.100.110",
       "grupo": "matriz"
     },
     {
       "nome": "Regional RJ",
       "tipo": "ilo",
-      "ip": "10.2.1.100",
+      "ip": "203.0.113.110",
       "grupo": "regionais"
     }
   ]

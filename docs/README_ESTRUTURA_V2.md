@@ -93,9 +93,9 @@ servidor = {
     "id": "srv_nova_01",
     "nome": "Servidor Nova 01",
     "tipo": "idrac",
-    "ip": "10.100.0.10",
-    "usuario": "root",
-    "senha": "senha123",
+    "ip": "198.51.100.210",
+    "usuario": "<USUARIO>",
+    "senha": "<SENHA>",
     "modelo": "Dell PowerEdge",
     "funcao": "Aplicação"
 }

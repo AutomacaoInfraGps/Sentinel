@@ -266,8 +266,8 @@ if "❌" in unifi_html:
 
 # === LÓGICA CORRETA DE CONTAGEM BASEADA EM LATÊNCIA E ERRO ===
 # Lista de servidores com falha de replicação explícita (erros operacionais)
-# Busca por padrões como "58 - ALDEBARAN.Galaxia.local" ou "58 - ELTANIN.Galaxia.local"
-replication_errors_list = re.findall(r"\d+\s*-\s*([A-Z0-9\.\-]+\.(?:Galaxia\.)?local)", rep_html, re.IGNORECASE)
+# Busca por padrões como "58 - servidor.dominio.local"
+replication_errors_list = re.findall(r"\d+\s*-\s*([A-Z0-9\.\-]+\.(?:[A-Z0-9\-]+\.)?local)", rep_html, re.IGNORECASE)
 
 # Busca por dados na tabela HTML - padrão mais flexível
 # Procura por linhas da tabela que contenham dados de servidor

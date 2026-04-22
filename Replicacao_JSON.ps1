@@ -14,6 +14,7 @@ if (-not (Test-Path -Path $dataDir)) {
 # Executa o comando repadmin e captura a saída completa
 Write-Host "Executando repadmin /replsummary..."
 $output = repadmin /replsummary | Out-String
+$domainSuffix = if ($env:AD_DOMAIN_DNS) { $env:AD_DOMAIN_DNS.ToLower() } else { "dominio.local" }
 
 # Salva a saída bruta para debug
 $rawOutputPath = "$dataDir\repadmin_raw.txt"
@@ -68,7 +69,6 @@ foreach ($linha in $linhas) {
         $delta = $matches[2]
         $falhas = [int]$matches[3]
         $total = [int]$matches[4]
-        $porcentagem = [int]$matches[5]
         $erro = if ($matches.Count -gt 6) { $matches[6] } else { "" }
         
         # Determina o status
@@ -79,7 +79,7 @@ foreach ($linha in $linhas) {
         
         # Adiciona à lista de servidores
         $servidores += [PSCustomObject]@{
-            nome = "$dsa.Galaxia.local"
+            nome = "$dsa.$domainSuffix"
             status = $status
             parceiros = $total
             falhas = $falhas
@@ -99,7 +99,6 @@ foreach ($linha in $linhas) {
         $delta = $matches[2]
         $falhas = [int]$matches[3]
         $total = [int]$matches[4]
-        $porcentagem = [int]$matches[5]
         $erro = if ($matches.Count -gt 6) { $matches[6] } else { "" }
         
         # Determina o status
@@ -110,7 +109,7 @@ foreach ($linha in $linhas) {
         
         # Adiciona à lista de servidores
         $servidores += [PSCustomObject]@{
-            nome = "$dsa.Galaxia.local"
+            nome = "$dsa.$domainSuffix"
             status = $status
             parceiros = $total
             falhas = $falhas
@@ -132,7 +131,7 @@ Write-Host "Erros operacionais encontrados: $($errosOperacionais.Count)"
 if ($servidores.Count -eq 0) {
     Write-Host "AVISO: Nenhum servidor encontrado. Adicionando servidor de exemplo."
     $servidores += [PSCustomObject]@{
-        nome = "EXEMPLO.GALAXIA.LOCAL"
+        nome = "EXEMPLO.$($domainSuffix.ToUpper())"
         status = "Warning"
         parceiros = 0
         falhas = 0

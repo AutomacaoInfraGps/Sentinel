@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from gerenciar_servidores import GerenciadorServidores
-from config import PROJECT_ROOT, ENV_CONFIG
+from config import PROJECT_ROOT, ENV_CONFIG, ENVIRONMENT_FILE
 
 class WizardConfiguracao:
     """Wizard interativo para configuração inicial"""
@@ -61,7 +61,7 @@ class WizardConfiguracao:
         print("-" * 30)
         
         # Verifica se já existe configuração
-        env_file = PROJECT_ROOT / "environment.json"
+        env_file = ENVIRONMENT_FILE
         servidores_file = PROJECT_ROOT / "servidores.json"
         
         tem_env = env_file.exists()
@@ -85,7 +85,7 @@ class WizardConfiguracao:
         print("-" * 40)
         
         # Carrega configuração existente se houver
-        env_file = PROJECT_ROOT / "environment.json"
+        env_file = ENVIRONMENT_FILE
         if env_file.exists():
             try:
                 with open(env_file, 'r', encoding='utf-8') as f:
@@ -138,9 +138,26 @@ class WizardConfiguracao:
         url_gps = input(f"   URL [{gps_config.get('url', 'https://gpsamigo.com.br/login.php')}]: ").strip()
         if not url_gps:
             url_gps = gps_config.get('url', 'https://gpsamigo.com.br/login.php')
+
+        # Configuração do AppGate
+        print("\n🔐 AppGate:")
+        appgate_config = self.configuracao.get("appgate", {})
+
+        url_appgate = input(f"   URL [{appgate_config.get('url', 'https://firewall.example.local/ng/system/dashboard/1')}]: ").strip()
+        if not url_appgate:
+            url_appgate = appgate_config.get('url', 'https://firewall.example.local/ng/system/dashboard/1')
+
+        usuario_appgate = input(f"   Usuário [{appgate_config.get('username', 'admin')}]: ").strip()
+        if not usuario_appgate:
+            usuario_appgate = appgate_config.get('username', 'admin')
+
+        senha_appgate = input("   Senha: ").strip()
+        if not senha_appgate:
+            senha_appgate = appgate_config.get('password', '')
         
         # Monta configuração
         self.configuracao = {
+            **self.configuracao,
             "naos_server": {
                 "ip": ip_naos,
                 "usuario": usuario_naos,
@@ -154,6 +171,11 @@ class WizardConfiguracao:
             },
             "gps_amigo": {
                 "url": url_gps
+            },
+            "appgate": {
+                "url": url_appgate,
+                "username": usuario_appgate,
+                "password": senha_appgate
             },
             "timeouts": {
                 "connection_timeout": 10,

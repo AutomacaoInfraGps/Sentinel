@@ -7,6 +7,7 @@ $jsonPath = "C:\Users\m.vbatista\Desktop\Automação\data\replicacao.json"
 
 # Executa o comando repadmin e captura a saída
 $output = repadmin /replsummary
+$domainSuffix = if ($env:AD_DOMAIN_DNS) { $env:AD_DOMAIN_DNS.ToLower() } else { "dominio.local" }
 
 # Cria listas para armazenar os dados
 $servidores = @()
@@ -57,7 +58,7 @@ foreach ($linha in $output) {
         
         # Adiciona à lista de servidores
         $servidores += [PSCustomObject]@{
-            nome = "$dsa.Galaxia.local"
+            nome = "$dsa.$domainSuffix"
             status = $status
             parceiros = $total
             falhas = $falhas
@@ -84,7 +85,7 @@ foreach ($linha in $output) {
         
         # Adiciona à lista de servidores
         $servidores += [PSCustomObject]@{
-            nome = "$dsa.Galaxia.local"
+            nome = "$dsa.$domainSuffix"
             status = $status
             parceiros = $total
             falhas = $falhas

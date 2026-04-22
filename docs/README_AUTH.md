@@ -2,6 +2,14 @@
 
 ## Configuração Implementada
 
+As configurações do AD podem ser fornecidas via variáveis de ambiente:
+
+- `AD_DOMAIN_DNS`
+- `AD_DOMAIN_NETBIOS`
+- `AD_DC_SERVER`
+- `AD_AUTHORIZED_OU`
+- `AD_SEARCH_BASE`
+
 ### Configurações do AD
 - **Domínio DNS**: DOMINIO.LOCAL
 - **Domínio NetBIOS**: DOMINIO

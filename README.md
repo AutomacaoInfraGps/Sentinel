@@ -83,7 +83,7 @@ python iniciar_web.py
 python manage.py list
 
 # Adicionar servidor
-python manage.py add --nome "Servidor SP" --tipo idrac --ip "10.1.1.100" --usuario root --senha "senha123"
+python manage.py add --nome "Servidor Exemplo" --tipo idrac --ip "198.51.100.10" --usuario "<USUARIO>" --senha "<SENHA>"
 
 # Testar conectividade
 python manage.py test-all
@@ -139,9 +139,9 @@ O sistema irá:
 ```
 Nome: NOVA_REGIONAL
 Tipo: idrac  # ou 'ilo'
-IP: 192.168.1.200
-Usuario: root
-Senha: calvin
+IP: 198.51.100.20
+Usuario: <USUARIO>
+Senha: <SENHA>
 ```
 
 ### Modificando Configurações
@@ -166,6 +166,7 @@ O design pode ser personalizado editando as variáveis CSS em `executar_tudo.py`
 ## 🔒 Segurança
 
 - **Credenciais Separadas**: Senhas ficam no `environment.json` (não no código)
+- **Documentação Neutra**: Exemplos usam placeholders e IPs reservados para documentação
 - **Arquivo .gitignore**: Evita commit acidental de credenciais
 - **Validação de Entrada**: Verificação de configurações antes da execução
 

@@ -91,19 +91,19 @@ class GerenciadorRegionais:
         codigo_regional = codigo_regional.upper()
         if codigo_regional not in self.regionais.get("regionais", {}):
             raise ValueError(f"Regional {codigo_regional} não encontrada")
-        
+
         # Validação básica do link
         campos_obrigatorios = ["id", "nome", "url"]
         for campo in campos_obrigatorios:
             if campo not in link:
                 raise ValueError(f"Campo de link '{campo}' obrigatório")
-        
+
         link.setdefault("ativo", True)
-        
+
         # Garante que a chave links existe (para regionais antigas)
         if "links" not in self.regionais["regionais"][codigo_regional]:
             self.regionais["regionais"][codigo_regional]["links"] = []
-            
+
         self.regionais["regionais"][codigo_regional]["links"].append(link)
         self.salvar_regionais()
 
@@ -216,27 +216,27 @@ class GerenciadorRegionais:
         """Adiciona um link a uma regional"""
         if codigo_regional not in self.regionais.get("regionais", {}):
             raise ValueError(f"Regional {codigo_regional} não encontrada")
-        
+
         # Inicializa lista de links se não existir
         if "links" not in self.regionais["regionais"][codigo_regional]:
             self.regionais["regionais"][codigo_regional]["links"] = []
-        
+
         # Validação básica do link
         campos_obrigatorios = ["id", "nome", "ip", "provedor"]
         for campo in campos_obrigatorios:
             if campo not in link:
                 raise ValueError(f"Campo obrigatório '{campo}' não encontrado")
-        
+
         # Adiciona campos padrão se não existirem
         link.setdefault("ativo", True)
-        
+
         self.regionais["regionais"][codigo_regional]["links"].append(link)
         self.salvar_regionais()
-        
+
     def remover_link(self, codigo_regional: str, id_link: str):
         """Remove um link de uma regional"""
         codigo_regional = codigo_regional.upper()
-        
+
         regional = self.regionais.get("regionais", {}).get(codigo_regional)
         if not regional:
             return False, "Regional não encontrada"
@@ -256,14 +256,14 @@ class GerenciadorRegionais:
         self.salvar_regionais()
 
         return True, f"Link {link_encontrado.get('nome')} removido com sucesso"
-    
+
     def listar_links_regional(self, codigo_regional: str) -> List[Dict]:
         """Lista todos os links de uma regional"""
         regional = self.obter_regional(codigo_regional)
         if regional:
             return regional.get("links", [])
         return []
-    
+
     def obter_link(self, codigo_regional: str, id_link: str) -> Optional[Dict]:
         """Obtém um link específico de uma regional"""
         links = self.listar_links_regional(codigo_regional)
@@ -271,7 +271,7 @@ class GerenciadorRegionais:
             if link.get("id") == id_link:
                 return link
         return None
-    
+
     def atualizar_link(self, codigo_regional: str, id_link: str, novos_dados: Dict):
         """Atualiza um link existente dentro de uma regional e salva no arquivo"""
         codigo_regional = codigo_regional.upper()

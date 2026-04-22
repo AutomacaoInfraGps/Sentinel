@@ -97,9 +97,9 @@ python executar_tudo.py
     {
       "nome": "Servidor-Matriz",
       "tipo": "idrac",
-      "ip": "10.1.1.100",
-      "usuario": "root",
-      "senha": "senha_segura",
+      "ip": "198.51.100.120",
+      "usuario": "<USUARIO>",
+      "senha": "<SENHA>",
       "grupo": "matriz",
       "ativo": true
     }

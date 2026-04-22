@@ -13,10 +13,43 @@ import requests
 import json
 import os
 import sys
+import builtins
+import unicodedata
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 from utils_paths import get_file_path
+
+
+_ORIGINAL_PRINT = builtins.print
+_PRINT_REPLACEMENTS = {
+    "✅": "[OK]",
+    "❌": "[ERRO]",
+    "⚠️": "[AVISO]",
+    "⚠": "[AVISO]",
+    "📊": "[INFO]",
+    "📡": "[API]",
+    "🔍": "[CHECK]",
+    "🟢": "[ONLINE]",
+    "🟡": "[WARN]",
+    "🔴": "[OFFLINE]",
+    "ℹ️": "[INFO]",
+    "ℹ": "[INFO]",
+}
+
+
+def _sanitize_console_text(value):
+    text = str(value)
+    for old_value, new_value in _PRINT_REPLACEMENTS.items():
+        text = text.replace(old_value, new_value)
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+def print(*args, **kwargs):
+    try:
+        _ORIGINAL_PRINT(*args, **kwargs)
+    except UnicodeEncodeError:
+        _ORIGINAL_PRINT(*(_sanitize_console_text(arg) for arg in args), **kwargs)
 
 # Importa o módulo de credenciais
 try:
@@ -49,24 +82,15 @@ class GerenciadorSwitches:
                     ENV_CONFIG = json.load(f)
                     zabbix_config = ENV_CONFIG.get('zabbix', {})
                     arquivo_excel_env = zabbix_config.get('excel_file')
-                    zabbix_url_env = zabbix_config.get('url')
-                    zabbix_username_env = zabbix_config.get('username')
-                    zabbix_password_env = zabbix_config.get('password')
             else:
                 ENV_CONFIG = {}
                 zabbix_config = {}
                 arquivo_excel_env = None
-                zabbix_url_env = None
-                zabbix_username_env = None
-                zabbix_password_env = None
         except Exception as e:
             print(f"⚠️ Erro ao carregar environment.json: {e}")
             ENV_CONFIG = {}
             zabbix_config = {}
             arquivo_excel_env = None
-            zabbix_url_env = None
-            zabbix_username_env = None
-            zabbix_password_env = None
         
         # Define o arquivo Excel (prioridade: parâmetro > environment.json > padrão)
         self.arquivo_excel = arquivo_excel or arquivo_excel_env or "switches_zabbix.xlsx"
@@ -77,9 +101,6 @@ class GerenciadorSwitches:
         self.auth_token = None
         self.switches = []
         self.regionais = {}
-        self.zabbix_url_env = zabbix_url_env
-        self.zabbix_username_env = zabbix_username_env
-        self.zabbix_password_env = zabbix_password_env
         
         # Carrega configurações
         self._carregar_config()
@@ -207,18 +228,13 @@ class GerenciadorSwitches:
     def _carregar_config(self):
         """Carrega configurações do Zabbix"""
         try:
-            # Primeiro tenta carregar do environment.json
-            self.zabbix_url = self.zabbix_url_env or self.zabbix_url
-            self.username = self.zabbix_username_env or self.username
-            self.password = self.zabbix_password_env or self.password
-
-            # Depois tenta carregar do arquivo de configuração legado
-            if (not self.zabbix_url or not self.username or not self.password) and os.path.exists(self.config_file):
+            # Primeiro tenta carregar do arquivo de configuração
+            if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.zabbix_url = self.zabbix_url or config.get('zabbix_url')
-                    self.username = self.username or config.get('username')
-                    self.password = self.password or config.get('password')
+                    self.zabbix_url = config.get('zabbix_url')
+                    self.username = config.get('username')
+                    self.password = config.get('password')
             
             # Se não encontrou no arquivo ou se algum valor estiver faltando,
             # tenta obter do módulo de credenciais
@@ -228,8 +244,8 @@ class GerenciadorSwitches:
                 self.username = self.username or creds.get('username')
                 self.password = self.password or creds.get('password')
                 
-                if self.zabbix_url and self.username and self.password:
-                    self.salvar_config()
+                # Salva as configurações no arquivo
+                self.salvar_config()
             
             # Se ainda estiver faltando algum valor, usa valores padrão
             if not self.zabbix_url:
@@ -278,46 +294,32 @@ class GerenciadorSwitches:
             print(f"🔑 Autenticando no Zabbix: {self.zabbix_url}")
             print(f"👤 Usuário: {self.username}")
             
-            def _post_auth(params_key):
-                payload = {
-                    "jsonrpc": "2.0",
-                    "method": "user.login",
-                    "params": {params_key: self.username, "password": self.password},
-                    "id": 1
-                }
-                headers = {"Content-Type": "application/json-rpc"}
-                return requests.post(self.zabbix_url, headers=headers, json=payload, timeout=10)
-
-            # Primeiro tenta com "user" (compatibilidade), e faz fallback para "username" se necessário
-            response = _post_auth("user")
-
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "user.login",
+                "params": {"user": self.username, "password": self.password},
+                "id": 1
+            }
+            headers = {"Content-Type": "application/json-rpc"}
+            
+            # Aumenta o timeout para 10 segundos
+            response = requests.post(self.zabbix_url, headers=headers, json=payload, timeout=10)
+            
             if response.status_code == 200:
                 result = response.json()
                 if "result" in result:
                     self.auth_token = result["result"]
                     print("✅ Autenticação no Zabbix bem-sucedida!")
                     return True
-
-                error_msg = result.get('error', {}).get('message', 'Desconhecido')
-                error_data = result.get('error', {}).get('data', '')
-
-                if "unexpected parameter \"user\"" in str(error_data):
-                    response = _post_auth("username")
-                    if response.status_code == 200:
-                        result = response.json()
-                        if "result" in result:
-                            self.auth_token = result["result"]
-                            print("✅ Autenticação no Zabbix bem-sucedida!")
-                            return True
-                        error_msg = result.get('error', {}).get('message', 'Desconhecido')
-                        error_data = result.get('error', {}).get('data', '')
-
-                print(f"❌ Erro de autenticação: {error_msg}")
-                print(f"   Detalhes: {error_data}")
+                else:
+                    error_msg = result.get('error', {}).get('message', 'Desconhecido')
+                    error_data = result.get('error', {}).get('data', '')
+                    print(f"❌ Erro de autenticação: {error_msg}")
+                    print(f"   Detalhes: {error_data}")
             else:
                 print(f"❌ Erro HTTP: {response.status_code}")
                 print(f"   Resposta: {response.text}")
-
+            
             return False
         except requests.exceptions.ConnectTimeout:
             print(f"❌ Timeout ao conectar ao Zabbix: {self.zabbix_url}")

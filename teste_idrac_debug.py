@@ -16,10 +16,10 @@ PROJECT_ROOT = Path(__file__).parent
 
 # Lista de servidores para testar
 servidores = [
-    {"nome": "RG_EXEMPLO_01", "ip": "192.0.2.10", "usuario": "root", "senha": "ALTERE_AQUI", "tipo": "idrac"},
-    {"nome": "RG_EXEMPLO_02", "ip": "192.0.2.11", "usuario": "root", "senha": "ALTERE_AQUI", "tipo": "idrac"},
-    {"nome": "RG_EXEMPLO_03", "ip": "192.0.2.12", "usuario": "root", "senha": "ALTERE_AQUI", "tipo": "idrac"},
-    {"nome": "RG_EXEMPLO_04", "ip": "192.0.2.13", "usuario": "admin", "senha": "ALTERE_AQUI", "tipo": "ilo"}
+    {"nome": "RG_GLOBAL SEGURANÇA", "ip": "192.0.2.10", "usuario": "root", "senha": "ALTERE_AQUI", "tipo": "idrac"},
+    {"nome": "RG_REGIONAL BELO HORIZONTE", "ip": "192.0.2.12", "usuario": "root", "senha": "ALTERE_AQUI", "tipo": "idrac"},
+    {"nome": "RG_MOTUS", "ip": "192.0.2.11", "usuario": "root", "senha": "ALTERE_AQUI", "tipo": "idrac"},
+    {"nome": "RG_GALAXIA", "ip": "192.0.2.18", "usuario": "admin", "senha": "ALTERE_AQUI", "tipo": "ilo"}
 ]
 
 for servidor in servidores:

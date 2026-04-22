@@ -14,15 +14,26 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _build_search_base(domain: str) -> str:
+    parts = [part for part in domain.split('.') if part]
+    if not parts:
+        return "DC=Empresa,DC=local"
+    return ",".join(f"DC={part}" for part in parts)
+
 class AuthAD:
     """Classe para autenticação Active Directory"""
     
     def __init__(self):
-        # Configurações do AD (baseadas nos comandos dsquery/dsget)
-        self.domain = "GALAXIA.LOCAL"  # Domínio DNS
-        self.domain_netbios = "GALAXIA"  # Nome NetBIOS do domínio
-        self.dc_server = "SIRIUS"  # Servidor de domínio principal
-        self.ou_autorizada = "OU=Usuarios Administrativos,OU=Galaxia,DC=Galaxia,DC=local"
+        # Configurações do AD via ambiente para evitar expor dados internos no código.
+        self.domain = os.getenv("AD_DOMAIN_DNS", "DOMINIO.LOCAL")
+        self.domain_netbios = os.getenv("AD_DOMAIN_NETBIOS", "DOMINIO")
+        self.dc_server = os.getenv("AD_DC_SERVER", "DC01")
+        self.ou_autorizada = os.getenv(
+            "AD_AUTHORIZED_OU",
+            "OU=Usuarios Administrativos,OU=Empresa,DC=Dominio,DC=local"
+        )
+        self.search_base = os.getenv("AD_SEARCH_BASE", _build_search_base(self.domain.title()))
         
         # Tenta descobrir o servidor automaticamente
         self.server_ip = self._descobrir_servidor_ad()
@@ -110,7 +121,7 @@ class AuthAD:
             logger.info(f"Usuário {username} autenticado com sucesso")
             
             # Busca informações completas do usuário
-            search_base = "DC=Galaxia,DC=local"
+            search_base = self.search_base
             search_filter = f"(sAMAccountName={username})"
             
             conn.search(

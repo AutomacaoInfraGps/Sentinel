@@ -25,7 +25,7 @@ $errosOperacionais = @()
 
 foreach ($linha in $saida) {
     # Captura os erros operacionais
-    if ($linha -match "^\s*\d+\s+-\s+.+\.Galaxia\.local") {
+    if ($linha -match "^\s*\d+\s+-\s+.+\.[A-Za-z0-9-]+\.local") {
         $errosOperacionais += $linha.Trim()
         continue
     }

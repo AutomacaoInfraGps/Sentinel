@@ -1,8 +1,25 @@
 from pathlib import Path
 from datetime import datetime
+import os
+import sys
+
+
+def _configure_stdio():
+    os.environ.setdefault("PYTHONUTF8", "1")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if not stream:
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 
 def main():
+    _configure_stdio()
     project_dir = Path(__file__).resolve().parent
     log_dir = project_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)

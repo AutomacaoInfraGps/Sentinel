@@ -7,6 +7,8 @@ import requests
 import json
 import urllib3
 import socket
+import builtins
+import unicodedata
 from datetime import datetime
 from typing import Dict, List, Tuple
 import concurrent.futures
@@ -25,6 +27,37 @@ except Exception as e:
 
 # Desabilita warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+_ORIGINAL_PRINT = builtins.print
+_PRINT_REPLACEMENTS = {
+    "✅": "[OK]",
+    "❌": "[ERRO]",
+    "⚠️": "[AVISO]",
+    "⚠": "[AVISO]",
+    "📊": "[INFO]",
+    "🔍": "[CHECK]",
+    "🟢": "[ONLINE]",
+    "🟡": "[WARN]",
+    "🔴": "[OFFLINE]",
+    "🕐": "[TIME]",
+    "📈": "[CHART]",
+    "🏢": "[REGIONAL]",
+}
+
+
+def _sanitize_console_text(value):
+    text = str(value)
+    for old_value, new_value in _PRINT_REPLACEMENTS.items():
+        text = text.replace(old_value, new_value)
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+def print(*args, **kwargs):
+    try:
+        _ORIGINAL_PRINT(*args, **kwargs)
+    except UnicodeEncodeError:
+        _ORIGINAL_PRINT(*(_sanitize_console_text(arg) for arg in args), **kwargs)
 
 class VerificadorServidoresV2:
     """Verificador de servidores com estrutura hierárquica"""
@@ -109,35 +142,6 @@ class VerificadorServidoresV2:
 
         return None
 
-    def suporta_redfish(self, ip: str) -> bool:
-        try:
-            r = requests.get(
-                f"https://{ip}/redfish/v1",
-                verify=False,
-                timeout=5
-            )
-            return r.status_code == 200
-        except Exception:
-            return False
-        
-    def detectar_controlador(self, ip: str) -> str:
-        sysdescr = self.snmp_get(ip, "1.3.6.1.2.1.1.1.0")
-
-        if not sysdescr:
-            return "desconhecido"
-
-        sysdescr = sysdescr.lower()
-
-        if "integrated lights-out" in sysdescr:
-            return "ilo_antigo"
-
-        if "idrac" in sysdescr:
-            return "idrac"
-
-        return "desconhecido"
-
-
-
 
     def testar_porta(self, ip, porta=443, timeout=2):
         try:
@@ -156,34 +160,6 @@ class VerificadorServidoresV2:
         )
         r.raise_for_status()
         return r.json()
-    
-    def coletar_hardware(self, servidor: Dict) -> Dict:
-        ip = servidor.get("ip")
-
-        if not ip:
-            return {"success": False, "message": "Servidor sem IP"}
-
-        # 1️⃣ Porta 443 responde?
-        if not self.testar_porta(ip, 443):
-            return {"success": False, "message": "Porta 443 fechada"}
-
-        # 2️⃣ Redfish existe?
-        if self.suporta_redfish(ip):
-            servidor["tipo_detectado"] = "idrac_redfish"
-            return self.coletar_hardware_idrac(servidor)
-
-        # 3️⃣ Não tem Redfish → tenta SNMP
-        sysdescr = self.snmp_get(ip, "1.3.6.1.2.1.1.1.0")
-
-        if sysdescr and "integrated lights-out" in sysdescr.lower():
-            servidor["tipo_detectado"] = "ilo_antigo"
-            return self.coletar_hardware_ilo_snmp(ip)
-
-        return {
-            "success": False,
-            "message": "Controlador não identificado (sem Redfish e sem SNMP)"
-        }
-
 
     def coletar_hardware_idrac(self, servidor: Dict) -> Dict:
         ip = servidor.get("ip")
@@ -277,41 +253,6 @@ class VerificadorServidoresV2:
         except Exception as e:
             return {"success": False, "message": str(e)}
         
-
-    def coletar_hardware_ilo_snmp(self, ip: str) -> Dict:
-        sysname = self.snmp_get(ip, "1.3.6.1.2.1.1.5.0")
-        sysdescr = self.snmp_get(ip, "1.3.6.1.2.1.1.1.0")
-        uptime = self.snmp_get(ip, "1.3.6.1.2.1.1.3.0")
-
-        tipo_detectado = "desconhecido"
-
-        if sysdescr:
-            sd = sysdescr.lower()
-            if "integrated lights-out 4" in sd:
-                tipo_detectado = "ilo4_snmp"
-            elif "integrated lights-out" in sd:
-                tipo_detectado = "ilo_snmp"
-
-        return {
-            "success": True,
-            "hardware": {
-                "controlador": {
-                    "sysDescr": sysdescr,
-                    "sysName": sysname,
-                    "tipo_detectado": tipo_detectado,
-                    "uptime": uptime
-                },
-                "cpu": {
-                    "count": None,
-                    "model": "N/A",
-                    "health": "N/A"
-                },
-                "memoria_gib": None,
-                "temperaturas": [],
-                "ventoinhas": []
-            }
-        }
-
     def verificar_regional(self, codigo_regional: str) -> List[Dict]:
         """Verifica todos os servidores de uma regional"""
         

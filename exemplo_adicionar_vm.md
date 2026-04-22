@@ -49,9 +49,9 @@ python manage_vms.py cli
     {
         "id": "vm-1753466017",
         "name": "Parana",
-      "ip": "192.0.2.40",
-      "username": "usuario.exemplo",
-      "password": "ALTERE_AQUI",
+        "ip": "192.0.2.40",
+        "username": "usuario.exemplo",
+        "password": "ALTERE_AQUI",
         "regional": "RG_PARANA",
         "description": "Máquina Virtual Regional do Paraná",
         "status": "Unknown",

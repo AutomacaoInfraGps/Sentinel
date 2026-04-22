@@ -106,8 +106,8 @@ def verificar_autenticacao():
         
         if sucesso:
             print("✅ Conexão AD: OK")
-            print("✅ Servidor SIRIUS: Acessível")
-            print("✅ Domínio GALAXIA.LOCAL: Conectado")
+            print("✅ Servidor AD: Acessível")
+            print("✅ Domínio AD: Conectado")
         else:
             print(f"⚠️ Conexão AD: {mensagem}")
         

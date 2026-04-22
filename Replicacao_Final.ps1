@@ -7,6 +7,8 @@ $jsonPath = "$env:USERPROFILE\Desktop\replicacao.json"
 
 # Executa o comando repadmin e captura a saída
 $output = repadmin /replsummary
+$domainSuffix = if ($env:AD_DOMAIN_DNS) { $env:AD_DOMAIN_DNS.ToLower() } else { "dominio.local" }
+$domainSuffixPattern = [regex]::Escape($domainSuffix)
 
 # Cria listas para armazenar os dados
 $servidores = @()
@@ -57,7 +59,7 @@ foreach ($linha in $output) {
         
         # Adiciona à lista de servidores
         $servidores += [PSCustomObject]@{
-            nome = "$dsa.Galaxia.local"
+            nome = "$dsa.$domainSuffix"
             status = $status
             parceiros = $total
             falhas = $falhas
@@ -84,7 +86,7 @@ foreach ($linha in $output) {
         
         # Adiciona à lista de servidores
         $servidores += [PSCustomObject]@{
-            nome = "$dsa.Galaxia.local"
+            nome = "$dsa.$domainSuffix"
             status = $status
             parceiros = $total
             falhas = $falhas
@@ -108,11 +110,11 @@ foreach ($linha in $output) {
 # Cria uma lista de servidores com erros operacionais
 $servidoresComErrosOperacionais = @()
 foreach ($erro in $errosOperacionais) {
-    if ($erro -match "(\S+)\.Galaxia\.local") {
-        $nomeServidor = "$($matches[1]).Galaxia.local"
+    if ($erro -match "(\S+)\.$domainSuffixPattern") {
+        $nomeServidor = "$($matches[1]).$domainSuffix"
         $servidoresComErrosOperacionais += $nomeServidor
     } elseif ($erro -match "(\S+)$") {
-        $nomeServidor = "$($matches[1]).Galaxia.local"
+        $nomeServidor = "$($matches[1]).$domainSuffix"
         $servidoresComErrosOperacionais += $nomeServidor
     }
 }

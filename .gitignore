@@ -1,6 +1,7 @@
 # Arquivos de configuração com credenciais
 environment.json
 Conexoes.txt
+.credentials/
 
 # Arquivos de saída
 output/
@@ -59,17 +60,23 @@ data/*.json
 auditoria_*.json
 relatorio_*.json
 
+# Arquivos temporários de segurança
+*.tmp
+*.temp
+audit_*.json
+
 # Backups e snapshots locais
 backup_*/
 backup_limpeza_*/
 backup_organizacao_*/
 backup_projeto_*/
-automacao_gps/
+switches_zabbix.xlsx
+switches_zabbix_corrigido_*.xlsx
+switches_zabbix_backup_*.xlsx
 
-# Arquivos temporários de segurança
-*.tmp
-*.temp
-audit_*.json
+# Ambientes virtuais locais
+.venv/
+snmp_worker/.venv/
 
 # Variáveis de ambiente
 .env

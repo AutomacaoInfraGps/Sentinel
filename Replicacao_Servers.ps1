@@ -48,7 +48,7 @@ foreach ($linha in $saida) {
     if ($linha -match "^\s*Destination DSA") { $secao = "dest";   continue }
 
     # Erros operacionais (cód. 58 – ajuste se precisar)
-    if ($linha -match "^\s*\d+\s+-\s+.+\.galaxia\.local") {
+    if ($linha -match "^\s*\d+\s+-\s+.+\.[A-Za-z0-9-]+\.local") {
         $errosOperacionais += $linha.Trim()
         continue
     }
@@ -129,7 +129,7 @@ $estilo
 <body>
   <h2>Resumo de Replicação AD (repadmin /replsummary)</h2>
   <div class="small">Gerado em: $timestamp</div>
-    <div class="small"><strong>Falhas/Total</strong>: número de falhas de replicação sobre o total de parceiros para cada servidor.</div>
+        <div class="small"><strong>Falhas/Total</strong>: número de falhas de replicação sobre o total de parceiros para cada servidor.</div>
   $htmlTabela
   $htmlErros
 </body>
