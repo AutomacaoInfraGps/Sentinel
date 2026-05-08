@@ -42,7 +42,7 @@
 python setup.py
 
 # 3. Configurar credenciais (3 opções)
-python iniciar_web.py          # Interface web
+powershell -ExecutionPolicy Bypass -File .\restart_web_service.ps1  # Interface web
 python configure.py            # Wizard CLI  
 # Ou editar environment.json manualmente
 
@@ -131,7 +131,7 @@ python executar_tudo.py
 python setup.py
 
 # 4. Configurar via web
-python iniciar_web.py
+powershell -ExecutionPolicy Bypass -File .\restart_web_service.ps1
 ```
 
 ### 💿 **Método 2: Executável Compilado**

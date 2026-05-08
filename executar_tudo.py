@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 from web_config import gerenciador_fortigate
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
-from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG
+from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG, UNIFI_CLIENTS_HTML, UNIFI_CLIENTS_IMG, UNIFI_CLIENTS_DASHBOARD, UNIFI_CONFIG
 
 import subprocess
 from pathlib import Path
@@ -153,6 +153,43 @@ def _montar_appgate_html():
     return (
         f'<div class="note" style="color:#666">Prévia indisponível no momento. ({ts})</div>'
         f'<p><a href="{url}" target="_blank">Abrir Firewall Rio de Janeiro</a></p>'
+    )
+
+
+def _montar_unifi_clientes_html():
+    try:
+        if UNIFI_CLIENTS_IMG.exists() and UNIFI_CLIENTS_IMG.stat().st_size > 10_000:
+            b64 = base64.b64encode(UNIFI_CLIENTS_IMG.read_bytes()).decode("ascii")
+            updated = datetime.fromtimestamp(UNIFI_CLIENTS_IMG.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+            title = UNIFI_CLIENTS_DASHBOARD.get("title", "Rede MARTE")
+            filtro = UNIFI_CLIENTS_DASHBOARD.get("wifi_filter", "MARTE")
+            return (
+                f'<img alt="{title}" '
+                f'style="max-width:100%;height:auto;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.08)" '
+                f'src="data:image/png;base64,{b64}">'
+                f'<div class="small" style="color:#666;margin-top:6px">Filtro WiFi: {filtro}</div>'
+                f'<div class="small" style="color:#666;margin-top:6px">Atualizado: {updated}</div>'
+            )
+
+        if UNIFI_CLIENTS_HTML.exists():
+            txt = UNIFI_CLIENTS_HTML.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"<body[^>]*>(.*?)</body>", txt, flags=re.IGNORECASE | re.DOTALL)
+            body = (m.group(1) if m else txt).strip()
+            if "data:image/png" in body or "<img" in body:
+                updated = datetime.fromtimestamp(UNIFI_CLIENTS_HTML.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+                filtro = UNIFI_CLIENTS_DASHBOARD.get("wifi_filter", "MARTE")
+                return body + f'<div class="small" style="color:#666;margin-top:6px">Filtro WiFi: {filtro}</div><div class="small" style="color:#666;margin-top:6px">Atualizado: {updated}</div>'
+    except Exception as e:
+        print("[UNIFI-CLIENTES] Falha montando HTML:", e)
+
+    host = (UNIFI_CONFIG.get("host") or "controller.example.local").strip()
+    port = int(UNIFI_CONFIG.get("port") or 8443)
+    path = (UNIFI_CLIENTS_DASHBOARD.get("clients_path") or "/manage/brihqlgm/clients/online").strip()
+    url = f"https://{host}:{port}{path if path.startswith('/') else '/' + path}"
+    ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    return (
+        f'<div class="note" style="color:#666">Prévia indisponível no momento. ({ts})</div>'
+        f'<p><a href="{url}" target="_blank">Abrir Rede MARTE</a></p>'
     )
 
 
@@ -317,12 +354,15 @@ def _carregar_servidores_da_estrutura():
 
 
 def _carregar_servidores_configurados():
+    estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
     try:
         servidores_estrutura = _carregar_servidores_da_estrutura()
         if servidores_estrutura:
             print(f"[INFO] {len(servidores_estrutura)} servidores carregados de estrutura_regionais.json")
             return servidores_estrutura
-        print("[INFO] estrutura_regionais.json encontrado, mas sem servidores ativos válidos")
+        if estrutura_path.exists():
+            print("[INFO] estrutura_regionais.json encontrado, mas sem servidores ativos válidos")
+            return []
     except Exception as e:
         print(f"[AVISO] Erro ao carregar estrutura_regionais.json: {e}")
 
@@ -1616,7 +1656,7 @@ except Exception as e:
 # === 8. CARREGA HTMLs GERADOS ===
 # Carrega o conteúdo dos arquivos HTML gerados. Se um arquivo não existir, fornece uma mensagem de erro.
 # --- GPS: garante placeholder e tenta gerar o print ANTES de ler o arquivo ---
-from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo, gerar_print_saturno_portal, gerar_print_appgate
+from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo, gerar_print_saturno_portal, gerar_print_appgate, gerar_print_unifi_clientes_marte
 ensure_gps_placeholder()
 try:
     gerar_print_gps_amigo()
@@ -1636,6 +1676,12 @@ try:
 except Exception as e:
     print("[APPGATE] Falha ao gerar print:", e)
 
+try:
+    gerar_print_unifi_clientes_marte()
+    print("[UNIFI-CLIENTES] Print gerado com sucesso.")
+except Exception as e:
+    print("[UNIFI-CLIENTES] Falha ao gerar print:", e)
+
 # (opcional) monta o card para uso em outros lugares, se precisar
 gps_section = render_bloco_gps()
 
@@ -1648,6 +1694,7 @@ gps_section = render_bloco_gps()
 gps_html = _montar_gps_html()
 print_rede_html = _montar_print_rede_html()
 appgate_html = _montar_appgate_html()
+unifi_clientes_html = _montar_unifi_clientes_html()
 
 
 rep_html = REPLICACAO_HTML.read_text(encoding="utf-8") if REPLICACAO_HTML.exists() else """
@@ -1737,8 +1784,21 @@ def _print_firewall_ok():
         pass
     return False
 
+def _print_unifi_clientes_ok():
+    try:
+        if UNIFI_CLIENTS_IMG.exists() and UNIFI_CLIENTS_IMG.stat().st_size > 10_000:
+            return True
+        if UNIFI_CLIENTS_HTML.exists():
+            txt = UNIFI_CLIENTS_HTML.read_text(encoding="utf-8", errors="ignore")
+            if "data:image/png" in txt or "<img" in txt:
+                return True
+    except Exception:
+        pass
+    return False
+
 print_rede_ok = _print_rede_ok()
 print_firewall_ok = _print_firewall_ok()
+print_unifi_clientes_ok = _print_unifi_clientes_ok()
 gps_status_display = (
     "<i class='fas fa-check-circle text-green-500'></i> Sucesso"
     if gps_ok else
@@ -2097,16 +2157,16 @@ dashboard_html = f"""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         
         :root {{
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --primary-gradient: linear-gradient(135deg, #012E40 0%, #0A4A63 55%, #0F6C8C 100%);
+            --secondary-gradient: linear-gradient(135deg, #0A4A63 0%, #0F6C8C 100%);
+            --success-gradient: linear-gradient(135deg, #0F6C8C 0%, #19a7a8 100%);
             --warning-gradient: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
             --error-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            --neutral-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            --neutral-gradient: linear-gradient(135deg, #d8eef5 0%, #f3fbff 100%);
             --glass-bg: rgba(255, 255, 255, 0.25);
             --glass-border: rgba(255, 255, 255, 0.18);
-            --shadow-soft: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            --shadow-hover: 0 15px 35px rgba(31, 38, 135, 0.2);
+            --shadow-soft: 0 8px 32px 0 rgba(1, 46, 64, 0.22);
+            --shadow-hover: 0 15px 35px rgba(1, 46, 64, 0.18);
         }}
         
         * {{
@@ -2117,7 +2177,7 @@ dashboard_html = f"""
         
         body {{
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            background: linear-gradient(135deg, #012E40 0%, #0A4A63 52%, #0F6C8C 100%);
             background-attachment: fixed;
             color: #2d3748;
             line-height: 1.6;
@@ -2539,7 +2599,7 @@ dashboard_html = f"""
             bottom: 32px;
             right: 32px;
             z-index: 9999;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #012E40 0%, #0A4A63 55%, #0F6C8C 100%);
             color: #ffffff;
             border: none;
             border-radius: 50%;
@@ -2547,7 +2607,7 @@ dashboard_html = f"""
             height: 52px;
             font-size: 1.6rem;
             cursor: pointer;
-            box-shadow: 0 4px 18px rgba(102,126,234,0.45);
+            box-shadow: 0 4px 18px rgba(1, 46, 64, 0.36);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2561,7 +2621,7 @@ dashboard_html = f"""
         }}
         .back-to-top:hover {{
             transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(102,126,234,0.6);
+            box-shadow: 0 8px 24px rgba(1, 46, 64, 0.48);
         }}
         
         .details-section summary:hover {{
@@ -2579,7 +2639,7 @@ dashboard_html = f"""
             top: 50%;
             transform: translateY(-50%);
             transition: transform 0.3s ease;
-            color: #667eea;
+            color: #0A4A63;
             font-size: 1.2rem;
         }}
         
@@ -2619,17 +2679,23 @@ dashboard_html = f"""
         }}
 
         .regional-badge {{
-            background: #ffffff;
-            border: 1px solid #d2d6dc;
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-left: 5px solid #2f855a;
             border-radius: 14px;
             padding: 14px 16px;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
             color: #2d3748;
             line-height: 1.45;
         }}
+        .vpn-regional-badge strong {{ color: #374151; }}
 
         .regional-badge-success {{
-            border-left: 6px solid #2f855a;
+        .vpn-regional-badge.vpn-regional-alert {{
+            background: #fff5f5;
+            border-color: #feb2b2;
+            border-left-color: #c53030;
+        }}
             background: #f0fff4;
         }}
 
@@ -2960,7 +3026,7 @@ dashboard_html = f"""
         .vpn-regional-badge {{
             background: #ffffff;
             border: 1px solid #d5dfef;
-            border-left: 5px solid #3b82f6;
+            border-left: 5px solid #2f855a;
             border-radius: 12px;
             padding: 10px 12px;
             box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
@@ -3107,9 +3173,10 @@ dashboard_html = f"""
                     <h3>Prints GPS</h3>
                 </div>
                 <div class="kpi-combo-grid">
-                    <div class="kpi-combo-item {'status-online' if gps_amigo_ok else 'status-offline'} nav-detail-trigger" data-detail-target="gps" role="button" tabindex="0"><span>GPS Amigo</span><strong>{'OK' if gps_amigo_ok else 'Falha'}</strong></div>
-                    <div class="kpi-combo-item {'status-online' if print_rede_ok else 'status-offline'} nav-detail-trigger" data-detail-target="print-rede" role="button" tabindex="0"><span>Rede Saturno</span><strong>{'OK' if print_rede_ok else 'Falha'}</strong></div>
-                    <div class="kpi-combo-item {'status-online' if print_firewall_ok else 'status-offline'} nav-detail-trigger" data-detail-target="appgate" role="button" tabindex="0"><span>Firewall RJ</span><strong>{'OK' if print_firewall_ok else 'Falha'}</strong></div>
+                    <div class="kpi-combo-item {'status-online' if gps_amigo_ok else 'status-offline'} nav-detail-trigger" data-detail-target="gps" role="button" tabindex="0"><span>GPS Amigo</span><strong>{'OK' if gps_amigo_ok else 'NÃO OK'}</strong></div>
+                    <div class="kpi-combo-item {'status-online' if print_rede_ok else 'status-offline'} nav-detail-trigger" data-detail-target="print-rede" role="button" tabindex="0"><span>Rede Saturno</span><strong>{'OK' if print_rede_ok else 'NÃO OK'}</strong></div>
+                    <div class="kpi-combo-item {'status-online' if print_firewall_ok else 'status-offline'} nav-detail-trigger" data-detail-target="appgate" role="button" tabindex="0"><span>Firewall RJ</span><strong>{'OK' if print_firewall_ok else 'NÃO OK'}</strong></div>
+                    <div class="kpi-combo-item {'status-online' if print_unifi_clientes_ok else 'status-offline'} nav-detail-trigger" data-detail-target="unifi-clientes" role="button" tabindex="0"><span>Rede MARTE</span><strong>{'OK' if print_unifi_clientes_ok else 'NÃO OK'}</strong></div>
                 </div>
             </div>
             <div class="kpi nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0">
@@ -3286,6 +3353,13 @@ dashboard_html = f"""
             <summary>[URL] Print Firewall Rio de Janeiro</summary>
             <div class="details-content">
                 {appgate_html}
+            </div>
+        </details>
+
+        <details id="unifi-clientes" class="details-section">
+            <summary>[URL] Print Rede MARTE</summary>
+            <div class="details-content">
+                {unifi_clientes_html}
             </div>
         </details>
 
@@ -3636,7 +3710,7 @@ new Chart(document.getElementById('chartUnifi'), {{
         labels: ['Regionais sem AP offline', 'Regionais com AP offline'],
         datasets: [{{
             data: [{aps_regionais_sem_offline}, {aps_regionais_com_offline}],
-            backgroundColor: ['#2196F3', '#B0BEC5'],
+            backgroundColor: ['#0A4A63', '#cbd5e0'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -3751,7 +3825,7 @@ new Chart(document.getElementById('chartSwitches'), {{
         labels: ['Regionais sem switch offline', 'Regionais com switch offline'],
         datasets: [{{
             data: [{switches_regionais_sem_offline}, {switches_regionais_com_offline}],
-            backgroundColor: ['#2196F3', '#FF9800'],
+            backgroundColor: ['#0F6C8C', '#dd6b20'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]

@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}{{ acao }} Link - {{ regional_nome }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('detalhar_regional', codigo_regional=regional_codigo) }}" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="display-5 mb-2">
+                    <i class="bi bi-router me-3"></i>
+                    {{ acao }} Link de Internet
+                </h1>
+                <p class="text-muted">Regional: {{ regional_nome }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-{{ 'plus-circle' if acao == 'Adicionar' else 'pencil' }} me-2"></i>
+                    {{ acao }} Link de Conectividade
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="formLink">
+                    <input type="hidden" id="regional_codigo" value="{{ regional_codigo }}">
+                    {% if link %}
+                    <input type="hidden" id="link_id" value="{{ link.id }}">
+                    {% endif %}
+
+                    <!-- Informações Básicas -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Informações do Link
+                            </h6>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="nome" class="form-label">Porta do Link *</label>
+                            <input type="text" class="form-control" id="nome"
+                                   value="{{ link.nome if link else '' }}"
+                                   placeholder="Ex: WAN1, WAN2, VLAN1" required>
+                            <div class="form-text">Porta/interface do link</div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="provedor" class="form-label">Provedor *</label>
+                            <input type="text" class="form-control" id="provedor"
+                                   value="{{ link.provedor if link else '' }}"
+                                   placeholder="Ex: Vivo, Claro, WA1" required>
+                            <div class="form-text">Provedor de internet</div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ip" class="form-label">Endereço IP *</label>
+                            <input type="text" class="form-control" id="ip"
+                                   value="{{ link.ip if link else '' }}"
+                                   placeholder="Ex: 200.123.45.67" required>
+                            <div class="form-text">IP público do link</div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ativo" class="form-label">Status</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="ativo"
+                                       {{ 'checked' if link and link.ativo else 'checked' }}>
+                                <label class="form-check-label" for="ativo">
+                                    Link ativo
+                                </label>
+                            </div>
+                            <div class="form-text">Desmarque se o link estiver desativado</div>
+                        </div>
+                    </div>
+
+                    <!-- Botões -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <a href="{{ url_for('detalhar_regional', codigo_regional=regional_codigo) }}"
+                                   class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Cancelar
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    <span id="btnText">{{ acao }} Link</span>
+                                    <span class="spinner-border spinner-border-sm ms-2" id="btnSpinner" role="status" style="display:none;"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#formLink').on('submit', function(e) {
+        e.preventDefault();
+
+        const btn = $('button[type="submit"]');
+        const btnText = $('#btnText');
+        const btnSpinner = $('#btnSpinner');
+
+        // Mostra loading
+        btn.prop('disabled', true);
+        btnText.text('Salvando...');
+        btnSpinner.show();
+
+        // Coleta dados
+        const data = {
+            nome: $('#nome').val(),
+            ip: $('#ip').val(),
+            provedor: $('#provedor').val(),
+            ativo: $('#ativo').is(':checked')
+        };
+
+        {% if link %}
+        data.id = '{{ link.id }}';
+        {% endif %}
+
+        // Envia para API
+        $.ajax({
+            url: `/api/regional/{{ regional_codigo }}/link`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+                if (response.success) {
+                    showToast(response.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = `{{ url_for('detalhar_regional', codigo_regional=regional_codigo) }}`;
+                    }, 1500);
+                } else {
+                    showToast(response.message, 'danger');
+                }
+            },
+            error: function(xhr) {
+                const response = xhr.responseJSON;
+                const message = response ? response.message : 'Erro desconhecido';
+                showToast(`Erro: ${message}`, 'danger');
+            },
+            complete: function() {
+                // Esconde loading
+                btn.prop('disabled', false);
+                btnText.text('{{ acao }} Link');
+                btnSpinner.hide();
+            }
+        });
+    });
+});
+
+function toggleSenha() {
+    const senha = $('#senha');
+    const icone = $('#iconeSenha');
+
+    if (senha.attr('type') === 'password') {
+        senha.attr('type', 'text');
+        icone.removeClass('bi-eye').addClass('bi-eye-slash');
+    } else {
+        senha.attr('type', 'password');
+        icone.removeClass('bi-eye-slash').addClass('bi-eye');
+    }
+}
+</script>
+{% endblock %}

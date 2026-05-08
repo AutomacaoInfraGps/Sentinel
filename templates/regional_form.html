@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}{{ acao }} Regional - Sistema de Automação{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="display-5 mb-2">
+                    <i class="bi bi-building me-3"></i>
+                    {{ acao }} Regional
+                </h1>
+                <p class="text-muted">{{ 'Edite os dados da regional' if regional else 'Adicione uma nova regional ao sistema' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-{{ 'pencil' if regional else 'plus-circle' }} me-2"></i>
+                    Dados da Regional
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="formRegional">
+                    {% if regional %}
+                    <input type="hidden" id="codigo_original" name="codigo_original" value="{{ regional.codigo }}">
+                    <input type="hidden" name="editando" value="true">
+                    {% endif %}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nome" class="form-label">
+                                <i class="bi bi-building me-1"></i>
+                                Nome da Regional *
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="nome" 
+                                   name="nome" 
+                                   value="{{ regional.nome if regional else '' }}"
+                                   placeholder="Ex: REG_GLOBAL SEGURANÇA"
+                                   required>
+                            <div class="form-text">Nome completo da regional</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="codigo" class="form-label">
+                                <i class="bi bi-tag me-1"></i>
+                                Código da Regional
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="codigo" 
+                                   name="codigo" 
+                                   value="{{ regional.codigo if regional else '' }}"
+                                   placeholder="Ex: REG_GLOBAL_SEGURANCA">
+                            <div class="form-text">
+                                {{ 'Você pode ajustar o código ao renomear a regional' if regional else 'Deixe em branco para gerar automaticamente' }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">
+                            <i class="bi bi-text-paragraph me-1"></i>
+                            Descrição
+                        </label>
+                        <textarea class="form-control" 
+                                  id="descricao" 
+                                  name="descricao" 
+                                  rows="3"
+                                  placeholder="Descrição detalhada da regional...">{{ regional.descricao if regional else '' }}</textarea>
+                        <div class="form-text">Descrição opcional da regional</div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Dica:</strong> Após criar a regional, você poderá adicionar servidores a ela.
+                    </div>
+                    
+                    <div class="d-flex gap-2 justify-content-end">
+                        <a href="{{ url_for('listar_regionais') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-{{ 'check-circle' if regional else 'plus-circle' }} me-1"></i>
+                            <span class="btn-text">{{ 'Atualizar' if regional else 'Criar' }} Regional</span>
+                            <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if regional %}
+        <!-- Servidores da Regional -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-server me-2"></i>
+                    Servidores da Regional
+                </h5>
+                <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-plus me-1"></i>
+                    Adicionar Servidor
+                </a>
+            </div>
+            <div class="card-body">
+                <div id="servidoresRegional">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="text-muted mt-2">Carregando servidores...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-gerar código baseado no nome
+    $('#nome').on('input', function() {
+        if (!{{ 'true' if regional else 'false' }}) {
+            const nome = $(this).val();
+            const codigo = nome.toUpperCase()
+                              .replace(/\s+/g, '_')
+                              .replace(/[^A-Z0-9_]/g, '')
+                              .substring(0, 50);
+            $('#codigo').val(codigo);
+        }
+    });
+    
+    // Carrega servidores se estiver editando
+    {% if regional %}
+    carregarServidoresRegional();
+    {% endif %}
+});
+
+$('#formRegional').on('submit', function(e) {
+    e.preventDefault();
+    
+    const btn = $(this).find('button[type="submit"]');
+    showLoading(btn);
+    
+    const formData = {
+        nome: $('#nome').val().trim(),
+        codigo: $('#codigo').val().trim(),
+        descricao: $('#descricao').val().trim(),
+        codigo_original: $('#codigo_original').val() || null,
+        editando: {{ 'true' if regional else 'false' }}
+    };
+    
+    // Validação
+    if (!formData.nome) {
+        showToast('Nome da regional é obrigatório', 'danger');
+        hideLoading(btn);
+        return;
+    }
+    
+    $.ajax({
+        url: '/api/regional',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+            if (response.success) {
+                showToast(response.message, 'success');
+                
+                setTimeout(() => {
+                    window.location.href = '{{ url_for("listar_regionais") }}';
+                }, 1500);
+            } else {
+                showToast(response.message, 'danger');
+            }
+        },
+        error: function() {
+            showToast('Erro de conexão ao salvar regional', 'danger');
+        },
+        complete: function() {
+            hideLoading(btn);
+        }
+    });
+});
+
+{% if regional %}
+function carregarServidoresRegional() {
+    $.get(`/api/regional/{{ regional.codigo }}/verificar`)
+        .done(function(response) {
+            if (response.success && response.resultados) {
+                renderizarServidores(response.resultados);
+            } else {
+                $('#servidoresRegional').html(`
+                    <div class="text-center py-3">
+                        <i class="bi bi-server text-muted fs-1"></i>
+                        <p class="text-muted">Nenhum servidor cadastrado</p>
+                        <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
+                           class="btn btn-primary">
+                            <i class="bi bi-plus me-1"></i>
+                            Adicionar Primeiro Servidor
+                        </a>
+                    </div>
+                `);
+            }
+        })
+        .fail(function() {
+            $('#servidoresRegional').html(`
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Erro ao carregar servidores da regional
+                </div>
+            `);
+        });
+}
+
+function renderizarServidores(servidores) {
+    if (servidores.length === 0) {
+        $('#servidoresRegional').html(`
+            <div class="text-center py-3">
+                <i class="bi bi-server text-muted fs-1"></i>
+                <p class="text-muted">Nenhum servidor cadastrado</p>
+                <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
+                   class="btn btn-primary">
+                    <i class="bi bi-plus me-1"></i>
+                    Adicionar Primeiro Servidor
+                </a>
+            </div>
+        `);
+        return;
+    }
+    
+    let html = '<div class="row">';
+    
+    servidores.forEach(function(servidor) {
+        const statusClass = servidor.status === 'online' ? 'success' : 
+                           servidor.status === 'offline' ? 'danger' : 'warning';
+        const statusIcon = servidor.status === 'online' ? 'wifi' : 
+                          servidor.status === 'offline' ? 'wifi-off' : 'exclamation-triangle';
+        const tipoIcon = servidor.tipo === 'idrac' ? 'hdd-rack' : 'server';
+        
+        html += `
+            <div class="col-md-6 mb-3">
+                <div class="card border-${statusClass} h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-${tipoIcon} me-1"></i>
+                                ${servidor.servidor}
+                            </h6>
+                            <span class="badge bg-${statusClass}">
+                                <i class="bi bi-${statusIcon} me-1"></i>
+                                ${servidor.status.toUpperCase()}
+                            </span>
+                        </div>
+                        
+                        <p class="text-muted small mb-2">
+                            <i class="bi bi-globe me-1"></i>
+                            ${servidor.ip}
+                        </p>
+                        
+                        ${servidor.tempo_resposta ? `
+                            <p class="text-muted small mb-0">
+                                <i class="bi bi-stopwatch me-1"></i>
+                                ${servidor.tempo_resposta}s
+                            </p>
+                        ` : ''}
+                        
+                        ${servidor.erro ? `
+                            <p class="text-danger small mb-0">
+                                <i class="bi bi-exclamation-circle me-1"></i>
+                                ${servidor.erro}
+                            </p>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    $('#servidoresRegional').html(html);
+}
+{% endif %}
+</script>
+{% endblock %}

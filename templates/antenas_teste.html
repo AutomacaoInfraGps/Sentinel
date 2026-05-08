@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste de API - Antenas UniFi</h1>
+    
+    <button id="btnTest">Testar API</button>
+    
+    <div id="status">Status: Aguardando...</div>
+    
+    <pre id="result">Clique no botão para testar a API</pre>
+    
+    <script>
+        document.getElementById('btnTest').addEventListener('click', function() {
+            document.getElementById('status').textContent = 'Status: Carregando...';
+            document.getElementById('result').textContent = 'Fazendo requisição...';
+            
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/public/status/unifi', true);
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        document.getElementById('status').textContent = 'Status: Sucesso!';
+                        try {
+                            var data = JSON.parse(xhr.responseText);
+                            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                        } catch (e) {
+                            document.getElementById('status').textContent = 'Status: Erro ao processar JSON';
+                            document.getElementById('result').textContent = 'Erro: ' + e.message + '\n\nResposta: ' + xhr.responseText;
+                        }
+                    } else {
+                        document.getElementById('status').textContent = 'Status: Erro ' + xhr.status;
+                        document.getElementById('result').textContent = 'Erro: ' + xhr.statusText;
+                    }
+                }
+            };
+            
+            xhr.onerror = function() {
+                document.getElementById('status').textContent = 'Status: Erro de rede';
+                document.getElementById('result').textContent = 'Erro de rede ao fazer a requisição';
+            };
+            
+            xhr.send();
+        });
+    </script>
+</body>
+</html>

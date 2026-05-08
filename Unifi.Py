@@ -57,11 +57,12 @@ html = """
     <meta charset="UTF-8">
     <title>Status das APs UniFi</title>
     <style>
-        body { font-family: Arial; margin: 20px; }
-        h2 { cursor: pointer; background: #0078d4; color: white; padding: 10px; border-radius: 5px; }
+        body { font-family: Arial; margin: 20px; color: #1f2937; }
+        h1 { color: #012E40; margin-bottom: 16px; }
+        h2 { cursor: pointer; background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C); color: white; padding: 10px 12px; border-radius: 8px; }
         table { border-collapse: collapse; width: 100%; margin-top: 10px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        th { background-color: #e8f3f8; color: #012E40; }
         .ap-online { color: green; font-weight: bold; }
         .ap-offline { color: red; font-weight: bold; }
     </style>

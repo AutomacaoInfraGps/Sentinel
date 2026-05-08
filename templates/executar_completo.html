@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block title %}Execução Completa - Sistema de Automação{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5 text-center mb-4">
+            <i class="bi bi-play-circle me-3"></i>
+            Execução Completa do Sistema
+        </h1>
+        <p class="lead text-center text-muted">
+            Execute verificação completa de todas as regionais e gere dashboards integrados
+        </p>
+    </div>
+</div>
+
+<!-- Status da Execução -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card" id="statusCard">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Status da Execução
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="statusContent">
+                    <div class="text-center py-3">
+                        <i class="bi bi-play-circle text-primary fs-1"></i>
+                        <h5 class="mt-3">Pronto para Executar</h5>
+                        <p class="text-muted">Clique no botão abaixo para iniciar a verificação completa</p>
+                    </div>
+                </div>
+                
+                <div id="progressContainer" style="display: none;">
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" 
+                             style="width: 0%"
+                             id="progressBar">
+                            <span id="progressText">0%</span>
+                        </div>
+                    </div>
+                    <div id="progressDetails" class="small text-muted"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Opções de Execução -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-gear me-2"></i>
+                    Configurações de Execução
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="configExecucao">
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-building me-1"></i>
+                            Regionais a Verificar
+                        </label>
+                        <div id="regionaisCheckbox">
+                            <div class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                <span class="ms-2">Carregando regionais...</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="gerarDashboards" checked>
+                            <label class="form-check-label" for="gerarDashboards">
+                                <i class="bi bi-graph-up me-1"></i>
+                                Gerar dashboards hierárquicos
+                            </label>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="abrirDashboard" checked>
+                            <label class="form-check-label" for="abrirDashboard">
+                                <i class="bi bi-window me-1"></i>
+                                Abrir dashboard ao finalizar
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check me-2"></i>
+                    O que será Executado
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="bi bi-server text-primary me-2"></i>
+                        <strong>Servidores:</strong> Verificação completa de todas as regionais
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-geo-alt text-warning me-2"></i>
+                        <strong>GPS Amigo:</strong> Captura de print do sistema
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-arrow-repeat text-success me-2"></i>
+                        <strong>Replicação AD:</strong> Verificação entre controladores de domínio
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-wifi text-info me-2"></i>
+                        <strong>Antenas UniFi:</strong> Coleta de dados dos access points
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-graph-up text-primary me-2"></i>
+                        <strong>Dashboard Final:</strong> Consolidação de todos os dados
+                    </li>
+                </ul>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <small>
+                        <strong>Tempo estimado:</strong> 2-5 minutos dependendo da quantidade de servidores
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Botões de Ação -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center">
+                <button class="btn btn-success btn-lg me-3" id="btnExecutar" onclick="executarCompleto()">
+                    <i class="bi bi-play-fill me-2"></i>
+                    <span class="btn-text">Executar Sistema Completo</span>
+                    <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                </button>
+                
+                <button class="btn btn-outline-info btn-lg me-3" onclick="verificarApenas()">
+                    <i class="bi bi-search me-2"></i>
+                    Apenas Verificar Status
+                </button>
+                
+                <a href="{{ url_for('dashboard_hierarquico_web') }}" class="btn btn-outline-primary btn-lg" target="_blank">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Ver Dashboard Atual
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resultados -->
+<div class="row" id="resultadosSection" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-clipboard-check me-2"></i>
+                    Resultados da Execução
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="resultadosContent">
+                    <!-- Resultados serão inseridos aqui -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let execucaoAtiva = false;
+
+$(document).ready(function() {
+    carregarRegionais();
+});
+
+function carregarRegionais() {
+    $.get('/api/dashboard/hierarquico')
+        .done(function(response) {
+            if (response.success && response.dados.regionais) {
+                renderizarRegionais(response.dados.regionais);
+            } else {
+                $('#regionaisCheckbox').html(`
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Nenhuma regional encontrada
+                    </div>
+                `);
+            }
+        })
+        .fail(function() {
+            $('#regionaisCheckbox').html(`
+                <div class="alert alert-danger">
+                    <i class="bi bi-x-circle me-2"></i>
+                    Erro ao carregar regionais
+                </div>
+            `);
+        });
+}
+
+function renderizarRegionais(regionais) {
+    let html = '';
+    
+    Object.keys(regionais).forEach(function(codigo) {
+        const regional = regionais[codigo];
+        html += `
+            <div class="form-check">
+                <input class="form-check-input regional-checkbox" 
+                       type="checkbox" 
+                       value="${codigo}" 
+                       id="regional_${codigo}" 
+                       checked>
+                <label class="form-check-label" for="regional_${codigo}">
+                    <strong>${regional.nome}</strong>
+                    <small class="text-muted d-block">${regional.servidores.length} servidor(es)</small>
+                </label>
+            </div>
+        `;
+    });
+    
+    if (html) {
+        html = `
+            <div class="mb-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleTodasRegionais(true)">
+                    Selecionar Todas
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleTodasRegionais(false)">
+                    Desmarcar Todas
+                </button>
+            </div>
+        ` + html;
+    }
+    
+    $('#regionaisCheckbox').html(html);
+}
+
+function toggleTodasRegionais(selecionar) {
+    $('.regional-checkbox').prop('checked', selecionar);
+}
+
+function executarCompleto() {
+    if (execucaoAtiva) return;
+    
+    const regionaisSelecionadas = $('.regional-checkbox:checked').map(function() {
+        return $(this).val();
+    }).get();
+    
+    if (regionaisSelecionadas.length === 0) {
+        showToast('Selecione pelo menos uma regional para verificar', 'warning');
+        return;
+    }
+    
+    execucaoAtiva = true;
+    const btn = $('#btnExecutar');
+    showLoading(btn);
+    
+    // Atualiza interface
+    $('#statusContent').html(`
+        <div class="text-center py-3">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <h5>Executando Sistema Completo</h5>
+            <p class="text-muted">Verificando ${regionaisSelecionadas.length} regional(is)...</p>
+        </div>
+    `);
+    
+    $('#progressContainer').show();
+    atualizarProgresso(0, 'Iniciando execução...');
+    
+    // Simula execução com progresso
+    simularExecucao(regionaisSelecionadas)
+        .then(function(resultado) {
+            mostrarResultados(resultado);
+            
+            if ($('#abrirDashboard').is(':checked') && resultado.dashboard_url) {
+                setTimeout(() => {
+                    window.open(resultado.dashboard_url, '_blank');
+                }, 1000);
+            }
+        })
+        .catch(function(erro) {
+            showToast('Erro na execução: ' + erro, 'danger');
+            $('#statusContent').html(`
+                <div class="text-center py-3">
+                    <i class="bi bi-x-circle text-danger fs-1"></i>
+                    <h5 class="mt-3 text-danger">Erro na Execução</h5>
+                    <p class="text-muted">${erro}</p>
+                </div>
+            `);
+        })
+        .finally(function() {
+            execucaoAtiva = false;
+            hideLoading(btn);
+            $('#progressContainer').hide();
+        });
+}
+
+function simularExecucao(regionais) {
+    return new Promise((resolve, reject) => {
+        let progresso = 0;
+        const etapas = [
+            'Executando checklists das regionais...',
+            'Capturando print do GPS Amigo...',
+            'Verificando replicação Active Directory...',
+            'Coletando dados das antenas UniFi...',
+            'Gerando dashboard final consolidado...'
+        ];
+        
+        let etapaAtual = 0;
+        
+        const interval = setInterval(() => {
+            progresso += Math.random() * 20;
+            
+            if (progresso >= 100) {
+                progresso = 100;
+                clearInterval(interval);
+                
+                // Chama API real
+                $.post('/api/executar/completo')
+                    .done(function(response) {
+                        if (response.success) {
+                            resolve({
+                                success: true,
+                                regionais_verificadas: regionais.length,
+                                dashboard_url: response.dashboard_url,
+                                message: response.message
+                            });
+                        } else {
+                            reject(response.message);
+                        }
+                    })
+                    .fail(function() {
+                        reject('Erro de conexão com o servidor');
+                    });
+            } else {
+                if (progresso > (etapaAtual + 1) * 20) {
+                    etapaAtual++;
+                }
+                
+                atualizarProgresso(progresso, etapas[etapaAtual] || 'Processando...');
+            }
+        }, 500);
+    });
+}
+
+function atualizarProgresso(porcentagem, texto) {
+    const progressBar = $('#progressBar');
+    const progressText = $('#progressText');
+    const progressDetails = $('#progressDetails');
+    
+    progressBar.css('width', porcentagem + '%');
+    progressText.text(Math.round(porcentagem) + '%');
+    progressDetails.text(texto);
+}
+
+function verificarApenas() {
+    showToast('Verificando status das regionais...', 'info');
+    
+    $.get('/api/dashboard/hierarquico')
+        .done(function(response) {
+            if (response.success) {
+                const dados = response.dados;
+                const stats = dados.estatisticas_gerais;
+                
+                showToast(`Status: ${stats.servidores_online}/${stats.total_servidores} servidores online`, 'success');
+                
+                // Atualiza status na tela
+                $('#statusContent').html(`
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="fs-2 text-primary">${stats.total_regionais}</div>
+                            <small class="text-muted">Regionais</small>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="fs-2 text-info">${stats.total_servidores}</div>
+                            <small class="text-muted">Servidores</small>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="fs-2 text-success">${stats.servidores_online}</div>
+                            <small class="text-muted">Online</small>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="fs-2 text-danger">${stats.servidores_offline}</div>
+                            <small class="text-muted">Offline</small>
+                        </div>
+                    </div>
+                `);
+            } else {
+                showToast('Erro ao verificar status: ' + response.message, 'danger');
+            }
+        })
+        .fail(function() {
+            showToast('Erro de conexão ao verificar status', 'danger');
+        });
+}
+
+function mostrarResultados(resultado) {
+    $('#statusContent').html(`
+        <div class="text-center py-3">
+            <i class="bi bi-check-circle text-success fs-1"></i>
+            <h5 class="mt-3 text-success">Execução Concluída!</h5>
+            <p class="text-muted">${resultado.message}</p>
+        </div>
+    `);
+    
+    const resultadosHtml = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6><i class="bi bi-info-circle me-2"></i>Componentes Executados</h6>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-server text-primary me-2"></i>Servidores verificados</li>
+                    <li><i class="bi bi-geo-alt text-warning me-2"></i>GPS Amigo capturado</li>
+                    <li><i class="bi bi-arrow-repeat text-success me-2"></i>Replicação AD verificada</li>
+                    <li><i class="bi bi-wifi text-info me-2"></i>Antenas UniFi coletadas</li>
+                    <li><i class="bi bi-graph-up text-primary me-2"></i>Dashboard final gerado</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="bi bi-link me-2"></i>Relatórios Gerados</h6>
+                <div class="d-grid gap-2">
+                    ${resultado.dashboard_url ? `
+                        <a href="${resultado.dashboard_url}" class="btn btn-outline-primary btn-sm" target="_blank">
+                            <i class="bi bi-graph-up me-1"></i>Dashboard Final Consolidado
+                        </a>
+                    ` : ''}
+                    <a href="/output/replsummary.html" class="btn btn-outline-success btn-sm" target="_blank">
+                        <i class="bi bi-arrow-repeat me-1"></i>Replicação AD
+                    </a>
+                    <a href="/output/dados_aps_unifi.html" class="btn btn-outline-info btn-sm" target="_blank">
+                        <i class="bi bi-wifi me-1"></i>Antenas UniFi
+                    </a>
+                    <a href="/relatorios-infra" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-file-earmark-text me-1"></i>Todos os Relatórios
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    $('#resultadosContent').html(resultadosHtml);
+    $('#resultadosSection').show();
+    
+    showToast('Sistema executado com sucesso!', 'success');
+}
+</script>
+{% endblock %}

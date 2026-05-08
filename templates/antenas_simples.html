@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Antenas UniFi{% endblock %}
+
+
+    {% block content %}
+        {% set ns = namespace(
+        congestionado=0,
+        atencao=0,
+        ok=0
+    ) %}
+
+    {% for canal in unifi_data.interferencia_5ghz %}
+        {% if canal.risco == 'CONGESTIONADO' or canal.risco == 'CRITICO' %}
+            {% set ns.congestionado = ns.congestionado + 1 %}
+        {% elif canal.risco == 'ATENCAO' %}
+            {% set ns.atencao = ns.atencao + 1 %}
+        {% elif canal.risco == 'OK' %}
+            {% set ns.ok = ns.ok + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="container py-4">
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center py-4">
+                <h2 class="mb-1 fw-bold">
+                    <i class="bi bi-wifi me-2"></i>
+                    Antenas UniFi
+                </h2>
+                <p class="text-muted mb-0">
+                    Monitoramento e interferência Wi-Fi 5GHz
+                </p>
+            </div>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="card text-white shadow-sm h-100"
+                    style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+                    <div class="card-body text-center">
+                        <h2 class="fw-bold mb-1">{{ ns.congestionado }}</h2>
+                        <div>Canais Congestionados</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <div class="card text-white shadow-sm h-100"
+                    style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
+                    <div class="card-body text-center">
+                        <h2 class="fw-bold mb-1">{{ ns.atencao }}</h2>
+                        <div>Canais em Atenção</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <div class="card text-white shadow-sm h-100"
+                    style="background: linear-gradient(135deg, #20c997, #28a745);">
+                    <div class="card-body text-center">
+                        <h2 class="fw-bold mb-1">{{ ns.ok }}</h2>
+                        <div>Canais OK</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning">
+                    <strong>📡 Interferência 5GHz por Canal</strong>
+                </div>
+                <div class="card-body">
+                        <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">Controle</h5>
+                                        <form action="/executar_unifi_direto" method="post">
+                                            <button type="submit" class="btn btn-light btn-sm">
+                                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                                Atualizar Dados
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    {% with messages = get_flashed_messages(with_categories=true) %}
+                                        {% if messages %}
+                                            {% for category, message in messages %}
+                                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <div class="alert alert-info">
+                                                Clique em "Atualizar Dados" para verificar o status das antenas.
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if unifi_data.interferencia_5ghz %}
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 80px;">Canal</th>
+                                <th style="width: 100px;">Qtd APs</th>
+                                <th style="width: 160px;">Risco</th>
+                                <th style="width: 160px;">Antenas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                        {% for canal in unifi_data.interferencia_5ghz | sort(attribute='qtd_aps', reverse=True) %}
+                            <tr>
+                                <td><strong>{{ canal.canal }}</strong></td>
+                                <td>{{ canal.qtd_aps }}</td>
+                                <td>
+                                    {% if canal.risco in ['CRITICO', 'CONGESTIONADO'] %}
+                                        <span class="badge bg-danger">{{ canal.risco }}</span>
+                                    {% elif canal.risco == 'ATENCAO' %}
+                                        <span class="badge bg-warning text-dark">{{ canal.risco }}</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ canal.risco }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm
+                                        {% if canal.risco in ['CRITICO', 'CONGESTIONADO'] %}
+                                            btn-outline-danger
+                                        {% elif canal.risco == 'ATENCAO' %}
+                                            btn-outline-warning
+                                        {% else %}
+                                            btn-outline-secondary
+                                        {% endif %}
+                                    "
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#canal_{{ canal.canal }}">
+                                        Ver antenas
+                                    </button>
+                                </td>
+                            </tr>
+
+                            <tr class="table-light">
+                                <td colspan="4" class="p-0">
+                                    <div class="collapse" id="canal_{{ canal.canal }}">
+                                        <div class="p-3">
+                                            <strong>Antenas no canal {{ canal.canal }}:</strong>
+                                            <ul class="mb-0 mt-2">
+                                                {% for ap in canal.aps %}
+                                                    <li>{{ ap }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                        <div class="alert alert-info">
+                            Nenhum dado de interferência disponível.
+                        </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+
+        <!-- TOTAL DE ANTENAS -->
+        <div class="col-md-3 mb-3">
+            <div class="card text-white shadow-sm h-100"
+                style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+                <div class="card-body text-center">
+                    <h2 class="fw-bold mb-1">
+                        {{ unifi_data.total_aps | default('-', true) }}
+                    </h2>
+                    <div>Total de Antenas</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ANTENAS ONLINE -->
+        <div class="col-md-3 mb-3">
+            <div class="card text-white shadow-sm h-100"
+                style="background: linear-gradient(135deg, #20c997, #28a745);">
+                <div class="card-body text-center">
+                    <h2 class="fw-bold mb-1">
+                        {{ unifi_data.aps_online | default('-', true) }}
+                    </h2>
+                    <div>Antenas Online</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ANTENAS OFFLINE -->
+        <div class="col-md-3 mb-3">
+            <div class="card text-white shadow-sm h-100"
+                style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+                <div class="card-body text-center">
+                    <h2 class="fw-bold mb-1">
+                        {{ unifi_data.aps_offline | default('-', true) }}
+                    </h2>
+                    <div>Antenas Offline</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLIENTES CONECTADOS -->
+        <div class="col-md-3 mb-3">
+            <div class="card text-white shadow-sm h-100"
+                style="background: linear-gradient(135deg, #0A4A63, #0F6C8C);">
+                <div class="card-body text-center">
+                    <h2 class="fw-bold mb-1">
+                        {{ unifi_data.clientes_conectados | default('-', true) }}
+                    </h2>
+                    <div>Clientes Conectados</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Lista de Antenas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% if unifi_data and unifi_data.aps %}
+                        
+                            {% for ap in unifi_data.aps %}
+
+                            {% set status_color =
+                                'success' if ap.status == 'online'
+                                else 'danger'
+                            %}
+
+                            {% set status_icon =
+                                'wifi' if ap.status == 'online'
+                                else 'wifi-off'
+                            %}
+
+                            <div class="col-md-6 col-lg-4 mb-4">
+                                <div class="card border-{{ status_color }} h-100 shadow-sm">
+                                    
+                                    <div class="card-header bg-{{ status_color }} text-white">
+                                        <h6 class="mb-0 fw-bold text-truncate">
+                                            <i class="bi bi-{{ status_icon }} me-2"></i>
+                                            {{ ap.nome }}
+                                        </h6>
+                                    </div>
+
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">Modelo:</span>
+                                                <span class="small">{{ ap.modelo }}</span>
+                                            </div>
+
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">IP:</span>
+                                                <code class="small">{{ ap.ip }}</code>
+                                            </div>
+
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">Status:</span>
+                                                <span class="badge bg-{{ status_color }}">
+                                                    {{ ap.status | upper }}
+                                                </span>
+                                            </div>
+
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">Clientes:</span>
+                                                <span class="badge bg-info">
+                                                    {{ ap.clientes | default(0, true) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        {% endfor %}
+
+                        {% elif unifi_data and unifi_data.total_aps > 0 %}
+                            {% for i in range(unifi_data.aps_online|default(0, true)) %}
+                                <div class="col-md-6 col-lg-4 mb-4">
+                                    <div class="card border-success h-100">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0 fw-bold">
+                                                <i class="bi bi-wifi me-2"></i>
+                                                AP Online {{ i+1 }}
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span class="small text-muted">Modelo:</span>
+                                                    <span class="small">UniFi AP</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span class="small text-muted">IP:</span>
+                                                    <code class="small">N/A</code>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span class="small text-muted">Status:</span>
+                                                    <span class="badge bg-success">online</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            
+                            {% for i in range(unifi_data.aps_offline|default(0, true)) %}
+                                <div class="col-md-6 col-lg-4 mb-4">
+                                    <div class="card border-danger h-100">
+                                        <div class="card-header bg-danger text-white">
+                                            <h6 class="mb-0 fw-bold">
+                                                <i class="bi bi-wifi-off me-2"></i>
+                                                AP Offline {{ i+1 }}
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span class="small text-muted">Modelo:</span>
+                                                    <span class="small">UniFi AP</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span class="small text-muted">IP:</span>
+                                                    <code class="small">N/A</code>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span class="small text-muted">Status:</span>
+                                                    <span class="badge bg-danger">offline</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    Nenhum AP encontrado. Clique em "Atualizar Dados" para verificar as antenas.
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
