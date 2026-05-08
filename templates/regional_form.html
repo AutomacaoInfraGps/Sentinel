@@ -252,7 +252,7 @@ function renderizarServidores(servidores) {
                            servidor.status === 'offline' ? 'danger' : 'warning';
         const statusIcon = servidor.status === 'online' ? 'wifi' : 
                           servidor.status === 'offline' ? 'wifi-off' : 'exclamation-triangle';
-        const tipoIcon = servidor.tipo === 'idrac' ? 'hdd-rack' : 'server';
+        const tipoIcon = 'server';
         
         html += `
             <div class="col-md-6 mb-3">
