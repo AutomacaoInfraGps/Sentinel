@@ -812,7 +812,7 @@ new Chart(document.getElementById('chartUnifi'), {{
         labels: ['Online', 'Offline'],
         datasets: [{{
             data: [{aps_online}, {aps_offline}],
-            backgroundColor: ['#2196F3', '#B0BEC5'],
+            backgroundColor: ['#0A4A63', '#cbd5e0'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]

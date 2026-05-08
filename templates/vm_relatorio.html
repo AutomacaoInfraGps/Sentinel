@@ -1,0 +1,771 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório Completo - {{ vm.name }} - Sistema de Automação{% endblock %}
+
+{% block content %}
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100" style="background-color: rgba(0,0,0,0.5); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Relatório Completo - <span id="vmName"></span></h1>
+            <p>Data da Coleta: <span id="dataColeta"></span></p>
+            <div class="d-flex justify-content-between mb-3">
+                <a href="{{ url_for('listar_vms') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+                <button id="btnAtualizar" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> Atualizar Relatório
+                </button>
+                <button id="btnExportarHTML" class="btn btn-success">
+                    <i class="fas fa-file-export"></i> Exportar HTML
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <!-- Informações do Sistema -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-server me-2"></i> Informações do Sistema</h2>
+        </div>
+        <div class="card-body">
+            <div class="row" id="sistemaInfo">
+                <div class="col-md-6">
+                    <table class="table table-striped">
+                        <tbody>
+                            <tr>
+                                <th>Nome do Computador</th>
+                                <td id="computerName">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Sistema Operacional</th>
+                                <td id="operatingSystem">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Versão do SO</th>
+                                <td id="osVersion">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Fabricante</th>
+                                <td id="manufacturer">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Modelo</th>
+                                <td id="model">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-striped">
+                        <tbody>
+                            <tr>
+                                <th>Processadores</th>
+                                <td id="processors">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Memória</th>
+                                <td id="memory">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Último Boot</th>
+                                <td id="lastBoot">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Uptime</th>
+                                <td id="uptime">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Fuso Horário</th>
+                                <td id="timeZone">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Versão BIOS</th>
+                                <td id="biosVersion">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Número de Série</th>
+                                <td id="serialNumber">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Discos -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-hdd me-2"></i> Discos</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Drive</th>
+                            <th>Volume</th>
+                            <th>Espaço Livre (GB)</th>
+                            <th>Espaço Usado (GB)</th>
+                            <th>Espaço Total (GB)</th>
+                            <th>% Usado</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="disksTable">
+                        <tr>
+                            <td colspan="5" class="text-center">Carregando informações de disco...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rede -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-network-wired me-2"></i> Configuração de Rede</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Adaptador</th>
+                            <th>Descrição</th>
+                            <th>Status</th>
+                            <th>Endereço MAC</th>
+                            <th>Endereço IP</th>
+                            <th>Gateway</th>
+                            <th>Servidor DNS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="redeTable">
+                        <tr>
+                            <td colspan="7" class="text-center">Carregando informações de rede...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roles e Features -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h2 class="h5 mb-0"><i class="fas fa-puzzle-piece me-2"></i> Roles e Features Instaladas</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Nome Interno</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="featuresTable">
+                        <tr>
+                            <td colspan="3" class="text-center">Carregando roles e features...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Serviços -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-cogs me-2"></i> Serviços Principais</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Nome Interno</th>
+                            <th>Status</th>
+                            <th>Tipo de Inicialização</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servicosTable">
+                        <tr>
+                            <td colspan="4" class="text-center">Carregando serviços...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Eventos de Erro -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-exclamation-triangle me-2"></i> Últimos Eventos de Erro</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Fonte</th>
+                            <th>ID</th>
+                            <th>Mensagem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventosTable">
+                        <tr>
+                            <td colspan="4" class="text-center">Carregando eventos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processos -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-microchip me-2"></i> Top 15 Processos por CPU</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>PID</th>
+                            <th>CPU</th>
+                            <th>Memória (MB)</th>
+                            <th>Memória Privada (MB)</th>
+                            <th>Handles</th>
+                            <th>Threads</th>
+                        </tr>
+                    </thead>
+                    <tbody id="processosTable">
+                        <tr>
+                            <td colspan="7" class="text-center">Carregando processos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Atualizações Instaladas -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h2 class="h5 mb-0"><i class="fas fa-sync-alt me-2"></i> Últimas Atualizações Instaladas</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Data de Instalação</th>
+                            <th>ID da Atualização</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody id="atualizacoesTable">
+                        <tr>
+                            <td colspan="3" class="text-center">Carregando atualizações...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const vmId = '{{ vm_id }}';
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const alertContainer = document.getElementById('alertContainer');
+        const btnAtualizar = document.getElementById('btnAtualizar');
+        const btnExportarHTML = document.getElementById('btnExportarHTML');
+        
+        // Função para mostrar alerta
+        function showAlert(message, type = 'danger') {
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            `;
+        }
+        
+        // Função para carregar o relatório
+        function carregarRelatorio() {
+            loadingOverlay.style.display = 'flex';
+            
+            fetch(`/api/vms/${vmId}/relatorio`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Preenche as informações básicas
+                        document.getElementById('vmName').textContent = data.vm.name;
+                        document.getElementById('dataColeta').textContent = data.data;
+                        
+                        // Preenche as informações do sistema
+                        if (data.sistema && !data.sistema.error) {
+                            document.getElementById('computerName').textContent = data.sistema.ComputerName || 'N/A';
+                            document.getElementById('operatingSystem').textContent = data.sistema.OperatingSystem || 'N/A';
+                            document.getElementById('osVersion').textContent = data.sistema.OSVersion || 'N/A';
+                            document.getElementById('manufacturer').textContent = data.sistema.Manufacturer || 'N/A';
+                            document.getElementById('model').textContent = data.sistema.Model || 'N/A';
+                            document.getElementById('processors').textContent = data.sistema.Processors || 'N/A';
+                            
+                            // Informações de memória
+                            const memoryInfo = `${data.sistema.TotalMemoryGB || 'N/A'} GB (Usado: ${data.sistema.UsedMemoryGB || 'N/A'} GB, ${data.sistema.MemoryPercent || 'N/A'}%)`;
+                            document.getElementById('memory').textContent = memoryInfo;
+                            
+                            document.getElementById('lastBoot').textContent = data.sistema.LastBootFormatted || 'N/A';
+                            document.getElementById('uptime').textContent = data.sistema.Uptime || 'N/A';
+                            document.getElementById('timeZone').textContent = data.sistema.TimeZone || 'N/A';
+                            document.getElementById('biosVersion').textContent = data.sistema.BIOSVersion || 'N/A';
+                            document.getElementById('serialNumber').textContent = data.sistema.SerialNumber || 'N/A';
+                            
+                            // Preenche a tabela de discos
+                            const disksTable = document.getElementById('disksTable');
+                            disksTable.innerHTML = '';
+                            
+                            if (data.sistema.Disks && data.sistema.Disks.length > 0) {
+                                data.sistema.Disks.forEach(disk => {
+                                    const row = document.createElement('tr');
+                                    
+                                    // Define a classe de status com base no espaço usado
+                                    let statusClass = 'success';
+                                    let statusText = 'OK';
+                                    
+                                    if (disk.PercentUsed > 90) {
+                                        statusClass = 'danger';
+                                        statusText = 'Crítico';
+                                    } else if (disk.PercentUsed > 80) {
+                                        statusClass = 'warning';
+                                        statusText = 'Atenção';
+                                    }
+                                    
+                                    row.innerHTML = `
+                                        <td>${disk.Drive}</td>
+                                        <td>${disk.VolumeLabel || ''}</td>
+                                        <td>${disk.FreeGB}</td>
+                                        <td>${disk.UsedGB}</td>
+                                        <td>${disk.TotalGB}</td>
+                                        <td>${disk.PercentUsed}%</td>
+                                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                                    `;
+                                    
+                                    disksTable.appendChild(row);
+                                });
+                            } else {
+                                disksTable.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma informação de disco disponível</td></tr>';
+                            }
+                        } else {
+                            const errorMsg = data.sistema && data.sistema.error ? data.sistema.error : 'Erro ao obter informações do sistema';
+                            document.getElementById('sistemaInfo').innerHTML = `<div class="col-12 text-center text-danger">${errorMsg}</div>`;
+                            document.getElementById('disksTable').innerHTML = '<tr><td colspan="5" class="text-center">Nenhuma informação de disco disponível</td></tr>';
+                        }
+                        
+                        // Preenche a tabela de rede
+                        const redeTable = document.getElementById('redeTable');
+                        redeTable.innerHTML = '';
+                        
+                        if (data.rede && data.rede.length > 0 && !data.rede[0].error) {
+                            data.rede.forEach(adapter => {
+                                const row = document.createElement('tr');
+                                
+                                row.innerHTML = `
+                                    <td>${adapter.Name || 'N/A'}</td>
+                                    <td>${adapter.InterfaceDescription || 'N/A'}</td>
+                                    <td>${adapter.Status || 'N/A'}</td>
+                                    <td>${adapter.MacAddress || 'N/A'}</td>
+                                    <td>${adapter.IPAddress || 'N/A'}</td>
+                                    <td>${adapter.Gateway || 'N/A'}</td>
+                                    <td>${adapter.DNSServer || 'N/A'}</td>
+                                `;
+                                
+                                redeTable.appendChild(row);
+                            });
+                        } else {
+                            const errorMsg = data.rede && data.rede[0] && data.rede[0].error ? data.rede[0].error : 'Nenhuma informação de rede disponível';
+                            redeTable.innerHTML = `<tr><td colspan="7" class="text-center">${errorMsg}</td></tr>`;
+                        }
+                        
+                        // Preenche a tabela de features
+                        const featuresTable = document.getElementById('featuresTable');
+                        featuresTable.innerHTML = '';
+                        
+                        if (data.features && data.features.length > 0 && !data.features[0].error) {
+                            data.features.forEach(feature => {
+                                const row = document.createElement('tr');
+                                
+                                row.innerHTML = `
+                                    <td>${feature.DisplayName || 'N/A'}</td>
+                                    <td>${feature.Name || 'N/A'}</td>
+                                    <td>${feature.InstallState || 'N/A'}</td>
+                                `;
+                                
+                                featuresTable.appendChild(row);
+                            });
+                        } else {
+                            const errorMsg = data.features && data.features[0] && data.features[0].error ? data.features[0].error : 'Nenhuma informação de features disponível';
+                            featuresTable.innerHTML = `<tr><td colspan="3" class="text-center">${errorMsg}</td></tr>`;
+                        }
+                        
+                        // Preenche a tabela de serviços
+                        const servicosTable = document.getElementById('servicosTable');
+                        servicosTable.innerHTML = '';
+                        
+                        if (data.servicos && data.servicos.length > 0 && !data.servicos[0].error) {
+                            data.servicos.forEach(service => {
+                                const row = document.createElement('tr');
+                                
+                                // Define a classe de status
+                                let statusClass = 'secondary';
+                                if (service.Status === 'Running') {
+                                    statusClass = 'success';
+                                } else if (service.Status === 'Stopped') {
+                                    statusClass = 'danger';
+                                }
+                                
+                                row.innerHTML = `
+                                    <td>${service.DisplayName || 'N/A'}</td>
+                                    <td>${service.Name || 'N/A'}</td>
+                                    <td><span class="badge bg-${statusClass}">${service.Status || 'N/A'}</span></td>
+                                    <td>${service.StartType || 'N/A'}</td>
+                                `;
+                                
+                                servicosTable.appendChild(row);
+                            });
+                        } else {
+                            const errorMsg = data.servicos && data.servicos[0] && data.servicos[0].error ? data.servicos[0].error : 'Nenhuma informação de serviços disponível';
+                            servicosTable.innerHTML = `<tr><td colspan="4" class="text-center">${errorMsg}</td></tr>`;
+                        }
+                        
+                        // Preenche a tabela de eventos
+                        const eventosTable = document.getElementById('eventosTable');
+                        eventosTable.innerHTML = '';
+                        
+                        if (data.eventos && data.eventos.length > 0 && !data.eventos[0].error) {
+                            data.eventos.forEach(event => {
+                                const row = document.createElement('tr');
+                                
+                                row.innerHTML = `
+                                    <td>${event.TimeGenerated || 'N/A'}</td>
+                                    <td>${event.Source || 'N/A'}</td>
+                                    <td>${event.EventID || 'N/A'}</td>
+                                    <td>${event.Message || 'N/A'}</td>
+                                `;
+                                
+                                eventosTable.appendChild(row);
+                            });
+                        } else {
+                            const errorMsg = data.eventos && data.eventos[0] && data.eventos[0].error ? data.eventos[0].error : 'Nenhuma informação de eventos disponível';
+                            eventosTable.innerHTML = `<tr><td colspan="4" class="text-center">${errorMsg}</td></tr>`;
+                        }
+                        
+                        // Preenche a tabela de processos
+                        const processosTable = document.getElementById('processosTable');
+                        processosTable.innerHTML = '';
+                        
+                        if (data.processos && data.processos.length > 0 && !data.processos[0].error) {
+                            data.processos.forEach(process => {
+                                const row = document.createElement('tr');
+                                
+                                row.innerHTML = `
+                                    <td>${process.Name || 'N/A'}</td>
+                                    <td>${process.ID || 'N/A'}</td>
+                                    <td>${process.CPU || 'N/A'}</td>
+                                    <td>${process.MemoryMB || 'N/A'}</td>
+                                    <td>${process.PrivateMemoryMB || 'N/A'}</td>
+                                    <td>${process.Handles || 'N/A'}</td>
+                                    <td>${process.Threads || 'N/A'}</td>
+                                `;
+                                
+                                processosTable.appendChild(row);
+                            });
+                        } else {
+                            const errorMsg = data.processos && data.processos[0] && data.processos[0].error ? data.processos[0].error : 'Nenhuma informação de processos disponível';
+                            processosTable.innerHTML = `<tr><td colspan="7" class="text-center">${errorMsg}</td></tr>`;
+                        }
+                        
+                        // Preenche a tabela de atualizações
+                        const atualizacoesTable = document.getElementById('atualizacoesTable');
+                        atualizacoesTable.innerHTML = '';
+                        
+                        if (data.atualizacoes && data.atualizacoes.length > 0 && !data.atualizacoes[0].error) {
+                            data.atualizacoes.forEach(update => {
+                                const row = document.createElement('tr');
+                                
+                                row.innerHTML = `
+                                    <td>${update.InstalledOn || 'N/A'}</td>
+                                    <td>${update.HotFixID || 'N/A'}</td>
+                                    <td>${update.Description || 'N/A'}</td>
+                                `;
+                                
+                                atualizacoesTable.appendChild(row);
+                            });
+                        } else {
+                            const errorMsg = data.atualizacoes && data.atualizacoes[0] && data.atualizacoes[0].error ? data.atualizacoes[0].error : 'Nenhuma informação de atualizações disponível';
+                            atualizacoesTable.innerHTML = `<tr><td colspan="3" class="text-center">${errorMsg}</td></tr>`;
+                        }
+                    } else {
+                        showAlert(data.message || 'Erro ao carregar relatório');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    showAlert('Erro ao carregar relatório: ' + error.message);
+                })
+                .finally(() => {
+                    loadingOverlay.style.display = 'none';
+                });
+        }
+        
+        // Função para exportar o relatório como HTML
+        function exportarHTML() {
+            const vmName = document.getElementById('vmName').textContent;
+            const dataColeta = document.getElementById('dataColeta').textContent;
+            
+            // Cria um novo documento HTML
+            const htmlContent = `
+            <!DOCTYPE html>
+            <html lang="pt-br">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Relatório - ${vmName} - ${dataColeta}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h1 { color: #2A5DB0; border-bottom: 1px solid #ccc; }
+                    h2 { color: #2A5DB0; margin-top: 30px; }
+                    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .badge { padding: 3px 8px; border-radius: 4px; color: white; }
+                    .bg-success { background-color: #28a745; }
+                    .bg-warning { background-color: #ffc107; color: black; }
+                    .bg-danger { background-color: #dc3545; }
+                    .bg-secondary { background-color: #6c757d; }
+                </style>
+            </head>
+            <body>
+                <h1>Relatório Completo - ${vmName}</h1>
+                <p>Data da Coleta: ${dataColeta}</p>
+                
+                <h2>Informações do Sistema</h2>
+                <div style="display: flex; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 300px;">
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <th>Nome do Computador</th>
+                                    <td>${document.getElementById('computerName').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Sistema Operacional</th>
+                                    <td>${document.getElementById('operatingSystem').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Versão do SO</th>
+                                    <td>${document.getElementById('osVersion').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Fabricante</th>
+                                    <td>${document.getElementById('manufacturer').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Modelo</th>
+                                    <td>${document.getElementById('model').textContent}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="flex: 1; min-width: 300px;">
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <th>Processadores</th>
+                                    <td>${document.getElementById('processors').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Memória (GB)</th>
+                                    <td>${document.getElementById('memory').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Último Boot</th>
+                                    <td>${document.getElementById('lastBoot').textContent}</td>
+                                </tr>
+                                <tr>
+                                    <th>Uptime</th>
+                                    <td>${document.getElementById('uptime').textContent}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <h2>Discos</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Drive</th>
+                            <th>Volume</th>
+                            <th>Espaço Livre (GB)</th>
+                            <th>Espaço Usado (GB)</th>
+                            <th>Espaço Total (GB)</th>
+                            <th>% Usado</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('disksTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <h2>Configuração de Rede</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Adaptador</th>
+                            <th>Descrição</th>
+                            <th>Status</th>
+                            <th>Endereço MAC</th>
+                            <th>Endereço IP</th>
+                            <th>Gateway</th>
+                            <th>Servidor DNS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('redeTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <h2>Roles e Features Instaladas</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Nome Interno</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('featuresTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <h2>Serviços Principais</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Nome Interno</th>
+                            <th>Status</th>
+                            <th>Tipo de Inicialização</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('servicosTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <h2>Últimos Eventos de Erro</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Fonte</th>
+                            <th>ID</th>
+                            <th>Mensagem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('eventosTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <h2>Top 15 Processos por CPU</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>PID</th>
+                            <th>CPU</th>
+                            <th>Memória (MB)</th>
+                            <th>Memória Privada (MB)</th>
+                            <th>Handles</th>
+                            <th>Threads</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('processosTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <h2>Últimas Atualizações Instaladas</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data de Instalação</th>
+                            <th>ID da Atualização</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('atualizacoesTable').innerHTML}
+                    </tbody>
+                </table>
+                
+                <footer>
+                    <p>Relatório gerado em ${new Date().toLocaleString()} pelo Sistema de Automação</p>
+                </footer>
+            </body>
+            </html>
+            `;
+            
+            // Cria um Blob com o conteúdo HTML
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            
+            // Cria um link para download
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Relatorio_${vmName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+            document.body.appendChild(a);
+            a.click();
+            
+            // Limpa
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        }
+        
+        // Botão de atualizar
+        btnAtualizar.addEventListener('click', carregarRelatorio);
+        
+        // Botão de exportar HTML
+        btnExportarHTML.addEventListener('click', exportarHTML);
+        
+        // Carrega o relatório ao iniciar a página
+        carregarRelatorio();
+    });
+</script>
+{% endblock %}

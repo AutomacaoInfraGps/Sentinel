@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}VPN IPsec - Sistema de Automação{% endblock %}
+
+{% block extra_css %}
+<style>
+    .vpn-card {
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .vpn-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+
+    .vpn-header {
+        padding: 15px;
+        color: white;
+    }
+
+    .vpn-up {
+        background: linear-gradient(135deg, #28a745, #20c997);
+    }
+
+    .vpn-down {
+        background: linear-gradient(135deg, #dc3545, #fd7e14);
+    }
+
+    .vpn-body {
+        padding: 20px;
+    }
+
+    .stats-card {
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        color: white;
+        text-align: center;
+    }
+
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+
+    .stats-label {
+        font-size: 0.9rem;
+        opacity: 0.85;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0,0,0,0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-spinner {
+        width: 80px;
+        height: 80px;
+        border: 8px solid #f3f3f3;
+        border-top: 8px solid #0A4A63;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Loading -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="text-white fs-4">Carregando VPN IPsec</div>
+    <div class="text-muted mt-2">Consultando Fortigate…</div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <h1 class="display-4">
+            <i class="bi bi-shield-lock me-2"></i> VPN IPsec
+        </h1>
+        <p class="lead text-muted">
+            Monitoramento dos túneis VPN via Fortigate
+        </p>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stats-card" style="background:linear-gradient(135deg,#012E40,#0A4A63,#0F6C8C)">
+            <div class="stats-number">{{ vpns|length }}</div>
+            <div class="stats-label">Total de Túneis</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="stats-card" style="background:linear-gradient(135deg,#20c997,#28a745)">
+            <div class="stats-number">
+                {{ vpns|selectattr('status','equalto','up')|list|length }}
+            </div>
+            <div class="stats-label">Túneis Ativos</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="stats-card" style="background:linear-gradient(135deg,#dc3545,#fd7e14)">
+            <div class="stats-number">
+                {{ vpns|selectattr('status','equalto','down')|list|length }}
+            </div>
+            <div class="stats-label">Túneis Inativos</div>
+        </div>
+    </div>
+</div>
+
+<!-- Botão -->
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <button class="btn btn-primary btn-lg" onclick="verificarVPN()">
+            <i class="bi bi-arrow-clockwise me-2"></i> Atualizar VPN
+        </button>
+    </div>
+</div>
+
+<!-- Lista -->
+<div class="row" id="vpn-container">
+{% for vpn in vpns %}
+    <div class="col-md-6 mb-4">
+        <div class="card vpn-card h-100">
+            <div class="card-header vpn-header {{ 'vpn-up' if vpn.status == 'up' else 'vpn-down' }}">
+                <div class="d-flex justify-content-between">
+                    <h5 class="mb-0">{{ vpn.tunel }}</h5>
+                    <span class="badge bg-light text-dark">
+                        {{ vpn.status|upper }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="card-body vpn-body">
+                <!-- <p><strong>Interface:</strong> {{ vpn.interface }}</p> -->
+                <p><strong>Status:</strong>
+                    {{ 'Online' if vpn.status == 'up' else 'Offline' }}
+                </p>
+                <p class="text-muted small">
+                    Última verificação: {{ vpn.ultima_verificacao }}
+                </p>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#loadingOverlay').hide();
+});
+
+function verificarVPN() {
+    $('#loadingOverlay').show();
+
+    $.post('/api/vpn/verificar')
+        .done(() => location.reload())
+        .fail(() => alert('Erro ao verificar VPN'))
+        .always(() => $('#loadingOverlay').hide());
+}
+</script>
+
+<script>
+async function atualizarVPN() {
+    const btn = document.getElementById("btnAtualizarVPN");
+    btn.disabled = true;
+    btn.innerText = "Atualizando...";
+
+    try {
+        const response = await fetch("/api/vpn/verificar", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            }
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(data.message || "Erro ao atualizar VPN");
+            return;
+        }
+
+        // Recarrega a página para refletir os novos dados
+        location.reload();
+
+    } catch (err) {
+        alert("Erro ao conectar com o servidor");
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Atualizar VPN";
+    }
+}
+</script>
+
+{% endblock %}

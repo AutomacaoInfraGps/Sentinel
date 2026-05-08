@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Automação</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --gps-primary: #012E40;
+            --gps-primary-soft: #0A4A63;
+            --gps-accent: #0F6C8C;
+            --gps-surface: rgba(249, 252, 255, 0.96);
+            --gps-border: rgba(1, 46, 64, 0.12);
+            --gps-shadow: rgba(1, 46, 64, 0.18);
+            --gps-text: #13313e;
+            --gps-muted: #60717a;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100svh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(12px, 2.2vw, 20px);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 26%),
+                linear-gradient(135deg, var(--gps-primary) 0%, var(--gps-primary-soft) 52%, var(--gps-accent) 100%);
+            overflow: hidden;
+        }
+        
+        .login-container {
+            background: var(--gps-surface);
+            backdrop-filter: blur(16px);
+            border-radius: 28px;
+            box-shadow: 0 28px 60px var(--gps-shadow);
+            padding: clamp(1.5rem, 3vw, 2.35rem);
+            width: 100%;
+            max-width: 560px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            max-height: calc(100svh - 24px);
+        }
+        
+        .login-header {
+            text-align: center;
+            margin-bottom: 1.15rem;
+        }
+
+        .gps-wordmark {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.55rem;
+            margin-bottom: 0.65rem;
+            color: var(--gps-primary);
+            line-height: 1;
+        }
+
+        .gps-wordmark-small {
+            font-size: clamp(1.1rem, 2vw, 1.4rem);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+
+        .gps-wordmark-large {
+            font-size: clamp(2.2rem, 4.8vw, 3.4rem);
+            font-weight: 900;
+            letter-spacing: -0.05em;
+        }
+        
+        .login-header h1 {
+            color: var(--gps-text);
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            font-size: clamp(2rem, 4vw, 2.7rem);
+        }
+        
+        .login-header p {
+            color: var(--gps-muted);
+            margin-bottom: 0;
+            font-size: 0.98rem;
+        }
+        
+        .form-floating {
+            margin-bottom: 1rem;
+        }
+        
+        .form-control {
+            border: 1px solid var(--gps-border);
+            border-radius: 14px;
+            padding: 1rem 1rem;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--gps-text);
+        }
+        
+        .form-control:focus {
+            border-color: rgba(1, 46, 64, 0.4);
+            box-shadow: 0 0 0 0.2rem rgba(1, 46, 64, 0.12);
+        }
+        
+        .btn-login {
+            background: linear-gradient(135deg, var(--gps-primary) 0%, var(--gps-primary-soft) 100%);
+            border: none;
+            border-radius: 14px;
+            padding: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            width: 100%;
+            box-shadow: 0 14px 26px rgba(1, 46, 64, 0.18);
+        }
+        
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 28px rgba(1, 46, 64, 0.22);
+            background: linear-gradient(135deg, var(--gps-primary-soft) 0%, var(--gps-accent) 100%);
+        }
+        
+        .btn-login:disabled {
+            opacity: 0.7;
+            transform: none;
+        }
+        
+        .alert {
+            border-radius: 14px;
+            border: none;
+            margin-bottom: 1rem;
+        }
+        
+        .domain-info {
+            background: linear-gradient(180deg, rgba(1, 46, 64, 0.07), rgba(15, 108, 140, 0.08));
+            border-radius: 16px;
+            padding: 0.95rem 0.95rem;
+            margin-bottom: 1.1rem;
+            text-align: center;
+            border: 1px solid rgba(1, 46, 64, 0.08);
+        }
+        
+        .domain-info small {
+            color: var(--gps-accent);
+            font-weight: 500;
+            display: block;
+            line-height: 1.55;
+        }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .system-info {
+            text-align: center;
+            margin-top: 1.1rem;
+            padding-top: 0.95rem;
+            border-top: 1px solid rgba(1, 46, 64, 0.08);
+        }
+        
+        .system-info small {
+            color: var(--gps-muted);
+            line-height: 1.5;
+        }
+
+        .system-info strong,
+        .domain-info strong {
+            color: var(--gps-primary);
+        }
+
+        @media (max-width: 576px) {
+            body {
+                align-items: stretch;
+                overflow: auto;
+            }
+
+            .login-container {
+                max-height: none;
+                border-radius: 22px;
+            }
+        }
+
+        @media (max-height: 820px) {
+            .login-container {
+                padding: 1.35rem;
+            }
+
+            .login-header {
+                margin-bottom: 0.9rem;
+            }
+
+            .gps-wordmark {
+                margin-bottom: 0.45rem;
+            }
+
+            .login-header h1 {
+                font-size: clamp(1.8rem, 3.4vw, 2.35rem);
+            }
+
+            .form-floating {
+                margin-bottom: 0.8rem;
+            }
+
+            .form-control {
+                padding: 0.9rem 0.95rem;
+            }
+
+            .btn-login {
+                padding: 0.9rem;
+            }
+
+            .domain-info {
+                margin-bottom: 0.9rem;
+            }
+
+            .system-info {
+                margin-top: 0.9rem;
+                padding-top: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="gps-wordmark" aria-label="Grupo GPS">
+                <span class="gps-wordmark-small">GRUPO</span>
+                <span class="gps-wordmark-large">GPS</span>
+            </div>
+            <h1>Sistema de Automação</h1>
+            <p>Autenticação Active Directory</p>
+        </div>
+        
+        <div class="domain-info">
+            <small>
+                <i class="bi bi-building me-1"></i>
+                Acesso corporativo GPS<br>
+                <i class="bi bi-people me-1"></i>
+                Use sua credencial autorizada para entrar no painel
+            </small>
+        </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST" id="loginForm">
+            <div class="form-floating">
+                <input type="text" 
+                       class="form-control" 
+                       id="username" 
+                       name="username" 
+                       placeholder="Usuário"
+                       required
+                       autocomplete="username">
+                <label for="username">
+                    <i class="bi bi-person me-2"></i>Usuário
+                </label>
+            </div>
+            
+            <div class="form-floating">
+                <input type="password" 
+                       class="form-control" 
+                       id="password" 
+                       name="password" 
+                       placeholder="Senha"
+                       required
+                       autocomplete="current-password">
+                <label for="password">
+                    <i class="bi bi-lock me-2"></i>Senha
+                </label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-login" id="btnLogin">
+                <span class="btn-text">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                    Entrar
+                </span>
+                <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </span>
+            </button>
+        </form>
+        
+        <div class="system-info">
+            <small>
+                <i class="bi bi-shield-check me-1"></i>
+                Ambiente monitorado com autenticação centralizada<br>
+                <i class="bi bi-window-stack me-1"></i>
+                Painel otimizado para acesso rápido e seguro
+            </small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const btn = document.getElementById('btnLogin');
+            const btnText = btn.querySelector('.btn-text');
+            const spinner = btn.querySelector('.loading-spinner');
+            
+            // Mostra loading
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'inline-block';
+            
+            // Se houver erro, restaura o botão após 3 segundos
+            setTimeout(() => {
+                btn.disabled = false;
+                btnText.style.display = 'inline-block';
+                spinner.style.display = 'none';
+            }, 3000);
+        });
+        
+        // Auto-focus no campo usuário
+        document.getElementById('username').focus();
+        
+        // Enter no campo usuário vai para senha
+        document.getElementById('username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('password').focus();
+            }
+        });
+    </script>
+</body>
+</html>

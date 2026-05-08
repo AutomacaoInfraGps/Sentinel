@@ -130,6 +130,8 @@ class WizardConfiguracao:
         senha_unifi = input("   Senha: ").strip()
         if not senha_unifi:
             senha_unifi = unifi_config.get('password', '')
+
+        unifi_clients_config = self.configuracao.get("unifi_clients_dashboard", {})
         
         # Configuração do GPS Amigo
         print("\n🗺️ GPS Amigo:")
@@ -151,6 +153,14 @@ class WizardConfiguracao:
                 "port": porta_unifi,
                 "username": usuario_unifi,
                 "password": senha_unifi
+            },
+            "unifi_clients_dashboard": {
+                "site": unifi_clients_config.get('site', 'brihqlgm'),
+                "clients_path": unifi_clients_config.get('clients_path', '/manage/brihqlgm/clients/online'),
+                "wifi_filter": unifi_clients_config.get('wifi_filter', 'MARTE'),
+                "title": unifi_clients_config.get('title', 'Rede MARTE'),
+                "username": unifi_clients_config.get('username', ''),
+                "password": unifi_clients_config.get('password', '')
             },
             "gps_amigo": {
                 "url": url_gps

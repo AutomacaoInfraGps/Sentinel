@@ -46,7 +46,7 @@ Este script irá:
 
 ### 🌐 Método 1: Interface Web (RECOMENDADO)
 ```bash
-python iniciar_web.py
+powershell -ExecutionPolicy Bypass -File .\restart_web_service.ps1
 ```
 **Interface moderna e intuitiva!** Acesse: http://localhost:5000
 - 🎨 Design responsivo e moderno
@@ -73,7 +73,7 @@ python manage.py add
 
 ### 🌐 Via Interface Web (Recomendado)
 ```bash
-python iniciar_web.py
+powershell -ExecutionPolicy Bypass -File .\restart_web_service.ps1
 # Acesse: http://localhost:5000 → Seção "Servidores"
 ```
 
@@ -167,7 +167,26 @@ O design pode ser personalizado editando as variáveis CSS em `executar_tudo.py`
 
 - **Credenciais Separadas**: Senhas ficam no `environment.json` (não no código)
 - **Arquivo .gitignore**: Evita commit acidental de credenciais
+- **Planilhas Sensíveis Fora do Git**: Bases como `Lideres.xlsx`, `switches_zabbix.xlsx` e backups `.xlsx` devem permanecer apenas no ambiente local
 - **Validação de Entrada**: Verificação de configurações antes da execução
+
+### Arquivos Que Não Devem Ser Versionados
+
+Antes de publicar o projeto em Git, mantenha fora do repositório:
+
+- `environment.json`
+- `Conexoes.txt`
+- planilhas operacionais e backups (`*.xlsx`, `*.xls`, `*.xlsm`, `*.csv`)
+- arquivos de autenticação e sessão (`auth_state.json`, perfis locais do navegador)
+- saídas geradas automaticamente (`output/`, `logs/`, relatórios e auditorias locais)
+
+Se em algum momento for necessário versionar a estrutura de uma planilha, use apenas um arquivo de exemplo sanitizado, sem nomes reais, e-mails reais, senhas, IPs, tokens ou qualquer dado operacional.
+
+### Antes de Subir Para Git
+
+1. Revise se não existem credenciais, e-mails reais, IPs internos ou planilhas operacionais na área de commit.
+2. Confirme que o `.gitignore` está cobrindo os arquivos locais do ambiente.
+3. Se algum arquivo sensível já tiver sido adicionado anteriormente ao Git, remova-o do índice antes do push com `git rm --cached <arquivo>`.
 
 ## 📝 Logs
 

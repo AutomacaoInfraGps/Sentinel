@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Replicação Active Directory{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Replicação Active Directory</h1>
+    
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Controle</h5>
+                        <form action="/executar_replicacao_direto" method="post">
+                            <button type="submit" class="btn btn-light btn-sm">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Atualizar Dados
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                Clique em "Atualizar Dados" para verificar a replicação do Active Directory.
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total de Servidores</h5>
+                    <h2>{{ replicacao_data.total_servidores|default('-', true) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Servidores Saudáveis</h5>
+                    <h2>{{ replicacao_data.servidores_saudaveis|default('-', true) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Servidores com Problemas</h5>
+                    <h2>{{ replicacao_data.servidores_problemas|default('-', true) }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- DSA Origem -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">DSA Origem</h5>
+                </div>
+                <div class="card-body">
+                    {% if replicacao_data and replicacao_data.servidores %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Servidor</th>
+                                        <th>Status</th>
+                                        <th>Delta</th>
+                                        <th>Falhas</th>
+                                        <th>Total</th>
+                                        <th>Detalhes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for servidor in replicacao_data.servidores %}
+                                        {% if servidor.tipo == 'Origem' %}
+                                            <tr>
+                                                <td>{{ servidor.nome }}</td>
+                                                <td>
+                                                    {% if servidor.status == 'OK' %}
+                                                        <span class="badge bg-success">Saudável</span>
+                                                    {% elif servidor.status == 'Warning' %}
+                                                        <span class="badge bg-warning">Atenção</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Problema</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ servidor.delta|default('N/A', true) }}</td>
+                                                <td>{{ servidor.falhas|default('0', true) }}</td>
+                                                <td>{{ servidor.parceiros|default('0', true) }}</td>
+                                                <td>{{ servidor.detalhes|default('', true) }}</td>
+                                            </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            Nenhum dado de replicação disponível. Clique em "Atualizar Dados" para verificar.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- DSA Destino -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">DSA Destino</h5>
+                </div>
+                <div class="card-body">
+                    {% if replicacao_data and replicacao_data.servidores %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Servidor</th>
+                                        <th>Status</th>
+                                        <th>Delta</th>
+                                        <th>Falhas</th>
+                                        <th>Total</th>
+                                        <th>Detalhes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for servidor in replicacao_data.servidores %}
+                                        {% if servidor.tipo == 'Destino' %}
+                                            <tr>
+                                                <td>{{ servidor.nome }}</td>
+                                                <td>
+                                                    {% if servidor.status == 'OK' %}
+                                                        <span class="badge bg-success">Saudável</span>
+                                                    {% elif servidor.status == 'Warning' %}
+                                                        <span class="badge bg-warning">Atenção</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Problema</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ servidor.delta|default('N/A', true) }}</td>
+                                                <td>{{ servidor.falhas|default('0', true) }}</td>
+                                                <td>{{ servidor.parceiros|default('0', true) }}</td>
+                                                <td>{{ servidor.detalhes|default('', true) }}</td>
+                                            </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            Nenhum dado de replicação disponível. Clique em "Atualizar Dados" para verificar.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Erros Operacionais -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Erros Operacionais</h5>
+                </div>
+                <div class="card-body">
+                    {% if replicacao_data and replicacao_data.erros_operacionais and replicacao_data.erros_operacionais|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Erro</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for erro in replicacao_data.erros_operacionais %}
+                                        <tr>
+                                            <td>{{ erro }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-success">
+                            Nenhum erro operacional encontrado.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

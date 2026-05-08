@@ -1,0 +1,631 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório Server Manager - {{ vm.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="display-5">
+            <i class="bi bi-file-earmark-text me-3"></i>
+            Relatório Server Manager - {{ vm.name }}
+        </h1>
+        <div>
+            <button class="btn btn-outline-primary me-2" onclick="atualizarRelatorio()">
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                Atualizar
+            </button>
+            <button class="btn btn-outline-success" onclick="exportarHTML()">
+                <i class="bi bi-file-earmark-code me-2"></i>
+                Exportar HTML
+            </button>
+        </div>
+    </div>
+    
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        <strong>Data da Coleta:</strong> <span id="dataColeta">Carregando...</span>
+    </div>
+    
+    <!-- Roles e Features Instaladas -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h5 mb-0"><i class="bi bi-boxes me-2"></i> Roles e Features Instaladas</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Nome Interno</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="featuresTable">
+                        <tr>
+                            <td colspan="3" class="text-center">Carregando roles e features...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Serviços Relacionados -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h2 class="h5 mb-0"><i class="bi bi-gear me-2"></i> Serviços Relacionados (AD, DNS, DHCP, File)</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Nome Interno</th>
+                            <th>Status</th>
+                            <th>Tipo de Inicialização</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servicosTable">
+                        <tr>
+                            <td colspan="4" class="text-center">Carregando serviços...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Eventos de Erro -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h2 class="h5 mb-0"><i class="bi bi-exclamation-triangle me-2"></i> Últimos 10 Eventos de Erro (System)</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Fonte</th>
+                            <th>ID</th>
+                            <th>Mensagem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventosTable">
+                        <tr>
+                            <td colspan="4" class="text-center">Carregando eventos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Processos -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h2 class="h5 mb-0"><i class="bi bi-cpu me-2"></i> Top 10 Processos por Uso de CPU</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>CPU</th>
+                            <th>Memória (MB)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="processosTable">
+                        <tr>
+                            <td colspan="3" class="text-center">Carregando processos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- BPA -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h2 class="h5 mb-0"><i class="bi bi-check-circle me-2"></i> Resultado do Best Practice Analyzer (AD DS)</h2>
+        </div>
+        <div class="card-body">
+            <div id="bpaResults">
+                <p class="text-center">Carregando resultados do BPA...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Informações do Sistema -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h2 class="h5 mb-0"><i class="bi bi-pc-display me-2"></i> Informações do Sistema</h2>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-striped">
+                        <tbody>
+                            <tr>
+                                <th>Nome do Computador</th>
+                                <td id="computerName">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Sistema Operacional</th>
+                                <td id="operatingSystem">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Versão do SO</th>
+                                <td id="osVersion">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Fabricante</th>
+                                <td id="manufacturer">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Modelo</th>
+                                <td id="model">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-striped">
+                        <tbody>
+                            <tr>
+                                <th>Processadores</th>
+                                <td id="processors">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Memória (GB)</th>
+                                <td id="memory">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Último Boot</th>
+                                <td id="lastBoot">Carregando...</td>
+                            </tr>
+                            <tr>
+                                <th>Uptime</th>
+                                <td id="uptime">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Discos -->
+            <h3 class="h6 mt-4 mb-3">Discos</h3>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Drive</th>
+                            <th>Espaço Livre (GB)</th>
+                            <th>Espaço Total (GB)</th>
+                            <th>% Livre</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="disksTable">
+                        <tr>
+                            <td colspan="5" class="text-center">Carregando informações de disco...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script para exportar HTML -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        carregarRelatorio();
+    });
+    
+    function carregarRelatorio() {
+        fetch('/api/vms/{{ vm.id }}/relatorio')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    preencherRelatorio(data);
+                } else {
+                    alert('Erro ao carregar relatório: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao carregar relatório');
+            });
+    }
+    
+    function atualizarRelatorio() {
+        // Limpa as tabelas
+        document.getElementById('featuresTable').innerHTML = '<tr><td colspan="3" class="text-center">Atualizando...</td></tr>';
+        document.getElementById('servicosTable').innerHTML = '<tr><td colspan="4" class="text-center">Atualizando...</td></tr>';
+        document.getElementById('eventosTable').innerHTML = '<tr><td colspan="4" class="text-center">Atualizando...</td></tr>';
+        document.getElementById('processosTable').innerHTML = '<tr><td colspan="3" class="text-center">Atualizando...</td></tr>';
+        document.getElementById('bpaResults').innerHTML = '<p class="text-center">Atualizando...</p>';
+        document.getElementById('disksTable').innerHTML = '<tr><td colspan="5" class="text-center">Atualizando...</td></tr>';
+        
+        // Recarrega os dados
+        carregarRelatorio();
+    }
+    
+    function preencherRelatorio(data) {
+        // Preenche as informações básicas
+        document.getElementById('dataColeta').textContent = data.data;
+        
+        // Preenche as informações do sistema
+        if (data.sistema && !data.sistema.error) {
+            document.getElementById('computerName').textContent = data.sistema.ComputerName || 'N/A';
+            document.getElementById('operatingSystem').textContent = data.sistema.OperatingSystem || 'N/A';
+            document.getElementById('osVersion').textContent = data.sistema.OSVersion || 'N/A';
+            document.getElementById('manufacturer').textContent = data.sistema.Manufacturer || 'N/A';
+            document.getElementById('model').textContent = data.sistema.Model || 'N/A';
+            document.getElementById('processors').textContent = data.sistema.Processors || 'N/A';
+            document.getElementById('memory').textContent = data.sistema.Memory || 'N/A';
+            document.getElementById('lastBoot').textContent = data.sistema.LastBoot || 'N/A';
+            document.getElementById('uptime').textContent = data.sistema.Uptime || 'N/A';
+            
+            // Preenche a tabela de discos
+            const disksTable = document.getElementById('disksTable');
+            disksTable.innerHTML = '';
+            
+            if (data.sistema.Disks && data.sistema.Disks.length > 0) {
+                data.sistema.Disks.forEach(disk => {
+                    const row = document.createElement('tr');
+                    
+                    // Define a classe de status com base no espaço livre
+                    let statusClass = 'success';
+                    let statusText = 'OK';
+                    
+                    if (disk.PercentFree < 10) {
+                        statusClass = 'danger';
+                        statusText = 'Crítico';
+                    } else if (disk.PercentFree < 20) {
+                        statusClass = 'warning';
+                        statusText = 'Atenção';
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${disk.Drive}</td>
+                        <td>${disk.FreeGB}</td>
+                        <td>${disk.TotalGB}</td>
+                        <td>${disk.PercentFree}%</td>
+                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                    `;
+                    
+                    disksTable.appendChild(row);
+                });
+            } else {
+                disksTable.innerHTML = '<tr><td colspan="5" class="text-center">Nenhuma informação de disco disponível</td></tr>';
+            }
+        } else {
+            const errorMsg = data.sistema && data.sistema.error ? data.sistema.error : 'Erro ao carregar informações do sistema';
+            document.getElementById('computerName').textContent = 'Erro';
+            document.getElementById('operatingSystem').textContent = 'Erro';
+            document.getElementById('osVersion').textContent = 'Erro';
+            document.getElementById('manufacturer').textContent = 'Erro';
+            document.getElementById('model').textContent = 'Erro';
+            document.getElementById('processors').textContent = 'Erro';
+            document.getElementById('memory').textContent = 'Erro';
+            document.getElementById('lastBoot').textContent = 'Erro';
+            document.getElementById('uptime').textContent = 'Erro';
+            document.getElementById('disksTable').innerHTML = `<tr><td colspan="5" class="text-center">${errorMsg}</td></tr>`;
+        }
+        
+        // Preenche a tabela de features
+        const featuresTable = document.getElementById('featuresTable');
+        featuresTable.innerHTML = '';
+        
+        if (data.features && data.features.length > 0 && !data.features[0].error) {
+            data.features.forEach(feature => {
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${feature.DisplayName || 'N/A'}</td>
+                    <td>${feature.Name || 'N/A'}</td>
+                    <td>${feature.InstallState || 'N/A'}</td>
+                `;
+                
+                featuresTable.appendChild(row);
+            });
+        } else {
+            const errorMsg = data.features && data.features[0] && data.features[0].error ? data.features[0].error : 'Nenhuma informação de features disponível';
+            featuresTable.innerHTML = `<tr><td colspan="3" class="text-center">${errorMsg}</td></tr>`;
+        }
+        
+        // Preenche a tabela de serviços
+        const servicosTable = document.getElementById('servicosTable');
+        servicosTable.innerHTML = '';
+        
+        if (data.servicos && data.servicos.length > 0 && !data.servicos[0].error) {
+            data.servicos.forEach(service => {
+                const row = document.createElement('tr');
+                
+                // Define a classe de status
+                let statusClass = 'secondary';
+                if (service.Status === 'Running') {
+                    statusClass = 'success';
+                } else if (service.Status === 'Stopped') {
+                    statusClass = 'danger';
+                }
+                
+                row.innerHTML = `
+                    <td>${service.DisplayName || 'N/A'}</td>
+                    <td>${service.Name || 'N/A'}</td>
+                    <td><span class="badge bg-${statusClass}">${service.Status || 'N/A'}</span></td>
+                    <td>${service.StartType || 'N/A'}</td>
+                `;
+                
+                servicosTable.appendChild(row);
+            });
+        } else {
+            const errorMsg = data.servicos && data.servicos[0] && data.servicos[0].error ? data.servicos[0].error : 'Nenhuma informação de serviços disponível';
+            servicosTable.innerHTML = `<tr><td colspan="4" class="text-center">${errorMsg}</td></tr>`;
+        }
+        
+        // Preenche a tabela de eventos
+        const eventosTable = document.getElementById('eventosTable');
+        eventosTable.innerHTML = '';
+        
+        if (data.eventos && data.eventos.length > 0 && !data.eventos[0].error) {
+            data.eventos.forEach(event => {
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${event.TimeGenerated || 'N/A'}</td>
+                    <td>${event.Source || 'N/A'}</td>
+                    <td>${event.EventID || 'N/A'}</td>
+                    <td>${event.Message || 'N/A'}</td>
+                `;
+                
+                eventosTable.appendChild(row);
+            });
+        } else {
+            const errorMsg = data.eventos && data.eventos[0] && data.eventos[0].error ? data.eventos[0].error : 'Nenhuma informação de eventos disponível';
+            eventosTable.innerHTML = `<tr><td colspan="4" class="text-center">${errorMsg}</td></tr>`;
+        }
+        
+        // Preenche a tabela de processos
+        const processosTable = document.getElementById('processosTable');
+        processosTable.innerHTML = '';
+        
+        if (data.processos && data.processos.length > 0 && !data.processos[0].error) {
+            data.processos.forEach(process => {
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${process.Name || 'N/A'}</td>
+                    <td>${process.CPU || 'N/A'}</td>
+                    <td>${process.WorkingSet || 'N/A'}</td>
+                `;
+                
+                processosTable.appendChild(row);
+            });
+        } else {
+            const errorMsg = data.processos && data.processos[0] && data.processos[0].error ? data.processos[0].error : 'Nenhuma informação de processos disponível';
+            processosTable.innerHTML = `<tr><td colspan="3" class="text-center">${errorMsg}</td></tr>`;
+        }
+        
+        // Preenche os resultados do BPA
+        const bpaResults = document.getElementById('bpaResults');
+        
+        if (data.bpa && !data.bpa.error) {
+            if (data.bpa.message) {
+                // Se for uma mensagem simples
+                bpaResults.innerHTML = `<div class="alert alert-info">${data.bpa.message}</div>`;
+            } else if (Array.isArray(data.bpa) && data.bpa.length > 0) {
+                // Se for uma lista de resultados
+                let bpaHtml = '<div class="table-responsive"><table class="table table-striped">';
+                bpaHtml += '<thead><tr><th>Severidade</th><th>Título</th><th>Conformidade</th><th>Problema</th><th>Impacto</th><th>Resolução</th></tr></thead>';
+                bpaHtml += '<tbody>';
+                
+                data.bpa.forEach(result => {
+                    let severityClass = 'secondary';
+                    if (result.Severity === 'Error') {
+                        severityClass = 'danger';
+                    } else if (result.Severity === 'Warning') {
+                        severityClass = 'warning';
+                    }
+                    
+                    bpaHtml += `<tr>
+                        <td><span class="badge bg-${severityClass}">${result.Severity || 'N/A'}</span></td>
+                        <td>${result.Title || 'N/A'}</td>
+                        <td>${result.Compliance || 'N/A'}</td>
+                        <td>${result.Problem || 'N/A'}</td>
+                        <td>${result.Impact || 'N/A'}</td>
+                        <td>${result.Resolution || 'N/A'}</td>
+                    </tr>`;
+                });
+                
+                bpaHtml += '</tbody></table></div>';
+                bpaResults.innerHTML = bpaHtml;
+            } else {
+                bpaResults.innerHTML = '<div class="alert alert-info">Nenhum resultado BPA disponível</div>';
+            }
+        } else {
+            const errorMsg = data.bpa && data.bpa.error ? data.bpa.error : 'Erro ao carregar resultados do BPA';
+            bpaResults.innerHTML = `<div class="alert alert-danger">${errorMsg}</div>`;
+        }
+    }
+    
+    function exportarHTML() {
+        // Cria um HTML completo para exportação
+        const htmlContent = `
+        <html>
+        <head>
+            <title>Relatório Server Manager - {{ vm.name }}</title>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: Arial; margin: 20px; }
+                h2 { color: #2A5DB0; border-bottom: 1px solid #ccc; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 40px; }
+                th, td { border: 1px solid #ccc; padding: 8px; }
+                th { background-color: #f2f2f2; text-align: left; }
+                .badge { 
+                    padding: 3px 8px; 
+                    border-radius: 4px; 
+                    color: white; 
+                    font-size: 12px;
+                }
+                .bg-success { background-color: #28a745; }
+                .bg-warning { background-color: #ffc107; color: black; }
+                .bg-danger { background-color: #dc3545; }
+                .bg-secondary { background-color: #6c757d; }
+            </style>
+        </head>
+        <body>
+            <h1>Relatório Server Manager - {{ vm.name }}</h1>
+            <p>Data da Coleta: ${document.getElementById('dataColeta').textContent}</p>
+            
+            <h2>Roles e Features Instaladas</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Nome Interno</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${document.getElementById('featuresTable').innerHTML}
+                </tbody>
+            </table>
+            
+            <h2>Serviços Relacionados (AD, DNS, DHCP, File)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Nome Interno</th>
+                        <th>Status</th>
+                        <th>Tipo de Inicialização</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${document.getElementById('servicosTable').innerHTML}
+                </tbody>
+            </table>
+            
+            <h2>Últimos 10 Eventos de Erro (System)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Fonte</th>
+                        <th>ID</th>
+                        <th>Mensagem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${document.getElementById('eventosTable').innerHTML}
+                </tbody>
+            </table>
+            
+            <h2>Top 10 Processos por Uso de CPU</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>CPU</th>
+                        <th>Memória (MB)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${document.getElementById('processosTable').innerHTML}
+                </tbody>
+            </table>
+            
+            <h2>Resultado do Best Practice Analyzer (AD DS)</h2>
+            <div>
+                ${document.getElementById('bpaResults').innerHTML}
+            </div>
+            
+            <h2>Informações do Sistema</h2>
+            <div>
+                <table>
+                    <tbody>
+                        <tr>
+                            <th>Nome do Computador</th>
+                            <td>${document.getElementById('computerName').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Sistema Operacional</th>
+                            <td>${document.getElementById('operatingSystem').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Versão do SO</th>
+                            <td>${document.getElementById('osVersion').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Fabricante</th>
+                            <td>${document.getElementById('manufacturer').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Modelo</th>
+                            <td>${document.getElementById('model').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Processadores</th>
+                            <td>${document.getElementById('processors').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Memória (GB)</th>
+                            <td>${document.getElementById('memory').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Último Boot</th>
+                            <td>${document.getElementById('lastBoot').textContent}</td>
+                        </tr>
+                        <tr>
+                            <th>Uptime</th>
+                            <td>${document.getElementById('uptime').textContent}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h3>Discos</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Drive</th>
+                            <th>Espaço Livre (GB)</th>
+                            <th>Espaço Total (GB)</th>
+                            <th>% Livre</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${document.getElementById('disksTable').innerHTML}
+                    </tbody>
+                </table>
+            </div>
+        </body>
+        </html>
+        `;
+        
+        // Cria um Blob com o conteúdo HTML
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        
+        // Cria um link para download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Relatorio_ServerManager_{{ vm.name }}.html';
+        
+        // Adiciona o link ao documento, clica nele e remove
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Libera o URL
+        URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

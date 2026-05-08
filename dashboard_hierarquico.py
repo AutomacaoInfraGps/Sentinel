@@ -360,7 +360,7 @@ class DashboardHierarquico:
     <div class="container">
         <div class="header">
             <h1> Dashboard Hierárquico</h1>
-            <p class="subtitle">Monitoramento de Regionais e Servidores iDRAC/ILO</p>
+            <p class="subtitle">Monitoramento de Regionais e Servidores</p>
         </div>
         
         <div class="stats-grid">

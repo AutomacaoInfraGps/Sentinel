@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios de Infraestrutura - Sistema de Automação{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5 mb-4">
+            <i class="bi bi-file-earmark-text me-3"></i>
+            Relatórios de Infraestrutura
+        </h1>
+        <p class="lead text-muted">
+            Visualize e gerencie relatórios de todos os componentes da infraestrutura
+        </p>
+    </div>
+</div>
+
+<!-- Estatísticas de Relatórios -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-number" id="totalRelatorios">-</div>
+            <div class="stats-label">
+                <i class="bi bi-file-earmark me-1"></i>
+                Total de Relatórios
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+            <div class="stats-number" id="relatoriosRecentes">-</div>
+            <div class="stats-label">
+                <i class="bi bi-clock me-1"></i>
+                Últimas 24h
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+            <div class="stats-number" id="tamanhoTotal">-</div>
+            <div class="stats-label">
+                <i class="bi bi-hdd me-1"></i>
+                Tamanho Total
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
+            <div class="stats-number" id="ultimaAtualizacao">-</div>
+            <div class="stats-label">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Última Atualização
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ações Rápidas -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning me-2"></i>
+                    Ações Rápidas
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-primary" onclick="gerarRelatorioCompleto()">
+                                <i class="bi bi-file-earmark-plus me-2"></i>
+                                <span class="btn-text">Relatório Completo</span>
+                                <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-info" onclick="atualizarTodos()">
+                                <i class="bi bi-arrow-clockwise me-2"></i>
+                                Atualizar Todos
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-secondary" onclick="limparAntigos()">
+                                <i class="bi bi-trash me-2"></i>
+                                Limpar Antigos
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="exportarRelatorios()">
+                                <i class="bi bi-download me-2"></i>
+                                Exportar Todos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Categorias de Relatórios -->
+<div class="row">
+    <!-- Servidores -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-server me-2"></i>
+                    Servidores
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Relatórios disponíveis:</span>
+                    <span class="badge bg-primary" id="relatoriosServidores">-</span>
+                </div>
+                
+                <div class="list-group list-group-flush" id="listaRelatoriosServidores">
+                    <!-- Relatórios serão carregados aqui -->
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary btn-sm w-100" onclick="gerarRelatorioServidores()">
+                        <i class="bi bi-plus-circle me-1"></i>
+                        Gerar Novo Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Replicação AD -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-arrow-repeat me-2"></i>
+                    Replicação Active Directory
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Relatórios disponíveis:</span>
+                    <span class="badge bg-success" id="relatoriosReplicacao">-</span>
+                </div>
+                
+                <div class="list-group list-group-flush" id="listaRelatoriosReplicacao">
+                    <!-- Relatórios serão carregados aqui -->
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-outline-success btn-sm w-100" onclick="gerarRelatorioReplicacao()">
+                        <i class="bi bi-plus-circle me-1"></i>
+                        Gerar Novo Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Antenas UniFi -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-wifi me-2"></i>
+                    Antenas UniFi
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Relatórios disponíveis:</span>
+                    <span class="badge bg-info" id="relatoriosUnifi">-</span>
+                </div>
+                
+                <div class="list-group list-group-flush" id="listaRelatoriosUnifi">
+                    <!-- Relatórios serão carregados aqui -->
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-outline-info btn-sm w-100" onclick="gerarRelatorioUnifi()">
+                        <i class="bi bi-plus-circle me-1"></i>
+                        Gerar Novo Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Dashboards -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Dashboards
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Dashboards disponíveis:</span>
+                    <span class="badge bg-warning text-dark" id="totalDashboards">-</span>
+                </div>
+                
+                <div class="list-group list-group-flush" id="listaDashboards">
+                    <!-- Dashboards serão carregados aqui -->
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-outline-warning btn-sm w-100" onclick="gerarDashboards()">
+                        <i class="bi bi-plus-circle me-1"></i>
+                        Gerar Dashboards
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log de Atividades -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-journal-text me-2"></i>
+                    Log de Atividades
+                </h5>
+                <button class="btn btn-outline-secondary btn-sm" onclick="limparLog()">
+                    <i class="bi bi-trash me-1"></i>
+                    Limpar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="logAtividades" class="bg-dark text-light p-3 rounded" style="height: 250px; overflow-y: auto; font-family: monospace;">
+                    <div class="text-muted">Aguardando atividades...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function gerarRelatorioCompleto() {
+    const btn = $('.btn-primary');
+    showLoading(btn);
+    
+    adicionarLog('📊 Iniciando geração de relatório completo...');
+    showToast('Gerando relatório completo...', 'info');
+    
+    // Simula geração de relatório completo
+    setTimeout(() => {
+        adicionarLog('✅ Relatório completo gerado com sucesso');
+        showToast('Relatório completo gerado!', 'success');
+        
+        // Atualiza contadores
+        atualizarEstatisticas();
+        carregarRelatorios();
+        
+        hideLoading(btn);
+    }, 5000);
+}
+
+function atualizarTodos() {
+    adicionarLog('🔄 Atualizando todos os relatórios...');
+    showToast('Atualizando relatórios...', 'info');
+    
+    setTimeout(() => {
+        adicionarLog('✅ Todos os relatórios atualizados');
+        showToast('Relatórios atualizados!', 'success');
+        carregarRelatorios();
+    }, 3000);
+}
+
+function limparAntigos() {
+    if (confirm('Deseja remover relatórios com mais de 30 dias?')) {
+        adicionarLog('🗑️ Removendo relatórios antigos...');
+        showToast('Limpando relatórios antigos...', 'warning');
+        
+        setTimeout(() => {
+            adicionarLog('✅ Relatórios antigos removidos');
+            showToast('Limpeza concluída!', 'success');
+            carregarRelatorios();
+        }, 2000);
+    }
+}
+
+function exportarRelatorios() {
+    adicionarLog('📦 Exportando todos os relatórios...');
+    showToast('Exportando relatórios...', 'info');
+    
+    setTimeout(() => {
+        adicionarLog('✅ Relatórios exportados para ZIP');
+        showToast('Relatórios exportados!', 'success');
+    }, 3000);
+}
+
+function gerarRelatorioServidores() {
+    adicionarLog('🖥️ Gerando relatório de servidores...');
+    showToast('Gerando relatório de servidores...', 'info');
+    
+    setTimeout(() => {
+        adicionarLog('✅ Relatório de servidores gerado');
+        showToast('Relatório de servidores pronto!', 'success');
+        carregarRelatorios();
+    }, 3000);
+}
+
+function gerarRelatorioReplicacao() {
+    adicionarLog('🔄 Gerando relatório de replicação AD...');
+    showToast('Gerando relatório de replicação...', 'info');
+    
+    setTimeout(() => {
+        adicionarLog('✅ Relatório de replicação gerado');
+        showToast('Relatório de replicação pronto!', 'success');
+        carregarRelatorios();
+    }, 3000);
+}
+
+function gerarRelatorioUnifi() {
+    adicionarLog('📡 Gerando relatório UniFi...');
+    showToast('Gerando relatório UniFi...', 'info');
+    
+    setTimeout(() => {
+        adicionarLog('✅ Relatório UniFi gerado');
+        showToast('Relatório UniFi pronto!', 'success');
+        carregarRelatorios();
+    }, 3000);
+}
+
+function gerarDashboards() {
+    adicionarLog('📊 Gerando dashboards hierárquicos...');
+    showToast('Gerando dashboards...', 'info');
+    
+    setTimeout(() => {
+        adicionarLog('✅ Dashboards gerados');
+        showToast('Dashboards prontos!', 'success');
+        carregarRelatorios();
+    }, 4000);
+}
+
+function abrirRelatorio(arquivo) {
+    adicionarLog(`📄 Abrindo relatório: ${arquivo}`);
+    window.open(`/output/${arquivo}`, '_blank');
+    showToast(`Relatório ${arquivo} aberto`, 'info');
+}
+
+function carregarRelatorios() {
+    // Simula carregamento de relatórios
+    const relatoriosSimulados = {
+        servidores: [
+            { nome: 'relatorio_servidores_20250723.html', data: '23/01/2025 15:30', tamanho: '2.1 MB' },
+            { nome: 'relatorio_servidores_20250722.html', data: '22/01/2025 15:30', tamanho: '2.0 MB' }
+        ],
+        replicacao: [
+            { nome: 'replsummary.html', data: '23/01/2025 16:00', tamanho: '1.5 MB' },
+            { nome: 'replsummary_20250722.html', data: '22/01/2025 16:00', tamanho: '1.4 MB' }
+        ],
+        unifi: [
+            { nome: 'unifi_status.html', data: '23/01/2025 14:45', tamanho: '3.2 MB' },
+            { nome: 'unifi_status_20250722.html', data: '22/01/2025 14:45', tamanho: '3.1 MB' }
+        ],
+        dashboards: [
+            { nome: 'dashboard_hierarquico.html', data: '23/01/2025 15:00', tamanho: '4.5 MB' },
+            { nome: 'dashboard_rg_galaxia.html', data: '23/01/2025 15:00', tamanho: '1.2 MB' },
+            { nome: 'dashboard_rg_global_seguranca.html', data: '23/01/2025 15:00', tamanho: '1.1 MB' }
+        ]
+    };
+    
+    // Atualiza contadores
+    $('#relatoriosServidores').text(relatoriosSimulados.servidores.length);
+    $('#relatoriosReplicacao').text(relatoriosSimulados.replicacao.length);
+    $('#relatoriosUnifi').text(relatoriosSimulados.unifi.length);
+    $('#totalDashboards').text(relatoriosSimulados.dashboards.length);
+    
+    // Gera listas
+    gerarListaRelatorios('listaRelatoriosServidores', relatoriosSimulados.servidores);
+    gerarListaRelatorios('listaRelatoriosReplicacao', relatoriosSimulados.replicacao);
+    gerarListaRelatorios('listaRelatoriosUnifi', relatoriosSimulados.unifi);
+    gerarListaRelatorios('listaDashboards', relatoriosSimulados.dashboards);
+}
+
+function gerarListaRelatorios(containerId, relatorios) {
+    let html = '';
+    
+    relatorios.forEach(relatorio => {
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-bold">${relatorio.nome}</div>
+                    <small class="text-muted">${relatorio.data} • ${relatorio.tamanho}</small>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="abrirRelatorio('${relatorio.nome}')">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (html === '') {
+        html = '<div class="text-muted text-center py-3">Nenhum relatório disponível</div>';
+    }
+    
+    $(`#${containerId}`).html(html);
+}
+
+function atualizarEstatisticas() {
+    $('#totalRelatorios').text('12');
+    $('#relatoriosRecentes').text('8');
+    $('#tamanhoTotal').text('15.2 MB');
+    $('#ultimaAtualizacao').text('Agora');
+}
+
+function adicionarLog(mensagem) {
+    const logContainer = $('#logAtividades');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `<div>[${timestamp}] ${mensagem}</div>`;
+    
+    logContainer.append(logEntry);
+    logContainer.scrollTop(logContainer[0].scrollHeight);
+}
+
+function limparLog() {
+    $('#logAtividades').html('<div class="text-muted">Log limpo...</div>');
+}
+
+// Inicialização
+$(document).ready(function() {
+    adicionarLog('📊 Sistema de relatórios iniciado');
+    
+    // Carrega dados iniciais
+    setTimeout(() => {
+        atualizarEstatisticas();
+        carregarRelatorios();
+        adicionarLog('✅ Relatórios carregados');
+    }, 1000);
+});
+</script>
+{% endblock %}

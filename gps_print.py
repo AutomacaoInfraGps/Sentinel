@@ -193,8 +193,12 @@ from config import (
     GPS_HTML,
     APPGATE_HTML,
     APPGATE_IMG,
+    UNIFI_CLIENTS_HTML,
+    UNIFI_CLIENTS_IMG,
     GPS_CONFIG,
     APPGATE_CONFIG,
+    UNIFI_CONFIG,
+    UNIFI_CLIENTS_DASHBOARD,
     SATURNO_PORTAL,
     SATURNO_OUTPUT_BASE,
     ensure_directories,
@@ -269,6 +273,257 @@ def _find_browser_exe() -> str | None:
         if c.exists():
             return str(c)
     return None
+
+
+def _wait_for_any_xpath(drv, xpaths: list[str], timeout: int):
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    def _predicate(_):
+        for xpath in xpaths:
+            try:
+                elements = drv.find_elements(By.XPATH, xpath)
+            except Exception:
+                continue
+            visible = [element for element in elements if element.is_displayed()]
+            if visible:
+                return visible[0]
+        return False
+
+    return WebDriverWait(drv, timeout).until(_predicate)
+
+
+def _find_clickable_by_text(drv, texts: list[str]):
+    from selenium.webdriver.common.by import By
+
+    lowered = [text.strip().lower() for text in texts if text]
+    if not lowered:
+        return None
+
+    elements = drv.find_elements(By.XPATH, "//button|//a|//span|//div|//label")
+    for element in elements:
+        try:
+            text = (element.text or "").strip().lower()
+        except Exception:
+            continue
+        if text in lowered and element.is_displayed():
+            return element
+    return None
+
+
+def _click_element(drv, element) -> None:
+    drv.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+    try:
+        element.click()
+    except Exception:
+        drv.execute_script("arguments[0].click();", element)
+
+
+def _find_visible_element_by_text(drv, texts: list[str]):
+    from selenium.webdriver.common.by import By
+
+    lowered = [text.strip().lower() for text in texts if text]
+    if not lowered:
+        return None
+
+    elements = drv.find_elements(By.XPATH, "//*[self::button or self::a or self::div or self::span or self::li]")
+    for element in elements:
+        try:
+            text = (element.text or "").strip().lower()
+        except Exception:
+            continue
+        if text in lowered and element.is_displayed():
+            return element
+    return None
+
+
+def _aplicar_filtro_unifi_por_coluna_wifi(drv, wifi_filter: str) -> bool:
+    script = r'''
+    const target = (arguments[0] || '').trim().toLowerCase();
+    if (!target) return false;
+
+    const tables = Array.from(document.querySelectorAll('table'));
+    for (const table of tables) {
+        const headers = Array.from(table.querySelectorAll('thead th, tr th'));
+        let wifiIndex = -1;
+        headers.forEach((header, index) => {
+            const text = (header.innerText || header.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            if (text === 'wifi') wifiIndex = index;
+        });
+        if (wifiIndex < 0) continue;
+
+        let visibleRows = 0;
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        rows.forEach((row) => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            if (!cells.length || cells.length <= wifiIndex) return;
+            const wifiText = (cells[wifiIndex].innerText || cells[wifiIndex].textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            if (wifiText === target) {
+                row.style.display = '';
+                visibleRows += 1;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const dropdowns = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .popover, .tooltip'));
+        dropdowns.forEach((el) => { el.style.display = 'none'; });
+
+        return visibleRows > 0;
+    }
+    return false;
+    '''
+    return bool(drv.execute_script(script, wifi_filter))
+
+
+def _wait_for_unifi_login(drv, timeout: int):
+    return _wait_for_any_xpath(drv, [
+        "//input[@type='password']",
+        "//input[contains(translate(@name,'PASSWORD','password'),'password')]",
+        "//input[contains(translate(@placeholder,'SENHAPASSWORD','senhapassword'),'password') or contains(translate(@placeholder,'SENHAPASSWORD','senhapassword'),'senha')]",
+    ], timeout)
+
+
+def _wait_for_unifi_clients_page(drv, timeout: int):
+    return _wait_for_any_xpath(drv, [
+        "//input[@type='search']",
+        "//input[contains(translate(@placeholder,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'search') or contains(translate(@placeholder,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'pesquisar') or contains(translate(@placeholder,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'procurar')]",
+        "//*[contains(translate(normalize-space(.),'CLIENT DEVICES','client devices'),'client devices')]",
+        "//*[contains(translate(normalize-space(.),'802.1X IDENTITY','802.1x identity'),'802.1x identity')]",
+    ], timeout)
+
+
+def gerar_print_unifi_clientes_marte(timeout: int = 60) -> Path:
+    """Gera um print autenticado da controladora UniFi filtrada pela Rede MARTE."""
+    ensure_directories()
+    OUTPUT_DIR_PUBLIC.mkdir(parents=True, exist_ok=True)
+    UNIFI_CLIENTS_HTML.parent.mkdir(parents=True, exist_ok=True)
+
+    host = (UNIFI_CONFIG.get("host") or "").strip()
+    port = int(UNIFI_CONFIG.get("port") or 8443)
+    username = (UNIFI_CLIENTS_DASHBOARD.get("username") or UNIFI_CONFIG.get("username") or "").strip()
+    password = UNIFI_CLIENTS_DASHBOARD.get("password") or UNIFI_CONFIG.get("password") or ""
+    site = (UNIFI_CLIENTS_DASHBOARD.get("site") or "brihqlgm").strip()
+    clients_path = (UNIFI_CLIENTS_DASHBOARD.get("clients_path") or f"/manage/{site}/clients/online").strip()
+    wifi_filter = (UNIFI_CLIENTS_DASHBOARD.get("wifi_filter") or "MARTE").strip()
+    title = (UNIFI_CLIENTS_DASHBOARD.get("title") or "Rede MARTE").strip()
+
+    if not host:
+        raise RuntimeError("unifi_controller.host nao configurado no environment.json")
+    if not username or not password:
+        raise RuntimeError("Credenciais da controladora UniFi nao configuradas no environment.json")
+
+    base_url = f"https://{host}:{port}"
+    target_url = f"{base_url}{clients_path if clients_path.startswith('/') else '/' + clients_path}"
+
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
+    opts = webdriver.EdgeOptions()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-background-networking")
+    opts.add_argument("--remote-debugging-port=0")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    opts.add_argument("--ignore-certificate-errors")
+    opts.add_argument("--allow-insecure-localhost")
+    opts.add_argument("--window-size=1920,1400")
+    opts.add_argument(f"--user-data-dir={PUBLIC_BASE / 'browser_profile_unifi_clients'}")
+    opts.set_capability("acceptInsecureCerts", True)
+
+    drv = webdriver.Edge(options=opts)
+    try:
+        drv.get(target_url)
+        WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(3)
+
+        login_required = False
+        try:
+            _wait_for_unifi_login(drv, 10)
+            login_required = True
+        except Exception:
+            login_required = False
+
+        if login_required:
+            username_input = _find_input(drv, [
+                "//input[@type='email' or @type='text'][1]",
+                "//input[contains(translate(@name,'USERNAMEEMAILLOGIN','usernameemaillogin'),'user') or contains(translate(@name,'USERNAMEEMAILLOGIN','usernameemaillogin'),'email') or contains(translate(@name,'USERNAMEEMAILLOGIN','usernameemaillogin'),'login')]",
+                "//input[contains(translate(@placeholder,'USERNAMEEMAILLOGINUSUARIO','usernameemailloginusuario'),'user') or contains(translate(@placeholder,'USERNAMEEMAILLOGINUSUARIO','usernameemailloginusuario'),'email') or contains(translate(@placeholder,'USERNAMEEMAILLOGINUSUARIO','usernameemailloginusuario'),'usuario')]",
+            ])
+            password_input = _find_input(drv, [
+                "//input[@type='password']",
+                "//input[contains(translate(@name,'PASSWORD','password'),'password')]",
+            ])
+
+            if username_input:
+                username_input.clear()
+                username_input.send_keys(username)
+            if not password_input:
+                raise RuntimeError("Campo de senha da controladora UniFi nao encontrado")
+            password_input.clear()
+            password_input.send_keys(password)
+
+            submit = _find_clickable_by_text(drv, ["sign in", "login", "entrar", "acessar"])
+            if submit:
+                _click_element(drv, submit)
+            else:
+                password_input.send_keys(Keys.ENTER)
+
+            WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            time.sleep(5)
+            drv.get(target_url)
+            WebDriverWait(drv, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            time.sleep(4)
+
+        _wait_for_unifi_clients_page(drv, timeout)
+
+        wifi_button = _find_clickable_by_text(drv, ["wifi", "wi-fi"])
+        if wifi_button:
+            _click_element(drv, wifi_button)
+            time.sleep(2)
+
+        search_input = _find_input(drv, [
+            "//input[@type='search']",
+            "//input[contains(translate(@placeholder,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'search') or contains(translate(@placeholder,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'pesquisar') or contains(translate(@placeholder,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'procurar')]",
+            "//input[contains(translate(@aria-label,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'search') or contains(translate(@aria-label,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'pesquisar') or contains(translate(@aria-label,'SEARCHPESQUISARPROCURAR','searchpesquisarprocurar'),'procurar')]",
+        ])
+        if not search_input:
+            raise RuntimeError("Campo de busca da pagina de clientes UniFi nao encontrado")
+
+        search_input.click()
+        drv.execute_script(
+            "arguments[0].value = arguments[1];"
+            "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));"
+            "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+            search_input,
+            wifi_filter,
+        )
+        time.sleep(1)
+
+        filtro_aplicado = _aplicar_filtro_unifi_por_coluna_wifi(drv, wifi_filter)
+        if filtro_aplicado:
+            time.sleep(1)
+        else:
+            search_input.send_keys(Keys.CONTROL, "a")
+            search_input.send_keys(Keys.DELETE)
+            search_input.send_keys(wifi_filter)
+            search_input.send_keys(Keys.ENTER)
+            time.sleep(2)
+
+        _wait_for_text(drv, [wifi_filter, "802.1x identity", "client devices"], timeout)
+        time.sleep(2)
+
+        drv.save_screenshot(str(UNIFI_CLIENTS_IMG))
+        UNIFI_CLIENTS_HTML.write_text(_html_from_named_image_base64(UNIFI_CLIENTS_IMG, title), encoding="utf-8")
+        return UNIFI_CLIENTS_IMG
+    finally:
+        drv.quit()
 
 
 def _silent_run(args: list[str], cwd: Path, timeout: int = 90) -> None:

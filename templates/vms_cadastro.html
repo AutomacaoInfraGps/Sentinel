@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Máquina Virtual - Sistema de Automação{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1 class="display-5">
+            <i class="bi bi-hdd-stack me-3"></i>
+            Cadastrar Máquina Virtual
+        </h1>
+        <p class="text-muted">Cadastro de novas máquinas virtuais no sistema</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="/vms" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>
+            Voltar para Lista
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-pc-display me-2"></i>
+            Dados da Máquina Virtual
+        </h5>
+    </div>
+    <div class="card-body">
+        <form id="formCadastroVM" method="post" action="/vms/cadastrar" onsubmit="return validarFormulario()">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome da VM *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                        <div class="form-text">Nome da máquina virtual</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="ip" class="form-label">Endereço (IP ou Hostname) *</label>
+                        <input type="text" class="form-control" id="ip" name="ip" required 
+                               pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                               placeholder="192.168.1.100">
+                        <div class="form-text">Endereço IP da máquina virtual</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="usuario" class="form-label">Usuário *</label>
+                        <input type="text" class="form-control" id="usuario" name="usuario" required value="Administrator">
+                        <div class="form-text">Usuário com acesso ao Server Manager na VM</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="regional" class="form-label">Regional *</label>
+                        <select class="form-select" id="regional" name="regional" required>
+                            <option value="">Selecione uma regional</option>
+                            {% for regional in regionais %}
+                            <option value="{{ regional }}">{{ regional }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Regional a que pertence a VM</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="senha" class="form-label">Senha *</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="senha" name="senha" required>
+                            <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('senha')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">Senha do usuário com acesso ao Server Manager</div>
+                    </div>
+                </div>
+                            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                        <div class="form-text">Descrição ou observações sobre a VM</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Nota:</strong> Este cadastro permite que o sistema se conecte ao Server Manager em execução na VM para obter informações sobre serviços e logs.
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="/vms" class="btn btn-outline-secondary me-md-2">Cancelar</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-2"></i>
+                    Cadastrar VM
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Função para alternar visibilidade da senha
+function toggleSenha(id) {
+    const input = document.getElementById(id);
+    if (input.type === 'password') {
+        input.type = 'text';
+    } else {
+        input.type = 'password';
+    }
+}
+
+// Função de validação do formulário
+function validarFormulario() {
+    const nome = document.getElementById('nome').value;
+    const ip = document.getElementById('ip').value;
+    const usuario = document.getElementById('usuario').value;
+    const senha = document.getElementById('senha').value;
+    const regional = document.getElementById('regional').value;
+    
+    if (!nome || !ip || !usuario || !senha || !regional) {
+        alert('Por favor, preencha todos os campos obrigatórios.');
+        return false;
+    }
+    
+    // Mostra o loading antes de enviar
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    return true;
+}
+
+// Funções de loading
+function showLoading() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}{{ acao }} Servidor - {{ regional_nome }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('detalhar_regional', codigo_regional=regional_codigo) }}" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="display-5 mb-2">
+                    <i class="bi bi-server me-3"></i>
+                    {{ acao }} Servidor
+                </h1>
+                <p class="text-muted">Regional: {{ regional_nome }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-{{ 'plus-circle' if acao == 'Adicionar' else 'pencil' }} me-2"></i>
+                    {{ acao }} Servidor
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="formServidor">
+                    <input type="hidden" id="regional_codigo" value="{{ regional_codigo }}">
+                    {% if servidor %}
+                    <input type="hidden" id="servidor_id" value="{{ servidor.id }}">
+                    {% endif %}
+                    
+                    <!-- Informações Básicas -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Informações Básicas
+                            </h6>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="nome" class="form-label">Nome do Servidor *</label>
+                            <input type="text" class="form-control" id="nome" 
+                                   value="{{ servidor.nome if servidor else '' }}" 
+                                   placeholder="Ex: Servidor BH 01" required>
+                            <div class="form-text">Nome identificador do servidor</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="sistema_operacional" class="form-label">Sistema Operacional</label>
+                            <select class="form-select" id="sistema_operacional">
+                                <option value="">Selecione o sistema operacional</option>
+                                <option value="win_server_22" {{ 'selected' if servidor and ((servidor.sistema_operacional == 'win_server_22') or (servidor.tipo == 'win_server_22')) else '' }}>
+                                    Win Server 22
+                                </option>
+                                <option value="win_server_19" {{ 'selected' if servidor and ((servidor.sistema_operacional == 'win_server_19') or (servidor.tipo == 'win_server_19')) else '' }}>
+                                    Win Server 19
+                                </option>
+                                <option value="win_server_16" {{ 'selected' if servidor and ((servidor.sistema_operacional == 'win_server_16') or (servidor.tipo == 'win_server_16')) else '' }}>
+                                    Win Server 16
+                                </option>
+                                <option value="ubuntu" {{ 'selected' if servidor and ((servidor.sistema_operacional == 'ubuntu') or (servidor.tipo == 'ubuntu')) else '' }}>
+                                    Ubuntu
+                                </option>
+                                <option value="debian" {{ 'selected' if servidor and ((servidor.sistema_operacional == 'debian') or (servidor.tipo == 'debian')) else '' }}>
+                                    Debian
+                                </option>
+                                <option value="centos" {{ 'selected' if servidor and ((servidor.sistema_operacional == 'centos') or (servidor.tipo == 'centos')) else '' }}>
+                                    CentOs
+                                </option>
+                            </select>
+                            <div class="form-text">Campo informativo do sistema operacional do servidor</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="modelo" class="form-label">Modelo do Servidor</label>
+                            <input type="text" class="form-control" id="modelo" 
+                                   value="{{ servidor.modelo if servidor else '' }}" 
+                                   placeholder="Ex: Dell PowerEdge R740">
+                            <div class="form-text">Modelo/série do servidor (opcional)</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="funcao" class="form-label">Função do Servidor *</label>
+                            <select class="form-select" id="funcao" required>
+                                <option value="Aplicação" {{ 'selected' if servidor and servidor.funcao == 'Aplicação' else '' }}>
+                                    Aplicação
+                                </option>
+                                <option value="Banco de Dados" {{ 'selected' if servidor and servidor.funcao == 'Banco de Dados' else '' }}>
+                                    Banco de Dados
+                                </option>
+                                <option value="Web Server" {{ 'selected' if servidor and servidor.funcao == 'Web Server' else '' }}>
+                                    Web Server
+                                </option>
+                                <option value="Backup" {{ 'selected' if servidor and servidor.funcao == 'Backup' else '' }}>
+                                    Backup
+                                </option>
+                                <option value="Virtualização" {{ 'selected' if servidor and servidor.funcao == 'Virtualização' else '' }}>
+                                    Virtualização
+                                </option>
+                                <option value="Storage" {{ 'selected' if servidor and servidor.funcao == 'Storage' else '' }}>
+                                    Storage
+                                </option>
+                                <option value="HOST" {{ 'selected' if servidor and servidor.funcao == 'HOST' else '' }}>
+                                    HOST
+                                </option>
+                                <option value="Controladora" {{ 'selected' if servidor and servidor.funcao == 'Controladora' else '' }}>
+                                    Controladora
+                                </option>
+                                <option value="Linux" {{ 'selected' if servidor and servidor.funcao == 'Linux' else '' }}>
+                                    Linux
+                                </option>
+                                <option value="DC" {{ 'selected' if servidor and servidor.funcao == 'DC' else '' }}>
+                                    DC
+                                </option>
+                                <option value="RODC" {{ 'selected' if servidor and servidor.funcao == 'RODC' else '' }}>
+                                    RODC
+                                </option>
+                                <option value="WSUS" {{ 'selected' if servidor and servidor.funcao == 'WSUS' else '' }}>
+                                    WSUS
+                                </option>
+                                <option value="RADIUS" {{ 'selected' if servidor and servidor.funcao == 'RADIUS' else '' }}>
+                                    RADIUS
+                                </option>
+                                <option value="API" {{ 'selected' if servidor and servidor.funcao == 'API' else '' }}>
+                                    API
+                                </option>
+                                <option value="ADMANAGER" {{ 'selected' if servidor and servidor.funcao == 'ADMANAGER' else '' }}>
+                                    ADMANAGER
+                                </option>
+                                <option value="SSO" {{ 'selected' if servidor and servidor.funcao == 'SSO' else '' }}>
+                                    SSO
+                                </option>
+
+                                <option value="Outros" {{ 'selected' if servidor and servidor.funcao == 'Outros' else '' }}>
+                                    Outros
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Configurações de Rede -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-network-wired me-2"></i>
+                                Configurações de Rede
+                            </h6>
+                        </div>
+                        
+                        <div class="col-md-8 mb-3">
+                            <label for="ip" class="form-label">Endereço IP *</label>
+                            <input type="text" class="form-control" id="ip" 
+                                   value="{{ servidor.ip if servidor else '' }}" 
+                                   placeholder="Ex: 192.168.1.100" required>
+                            <div class="form-text">IP do servidor ou da interface de gerenciamento</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="porta" class="form-label">Porta</label>
+                            <input type="number" class="form-control" id="porta" 
+                                   value="{{ servidor.porta if servidor else '443' }}" 
+                                   min="1" max="65535">
+                            <div class="form-text">Porta HTTPS (padrão: 443)</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="timeout" class="form-label">Timeout (segundos)</label>
+                            <input type="number" class="form-control" id="timeout" 
+                                   value="{{ servidor.timeout if servidor else '10' }}" 
+                                   min="5" max="60">
+                            <div class="form-text">Tempo limite para conexão</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Credenciais -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-shield-lock me-2"></i>
+                                Credenciais de Acesso
+                            </h6>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="usuario" class="form-label">Usuário *</label>
+                            <input type="text" class="form-control" id="usuario" 
+                                   value="{{ servidor.usuario if servidor else '' }}" 
+                                   placeholder="Ex: root" required>
+                            <div class="form-text">Usuário usado no monitoramento</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="senha" class="form-label">Senha *</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="senha" 
+                                       value="{{ servidor.senha if servidor else '' }}" 
+                                       placeholder="Senha do usuário" required>
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha()">
+                                    <i class="bi bi-eye" id="iconeSenha"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">Senha usada no monitoramento</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Status -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-toggle-on me-2"></i>
+                                Status
+                            </h6>
+                        </div>
+                        
+                        <div class="col-12 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="ativo" 
+                                       {{ 'checked' if not servidor or servidor.ativo else '' }}>
+                                <label class="form-check-label" for="ativo">
+                                    Servidor ativo para verificações
+                                </label>
+                                <div class="form-text">Desmarque para desabilitar temporariamente</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Botões -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="d-flex gap-3">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-2"></i>
+                                    <span class="btn-text">{{ acao }} Servidor</span>
+                                    <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                                </button>
+                                
+                                <button type="button" class="btn btn-outline-info" onclick="testarConexao()">
+                                    <i class="bi bi-wifi me-2"></i>
+                                    <span class="btn-text">Testar Conexão</span>
+                                    <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                                </button>
+                                
+                                <a href="{{ url_for('detalhar_regional', codigo_regional=regional_codigo) }}" 
+                                   class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-lg me-2"></i>
+                                    Cancelar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#formServidor').on('submit', function(e) {
+        e.preventDefault();
+        salvarServidor();
+    });
+    
+    $('#sistema_operacional').on('change', function() {
+        const sistemaOperacional = $(this).val();
+        const modeloField = $('#modelo');
+        
+        if (sistemaOperacional && !modeloField.val()) {
+            modeloField.val('Servidor Virtual');
+        }
+    });
+});
+
+function salvarServidor() {
+    const btn = $('.btn-primary');
+    showLoading(btn);
+    
+    // Validação básica
+    const campos = ['nome', 'funcao', 'ip', 'usuario', 'senha'];
+    for (let campo of campos) {
+        if (!$('#' + campo).val().trim()) {
+            showToast(`Campo ${campo} é obrigatório`, 'warning');
+            hideLoading(btn);
+            return;
+        }
+    }
+    
+    // Validação de IP
+    const ip = $('#ip').val().trim();
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(ip)) {
+        showToast('Formato de IP inválido', 'warning');
+        hideLoading(btn);
+        return;
+    }
+    
+    const dados = {
+        id: $('#servidor_id').val() || null,
+        nome: $('#nome').val().trim(),
+        sistema_operacional: $('#sistema_operacional').val(),
+        ip: ip,
+        usuario: $('#usuario').val().trim(),
+        senha: $('#senha').val(),
+        porta: parseInt($('#porta').val()) || 443,
+        timeout: parseInt($('#timeout').val()) || 10,
+        ativo: $('#ativo').is(':checked'),
+        modelo: $('#modelo').val().trim() || null,
+        funcao: $('#funcao').val()
+    };
+    
+    const regionalCodigo = $('#regional_codigo').val();
+    
+    $.ajax({
+        url: `/api/regional/${regionalCodigo}/servidor`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(dados),
+        success: function(response) {
+            if (response.success) {
+                showToast(response.message, 'success');
+                setTimeout(() => {
+                    window.location.href = `{{ url_for('detalhar_regional', codigo_regional='PLACEHOLDER') }}`.replace('PLACEHOLDER', regionalCodigo);
+                }, 1500);
+            } else {
+                showToast('Erro: ' + response.message, 'danger');
+            }
+        },
+        error: function() {
+            showToast('Erro de conexão ao salvar servidor', 'danger');
+        },
+        complete: function() {
+            hideLoading(btn);
+        }
+    });
+}
+
+function testarConexao() {
+    const btn = $('.btn-outline-info');
+    showLoading(btn);
+    
+    const ip = $('#ip').val().trim();
+    const usuario = $('#usuario').val().trim();
+    const senha = $('#senha').val();
+    const porta = parseInt($('#porta').val()) || 443;
+    
+    if (!ip || !usuario || !senha) {
+        showToast('Preencha IP, usuário e senha para testar', 'warning');
+        hideLoading(btn);
+        return;
+    }
+    
+    showToast(`Testando conexão com ${ip}...`, 'info');
+    
+    // Simula teste de conexão
+    setTimeout(() => {
+        const sucesso = Math.random() > 0.3; // 70% de chance de sucesso
+        
+        if (sucesso) {
+            showToast(`Conexão com ${ip} bem-sucedida!`, 'success');
+        } else {
+            showToast(`Falha na conexão com ${ip}. Verifique as credenciais.`, 'warning');
+        }
+        
+        hideLoading(btn);
+    }, 3000);
+}
+
+function toggleSenha() {
+    const senhaField = $('#senha');
+    const icone = $('#iconeSenha');
+    
+    if (senhaField.attr('type') === 'password') {
+        senhaField.attr('type', 'text');
+        icone.removeClass('bi-eye').addClass('bi-eye-slash');
+    } else {
+        senhaField.attr('type', 'password');
+        icone.removeClass('bi-eye-slash').addClass('bi-eye');
+    }
+}
+</script>
+{% endblock %}

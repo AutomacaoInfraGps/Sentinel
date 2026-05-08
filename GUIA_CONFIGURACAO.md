@@ -4,7 +4,7 @@
 
 ### 🌐 Método 1: Interface Web (RECOMENDADO)
 ```bash
-python iniciar_web.py
+powershell -ExecutionPolicy Bypass -File .\restart_web_service.ps1
 ```
 **A interface web oferece:**
 - 🎨 Interface visual moderna e intuitiva

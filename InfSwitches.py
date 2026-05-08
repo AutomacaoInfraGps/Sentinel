@@ -109,7 +109,7 @@ html_content = f"""
   <title>Status dos Switches - Zabbix</title>
   <style>
     body {{ font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }}
-    h2 {{ background-color: #003366; color: white; padding: 10px; }}
+    h2 {{ background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C); color: white; padding: 10px 12px; border-radius: 8px; }}
     summary {{ cursor: pointer; padding: 5px; font-size: 1.1em; background-color: #ddd; margin-top: 5px; }}
     table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
     th, td {{ border: 1px solid #aaa; padding: 8px; text-align: left; }}

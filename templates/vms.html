@@ -1,0 +1,1017 @@
+{% extends "base.html" %}
+
+{% block title %}Máquinas Virtuais - Sistema de Automação{% endblock %}
+
+{% block content %}
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100" style="background-color: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1 class="display-5">
+            <i class="bi bi-hdd-stack me-3"></i>
+            Máquinas Virtuais
+        </h1>
+        <p class="text-muted">Gerenciamento de máquinas virtuais do Server Manager</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="/vms/cadastrar" class="btn btn-success me-2">
+            <i class="bi bi-plus-circle me-2"></i>
+            Nova VM
+        </a>
+        <button class="btn btn-outline-secondary me-2" onclick="atualizarVMs()">
+            <i class="bi bi-arrow-clockwise me-2"></i>
+            Atualizar
+        </button>
+        <button class="btn btn-primary me-2" onclick="gerarRelatorio()">
+            <i class="bi bi-file-earmark-excel me-2"></i>
+            Exportar Excel
+        </button>
+        <button class="btn btn-warning" onclick="mostrarAjudaRelatorio()">
+            <i class="bi bi-file-earmark-text me-2"></i>
+            Relatório Completo
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="mb-3 mb-md-0">
+                    <label for="filtroRegional" class="form-label">Regional</label>
+                    <select class="form-select" id="filtroRegional" onchange="filtrarVMs()">
+                        <option value="">Todas as Regionais</option>
+                        {% for regional in regionais %}
+                        <option value="{{ regional }}">{{ regional }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mb-3 mb-md-0">
+                    <label for="filtroHost" class="form-label">Host</label>
+                    <select class="form-select" id="filtroHost" onchange="filtrarVMs()">
+                        <option value="">Todos os Hosts</option>
+                        {% for host in hosts %}
+                        <option value="{{ host.id }}">{{ host.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mb-0">
+                    <label for="filtroBusca" class="form-label">Busca</label>
+                    <input type="text" class="form-control" id="filtroBusca" placeholder="Nome da VM ou IP" oninput="filtrarVMs()">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de VMs -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-pc-display me-2"></i>
+                Máquinas Virtuais
+            </h5>
+            <span class="badge bg-primary" id="contadorVMs">{{ vms|length }} VMs</span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>Sistema Operacional</th>
+                        <th>Host</th>
+                        <th>Regional</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="listaVMs">
+                    {% for vm in vms %}
+                    <tr data-vm-id="{{ vm.id }}" data-host-id="{{ vm.host_id }}" data-regional="{{ vm.regional }}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if 'windows' in vm.operatingSystem|lower %}
+                                <i class="bi bi-windows me-2 text-primary"></i>
+                                {% elif 'linux' in vm.operatingSystem|lower %}
+                                <i class="bi bi-ubuntu me-2 text-danger"></i>
+                                {% else %}
+                                <i class="bi bi-pc-display me-2 text-secondary"></i>
+                                {% endif %}
+                                <span>{{ vm.name }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if vm.status == 'Running' %}
+                            <span class="badge bg-success">Online</span>
+                            {% elif vm.status == 'Stopped' %}
+                            <span class="badge bg-danger">Parada</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ vm.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if vm.ipAddresses %}
+                            {{ vm.ipAddresses[0] }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ vm.operatingSystem }}</td>
+                        <td>{{ vm.host_name }}</td>
+                        <td>{{ vm.regional }}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-outline-success" onclick="conectarVm('{{ vm.id }}')" title="Conectar (RDP)">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="verDetalhes('{{ vm.id }}')" title="Ver detalhes">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="verServicos('{{ vm.id }}')" title="Ver serviços">
+                                    <i class="bi bi-gear"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="verLogs('{{ vm.id }}')" title="Ver logs">
+                                    <i class="bi bi-journal-text"></i>
+                                </button>
+                                <a href="/vms/{{ vm.id }}/relatorio" class="btn btn-sm btn-outline-warning" title="Relatório Completo">
+                                    <i class="bi bi-file-earmark-text"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmarRemocao('{{ vm.id }}', '{{ vm.name }}')" title="Remover VM">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1" aria-labelledby="modalDetalhesLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalhesLabel">Detalhes da VM</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Nome</label>
+                            <p id="detalheNome" class="mb-0">-</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Status</label>
+                            <p id="detalheStatus" class="mb-0">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Sistema Operacional</label>
+                            <p id="detalheSO" class="mb-0">-</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Uptime</label>
+                            <p id="detalheUptime" class="mb-0">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">CPUs</label>
+                            <p id="detalheCPUs" class="mb-0">-</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Memória</label>
+                            <p id="detalheMemoria" class="mb-0">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Host</label>
+                            <p id="detalheHost" class="mb-0">-</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Regional</label>
+                            <p id="detalheRegional" class="mb-0">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="mb-0">
+                            <label class="form-label fw-bold">Endereços IP</label>
+                            <p id="detalheIPs" class="mb-0">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Serviços -->
+<div class="modal fade" id="modalServicos" tabindex="-1" aria-labelledby="modalServicosLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalServicosLabel">Serviços da VM</h5>
+                <span class="badge bg-primary" id="contadorServicos">Carregando...</span>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Status</th>
+                                <th>Tipo de Inicialização</th>
+                                <th>Conta</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaServicos">
+                            <tr>
+                                <td colspan="4" class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Carregando...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Logs -->
+<div class="modal fade" id="modalLogs" tabindex="-1" aria-labelledby="modalLogsLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLogsLabel">Logs da VM</h5>
+                <span class="badge bg-primary" id="contadorLogs">Carregando...</span>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="list-group" id="listaLogs">
+                    <div class="text-center p-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Armazena todas as VMs para filtragem
+let todasVMs = [];
+
+// Inicializa os dados
+document.addEventListener('DOMContentLoaded', function() {
+    // Captura todas as VMs da tabela
+    const linhasVM = document.querySelectorAll('#listaVMs tr');
+    todasVMs = Array.from(linhasVM);
+    
+    // Inicializa os modais
+    const modais = [
+        new bootstrap.Modal(document.getElementById('modalDetalhes'), { backdrop: false, focus: false }),
+        new bootstrap.Modal(document.getElementById('modalServicos'), { backdrop: false, focus: false }),
+        new bootstrap.Modal(document.getElementById('modalLogs'), { backdrop: false, focus: false })
+    ];
+});
+
+// Função para filtrar VMs
+function filtrarVMs() {
+    const regional = document.getElementById('filtroRegional').value.toLowerCase();
+    const hostId = document.getElementById('filtroHost').value;
+    const busca = document.getElementById('filtroBusca').value.toLowerCase();
+    
+    let vmsFiltradas = todasVMs;
+    
+    // Filtra por regional
+    if (regional) {
+        vmsFiltradas = vmsFiltradas.filter(vm => 
+            vm.getAttribute('data-regional').toLowerCase() === regional
+        );
+    }
+    
+    // Filtra por host
+    if (hostId) {
+        vmsFiltradas = vmsFiltradas.filter(vm => 
+            vm.getAttribute('data-host-id') === hostId
+        );
+    }
+    
+    // Filtra por busca
+    if (busca) {
+        vmsFiltradas = vmsFiltradas.filter(vm => {
+            const nome = vm.querySelector('td:nth-child(1)').textContent.toLowerCase();
+            const ip = vm.querySelector('td:nth-child(3)').textContent.toLowerCase();
+            return nome.includes(busca) || ip.includes(busca);
+        });
+    }
+    
+    // Atualiza a tabela
+    const tbody = document.getElementById('listaVMs');
+    tbody.innerHTML = '';
+    
+    if (vmsFiltradas.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="7" class="text-center py-3">Nenhuma VM encontrada com os filtros selecionados</td>';
+        tbody.appendChild(tr);
+    } else {
+        vmsFiltradas.forEach(vm => tbody.appendChild(vm));
+    }
+    
+    // Atualiza o contador
+    document.getElementById('contadorVMs').textContent = `${vmsFiltradas.length} VMs`;
+}
+
+// Função para atualizar a lista de VMs
+function atualizarVMs() {
+    showPageLoading();
+    
+    fetch('/api/vms/listar')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                showToast('Erro', data.message, 'danger');
+                hidePageLoading();
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            showToast('Erro', 'Falha ao atualizar VMs', 'danger');
+            hidePageLoading();
+        });
+}
+
+// Função para gerar relatório
+function gerarRelatorio() {
+    showPageLoading();
+    
+    fetch('/api/vms/relatorio')
+        .then(response => response.json())
+        .then(data => {
+            hidePageLoading();
+            if (data.success) {
+                showToast('Sucesso', 'Relatório gerado com sucesso!', 'success');
+                // Abre o arquivo em uma nova aba
+                window.open('/download/' + data.file, '_blank');
+            } else {
+                showToast('Erro', data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            showToast('Erro', 'Falha ao gerar relatório', 'danger');
+            hidePageLoading();
+        });
+}
+
+// Inicia conexao RDP via mstsc no host do servidor
+function conectarVm(vmId) {
+    showPageLoading();
+
+    fetch(`/api/vms/${vmId}/conectar`, { method: 'POST' })
+        .then(async response => {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/rdp')) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${vmId}.rdp`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+                hidePageLoading();
+                showToast('Sucesso', 'Arquivo RDP baixado', 'success');
+                return;
+            }
+
+            const data = await response.json();
+            hidePageLoading();
+            if (data.success) {
+                showToast('Sucesso', data.message || 'Conexao RDP iniciada', 'success');
+            } else {
+                showToast('Erro', data.message || 'Falha ao iniciar RDP', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            showToast('Erro', 'Falha ao iniciar RDP', 'danger');
+            hidePageLoading();
+        });
+}
+
+// Função para ver detalhes da VM
+function verDetalhes(vmId) {
+    showPageLoading();
+    
+    fetch(`/api/vms/${vmId}/detalhes`)
+        .then(response => response.json())
+        .then(data => {
+            hidePageLoading();
+            if (data.success) {
+                const vm = data.vm;
+                
+                // Preenche os detalhes
+                document.getElementById('detalheNome').textContent = vm.name;
+                document.getElementById('detalheStatus').innerHTML = getStatusBadge(vm.status);
+                document.getElementById('detalheSO').textContent = vm.operatingSystem || '-';
+                document.getElementById('detalheUptime').textContent = vm.uptime || '-';
+                document.getElementById('detalheCPUs').textContent = vm.processors || '-';
+                document.getElementById('detalheMemoria').textContent = formatMemory(vm.memory);
+                document.getElementById('detalheHost').textContent = vm.host_name || '-';
+                document.getElementById('detalheRegional').textContent = vm.regional || '-';
+                
+                // Formata IPs
+                if (vm.ipAddresses && vm.ipAddresses.length > 0) {
+                    document.getElementById('detalheIPs').textContent = vm.ipAddresses.join(', ');
+                } else {
+                    document.getElementById('detalheIPs').textContent = '-';
+                }
+                
+                // Exibe o modal
+                const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'), {
+                    backdrop: false,
+                    focus: false
+                });
+                modal.show();
+            } else {
+                showToast('Erro', data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            showToast('Erro', 'Falha ao obter detalhes da VM', 'danger');
+            hidePageLoading();
+        });
+}
+
+// Função para ver serviços da VM
+function verServicos(vmId) {
+    // Exibe o modal
+    const modal = new bootstrap.Modal(document.getElementById('modalServicos'), {
+        backdrop: false,
+        focus: false
+    });
+    modal.show();
+    
+    // Atualiza o contador
+    document.getElementById('contadorServicos').textContent = 'Carregando...';
+    
+    // Limpa a lista de serviços
+    document.getElementById('listaServicos').innerHTML = `
+        <tr>
+            <td colspan="4" class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Carrega os serviços
+    fetch(`/api/vms/${vmId}/servicos`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const services = data.services;
+                const vm = data.vm;
+                const tbody = document.getElementById('listaServicos');
+                
+                // Atualiza o título do modal
+                document.getElementById('modalServicosLabel').textContent = `Serviços da VM: ${vm.name}`;
+                
+                // Atualiza o contador
+                document.getElementById('contadorServicos').textContent = `${services.length} serviços`;
+                
+                if (services.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center">
+                                Nenhum serviço encontrado
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                
+                // Conta os serviços por status
+                let running = 0;
+                let stopped = 0;
+                let other = 0;
+                
+                services.forEach(service => {
+                    const tr = document.createElement('tr');
+                    
+                    // Status do serviço
+                    let statusBadge = '';
+                    if (service.status === 'Running') {
+                        statusBadge = '<span class="badge bg-success">Em Execução</span>';
+                        running++;
+                    } else if (service.status === 'Stopped') {
+                        statusBadge = '<span class="badge bg-danger">Parado</span>';
+                        stopped++;
+                    } else {
+                        statusBadge = `<span class="badge bg-secondary">${service.status}</span>`;
+                        other++;
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${service.displayName}</td>
+                        <td>${statusBadge}</td>
+                        <td>${service.startMode || '-'}</td>
+                        <td>${service.account || '-'}</td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+                
+                // Adiciona um resumo no final da tabela
+                const trSummary = document.createElement('tr');
+                trSummary.className = 'table-light';
+                trSummary.innerHTML = `
+                    <td colspan="4" class="text-end">
+                        <strong>Resumo:</strong> 
+                        <span class="badge bg-success">${running} Em Execução</span>
+                        <span class="badge bg-danger">${stopped} Parados</span>
+                        ${other > 0 ? `<span class="badge bg-secondary">${other} Outros</span>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(trSummary);
+            } else {
+                // Atualiza o contador
+                document.getElementById('contadorServicos').textContent = 'Erro';
+                
+                document.getElementById('listaServicos').innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center text-danger">
+                            Erro ao carregar serviços: ${data.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            
+            // Atualiza o contador
+            document.getElementById('contadorServicos').textContent = 'Erro';
+            
+            document.getElementById('listaServicos').innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center text-danger">
+                        Falha ao carregar serviços
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+// Função para ver logs da VM
+function verLogs(vmId) {
+    // Exibe o modal
+    const modal = new bootstrap.Modal(document.getElementById('modalLogs'), {
+        backdrop: false,
+        focus: false
+    });
+    modal.show();
+    
+    // Atualiza o contador
+    document.getElementById('contadorLogs').textContent = 'Carregando...';
+    
+    // Limpa a lista de logs
+    document.getElementById('listaLogs').innerHTML = `
+        <div class="text-center p-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    `;
+    
+    // Carrega os logs
+    fetch(`/api/vms/${vmId}/logs`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const events = data.events;
+                const vm = data.vm;
+                const listGroup = document.getElementById('listaLogs');
+                
+                // Atualiza o título do modal
+                document.getElementById('modalLogsLabel').textContent = `Logs da VM: ${vm.name}`;
+                
+                // Atualiza o contador
+                document.getElementById('contadorLogs').textContent = `${events.length} logs`;
+                
+                if (events.length === 0) {
+                    listGroup.innerHTML = `
+                        <div class="text-center p-3">
+                            Nenhum log encontrado
+                        </div>
+                    `;
+                    return;
+                }
+                
+                listGroup.innerHTML = '';
+                
+                // Conta os logs por nível
+                let errors = 0;
+                let warnings = 0;
+                let info = 0;
+                let other = 0;
+                
+                events.forEach(event => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item';
+                    
+                    // Formata a data
+                    const date = new Date(event.timeCreated);
+                    const formattedDate = date.toLocaleString('pt-BR');
+                    
+                    // Define a cor com base no nível
+                    let levelClass = 'text-secondary';
+                    let levelIcon = 'bi-info-circle';
+                    
+                    if (event.level === 'Error') {
+                        levelClass = 'text-danger';
+                        levelIcon = 'bi-exclamation-triangle-fill';
+                        errors++;
+                    } else if (event.level === 'Warning') {
+                        levelClass = 'text-warning';
+                        levelIcon = 'bi-exclamation-triangle';
+                        warnings++;
+                    } else if (event.level === 'Information') {
+                        levelClass = 'text-info';
+                        levelIcon = 'bi-info-circle-fill';
+                        info++;
+                    } else {
+                        other++;
+                    }
+                    
+                    item.innerHTML = `
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1 ${levelClass}">
+                                <i class="bi ${levelIcon} me-1"></i>
+                                ${event.level || 'Log'}
+                            </h6>
+                            <small class="text-muted">${formattedDate}</small>
+                        </div>
+                        <p class="mb-1">${event.message || 'Sem mensagem'}</p>
+                        <small class="text-muted">ID: ${event.id} | Fonte: ${event.source || 'Desconhecida'}</small>
+                    `;
+                    
+                    listGroup.appendChild(item);
+                });
+                
+                // Adiciona um resumo no final
+                const summary = document.createElement('div');
+                summary.className = 'list-group-item bg-light text-end';
+                summary.innerHTML = `
+                    <strong>Resumo:</strong> 
+                    ${errors > 0 ? `<span class="badge bg-danger">${errors} Erros</span> ` : ''}
+                    ${warnings > 0 ? `<span class="badge bg-warning text-dark">${warnings} Avisos</span> ` : ''}
+                    ${info > 0 ? `<span class="badge bg-info text-dark">${info} Informações</span> ` : ''}
+                    ${other > 0 ? `<span class="badge bg-secondary">${other} Outros</span>` : ''}
+                `;
+                listGroup.appendChild(summary);
+            } else {
+                // Atualiza o contador
+                document.getElementById('contadorLogs').textContent = 'Erro';
+                
+                document.getElementById('listaLogs').innerHTML = `
+                    <div class="text-center p-3 text-danger">
+                        Erro ao carregar logs: ${data.message}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            
+            // Atualiza o contador
+            document.getElementById('contadorLogs').textContent = 'Erro';
+            
+            document.getElementById('listaLogs').innerHTML = `
+                <div class="text-center p-3 text-danger">
+                    Falha ao carregar logs
+                </div>
+            `;
+        });
+}
+
+// Função para formatar memória
+function formatMemory(memoryInMB) {
+    if (!memoryInMB) return '-';
+    
+    if (memoryInMB < 1024) {
+        return `${memoryInMB} MB`;
+    } else {
+        return `${(memoryInMB / 1024).toFixed(2)} GB`;
+    }
+}
+
+// Função para obter badge de status
+function getStatusBadge(status) {
+    if (status === 'Running') {
+        return '<span class="badge bg-success">Online</span>';
+    } else if (status === 'Stopped') {
+        return '<span class="badge bg-danger">Parada</span>';
+    } else {
+        return `<span class="badge bg-secondary">${status}</span>`;
+    }
+}
+
+// Funções de loading
+function showPageLoading() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function hidePageLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// Função para executar verificação de uma VM
+function executarVerificacao(vmId) {
+    // Mostra confirmação
+    if (!confirm('Deseja executar a verificação desta VM?')) {
+        return;
+    }
+    
+    // Mostra o loading
+    showPageLoading();
+    
+    // Faz a requisição para a API
+    fetch(`/api/vms/${vmId}/verificar`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        hidePageLoading();
+        
+        if (data.success) {
+            showToast('Sucesso', data.message, 'success');
+            
+            // Atualiza a linha da VM na tabela
+            if (data.vm) {
+                atualizarLinhaVM(data.vm);
+            } else {
+                // Se não retornou a VM atualizada, recarrega a página após 2 segundos
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            }
+        } else {
+            showToast('Erro', data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        hidePageLoading();
+        console.error('Erro:', error);
+        showToast('Erro', 'Falha ao executar verificação', 'danger');
+    });
+}
+
+// Função para atualizar uma linha da tabela de VMs
+function atualizarLinhaVM(vm) {
+    const linha = document.querySelector(`tr[data-vm-id="${vm.id}"]`);
+    if (!linha) return;
+    
+    // Atualiza o status
+    const statusCell = linha.querySelector('td:nth-child(2)');
+    if (statusCell) {
+        statusCell.innerHTML = getStatusBadge(vm.status);
+    }
+    
+    // Atualiza o IP
+    const ipCell = linha.querySelector('td:nth-child(3)');
+    if (ipCell && vm.ipAddresses) {
+        ipCell.textContent = vm.ipAddresses[0] || '-';
+    }
+    
+    // Atualiza o sistema operacional
+    const osCell = linha.querySelector('td:nth-child(4)');
+    if (osCell) {
+        osCell.textContent = vm.operatingSystem || '-';
+    }
+    
+    // Destaca a linha brevemente para indicar atualização
+    linha.classList.add('table-success');
+    setTimeout(() => {
+        linha.classList.remove('table-success');
+    }, 3000);
+}
+
+// Função para confirmar remoção de VM
+function confirmarRemocao(vmId, vmNome) {
+    if (confirm(`Tem certeza que deseja remover a VM "${vmNome}"?`)) {
+        removerVM(vmId);
+    }
+}
+
+// Função para mostrar ajuda sobre o relatório completo
+function mostrarAjudaRelatorio() {
+    // Cria um modal com informações sobre o relatório completo
+    const modalHtml = `
+    <div class="modal fade" id="modalAjudaRelatorio" tabindex="-1" aria-labelledby="modalAjudaRelatorioLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="modalAjudaRelatorioLabel">
+                        <i class="bi bi-file-earmark-text me-2"></i>
+                        Relatório Completo de VMs
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        O relatório completo fornece informações detalhadas sobre uma VM específica, incluindo:
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <i class="bi bi-pc-display me-2"></i>
+                                    Informações do Sistema
+                                </div>
+                                <div class="card-body">
+                                    <ul>
+                                        <li>Sistema operacional e versão</li>
+                                        <li>Hardware (processador, memória)</li>
+                                        <li>Tempo de atividade (uptime)</li>
+                                        <li>Informações de disco</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-header bg-success text-white">
+                                    <i class="bi bi-hdd-network me-2"></i>
+                                    Configuração de Rede
+                                </div>
+                                <div class="card-body">
+                                    <ul>
+                                        <li>Adaptadores de rede</li>
+                                        <li>Endereços IP</li>
+                                        <li>Configurações de DNS</li>
+                                        <li>Gateways</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-secondary text-white">
+                                    <i class="bi bi-gear me-2"></i>
+                                    Serviços e Processos
+                                </div>
+                                <div class="card-body">
+                                    <ul>
+                                        <li>Serviços principais e status</li>
+                                        <li>Top processos por uso de CPU</li>
+                                        <li>Consumo de memória</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-header bg-danger text-white">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    Eventos e Logs
+                                </div>
+                                <div class="card-body">
+                                    <ul>
+                                        <li>Eventos de erro recentes</li>
+                                        <li>Logs do sistema</li>
+                                        <li>Alertas importantes</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-lightbulb-fill me-2"></i>
+                        <strong>Como acessar:</strong> Clique no ícone <i class="bi bi-file-earmark-text"></i> na linha da VM desejada para ver seu relatório completo.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    // Adiciona o modal ao corpo do documento
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Cria e exibe o modal
+    const modalElement = document.getElementById('modalAjudaRelatorio');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+    
+    // Remove o modal do DOM quando for fechado
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        document.body.removeChild(modalElement);
+    });
+}
+
+// Função para remover VM
+function removerVM(vmId) {
+    // Mostra o loading
+    showPageLoading();
+    
+    // Faz a requisição para a API
+    fetch(`/api/vms/remover/${vmId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        hidePageLoading();
+        
+        if (data.success) {
+            showToast('Sucesso', data.message, 'success');
+            
+            // Remove a linha da tabela
+            const linha = document.querySelector(`tr[data-vm-id="${vmId}"]`);
+            if (linha) {
+                linha.remove();
+            }
+            
+            // Se não houver mais VMs, recarrega a página
+            const linhas = document.querySelectorAll('tbody tr');
+            if (linhas.length === 0) {
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            }
+        } else {
+            showToast('Erro', data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        hidePageLoading();
+        console.error('Erro:', error);
+        showToast('Erro', 'Falha ao remover VM', 'danger');
+    });
+}
+</script>
+{% endblock %}

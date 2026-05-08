@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Antenas UniFi - Versão Básica{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Antenas UniFi - Versão Básica</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total de Antenas</h5>
+                    <h2 id="totalAntenas">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Antenas Online</h5>
+                    <h2 id="antenasOnline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Antenas Offline</h5>
+                    <h2 id="antenasOffline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Clientes Conectados</h5>
+                    <h2 id="clientesConectados">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Lista de Antenas</h5>
+        </div>
+        <div class="card-body">
+            <div id="listaAPs" class="row">
+                <div class="col-12 text-center">
+                    <div class="spinner-border"></div>
+                    <p>Carregando dados...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Página carregada');
+    carregarDados();
+});
+
+function carregarDados() {
+    console.log('Carregando dados...');
+    
+    // Usando XMLHttpRequest para compatibilidade máxima
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/public/status/unifi', true);
+    
+    xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            console.log('Dados recebidos com sucesso');
+            var data = JSON.parse(xhr.responseText);
+            console.log('Dados:', data);
+            
+            // Atualiza estatísticas
+            document.getElementById('totalAntenas').textContent = data.total_aps || 0;
+            document.getElementById('antenasOnline').textContent = data.aps_online || 0;
+            document.getElementById('antenasOffline').textContent = data.aps_offline || 0;
+            document.getElementById('clientesConectados').textContent = data.clientes_conectados || 0;
+            
+            // Gera HTML para a lista de APs
+            var htmlAPs = '';
+            
+            if (data.aps && data.aps.length > 0) {
+                for (var i = 0; i < data.aps.length; i++) {
+                    var ap = data.aps[i];
+                    var statusClass = ap.status === 'online' ? 'success' : 'danger';
+                    
+                    htmlAPs += '<div class="col-md-4 mb-3">';
+                    htmlAPs += '<div class="card border-' + statusClass + '">';
+                    htmlAPs += '<div class="card-header bg-' + statusClass + ' text-white">' + ap.nome + '</div>';
+                    htmlAPs += '<div class="card-body">';
+                    htmlAPs += '<p>Modelo: ' + ap.modelo + '</p>';
+                    htmlAPs += '<p>IP: ' + ap.ip + '</p>';
+                    htmlAPs += '</div>';
+                    htmlAPs += '</div>';
+                    htmlAPs += '</div>';
+                }
+            } else if (data.total_aps > 0) {
+                // Cria APs genéricas baseadas na contagem
+                for (var i = 0; i < data.aps_online; i++) {
+                    htmlAPs += '<div class="col-md-4 mb-3">';
+                    htmlAPs += '<div class="card border-success">';
+                    htmlAPs += '<div class="card-header bg-success text-white">AP Online ' + (i+1) + '</div>';
+                    htmlAPs += '<div class="card-body">';
+                    htmlAPs += '<p>Modelo: UniFi AP</p>';
+                    htmlAPs += '<p>IP: N/A</p>';
+                    htmlAPs += '</div>';
+                    htmlAPs += '</div>';
+                    htmlAPs += '</div>';
+                }
+                
+                for (var i = 0; i < data.aps_offline; i++) {
+                    htmlAPs += '<div class="col-md-4 mb-3">';
+                    htmlAPs += '<div class="card border-danger">';
+                    htmlAPs += '<div class="card-header bg-danger text-white">AP Offline ' + (i+1) + '</div>';
+                    htmlAPs += '<div class="card-body">';
+                    htmlAPs += '<p>Modelo: UniFi AP</p>';
+                    htmlAPs += '<p>IP: N/A</p>';
+                    htmlAPs += '</div>';
+                    htmlAPs += '</div>';
+                    htmlAPs += '</div>';
+                }
+            } else {
+                htmlAPs = '<div class="col-12"><div class="alert alert-info">Nenhum AP encontrado</div></div>';
+            }
+            
+            document.getElementById('listaAPs').innerHTML = htmlAPs;
+        } else {
+            console.error('Erro ao carregar dados:', xhr.statusText);
+            document.getElementById('listaAPs').innerHTML = '<div class="col-12"><div class="alert alert-danger">Erro ao carregar dados: ' + xhr.statusText + '</div></div>';
+        }
+    };
+    
+    xhr.onerror = function() {
+        console.error('Erro de rede');
+        document.getElementById('listaAPs').innerHTML = '<div class="col-12"><div class="alert alert-danger">Erro de rede ao carregar dados</div></div>';
+    };
+    
+    xhr.send();
+}
+</script>
+{% endblock %}

@@ -54,6 +54,7 @@ from dashboard_hierarquico import DashboardHierarquico
 from gerenciar_switches import GerenciadorSwitches
 from gerenciar_fortigate import GerenciadorFortigate
 from gerenciar_vms import GerenciadorVMs
+from gerenciar_contatos_email import GerenciadorContatosEmail
 
 # Autenticação AD
 from auth_ad import init_auth, get_user
@@ -99,6 +100,30 @@ verificador_v2 = VerificadorServidoresV2()
 dashboard_hierarquico = DashboardHierarquico()
 gerenciador_switches = GerenciadorSwitches()
 gerenciador_fortigate = GerenciadorFortigate()
+gerenciador_contatos_email = GerenciadorContatosEmail()
+
+
+def _normalizar_host_switch(host):
+    return re.sub(r'\s+', ' ', str(host or '').strip()).casefold()
+
+
+def _obter_arquivo_switches():
+    return gerenciador_switches.arquivo_excel
+
+
+def _carregar_planilha_switches():
+    arquivo_excel = _obter_arquivo_switches()
+    df = pd.read_excel(arquivo_excel, sheet_name='Switches', header=2)
+    df.columns = df.columns.str.strip()
+    return arquivo_excel, df
+
+
+def _localizar_indice_switch(df, host):
+    if 'Host' not in df.columns:
+        return pd.Index([])
+
+    hosts_normalizados = df['Host'].fillna('').map(_normalizar_host_switch)
+    return df[hosts_normalizados == _normalizar_host_switch(host)].index
 
 # === UTILITÁRIOS FORTIMANAGER/FORTIGATE (REGIONAIS) ===
 
@@ -111,7 +136,7 @@ _REGIONAL_ALIAS = {
 }
 
 _REGIONAL_DEVICE_OVERRIDE = {
-    "RG_GLOBAL_SEGURANCA": ["FTG_GLOBALSEG", "FTG_GLX_100F_MATRIZ"],
+    "REG_GLOBAL_SEGURANCA": ["FTG_GLOBALSEG", "FTG_GLX_100F_MATRIZ"],
     "REG_ALAGOAS": ["FTG_REGALAGOAS"],
     "REG_SJC": ["FGT_REGSAOJOSEDOSCAMPOS"],
 }
@@ -603,12 +628,68 @@ def api_excluir_regional(codigo_regional):
 
 # === ROTAS DE INFRAESTRUTURA ===
 
+@app.route('/emails-contatos')
+@login_required
+def cadastro_emails_contatos():
+    """Tela para gerenciar contatos e emails de regionais em planilha externa."""
+    config = gerenciador_contatos_email.obter_configuracao()
+    registros = []
+    page_error = None
+
+    if config.get('xlsx_path'):
+        try:
+            registros = gerenciador_contatos_email.listar_registros()
+        except Exception as exc:
+            page_error = str(exc)
+
+    return render_template(
+        'emails_contatos.html',
+        config=config,
+        registros=registros,
+        page_error=page_error,
+        required_columns=gerenciador_contatos_email.REQUIRED_COLUMNS,
+    )
+
+
+@app.route('/api/emails-contatos/config', methods=['POST'])
+@login_required
+def api_salvar_config_emails_contatos():
+    try:
+        data = request.get_json() or {}
+        xlsx_path = str(data.get('xlsx_path') or '').strip()
+        sheet_name = str(data.get('sheet_name') or '').strip()
+
+        if not xlsx_path:
+            return jsonify({'success': False, 'message': 'Informe o caminho da planilha XLSX.'}), 400
+
+        config = gerenciador_contatos_email.salvar_configuracao(xlsx_path, sheet_name)
+        return jsonify({'success': True, 'message': 'Configuração salva com sucesso.', 'config': config})
+    except Exception as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/api/emails-contatos/<int:row_index>', methods=['PUT'])
+@login_required
+def api_atualizar_emails_contatos(row_index):
+    try:
+        data = request.get_json() or {}
+        payload = {
+            column: str(data.get(column) or '').strip()
+            for column in gerenciador_contatos_email.REQUIRED_COLUMNS
+        }
+        registro = gerenciador_contatos_email.atualizar_registro(row_index, payload)
+        return jsonify({'success': True, 'message': 'Contato atualizado com sucesso.', 'registro': registro})
+    except Exception as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
 @app.route('/switches/editar/<host>', methods=['GET', 'POST'])
 @login_required
 def editar_switch(host):
     """Página para editar um switch existente"""
     if request.method == 'POST':
         try:
+            gerenciador_switches._carregar_switches()
+
             # Obtém os dados do formulário
             ip = request.form.get('ip').strip()
             regional = request.form.get('regional').strip().upper()
@@ -627,7 +708,7 @@ def editar_switch(host):
             # Encontra o switch na lista
             switch_encontrado = None
             for switch in gerenciador_switches.switches:
-                if switch["host"] == host:
+                if _normalizar_host_switch(switch["host"]) == _normalizar_host_switch(host):
                     switch_encontrado = switch
                     break
             
@@ -635,12 +716,11 @@ def editar_switch(host):
                 flash(f'Switch não encontrado: {host}', 'error')
                 return redirect(url_for('listar_switches'))
             
-            # Carrega o arquivo Excel
-            arquivo_excel = "switches_zabbix.xlsx"
-            df = pd.read_excel(arquivo_excel, sheet_name='Switches', header=2)
+            # Carrega o arquivo Excel real configurado para switches
+            arquivo_excel, df = _carregar_planilha_switches()
             
             # Encontra o índice do switch no DataFrame
-            idx = df[df['Host'] == host].index
+            idx = _localizar_indice_switch(df, host)
             if len(idx) == 0:
                 flash(f'Switch não encontrado no Excel: {host}', 'error')
                 return redirect(url_for('listar_switches'))
@@ -678,10 +758,12 @@ def editar_switch(host):
             return redirect(url_for('editar_switch', host=host))
     
     # Método GET - exibe o formulário
+    gerenciador_switches._carregar_switches()
+
     # Encontra o switch na lista
     switch = None
     for s in gerenciador_switches.switches:
-        if s["host"] == host:
+        if _normalizar_host_switch(s["host"]) == _normalizar_host_switch(host):
             switch = s
             break
     
@@ -697,10 +779,12 @@ def editar_switch(host):
 def api_excluir_switch(host):
     """API para excluir um switch"""
     try:
+        gerenciador_switches._carregar_switches()
+
         # Encontra o switch na lista
         switch_encontrado = None
         for switch in gerenciador_switches.switches:
-            if switch["host"] == host:
+            if _normalizar_host_switch(switch["host"]) == _normalizar_host_switch(host):
                 switch_encontrado = switch
                 break
         
@@ -710,12 +794,11 @@ def api_excluir_switch(host):
                 "message": f"Switch não encontrado: {host}"
             })
         
-        # Carrega o arquivo Excel
-        arquivo_excel = "switches_zabbix.xlsx"
-        df = pd.read_excel(arquivo_excel, sheet_name='Switches', header=2)
+        # Carrega o arquivo Excel real configurado para switches
+        arquivo_excel, df = _carregar_planilha_switches()
         
         # Encontra o índice do switch no DataFrame
-        idx = df[df['Host'] == host].index
+        idx = _localizar_indice_switch(df, host)
         if len(idx) == 0:
             return jsonify({
                 "success": False,
@@ -761,6 +844,8 @@ def cadastrar_switch():
     """Página para cadastrar um novo switch"""
     if request.method == 'POST':
         try:
+            gerenciador_switches._carregar_switches()
+
             # Obtém os dados do formulário
             host_name = (request.form.get('host') or '').strip()
             ip = (request.form.get('ip') or '').strip()
@@ -792,13 +877,12 @@ def cadastrar_switch():
             
             # Verifica se o switch já existe na lista local
             for switch in gerenciador_switches.switches:
-                if switch["host"].lower() == host_name.lower():
+                if _normalizar_host_switch(switch["host"]) == _normalizar_host_switch(host_name):
                     flash(f'Switch já cadastrado: {host_name}', 'error')
                     return redirect(url_for('cadastrar_switch'))
             
-            # Carrega o arquivo Excel
-            arquivo_excel = "switches_zabbix.xlsx"
-            df = pd.read_excel(arquivo_excel, sheet_name='Switches', header=2)
+            # Carrega o arquivo Excel real configurado para switches
+            arquivo_excel, df = _carregar_planilha_switches()
             
             # Cria um novo registro
             novo_switch = {
@@ -842,7 +926,8 @@ def cadastrar_switch():
             return redirect(url_for('cadastrar_switch'))
     
     # Método GET - exibe o formulário
-    regionais = gerenciador_switches.listar_regionais()
+    # Exibe todas as regionais cadastradas, não só as com switches
+    regionais = gerenciador_regionais.listar_regionais()
     return render_template('cadastrar_switch.html', regionais=regionais)
 
 @app.route('/switches')
@@ -850,36 +935,36 @@ def cadastrar_switch():
 def listar_switches():
     """Página de listagem de switches"""
     try:
+        # Sempre recarrega os switches do Excel ao acessar a lista
+        gerenciador_switches._carregar_switches()
         # Obtém as regionais com switches
         regionais = gerenciador_switches.listar_regionais()
-        
+
         # Prepara dados para a view
         regionais_dados = []
-        
-        # Não verificamos todos os switches ao carregar a página para evitar lentidão
-        # O usuário pode clicar no botão "Verificar Todos os Switches" para fazer isso
-        print("Carregando página de switches sem verificação automática...")
-        
+
+        print("Carregando página de switches SEM cache, lendo do Excel...")
+
         # Agora processa os dados para a view
         for regional in regionais:
             switches = gerenciador_switches.obter_switches_regional(regional)
-            
+
             # Garante que todos os IPs estão convertidos corretamente
             for switch in switches:
                 # Se o IP não parece estar no formato correto (sem pontos), converte
                 if switch.get("ip") and "." not in switch.get("ip", ""):
                     switch["ip"] = gerenciador_switches._converter_ip_numerico(switch["ip"])
-            
+
             # Conta switches por status
             total_switches = len(switches)
             online = sum(1 for s in switches if s.get('status') == 'online')
             offline = sum(1 for s in switches if s.get('status') == 'offline')
             warning = sum(1 for s in switches if s.get('status') == 'warning')
             desconhecidos = total_switches - online - offline - warning
-            
+
             # Calcula percentual
             percentual_online = 0 if total_switches == 0 else (online / total_switches) * 100
-            
+
             regionais_dados.append({
                 'nome': regional,
                 'total_switches': total_switches,
@@ -890,9 +975,9 @@ def listar_switches():
                 'percentual_online': percentual_online,
                 'switches': switches
             })
-        
+
         return render_template('switches.html', regionais=regionais_dados)
-        
+
     except Exception as e:
         flash(f'Erro ao carregar switches: {str(e)}', 'error')
         return render_template('switches.html', regionais=[])
@@ -3191,12 +3276,18 @@ def api_salvar_servidor_regional(codigo_regional):
     """API para salvar servidor em uma regional"""
     try:
         data = request.get_json()
+        tipo_servidor = (data.get('tipo') or data.get('tipo_monitoramento') or 'idrac').strip().lower()
+        funcao_servidor = (data.get('funcao') or '').strip()
         
         # Validação básica
-        campos_obrigatorios = ['nome', 'tipo', 'ip', 'usuario', 'senha']
+        campos_obrigatorios = ['nome', 'ip', 'usuario', 'senha', 'funcao']
         for campo in campos_obrigatorios:
-            if not data.get(campo):
+            valor = funcao_servidor if campo == 'funcao' else data.get(campo)
+            if not valor:
                 return jsonify({'success': False, 'message': f'Campo {campo} é obrigatório'})
+
+        if tipo_servidor not in {'idrac', 'ilo'}:
+            tipo_servidor = 'idrac'
         
         # Verifica se a regional existe
         if not gerenciador_regionais.obter_regional(codigo_regional):
@@ -3206,15 +3297,15 @@ def api_salvar_servidor_regional(codigo_regional):
         servidor = {
             'id': data.get('id') or f"srv_{codigo_regional.lower()}_{len(gerenciador_regionais.listar_servidores_regional(codigo_regional)) + 1:02d}",
             'nome': data['nome'],
-            'tipo': data['tipo'],
+            'tipo': tipo_servidor,
             'ip': data['ip'],
             'usuario': data['usuario'],
             'senha': data['senha'],
             'porta': int(data.get('porta', 443)),
             'timeout': int(data.get('timeout', 10)),
             'ativo': data.get('ativo', True),
-            'modelo': data.get('modelo', 'Dell PowerEdge' if data['tipo'] == 'idrac' else 'HPE ProLiant'),
-            'funcao': data.get('funcao', 'Aplicação')
+            'modelo': data.get('modelo') or ('Dell PowerEdge' if tipo_servidor == 'idrac' else 'HPE ProLiant'),
+            'funcao': funcao_servidor
         }
         
         # Adiciona servidor à regional
@@ -4151,7 +4242,7 @@ def api_executar_completo():
                 'dashboard_gerado': dashboard_path.exists(),
                 'dashboard_url': '/output/dashboard_final.html' if dashboard_path.exists() else None,
                 'detalhes': {
-                    'regionais': 'Verificação iDRAC/iLO concluída',
+                    'regionais': 'Verificação de servidores concluída',
                     'gps': 'GPS Amigo capturado',
                     'replicacao': 'Replicação AD verificada',
                     'unifi': 'Antenas UniFi coletadas'
