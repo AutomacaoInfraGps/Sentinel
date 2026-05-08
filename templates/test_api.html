@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .success {
+            color: #198754;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .info {
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">Teste de API</h1>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Endpoints Disponíveis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-primary" onclick="testAPI('/api/test')">Testar API</button>
+                            <button class="btn btn-success" onclick="testAPI('/api/public/status/unifi')">Dados UniFi</button>
+                            <button class="btn btn-info" onclick="testAPI('/api/public/status/replicacao')">Dados Replicação</button>
+                            <button class="btn btn-warning" onclick="testAPI('/api/public/status/servidores')">Dados Servidores</button>
+                            <button class="btn btn-danger" onclick="clearLog()">Limpar Log</button>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="customEndpoint">Endpoint Personalizado:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="customEndpoint" placeholder="/api/...">
+                                <button class="btn btn-outline-secondary" onclick="testCustomAPI()">Testar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">Log de Requisições</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="requestLog" class="p-2" style="height: 400px; overflow-y: auto;">
+                            <div class="log-entry info">Aguardando requisições...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">Resposta da API</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="apiResponse">Nenhuma resposta ainda...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function addLogEntry(message, type = 'info') {
+            const logContainer = document.getElementById('requestLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('requestLog').innerHTML = '<div class="log-entry info">Log limpo...</div>';
+            document.getElementById('apiResponse').textContent = 'Nenhuma resposta ainda...';
+        }
+        
+        function testAPI(endpoint) {
+            addLogEntry(`Testando endpoint: ${endpoint}`, 'info');
+            
+            // Mostra indicador de carregamento
+            document.getElementById('apiResponse').textContent = 'Carregando...';
+            
+            // Configura timeout de 10 segundos
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            // Faz a requisição
+            fetch(endpoint, { signal: controller.signal })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    addLogEntry(`Resposta recebida: ${response.status} ${response.statusText}`, 'success');
+                    return response.json();
+                })
+                .then(data => {
+                    // Formata a resposta JSON
+                    const formattedResponse = JSON.stringify(data, null, 2);
+                    document.getElementById('apiResponse').textContent = formattedResponse;
+                    
+                    // Adiciona informações ao log
+                    if (data.status) {
+                        addLogEntry(`Status: ${data.status}`, 'info');
+                    }
+                    
+                    // Verifica se há dados específicos do UniFi
+                    if (endpoint.includes('unifi')) {
+                        const totalAPs = data.total_aps || 0;
+                        const apsOnline = data.aps_online || 0;
+                        const apsOffline = data.aps_offline || 0;
+                        
+                        addLogEntry(`Total de APs: ${totalAPs}`, 'info');
+                        addLogEntry(`APs Online: ${apsOnline}`, 'success');
+                        addLogEntry(`APs Offline: ${apsOffline}`, 'error');
+                        
+                        if (data.aps && data.aps.length > 0) {
+                            addLogEntry(`${data.aps.length} APs encontrados nos dados`, 'success');
+                        } else {
+                            addLogEntry('Nenhum AP encontrado nos dados', 'error');
+                        }
+                    }
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    
+                    addLogEntry(`Erro: ${error.message}`, 'error');
+                    document.getElementById('apiResponse').textContent = `Erro: ${error.message}`;
+                    
+                    if (error.name === 'AbortError') {
+                        addLogEntry('A requisição excedeu o tempo limite (10 segundos)', 'error');
+                    }
+                });
+        }
+        
+        function testCustomAPI() {
+            const endpoint = document.getElementById('customEndpoint').value;
+            
+            if (!endpoint) {
+                addLogEntry('Por favor, informe um endpoint válido', 'error');
+                return;
+            }
+            
+            testAPI(endpoint);
+        }
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            addLogEntry('Página de teste de API inicializada', 'info');
+        });
+    </script>
+</body>
+</html>

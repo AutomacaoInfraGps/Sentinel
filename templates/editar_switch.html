@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Switch - Sistema de Automação{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        padding: 30px;
+    }
+    
+    .form-header {
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        color: white;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 30px;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    
+    .form-control {
+        border-radius: 5px;
+        padding: 12px;
+        border: 1px solid #ced4da;
+    }
+    
+    .form-control:focus {
+        border-color: #0A4A63;
+        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        border: none;
+        padding: 12px 25px;
+        font-weight: 600;
+    }
+    
+    .btn-secondary {
+        background-color: #6c757d;
+        border: none;
+        padding: 12px 25px;
+        font-weight: 600;
+    }
+    
+    .required-field::after {
+        content: " *";
+        color: red;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 text-center mb-4">
+            <i class="bi bi-pencil-square me-3"></i>
+            Editar Switch
+        </h1>
+        <p class="lead text-center text-muted">
+            Atualize as informações do switch no sistema
+        </p>
+    </div>
+</div>
+
+<div class="form-container">
+    <div class="form-header">
+        <h3 class="mb-0">
+            <i class="bi bi-hdd-network me-2"></i>
+            {{ switch.host }}
+        </h3>
+    </div>
+    
+    <form method="post" action="{{ url_for('editar_switch', host=switch.host) }}">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="host" class="form-label">Nome do Host</label>
+                    <input type="text" class="form-control" id="host" name="host" 
+                           value="{{ switch.host }}" readonly>
+                    <small class="text-muted">O nome do host não pode ser alterado</small>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="ip" class="form-label required-field">Endereço IP</label>
+                    <input type="text" class="form-control" id="ip" name="ip" 
+                           value="{{ switch.ip }}" required>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="regional" class="form-label required-field">Regional</label>
+                    <select class="form-select" id="regional" name="regional" required>
+                        <option value="">Selecione uma regional</option>
+                        {% for regional in regionais %}
+                        <option value="{{ regional }}" {% if regional == switch.regional %}selected{% endif %}>{{ regional }}</option>
+                        {% endfor %}
+                        <option value="NOVA">Nova Regional...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="nova-regional-group" style="display: none;">
+                    <label for="nova-regional" class="form-label">Nova Regional</label>
+                    <input type="text" class="form-control" id="nova-regional" 
+                           placeholder="Digite o nome da nova regional">
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="modelo" class="form-label">Modelo</label>
+                    <input type="text" class="form-control" id="modelo" name="modelo" 
+                           value="{{ switch.modelo }}">
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="local" class="form-label">Local</label>
+            <input type="text" class="form-control" id="local" name="local" 
+                   value="{{ switch.local }}">
+        </div>
+        
+        <div class="form-group mt-4">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                Após salvar, o sistema atualizará a lista de switches.
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between mt-4">
+            <a href="{{ url_for('listar_switches') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2"></i>
+                Voltar
+            </a>
+            
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-2"></i>
+                Salvar Alterações
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Mostra/esconde campo de nova regional
+    $('#regional').change(function() {
+        if ($(this).val() === 'NOVA') {
+            $('#nova-regional-group').show();
+            $('#nova-regional').attr('required', true);
+        } else {
+            $('#nova-regional-group').hide();
+            $('#nova-regional').attr('required', false);
+        }
+    });
+    
+    // Atualiza o campo regional quando uma nova regional é digitada
+    $('form').submit(function(e) {
+        if ($('#regional').val() === 'NOVA') {
+            e.preventDefault();
+            var novaRegional = $('#nova-regional').val().trim();
+            
+            if (novaRegional) {
+                $('#regional').val(novaRegional.toUpperCase());
+                $(this).unbind('submit').submit();
+            } else {
+                alert('Por favor, digite o nome da nova regional.');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

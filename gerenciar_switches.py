@@ -12,11 +12,45 @@ except ImportError:
 import requests
 import json
 import os
+import re
 import sys
+import builtins
+import unicodedata
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 from utils_paths import get_file_path
+
+
+_ORIGINAL_PRINT = builtins.print
+_PRINT_REPLACEMENTS = {
+    "✅": "[OK]",
+    "❌": "[ERRO]",
+    "⚠️": "[AVISO]",
+    "⚠": "[AVISO]",
+    "📊": "[INFO]",
+    "📡": "[API]",
+    "🔍": "[CHECK]",
+    "🟢": "[ONLINE]",
+    "🟡": "[WARN]",
+    "🔴": "[OFFLINE]",
+    "ℹ️": "[INFO]",
+    "ℹ": "[INFO]",
+}
+
+
+def _sanitize_console_text(value):
+    text = str(value)
+    for old_value, new_value in _PRINT_REPLACEMENTS.items():
+        text = text.replace(old_value, new_value)
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+def print(*args, **kwargs):
+    try:
+        _ORIGINAL_PRINT(*args, **kwargs)
+    except UnicodeEncodeError:
+        _ORIGINAL_PRINT(*(_sanitize_console_text(arg) for arg in args), **kwargs)
 
 # Importa o módulo de credenciais
 try:
@@ -203,6 +237,67 @@ class GerenciadorSwitches:
         except Exception as e:
             print(f"Erro ao converter IP {ip_numerico}: {str(e)}")
             return str(ip_numerico)
+
+    def _normalizar_texto_host(self, texto):
+        """Normaliza texto para comparações conservadoras de host"""
+        texto_normalizado = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode("ascii")
+        texto_normalizado = texto_normalizado.upper().replace("_", "-")
+        return re.sub(r"[^A-Z0-9]", "", texto_normalizado)
+
+    def _extrair_identificadores_host(self, host_name):
+        """Extrai identificadores técnicos do nome do switch"""
+        padrao = re.compile(r"(SWT[A-Z0-9_-]+(?:-\d+|_\d+|CORE|WAN)?)", re.IGNORECASE)
+        identificadores = []
+
+        for valor in padrao.findall(str(host_name or "")):
+            identificador = valor.upper().replace("_", "-").strip("-")
+            if identificador and identificador not in identificadores:
+                identificadores.append(identificador)
+
+        return identificadores
+
+    def _buscar_host_por_identificador(self, host_name):
+        """Busca host no Zabbix por identificador único do switch"""
+        identificadores = self._extrair_identificadores_host(host_name)
+
+        if not identificadores:
+            return {"result": []}
+
+        host_resp = self._call_api("host.get", {
+            "output": ["hostid", "name", "status"],
+            "limit": 5000,
+            "sortfield": "name"
+        })
+
+        hosts_zabbix = host_resp.get("result", [])
+
+        for identificador in identificadores:
+            print(f"⚠️ Tentando buscar por identificador do switch: {identificador}")
+
+            candidatos = []
+            identificador_normalizado = self._normalizar_texto_host(identificador)
+
+            for host in hosts_zabbix:
+                nome_normalizado = self._normalizar_texto_host(host.get("name"))
+                if identificador_normalizado and identificador_normalizado in nome_normalizado:
+                    candidatos.append(host)
+
+            candidatos_unicos = []
+            hostids_vistos = set()
+            for host in candidatos:
+                host_id = host.get("hostid")
+                if host_id and host_id not in hostids_vistos:
+                    candidatos_unicos.append(host)
+                    hostids_vistos.add(host_id)
+
+            if len(candidatos_unicos) == 1:
+                print(f"✅ Encontrado host por identificador: {candidatos_unicos[0]['name']}")
+                return {"result": candidatos_unicos}
+
+            if len(candidatos_unicos) > 1:
+                print(f"⚠️ Identificador ambíguo no Zabbix: {identificador} ({len(candidatos_unicos)} candidatos)")
+
+        return {"result": []}
     
     def _carregar_config(self):
         """Carrega configurações do Zabbix"""
@@ -543,6 +638,10 @@ class GerenciadorSwitches:
                 "filter": {"name": host_name},
                 "output": ["hostid", "name", "status"]
             })
+
+            # Se não encontrou pelo nome exato, tenta usar um identificador técnico único do switch
+            if not host_resp.get("result"):
+                host_resp = self._buscar_host_por_identificador(host_name)
             
             # Se não encontrou pelo nome, tenta pelo IP
             if not host_resp.get("result") and switch_info["ip"]:
@@ -872,7 +971,7 @@ class GerenciadorSwitches:
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
             <style>
                 .regional-header {{
-                    background: linear-gradient(135deg, #003366, #0066cc);
+                    background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
                     color: white;
                     padding: 10px 15px;
                     margin-bottom: 15px;

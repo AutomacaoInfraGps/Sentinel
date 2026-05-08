@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h1 class="mb-4">Debug API</h1>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Teste da API UniFi</h5>
+                    </div>
+                    <div class="card-body">
+                        <button id="btnTestJQuery" class="btn btn-primary me-2">Testar com jQuery</button>
+                        <button id="btnTestFetch" class="btn btn-secondary me-2">Testar com Fetch</button>
+                        <button id="btnClear" class="btn btn-outline-danger">Limpar</button>
+                        
+                        <hr>
+                        
+                        <h6>Resultado:</h6>
+                        <pre id="result">Clique em um dos botões para testar a API...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Teste com jQuery
+            $('#btnTestJQuery').click(function() {
+                $('#result').html('Testando com jQuery...');
+                
+                $.get('/api/public/status/unifi')
+                    .done(function(data) {
+                        $('#result').html(JSON.stringify(data, null, 2));
+                        console.log('jQuery Success:', data);
+                    })
+                    .fail(function(xhr, status, error) {
+                        $('#result').html(`Erro: ${error}\nStatus: ${status}\nResponse: ${xhr.responseText}`);
+                        console.error('jQuery Error:', error);
+                    });
+            });
+            
+            // Teste com Fetch
+            $('#btnTestFetch').click(function() {
+                $('#result').html('Testando com Fetch...');
+                
+                fetch('/api/public/status/unifi')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        $('#result').html(JSON.stringify(data, null, 2));
+                        console.log('Fetch Success:', data);
+                    })
+                    .catch(error => {
+                        $('#result').html(`Erro: ${error.message}`);
+                        console.error('Fetch Error:', error);
+                    });
+            });
+            
+            // Limpar resultado
+            $('#btnClear').click(function() {
+                $('#result').html('Resultado limpo...');
+            });
+        });
+    </script>
+</body>
+</html>

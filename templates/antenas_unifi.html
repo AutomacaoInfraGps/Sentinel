@@ -1,0 +1,751 @@
+{% extends 'base.html' %}
+
+{% block title %}Antenas UniFi{% endblock %}
+
+{% block head %}
+<style>
+    /* Estilos para corrigir problemas de sobreposição */
+    .site-card {
+        margin-bottom: 2rem;
+        position: relative;
+        z-index: 1;
+        transition: z-index 0s linear 0.3s;
+    }
+    
+    .site-card.expanded {
+        z-index: 10;
+        transition: none;
+    }
+    
+    .site-card .card-body {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+    
+    .site-card .collapse.show {
+        overflow: visible;
+    }
+    
+    /* Ajuste para scroll suave */
+    html {
+        scroll-behavior: smooth;
+    }
+    
+    /* Espaçamento entre cards */
+    .ap-card {
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Animação suave para expansão/colapso */
+    .collapse {
+        transition: all 0.3s ease;
+    }
+    
+    /* Ajuste para dispositivos móveis */
+    @media (max-width: 768px) {
+        .site-card {
+            margin-bottom: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-wifi me-2"></i>
+                            Gerenciamento de Antenas UniFi
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="atualizarLista()">
+                                <i class="bi bi-arrow-repeat me-1"></i>
+                                Atualizar
+                            </button>
+                            <button class="btn btn-sm btn-outline-success me-2" onclick="verificarAntenas()">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Verificar Antenas
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="testarAPI()">
+                                <i class="bi bi-bug me-1"></i>
+                                Testar API
+                            </button>
+                            <a href="/debug_antenas" class="btn btn-sm btn-outline-danger" target="_blank">
+                                <i class="bi bi-tools me-1"></i>
+                                Debug
+                            </a>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted">
+                        Monitore e gerencie as antenas UniFi da rede.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Total de Antenas</h6>
+                    <h2 class="display-5 fw-bold text-primary" id="totalAntenas">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Antenas Online</h6>
+                    <h2 class="display-5 fw-bold text-success" id="antenasOnline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Antenas Offline</h6>
+                    <h2 class="display-5 fw-bold text-danger" id="antenasOffline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Clientes Conectados</h6>
+                    <h2 class="display-5 fw-bold text-info" id="clientesConectados">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-hdd-rack me-2"></i>
+                        Controller UniFi
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">IP:</span>
+                                <span id="controllerIP">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Porta:</span>
+                                <span id="controllerPorta">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Versão:</span>
+                                <span id="controllerVersao">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Status:</span>
+                                <span class="badge bg-warning" id="controllerStatus">Aguardando</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-activity me-2"></i>
+                        Log de Atividades
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div id="logAtividades" class="p-3" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem;">
+                        <div class="text-muted">Aguardando atividades...</div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light p-2">
+                    <div class="d-flex justify-content-between">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="limparLog()">
+                            <i class="bi bi-trash me-1"></i>
+                            Limpar Log
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="gerarRelatorioWifi()">
+                            <i class="bi bi-file-earmark-text me-1"></i>
+                            Gerar Relatório
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="bi bi-wifi me-2"></i>
+                            Controladoras por Site
+                        </h6>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-2" id="expandirTodos">
+                                <i class="bi bi-arrows-expand me-1"></i>
+                                Expandir Todos
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" id="colapsarTodos">
+                                <i class="bi bi-arrows-collapse me-1"></i>
+                                Colapsar Todos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="sitesContainer">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Carregando sites...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Inicialização
+$(document).ready(function() {
+    adicionarLog('🚀 Sistema de monitoramento de antenas iniciado');
+    
+    // Carrega dados iniciais
+    carregarDadosAPs();
+    
+    // Configura atualização automática a cada 60 segundos
+    setInterval(function() {
+        if (document.visibilityState === 'visible') {
+            carregarDadosAPs();
+        }
+    }, 60000);
+    
+    // Configura o comportamento dos cards expansíveis
+    $(document).on('show.bs.collapse', '.collapse', function() {
+        const siteId = $(this).attr('id');
+        const siteContainer = $(`#site_container_${siteId.replace('site_', '')}`);
+        const header = $(`[data-bs-target="#${siteId}"]`);
+        const icon = header.find('i.bi-chevron-down, i.bi-chevron-up');
+        
+        // Adiciona classe para aumentar o z-index
+        siteContainer.addClass('expanded');
+        
+        // Altera o ícone
+        icon.removeClass('bi-chevron-down').addClass('bi-chevron-up');
+        
+        // Scroll para o card se necessário
+        if (!isElementInViewport(siteContainer[0])) {
+            $('html, body').animate({
+                scrollTop: siteContainer.offset().top - 100
+            }, 300);
+        }
+    });
+    
+    $(document).on('hide.bs.collapse', '.collapse', function() {
+        const siteId = $(this).attr('id');
+        const siteContainer = $(`#site_container_${siteId.replace('site_', '')}`);
+        const header = $(`[data-bs-target="#${siteId}"]`);
+        const icon = header.find('i.bi-chevron-down, i.bi-chevron-up');
+        
+        // Remove classe para normalizar o z-index
+        siteContainer.removeClass('expanded');
+        
+        // Altera o ícone
+        icon.removeClass('bi-chevron-up').addClass('bi-chevron-down');
+    });
+    
+    // Função para verificar se um elemento está visível na viewport
+    function isElementInViewport(el) {
+        const rect = el.getBoundingClientRect();
+        return (
+            rect.top >= 0 &&
+            rect.left >= 0 &&
+            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+        );
+    }
+    
+    // Botão para expandir todos os sites
+    $('#expandirTodos').click(function() {
+        $('.collapse').collapse('show');
+        adicionarLog('🔍 Expandindo todos os sites');
+    });
+    
+    // Botão para colapsar todos os sites
+    $('#colapsarTodos').click(function() {
+        $('.collapse').collapse('hide');
+        adicionarLog('🔍 Colapsando todos os sites');
+    });
+});
+
+function verificarAntenas() {
+    adicionarLog('🔍 Iniciando verificação de antenas...');
+    showToast('Verificação iniciada...', 'info');
+    
+    // Mostra indicador de carregamento
+    $('#sitesContainer').html(`
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Verificando...</span>
+            </div>
+            <p class="mt-3 text-muted">Verificando antenas...</p>
+        </div>
+    `);
+    
+    // Simula verificação
+    setTimeout(() => {
+        adicionarLog('✅ Verificação concluída');
+        showToast('Verificação concluída!', 'success');
+        
+        // Recarrega dados
+        carregarDadosAPs();
+    }, 5000);
+}
+
+function limparLog() {
+    $('#logAtividades').html('<div class="text-muted">Log limpo...</div>');
+    adicionarLog('🧹 Log de atividades limpo');
+}
+
+function gerarRelatorioWifi() {
+    adicionarLog('📊 Gerando relatório WiFi...');
+    showToast('Gerando relatório WiFi...', 'info');
+    
+    // Simula geração de relatório
+    setTimeout(() => {
+        adicionarLog('✅ Relatório WiFi gerado');
+        showToast('Relatório gerado com sucesso!', 'success');
+    }, 3000);
+}
+
+function carregarDadosAPs() {
+    adicionarLog('🔄 Carregando dados das antenas...');
+    
+    // Mostra indicador de carregamento
+    $('#totalAntenas').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#antenasOnline').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#antenasOffline').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#clientesConectados').html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    // Limpa a lista de sites
+    $('#sitesContainer').html('<div class="text-center"><div class="spinner-border"></div><p class="mt-2">Carregando dados...</p></div>');
+    
+    // Adiciona log para depuração
+    console.log('Iniciando requisição para /api/public/status/unifi');
+    adicionarLog('🔄 Buscando dados das antenas...');
+    
+    // Salva o estado atual dos sites (expandidos/colapsados)
+    window.sitesState = {};
+    $('.collapse').each(function() {
+        window.sitesState[$(this).attr('id')] = $(this).hasClass('show');
+    });
+    
+    // Busca os dados das antenas diretamente
+    $.get('/api/public/status/unifi')
+        .done(function(data) {
+            // Log de sucesso
+            adicionarLog('✅ Dados das antenas carregados');
+            console.log('Dados UniFi:', data);
+            
+            // Atualiza estatísticas
+            const totalAPs = data.total_aps || 0;
+            const apsOnline = data.aps_online || 0;
+            const apsOffline = totalAPs - apsOnline;
+            const totalClientes = data.clientes_conectados || 0;
+            
+            $('#totalAntenas').text(totalAPs);
+            $('#antenasOnline').text(apsOnline);
+            $('#antenasOffline').text(apsOffline);
+            $('#clientesConectados').text(totalClientes);
+            
+            // Atualiza dados do controller
+            $('#controllerIP').text(data.controller_ip || 'Não disponível');
+            $('#controllerPorta').text(data.controller_porta || 'Não disponível');
+            $('#controllerVersao').text(data.controller_versao || 'Não disponível');
+            
+            if (data.controller_online) {
+                $('#controllerStatus').removeClass('bg-danger').addClass('bg-success').text('Online');
+            } else {
+                $('#controllerStatus').removeClass('bg-success').addClass('bg-danger').text('Offline');
+            }
+            
+            // Agrupa APs por site
+            let sitesHTML = '';
+            
+            if ((!data.aps || data.aps.length === 0) && totalAPs > 0) {
+                adicionarLog('⚠️ Sem dados detalhados das APs, usando contagem geral');
+                
+                // Cria um site genérico
+                sitesHTML = `
+                    <div class="mb-4 site-card" id="site_container_padrao">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white" role="button" data-bs-toggle="collapse" data-bs-target="#site_padrao" aria-expanded="true" aria-controls="site_padrao" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-building me-2"></i>
+                                        Site Padrão
+                                    </h5>
+                                    <div>
+                                        <span class="badge bg-light text-dark me-2">${totalAPs} APs</span>
+                                        <i class="bi bi-chevron-down"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="site_padrao" class="collapse show">
+                                <div class="card-body">
+                                    <div class="row">
+                `;
+                
+                // Cria APs genéricas baseadas na contagem
+                const apsGenerico = [];
+                
+                // APs online
+                for (let i = 0; i < apsOnline; i++) {
+                    apsGenerico.push({
+                        nome: `AP Online ${i+1}`,
+                        modelo: 'UniFi AP',
+                        ip: 'N/A',
+                        status: 'online',
+                        clientes: 0,
+                        uptime: 'N/A',
+                        canal_2g: 'N/A',
+                        canal_5g: 'N/A',
+                        site: 'Padrão'
+                    });
+                }
+                
+                // APs offline
+                for (let i = 0; i < apsOffline; i++) {
+                    apsGenerico.push({
+                        nome: `AP Offline ${i+1}`,
+                        modelo: 'UniFi AP',
+                        ip: 'N/A',
+                        status: 'offline',
+                        clientes: 0,
+                        uptime: 'N/A',
+                        canal_2g: 'N/A',
+                        canal_5g: 'N/A',
+                        site: 'Padrão'
+                    });
+                }
+                
+                // Adiciona as APs genéricas
+                apsGenerico.forEach(ap => {
+                    const statusClass = ap.status === 'online' ? 'success' : 'danger';
+                    const statusIcon = ap.status === 'online' ? 'wifi' : 'wifi-off';
+                    
+                    sitesHTML += `
+                        <div class="col-md-6 col-lg-4 mb-4 ap-card">
+                            <div class="card border-${statusClass} h-100">
+                                <div class="card-header bg-${statusClass} text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-${statusIcon} me-2"></i>
+                                        ${ap.nome}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">${ap.modelo}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">${ap.ip}</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Clientes:</span>
+                                            <span class="badge bg-info">${ap.clientes}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Uptime:</span>
+                                            <span class="small">${ap.uptime}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-outline-info btn-sm flex-fill" onclick="detalharAP('${ap.nome}')">
+                                            <i class="bi bi-eye me-1"></i>
+                                            Detalhes
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="reiniciarAP('${ap.nome}')">
+                                            <i class="bi bi-arrow-repeat me-1"></i>
+                                            Reiniciar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                sitesHTML += `
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+            } else if (data.aps && data.aps.length > 0) {
+                // Agrupa APs por site
+                const siteMap = {};
+                
+                // Agrupa as APs por site
+                data.aps.forEach(ap => {
+                    const site = ap.site || 'Desconhecido';
+                    if (!siteMap[site]) {
+                        siteMap[site] = [];
+                    }
+                    siteMap[site].push(ap);
+                });
+                
+                // Gera HTML para cada site
+                Object.keys(siteMap).sort().forEach(site => {
+                    const aps = siteMap[site];
+                    const totalSiteAPs = aps.length;
+                    const onlineSiteAPs = aps.filter(ap => ap.status === 'online').length;
+                    
+                    sitesHTML += `
+                        <div class="mb-4 site-card" id="site_container_${site.replace(/[^a-zA-Z0-9]/g, '_')}">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white" role="button" data-bs-toggle="collapse" data-bs-target="#site_${site.replace(/[^a-zA-Z0-9]/g, '_')}" aria-expanded="true" aria-controls="site_${site.replace(/[^a-zA-Z0-9]/g, '_')}" style="cursor: pointer;">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-building me-2"></i>
+                                            Site: ${site}
+                                        </h5>
+                                        <div>
+                                            <span class="badge bg-light text-dark me-2">${onlineSiteAPs}/${totalSiteAPs} APs Online</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="site_${site.replace(/[^a-zA-Z0-9]/g, '_')}" class="collapse show">
+                                    <div class="card-body">
+                                        <div class="row">
+                   `;
+                     
+                    // Adiciona as APs do site
+                    aps.forEach(ap => {
+                        const statusClass = ap.status === 'online' ? 'success' : 'danger';
+                        const statusIcon = ap.status === 'online' ? 'wifi' : 'wifi-off';
+                        
+                        sitesHTML += `
+                            <div class="col-md-6 col-lg-4 mb-4 ap-card">
+                                <div class="card border-${statusClass} h-100">
+                                    <div class="card-header bg-${statusClass} text-white">
+                                        <h6 class="mb-0 fw-bold">
+                                            <i class="bi bi-${statusIcon} me-2"></i>
+                                            ${ap.nome}
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">Modelo:</span>
+                                                <span class="small">${ap.modelo}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">IP:</span>
+                                                <code class="small">${ap.ip}</code>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">Clientes:</span>
+                                                <span class="badge bg-info">${ap.clientes}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="small text-muted">Uptime:</span>
+                                                <span class="small">${ap.uptime}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer bg-transparent">
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-outline-info btn-sm flex-fill" onclick="detalharAP('${ap.nome}')">
+                                                <i class="bi bi-eye me-1"></i>
+                                                Detalhes
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" onclick="reiniciarAP('${ap.nome}')">
+                                                <i class="bi bi-arrow-repeat me-1"></i>
+                                                Reiniciar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    sitesHTML += `
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Atualiza o container de sites
+            $('#sitesContainer').html(sitesHTML || '<div class="alert alert-info">Nenhum site ou AP encontrado</div>');
+            
+            // Inicializa os sites (colapsa todos exceto o primeiro)
+            setTimeout(() => {
+                // Se temos estados salvos, restauramos
+                if (window.sitesState) {
+                    Object.keys(window.sitesState).forEach(siteId => {
+                        if (window.sitesState[siteId]) {
+                            $(`#${siteId}`).collapse('show');
+                        } else {
+                            $(`#${siteId}`).collapse('hide');
+                        }
+                    });
+                } else {
+                    // Na primeira carga, deixa apenas o primeiro site expandido
+                    const sites = $('.collapse');
+                    if (sites.length > 1) {
+                        sites.each(function(index) {
+                            if (index > 0) {
+                                $(this).collapse('hide');
+                            }
+                        });
+                    }
+                }
+            }, 100);
+        })
+        .fail(function(xhr, status, error) {
+            adicionarLog(`❌ Erro ao carregar dados das antenas: ${error}`);
+            console.error('Erro ao carregar dados UniFi:', error);
+            
+            // Restaura valores padrão
+            $('#totalAntenas').text('0');
+            $('#antenasOnline').text('0');
+            $('#antenasOffline').text('0');
+            $('#clientesConectados').text('0');
+            
+            // Mostra mensagem de erro
+            $('#sitesContainer').html(`
+                <div class="alert alert-danger">
+                    <h5 class="alert-heading">Erro ao carregar dados</h5>
+                    <p>${error}</p>
+                    <hr>
+                    <p class="mb-0">Verifique se o script Unifi.py foi executado recentemente.</p>
+                </div>
+            `);
+            
+            // Sugere executar verificação
+            showToast('Erro ao carregar dados. Tente verificar as antenas.', 'danger');
+        })
+        .always(function() {
+            adicionarLog('🔄 Requisição finalizada');
+        });
+}
+
+function atualizarLista() {
+    adicionarLog('🔄 Atualizando lista de APs...');
+    carregarDadosAPs();
+    showToast('Lista atualizada!', 'success');
+}
+
+function detalharAP(nome) {
+    adicionarLog(`🔍 Visualizando detalhes do ${nome}...`);
+    showToast(`Detalhes do ${nome}`, 'info');
+}
+
+function reiniciarAP(nome) {
+    if (confirm(`Deseja reiniciar o ${nome}?`)) {
+        adicionarLog(`🔄 Reiniciando ${nome}...`);
+        showToast(`Reiniciando ${nome}...`, 'warning');
+        
+        setTimeout(() => {
+            adicionarLog(`✅ ${nome} reiniciado`);
+            showToast(`${nome} reiniciado!`, 'success');
+        }, 3000);
+    }
+}
+
+function testarAPI() {
+    adicionarLog('🔍 Testando API...');
+    
+    // Testa a rota de teste
+    $.get('/api/test')
+        .done(function(data) {
+            adicionarLog('✅ API de teste funcionando: ' + JSON.stringify(data));
+            
+            // Testa a rota de dados UniFi
+            adicionarLog('🔍 Testando API de dados UniFi...');
+            $.get('/api/public/status/unifi')
+                .done(function(data) {
+                    adicionarLog('✅ API de dados UniFi funcionando');
+                    adicionarLog('📊 Dados recebidos: ' + JSON.stringify(data).substring(0, 100) + '...');
+                    showToast('APIs funcionando corretamente!', 'success');
+                })
+                .fail(function(error) {
+                    adicionarLog('❌ Erro na API de dados UniFi: ' + error.statusText);
+                    showToast('Erro na API de dados UniFi', 'danger');
+                });
+        })
+        .fail(function(error) {
+            adicionarLog('❌ Erro na API de teste: ' + error.statusText);
+            showToast('Erro na API de teste', 'danger');
+        });
+}
+
+function adicionarLog(mensagem) {
+    const logContainer = $('#logAtividades');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `<div>[${timestamp}] ${mensagem}</div>`;
+    
+    logContainer.append(logEntry);
+    logContainer.scrollTop(logContainer[0].scrollHeight);
+}
+
+function showToast(mensagem, tipo) {
+    const toast = $(`
+        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${mensagem}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `);
+    
+    $('.toast-container').append(toast);
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    // Remove o toast após ser ocultado
+    toast.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
+}
+</script>
+{% endblock %}

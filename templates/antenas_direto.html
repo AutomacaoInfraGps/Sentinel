@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block title %}Antenas UniFi - Execução Direta{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Antenas UniFi - Execução Direta</h1>
+    
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Controle de Execução</h5>
+                    <div>
+                        <button id="btnExecutar" class="btn btn-sm btn-light">
+                            <i class="bi bi-play-fill me-1"></i>
+                            Executar Verificação
+                        </button>
+                        <button id="btnAtualizar" class="btn btn-sm btn-warning ms-2" disabled>
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            Atualizar Dados
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        Clique em "Executar Verificação" para iniciar a coleta de dados das antenas UniFi.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="consoleOutput" class="form-label fw-bold">Console de Execução:</label>
+                        <div id="consoleOutput" class="bg-dark text-light p-3 rounded" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+                            Aguardando execução...
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-3">
+                        <div id="progressBar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    
+                    <div id="statusMessage" class="text-center text-muted">
+                        Aguardando início da verificação
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4" id="resultadosContainer" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Resultados da Verificação</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-3 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Total de Antenas</h5>
+                                    <h2 id="totalAntenas">-</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Antenas Online</h5>
+                                    <h2 id="antenasOnline">-</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Antenas Offline</h5>
+                                    <h2 id="antenasOffline">-</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Clientes Conectados</h5>
+                                    <h2 id="clientesConectados">-</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Controller UniFi</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 col-sm-6 mb-2">
+                                    <span class="text-muted">IP:</span>
+                                    <span id="controllerIP" class="fw-bold">-</span>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-2">
+                                    <span class="text-muted">Porta:</span>
+                                    <span id="controllerPorta" class="fw-bold">-</span>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-2">
+                                    <span class="text-muted">Versão:</span>
+                                    <span id="controllerVersao" class="fw-bold">-</span>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-2">
+                                    <span class="text-muted">Status:</span>
+                                    <span id="controllerStatus" class="badge bg-secondary">Aguardando</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Lista de Antenas</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="listaAPs" class="row">
+                                <div class="col-12 text-center">
+                                    <div class="spinner-border"></div>
+                                    <p>Carregando dados...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Página carregada');
+    
+    const btnExecutar = document.getElementById('btnExecutar');
+    const btnAtualizar = document.getElementById('btnAtualizar');
+    const consoleOutput = document.getElementById('consoleOutput');
+    const progressBar = document.getElementById('progressBar');
+    const statusMessage = document.getElementById('statusMessage');
+    const resultadosContainer = document.getElementById('resultadosContainer');
+    
+    // Função para adicionar mensagem ao console
+    function addConsoleMessage(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        let className = '';
+        
+        switch(type) {
+            case 'success':
+                className = 'text-success';
+                break;
+            case 'error':
+                className = 'text-danger';
+                break;
+            case 'warning':
+                className = 'text-warning';
+                break;
+            default:
+                className = 'text-info';
+        }
+        
+        const messageElement = document.createElement('div');
+        messageElement.className = className;
+        messageElement.innerHTML = `[${timestamp}] ${message}`;
+        
+        consoleOutput.appendChild(messageElement);
+        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+    
+    // Função para atualizar a barra de progresso
+    function updateProgress(percent) {
+        progressBar.style.width = `${percent}%`;
+        progressBar.textContent = `${percent}%`;
+        progressBar.setAttribute('aria-valuenow', percent);
+    }
+    
+    // Função para executar a verificação
+    function executarVerificacao() {
+        btnExecutar.disabled = true;
+        btnAtualizar.disabled = true;
+        resultadosContainer.style.display = 'none';
+        
+        consoleOutput.innerHTML = '';
+        updateProgress(0);
+        statusMessage.textContent = 'Iniciando verificação...';
+        
+        addConsoleMessage('Iniciando verificação das antenas UniFi...', 'info');
+        
+        // Faz a requisição para executar o script
+        fetch('/api/executar/unifi', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                addConsoleMessage('Verificação iniciada com sucesso!', 'success');
+                verificarProgresso();
+            } else {
+                addConsoleMessage(`Erro ao iniciar verificação: ${data.message}`, 'error');
+                statusMessage.textContent = 'Erro ao iniciar verificação';
+                btnExecutar.disabled = false;
+            }
+        })
+        .catch(error => {
+            addConsoleMessage(`Erro ao iniciar verificação: ${error.message}`, 'error');
+            statusMessage.textContent = 'Erro ao iniciar verificação';
+            btnExecutar.disabled = false;
+        });
+    }
+    
+    // Função para verificar o progresso da execução
+    function verificarProgresso() {
+        let checkCount = 0;
+        const maxChecks = 60; // 2 minutos (2s * 60)
+        
+        const progressInterval = setInterval(() => {
+            checkCount++;
+            
+            // Simula progresso (em uma implementação real, isso viria do servidor)
+            const simulatedProgress = Math.min(Math.floor((checkCount / maxChecks) * 100), 95);
+            updateProgress(simulatedProgress);
+            
+            if (checkCount % 5 === 0) {
+                addConsoleMessage(`Verificando antenas... (${simulatedProgress}%)`, 'info');
+            }
+            
+            // Verifica se o script terminou
+            fetch('/api/public/status/unifi_execution')
+            .then(response => response.json())
+            .then(data => {
+                if (data.completed) {
+                    clearInterval(progressInterval);
+                    addConsoleMessage('Verificação concluída com sucesso!', 'success');
+                    updateProgress(100);
+                    statusMessage.textContent = 'Verificação concluída';
+                    btnExecutar.disabled = false;
+                    btnAtualizar.disabled = false;
+                    
+                    // Carrega os resultados
+                    carregarDados();
+                }
+            })
+            .catch(error => {
+                addConsoleMessage(`Erro ao verificar progresso: ${error.message}`, 'warning');
+            });
+            
+            // Timeout de segurança
+            if (checkCount >= maxChecks) {
+                clearInterval(progressInterval);
+                addConsoleMessage('Tempo limite excedido. Verificando resultados...', 'warning');
+                updateProgress(100);
+                statusMessage.textContent = 'Verificação concluída (timeout)';
+                btnExecutar.disabled = false;
+                btnAtualizar.disabled = false;
+                
+                // Tenta carregar os resultados mesmo assim
+                carregarDados();
+            }
+        }, 2000); // Verifica a cada 2 segundos
+    }
+    
+    // Função para carregar os dados
+    function carregarDados() {
+        addConsoleMessage('Carregando dados das antenas...', 'info');
+        
+        fetch('/api/public/status/unifi')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            addConsoleMessage('Dados carregados com sucesso!', 'success');
+            
+            // Exibe o container de resultados
+            resultadosContainer.style.display = 'block';
+            
+            // Atualiza estatísticas
+            document.getElementById('totalAntenas').textContent = data.total_aps || 0;
+            document.getElementById('antenasOnline').textContent = data.aps_online || 0;
+            document.getElementById('antenasOffline').textContent = data.aps_offline || 0;
+            document.getElementById('clientesConectados').textContent = data.clientes_conectados || 0;
+            
+            // Atualiza dados do controller
+            document.getElementById('controllerIP').textContent = data.controller_ip || 'Não disponível';
+            document.getElementById('controllerPorta').textContent = data.controller_porta || 'Não disponível';
+            document.getElementById('controllerVersao').textContent = data.controller_versao || 'Não disponível';
+            
+            if (data.controller_online) {
+                document.getElementById('controllerStatus').className = 'badge bg-success';
+                document.getElementById('controllerStatus').textContent = 'Online';
+            } else {
+                document.getElementById('controllerStatus').className = 'badge bg-danger';
+                document.getElementById('controllerStatus').textContent = 'Offline';
+            }
+            
+            // Gera HTML para a lista de APs
+            let htmlAPs = '';
+            
+            if (data.aps && data.aps.length > 0) {
+                addConsoleMessage(`Processando ${data.aps.length} antenas...`, 'info');
+                
+                for (let i = 0; i < data.aps.length; i++) {
+                    const ap = data.aps[i];
+                    const statusClass = ap.status === 'online' ? 'success' : 'danger';
+                    const statusIcon = ap.status === 'online' ? 'wifi' : 'wifi-off';
+                    
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-${statusClass} h-100">
+                                <div class="card-header bg-${statusClass} text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-${statusIcon} me-2"></i>
+                                        ${ap.nome}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">${ap.modelo}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">${ap.ip}</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Status:</span>
+                                            <span class="badge bg-${statusClass}">${ap.status}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Clientes:</span>
+                                            <span class="small">${ap.clientes || 0}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else if (data.total_aps > 0) {
+                addConsoleMessage('Sem dados detalhados das APs, usando contagem geral', 'warning');
+                
+                // Cria APs genéricas baseadas na contagem
+                for (let i = 0; i < data.aps_online; i++) {
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-success h-100">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-wifi me-2"></i>
+                                        AP Online ${i+1}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">UniFi AP</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">N/A</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Status:</span>
+                                            <span class="badge bg-success">online</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                for (let i = 0; i < data.aps_offline; i++) {
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-danger h-100">
+                                <div class="card-header bg-danger text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-wifi-off me-2"></i>
+                                        AP Offline ${i+1}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">UniFi AP</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">N/A</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Status:</span>
+                                            <span class="badge bg-danger">offline</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                addConsoleMessage('Nenhum AP encontrado', 'warning');
+                htmlAPs = '<div class="col-12"><div class="alert alert-info">Nenhum AP encontrado</div></div>';
+            }
+            
+            document.getElementById('listaAPs').innerHTML = htmlAPs;
+        })
+        .catch(error => {
+            addConsoleMessage(`Erro ao carregar dados: ${error.message}`, 'error');
+            document.getElementById('listaAPs').innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading">Erro ao carregar dados</h5>
+                        <p>${error.message}</p>
+                        <hr>
+                        <p class="mb-0">Verifique se o script Unifi.py foi executado recentemente.</p>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    // Configura os botões
+    btnExecutar.addEventListener('click', executarVerificacao);
+    btnAtualizar.addEventListener('click', carregarDados);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Antenas UniFi - Cards{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Antenas UniFi</h1>
+    
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Controle</h5>
+                        <button id="btnAtualizar" class="btn btn-light btn-sm">
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            Atualizar Dados
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="statusMessage" class="alert alert-info">
+                        Clique em "Atualizar Dados" para verificar o status das antenas.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total de Antenas</h5>
+                    <h2 id="totalAntenas">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Antenas Online</h5>
+                    <h2 id="antenasOnline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Antenas Offline</h5>
+                    <h2 id="antenasOffline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Clientes Conectados</h5>
+                    <h2 id="clientesConectados">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Lista de Antenas</h5>
+                </div>
+                <div class="card-body">
+                    <div id="listaAPs" class="row">
+                        <div class="col-12 text-center">
+                            <p class="text-muted">Clique em "Atualizar Dados" para carregar a lista de antenas.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnAtualizar = document.getElementById('btnAtualizar');
+    const statusMessage = document.getElementById('statusMessage');
+    const totalAntenas = document.getElementById('totalAntenas');
+    const antenasOnline = document.getElementById('antenasOnline');
+    const antenasOffline = document.getElementById('antenasOffline');
+    const clientesConectados = document.getElementById('clientesConectados');
+    const listaAPs = document.getElementById('listaAPs');
+    
+    // Função para atualizar os dados
+    function atualizarDados() {
+        // Atualiza o status
+        statusMessage.className = 'alert alert-warning';
+        statusMessage.innerHTML = '<div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div><div>Atualizando dados das antenas...</div></div>';
+        
+        // Desabilita o botão durante a atualização
+        btnAtualizar.disabled = true;
+        
+        // Faz a requisição para atualizar os dados
+        fetch('/atualizar_antenas', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Atualiza o status
+                statusMessage.className = 'alert alert-success';
+                statusMessage.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Dados atualizados com sucesso!';
+                
+                // Carrega os dados atualizados
+                carregarDados();
+            } else {
+                // Exibe mensagem de erro
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2"></i>Erro ao atualizar dados: ${data.message}`;
+                btnAtualizar.disabled = false;
+            }
+        })
+        .catch(error => {
+            // Exibe mensagem de erro
+            statusMessage.className = 'alert alert-danger';
+            statusMessage.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2"></i>Erro ao atualizar dados: ${error.message}`;
+            btnAtualizar.disabled = false;
+        });
+    }
+    
+    // Função para carregar os dados
+    function carregarDados() {
+        fetch('/api/public/status/unifi')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Atualiza os cards
+            totalAntenas.textContent = data.total_aps || 0;
+            antenasOnline.textContent = data.aps_online || 0;
+            antenasOffline.textContent = data.aps_offline || 0;
+            clientesConectados.textContent = data.clientes_conectados || 0;
+            
+            // Gera HTML para a lista de APs
+            let htmlAPs = '';
+            
+            if (data.aps && data.aps.length > 0) {
+                for (let i = 0; i < data.aps.length; i++) {
+                    const ap = data.aps[i];
+                    const statusClass = ap.status === 'online' ? 'success' : 'danger';
+                    const statusIcon = ap.status === 'online' ? 'wifi' : 'wifi-off';
+                    
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-${statusClass} h-100">
+                                <div class="card-header bg-${statusClass} text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-${statusIcon} me-2"></i>
+                                        ${ap.nome}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">${ap.modelo}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">${ap.ip}</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Status:</span>
+                                            <span class="badge bg-${statusClass}">${ap.status}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Clientes:</span>
+                                            <span class="small">${ap.clientes || 0}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else if (data.total_aps > 0) {
+                // Cria APs genéricas baseadas na contagem
+                for (let i = 0; i < data.aps_online; i++) {
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-success h-100">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-wifi me-2"></i>
+                                        AP Online ${i+1}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">UniFi AP</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">N/A</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Status:</span>
+                                            <span class="badge bg-success">online</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                for (let i = 0; i < data.aps_offline; i++) {
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-danger h-100">
+                                <div class="card-header bg-danger text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-wifi-off me-2"></i>
+                                        AP Offline ${i+1}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">UniFi AP</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">N/A</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Status:</span>
+                                            <span class="badge bg-danger">offline</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                htmlAPs = '<div class="col-12"><div class="alert alert-info">Nenhum AP encontrado</div></div>';
+            }
+            
+            listaAPs.innerHTML = htmlAPs;
+            
+            // Reativa o botão
+            btnAtualizar.disabled = false;
+        })
+        .catch(error => {
+            // Exibe mensagem de erro
+            statusMessage.className = 'alert alert-danger';
+            statusMessage.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2"></i>Erro ao carregar dados: ${error.message}`;
+            listaAPs.innerHTML = '<div class="col-12"><div class="alert alert-danger">Erro ao carregar dados</div></div>';
+            btnAtualizar.disabled = false;
+        });
+    }
+    
+    // Configura o botão de atualização
+    btnAtualizar.addEventListener('click', atualizarDados);
+    
+    // Carrega os dados iniciais
+    carregarDados();
+});
+</script>
+{% endblock %}

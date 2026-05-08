@@ -57,7 +57,7 @@ body {
     background-color: #f5f5f5;
 }
 h1, h2 {
-    color: #0066cc;
+    color: #012E40;
 }
 .container {
     max-width: 1200px;
@@ -73,8 +73,8 @@ h1, h2 {
     margin-bottom: 20px;
 }
 .summary-box {
-    background-color: #f0f8ff;
-    border: 1px solid #d0e4fe;
+    background-color: #eef6f9;
+    border: 1px solid #c7dde7;
     border-radius: 5px;
     padding: 15px;
     width: 23%;
@@ -104,14 +104,14 @@ th, td {
     border-bottom: 1px solid #ddd;
 }
 th {
-    background-color: #0066cc;
+    background: linear-gradient(135deg, #012E40, #0A4A63);
     color: white;
 }
 tr:nth-child(even) {
     background-color: #f2f2f2;
 }
 tr:hover {
-    background-color: #e6f2ff;
+    background-color: #eef6f9;
 }
 .status-ok {
     color: green;

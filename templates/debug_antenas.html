@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Antenas UniFi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        #logContainer {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h1 class="mb-4">Debug Antenas UniFi</h1>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Ações de Diagnóstico</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-primary" id="btnTestAPI">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Testar API
+                            </button>
+                            <button class="btn btn-success" id="btnLoadData">
+                                <i class="bi bi-arrow-repeat me-1"></i>
+                                Carregar Dados
+                            </button>
+                            <button class="btn btn-warning" id="btnCheckFile">
+                                <i class="bi bi-file-earmark-text me-1"></i>
+                                Verificar Arquivo
+                            </button>
+                            <button class="btn btn-danger" id="btnClearLog">
+                                <i class="bi bi-trash me-1"></i>
+                                Limpar Log
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Log de Diagnóstico</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="logContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Dados Recebidos</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="dataOutput">Nenhum dado carregado ainda...</pre>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">Primeiro AP</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="firstAPOutput">Nenhum AP carregado ainda...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Função para adicionar mensagem ao log
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            let className = '';
+            
+            switch(type) {
+                case 'success':
+                    className = 'text-success';
+                    break;
+                case 'error':
+                    className = 'text-danger';
+                    break;
+                case 'warning':
+                    className = 'text-warning';
+                    break;
+                default:
+                    className = 'text-info';
+            }
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = className;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Também loga no console para depuração adicional
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        // Função para limpar o log
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '';
+            log('Log limpo', 'info');
+        }
+        
+        // Função para testar a API básica
+        function testAPI() {
+            log('Testando API básica...', 'info');
+            
+            $.ajax({
+                url: '/api/test',
+                type: 'GET',
+                timeout: 5000,
+                success: function(data) {
+                    log('API básica funcionando corretamente', 'success');
+                    document.getElementById('dataOutput').textContent = JSON.stringify(data, null, 2);
+                },
+                error: function(xhr, status, error) {
+                    log(`Erro na API básica: ${status} - ${error}`, 'error');
+                }
+            });
+        }
+        
+        // Função para carregar dados das antenas
+        function loadData() {
+            log('Carregando dados das antenas...', 'info');
+            
+            $.ajax({
+                url: '/api/public/status/unifi',
+                type: 'GET',
+                timeout: 10000,
+                success: function(data) {
+                    log('Dados das antenas carregados com sucesso', 'success');
+                    
+                    // Exibe os dados principais
+                    const mainData = {
+                        status: data.status,
+                        total_aps: data.total_aps,
+                        aps_online: data.aps_online,
+                        aps_offline: data.aps_offline,
+                        clientes_conectados: data.clientes_conectados,
+                        ultima_verificacao: data.ultima_verificacao,
+                        controller_online: data.controller_online,
+                        dados_atualizados: data.dados_atualizados,
+                        timestamp: data.timestamp
+                    };
+                    
+                    document.getElementById('dataOutput').textContent = JSON.stringify(mainData, null, 2);
+                    
+                    // Verifica se há APs
+                    if (data.aps && data.aps.length > 0) {
+                        log(`${data.aps.length} APs encontrados`, 'success');
+                        document.getElementById('firstAPOutput').textContent = JSON.stringify(data.aps[0], null, 2);
+                    } else {
+                        log('Nenhum AP encontrado nos dados', 'warning');
+                        document.getElementById('firstAPOutput').textContent = 'Nenhum AP encontrado';
+                    }
+                },
+                error: function(xhr, status, error) {
+                    log(`Erro ao carregar dados: ${status} - ${error}`, 'error');
+                    
+                    if (xhr.responseText) {
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            document.getElementById('dataOutput').textContent = JSON.stringify(errorData, null, 2);
+                        } catch (e) {
+                            document.getElementById('dataOutput').textContent = xhr.responseText;
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Função para verificar o arquivo JSON
+        function checkFile() {
+            log('Verificando arquivo unifi.json...', 'info');
+            
+            $.ajax({
+                url: '/api/check_file/unifi',
+                type: 'GET',
+                timeout: 5000,
+                success: function(data) {
+                    log('Verificação do arquivo concluída', 'success');
+                    document.getElementById('dataOutput').textContent = JSON.stringify(data, null, 2);
+                },
+                error: function(xhr, status, error) {
+                    log(`Erro ao verificar arquivo: ${status} - ${error}`, 'error');
+                }
+            });
+        }
+        
+        // Configuração dos botões
+        document.getElementById('btnTestAPI').addEventListener('click', testAPI);
+        document.getElementById('btnLoadData').addEventListener('click', loadData);
+        document.getElementById('btnCheckFile').addEventListener('click', checkFile);
+        document.getElementById('btnClearLog').addEventListener('click', clearLog);
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Página de diagnóstico inicializada', 'info');
+            log('Clique em "Testar API" para começar', 'info');
+        });
+    </script>
+</body>
+</html>

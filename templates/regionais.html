@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+
+{% block title %}Regionais - Sistema de Automação{% endblock %}
+
+{% block extra_css %}
+<style>
+    .transition-all {
+        transition: all 0.3s ease;
+    }
+    
+    .card.border-success {
+        border-left: 4px solid #28a745 !important;
+    }
+    
+    .card.border-warning {
+        border-left: 4px solid #ffc107 !important;
+    }
+    
+    .card.border-danger {
+        border-left: 4px solid #dc3545 !important;
+    }
+    
+    .loading-spinner {
+        display: none;
+    }
+
+    .ip-link {
+        color: var(--bs-code-color, #d63384);
+        text-decoration: none;
+        display: inline-block;
+        transition: transform 0.12s ease-in-out;
+    }
+
+    .ip-link:hover {
+        transform: scale(1.03);
+    }
+
+    /* Dropdown do card de regional não fica atrás de outros cards */
+    .regional-card {
+        overflow: visible !important;
+    }
+    .regional-card .card-header {
+        overflow: visible !important;
+        position: relative;
+        z-index: 1;
+    }
+    .regional-card .dropdown-menu {
+        z-index: 9999 !important;
+    }
+    /* Eleva o card que tem o dropdown aberto */
+    .regional-card:has(.dropdown-menu.show) {
+        z-index: 100;
+        position: relative;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ✅ FIX DO ERRO DO JINJA NO JS: DADOS SÓ AQUI -->
+<div id="regionais-data"
+     data-regionais='{{ regionais|map(attribute="codigo")|list|tojson }}'
+     style="display:none"></div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="display-5 mb-2">
+                    <i class="bi bi-building me-3"></i>
+                    Gerenciar Regionais
+                </h1>
+                <p class="text-muted">Gerencie as regionais e seus servidores</p>
+            </div>
+            <div>
+                <a href="{{ url_for('nova_regional') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Nova Regional
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estatísticas Rápidas -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-number">{{ regionais|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-building me-1"></i>
+                Total de Regionais
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+            <div class="stats-number">{{ regionais|sum(attribute='total_servidores') }}</div>
+            <div class="stats-label">
+                <i class="bi bi-server me-1"></i>
+                Total de Servidores
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
+            <div class="stats-number">{{ regionais|sum(attribute='total_links') }}</div>
+            <div class="stats-label">
+                <i class="bi bi-router me-1"></i>
+                Total de Links
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+            <div class="stats-number">{{ (regionais|selectattr('total_links', '>', 0)|list)|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-wifi me-1"></i>
+                Com Links
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Regionais -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list me-2"></i>
+                    Regionais Cadastradas
+                </h5>
+                <div>
+                    <button class="btn btn-outline-info btn-sm" onclick="verificarTodasRegionais()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        Verificar Todas
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm ms-2"
+                            onclick="verificarLinksTodasRegionais()">
+                        <i class="bi bi-wifi me-1"></i>
+                        Atualizar Links
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if regionais %}
+                <div class="row">
+                    {% for regional in regionais %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card border-0 shadow-sm h-100 transition-all regional-card"
+                            id="card-regional-{{ regional.codigo }}">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-bold">{{ regional.nome }}</h6>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                            type="button" data-bs-toggle="dropdown">
+                                        <i class="bi bi-three-dots"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('detalhar_regional', codigo_regional=regional.codigo) }}">
+                                                <i class="bi bi-eye me-2"></i>Detalhes
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('editar_regional', codigo_regional=regional.codigo) }}">
+                                                <i class="bi bi-pencil me-2"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}">
+                                                <i class="bi bi-plus me-2"></i>Adicionar Servidor
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('novo_link_regional', codigo_regional=regional.codigo) }}">
+                                                <i class="bi bi-router me-2"></i>Adicionar Link
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button class="dropdown-item text-info" onclick="verificarRegional('{{ regional.codigo }}')">
+                                                <i class="bi bi-arrow-clockwise me-2"></i>Verificar Status
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item text-danger"
+                                                    onclick="excluirRegional('{{ regional.codigo }}')">
+                                                <i class="bi bi-trash me-2"></i>Excluir
+                                            </button>
+                                        </li>
+
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="card-body">
+                                <p class="text-muted small mb-3">{{ regional.descricao or 'Sem descrição' }}</p>
+                                
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Código:</span>
+                                        <code class="small">{{ regional.codigo }}</code>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small text-muted">Servidores:</span>
+                                        <span class="badge bg-primary">{{ regional.total_servidores }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small text-muted">Links:</span>
+                                        <span class="badge bg-info">{{ regional.total_links }}</span>
+                                    </div>
+                                </div>
+                                
+                                {% if regional.total_servidores > 0 %}
+                                <div class="mb-3">
+                                    <h6 class="small text-muted mb-2">Servidores:</h6>
+                                    {% for servidor in regional.servidores[:3] %}
+                                    <div class="d-flex align-items-center mb-1">
+                                        <i class="bi bi-{{ 'hdd-rack' if servidor.tipo == 'idrac' else 'server' }} me-2 text-primary"></i>
+                                        <span class="small">{{ servidor.nome }}</span>
+                                        <span class="ms-auto d-flex align-items-center">
+                                            <a class="small me-2 ip-link" href="https://{{ servidor.ip }}" target="_blank" rel="noopener">
+                                                {{ servidor.ip }}
+                                            </a>
+                                            <span class="status-indicator" data-ip="{{ servidor.ip }}" data-regional="{{ regional.codigo }}">
+                                                <i class="bi bi-question-circle text-muted" style="font-size: 0.8rem;"></i>
+                                            </span>
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                    
+                                    {% if regional.total_servidores > 3 %}
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">
+                                            +{{ regional.total_servidores - 3 }} servidor(es)
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <div class="text-center py-3">
+                                    <i class="bi bi-server text-muted fs-1"></i>
+                                    <p class="text-muted small mb-0">Nenhum servidor cadastrado</p>
+                                </div>
+                                {% endif %}
+
+                                {% if regional.total_links > 0 %}
+                                <div class="mb-3">
+                                    <h6 class="small text-muted mb-2">Links de Internet:</h6>
+                                    {% for link in regional.links[:2] %}
+                                    <div class="d-flex align-items-center mb-1">
+                                        <i class="bi bi-router me-2 text-info"></i>
+                                        <span class="small">{{ link.provedor }}:</span>
+                                        <code class="small ms-auto">{{ link.ip }}</code>
+                                    </div>
+                                    {% endfor %}
+                                    
+                                    {% if regional.total_links > 2 %}
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">
+                                            +{{ regional.total_links - 2 }} link(s)
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="card-footer bg-transparent">
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('detalhar_regional', codigo_regional=regional.codigo) }}" 
+                                       class="btn btn-outline-primary btn-sm flex-fill">
+                                        <i class="bi bi-eye me-1"></i>
+                                        Detalhes
+                                    </a>
+                                    
+                                    {% if regional.total_servidores > 0 %}
+                                    <button class="btn btn-outline-info btn-sm" 
+                                            onclick="verificarRegional('{{ regional.codigo }}')">
+                                        <i class="bi bi-arrow-clockwise me-1"></i>
+                                        Verificar
+                                    </button>
+                                    {% else %}
+                                    <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
+                                       class="btn btn-outline-success btn-sm">
+                                        <i class="bi bi-plus me-1"></i>
+                                        Servidor
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-building text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">Nenhuma regional cadastrada</h4>
+                    <p class="text-muted">Comece adicionando sua primeira regional</p>
+                    <a href="{{ url_for('nova_regional') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        Adicionar Regional
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function atualizarIndicadoresStatus(codigo, resultados) {
+    // Atualiza os indicadores de status para cada servidor
+    resultados.forEach(function(resultado) {
+        const ip = resultado.ip;
+        const status = resultado.status;
+        
+        // Encontra o indicador de status para este servidor
+        const indicador = $(`.status-indicator[data-ip="${ip}"][data-regional="${codigo}"]`);
+        
+        if (indicador.length > 0) {
+            // Remove classes e ícones anteriores
+            indicador.find('i').removeClass('bi-question-circle bi-check-circle bi-x-circle bi-exclamation-circle')
+                              .removeClass('text-muted text-success text-danger text-warning');
+            
+            // Adiciona o ícone e cor apropriados
+            if (status === 'online') {
+                indicador.find('i').addClass('bi-check-circle text-success');
+                indicador.attr('title', 'Online');
+            } else if (status === 'offline') {
+                indicador.find('i').addClass('bi-x-circle text-danger');
+                indicador.attr('title', resultado.erro || 'Offline');
+            } else {
+                indicador.find('i').addClass('bi-exclamation-circle text-warning');
+                indicador.attr('title', resultado.erro || 'Warning');
+            }
+        }
+    });
+}
+
+function excluirRegional(codigo) {
+    if (!confirm(`Deseja realmente excluir a regional ${codigo}?`)) {
+        return;
+    }
+
+    fetch(`/api/regional/${codigo}/excluir`, {
+        method: 'DELETE'
+    })
+
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast(data.message, 'danger');
+        }
+    })
+    .catch(() => {
+        showToast('Erro ao excluir regional', 'danger');
+    });
+}
+
+
+function verificarRegional(codigo) {
+    const btn = $(event.currentTarget);
+    showLoading(btn);
+
+    showToast(`Verificando regional ${codigo}...`, 'info');
+
+    const card = $(`#card-regional-${codigo}`);
+
+    $.get(`/api/regional/${encodeURIComponent(codigo)}/verificar`)
+        .done(function(response) {
+            if (response.success) {
+                const resumo = response.resumo;
+                const resultados = response.resultados;
+
+                atualizarIndicadoresStatus(codigo, resultados);
+
+                if (resumo.total > 0) {
+                    if (resumo.offline === 0) {
+                        card.removeClass('border-warning border-danger').addClass('border-success');
+                    } else if (resumo.online === 0) {
+                        card.removeClass('border-success border-warning').addClass('border-danger');
+                    } else {
+                        card.removeClass('border-success border-danger').addClass('border-warning');
+                    }
+                } else {
+                    card.removeClass('border-success border-warning border-danger').addClass('border-secondary');
+                }
+            } else {
+                showToast(`Erro ao verificar ${codigo}: ${response.message}`, 'danger');
+            }
+        })
+        .fail(function() {
+            showToast(`Erro de conexão ao verificar ${codigo}`, 'danger');
+        })
+        .always(function() {
+            hideLoading(btn);
+        });
+}
+
+function verificarTodasRegionais() {
+    const btn = $(event.currentTarget);
+    showLoading(btn);
+
+    showToast('Verificando todas as regionais...', 'info');
+
+    // ✅ CORREÇÃO DO ERRO: Jinja saiu do JS e veio do HTML (div escondida)
+    const regionais = JSON.parse(
+        document.getElementById("regionais-data").dataset.regionais
+    );
+
+    let verificacoesConcluidas = 0;
+    let totalOnline = 0;
+    let totalServidores = 0;
+    let totalErros = 0;
+
+    // ✅ Reseta só os cards das regionais
+    $('.regional-card').removeClass('border-success border-warning border-danger');
+
+    // ✅ Reseta todos os indicadores
+    $('.status-indicator i')
+        .removeClass('bi-check-circle bi-x-circle bi-exclamation-circle')
+        .removeClass('text-success text-danger text-warning')
+        .addClass('bi-question-circle text-muted');
+
+    function finalizarVerificacao() {
+        hideLoading(btn);
+
+        if (totalServidores > 0) {
+            const percentOnline = Math.round((totalOnline / totalServidores) * 100);
+
+            if (totalErros > 0) {
+                showToast(
+                    `Verificação concluída: ${totalOnline}/${totalServidores} online (${percentOnline}%) | Erros: ${totalErros}`,
+                    'warning'
+                );
+            } else {
+                showToast(
+                    `Verificação concluída: ${totalOnline}/${totalServidores} online (${percentOnline}%)`,
+                    totalOnline === totalServidores ? 'success' : 'warning'
+                );
+            }
+        } else {
+            showToast(`Verificação concluída: Nenhum servidor encontrado`, 'info');
+        }
+    }
+
+    function processarRegional(indice) {
+        if (indice >= regionais.length) {
+            finalizarVerificacao();
+            return;
+        }
+
+        const codigo = regionais[indice];
+
+        $.get(`/api/regional/${encodeURIComponent(codigo)}/verificar`)
+            .done(function(response) {
+                const card = $(`#card-regional-${codigo}`);
+
+                if (!response.success) {
+                    totalErros++;
+                    card.removeClass('border-success border-warning border-secondary').addClass('border-danger');
+                    return;
+                }
+
+                totalOnline += response.resumo.online;
+                totalServidores += response.resumo.total;
+
+                atualizarIndicadoresStatus(codigo, response.resultados);
+
+                if (response.resumo.total > 0) {
+                    if (response.resumo.offline === 0) {
+                        card.removeClass('border-warning border-danger border-secondary').addClass('border-success');
+                    } else if (response.resumo.online === 0) {
+                        card.removeClass('border-success border-warning border-secondary').addClass('border-danger');
+                    } else {
+                        card.removeClass('border-success border-danger border-secondary').addClass('border-warning');
+                    }
+                } else {
+                    card.removeClass('border-success border-warning border-danger').addClass('border-secondary');
+                }
+            })
+            .fail(function() {
+                totalErros++;
+                const card = $(`#card-regional-${codigo}`);
+                card.removeClass('border-success border-warning border-secondary').addClass('border-danger');
+            })
+            .always(function() {
+                verificacoesConcluidas++;
+                processarRegional(indice + 1);
+            });
+    }
+
+    processarRegional(0);
+}
+
+function verificarLinksTodasRegionais() {
+    const btn = $(event.currentTarget);
+    showLoading(btn);
+
+    showToast('Atualizando links de todas as regionais...', 'info');
+
+    fetch('/api/regionais/verificar-links', {
+        method: 'POST'
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (!data.success) {
+            showToast(data.message || 'Erro ao verificar links', 'danger');
+            return;
+        }
+
+        let totalRegionais = Object.keys(data.regionais).length;
+        let erros = 0;
+
+        for (const [codigo, resultado] of Object.entries(data.regionais)) {
+            if (!resultado.success) {
+                erros++;
+                // aqui depois podemos marcar o card da regional
+                console.warn(`Erro em ${codigo}:`, resultado.message);
+            }
+        }
+
+        if (erros > 0) {
+            showToast(
+                `Links verificados. Regionais com erro: ${erros}/${totalRegionais}`,
+                'warning'
+            );
+        } else {
+            showToast(
+                `Links verificados com sucesso em ${totalRegionais} regionais`,
+                'success'
+            );
+        }
+    })
+    .catch(() => {
+        showToast('Erro de conexão ao verificar links', 'danger');
+    })
+    .finally(() => {
+        hideLoading(btn);
+    });
+}
+
+</script>
+{% endblock %}

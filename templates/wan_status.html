@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status das Interfaces WAN - Sistema de Automação</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #012E40 0%, #0A4A63 55%, #0F6C8C 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 1200px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #333;
+        }
+
+        .wan-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+
+        .wan-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .wan-card.online {
+            border-left: 5px solid #28a745;
+        }
+
+        .wan-card.offline {
+            border-left: 5px solid #dc3545;
+        }
+
+        .wan-card.degraded {
+            border-left: 5px solid #ffc107;
+        }
+
+        .status-badge {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .status-online {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .status-offline {
+            background: linear-gradient(45deg, #dc3545, #e74c3c);
+            color: white;
+        }
+
+        .status-degraded {
+            background: linear-gradient(45deg, #ffc107, #f39c12);
+            color: #333;
+        }
+
+        .status-unknown {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            color: white;
+        }
+
+        .interface-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .interface-icon.online {
+            color: #28a745;
+        }
+
+        .interface-icon.offline {
+            color: #dc3545;
+        }
+
+        .interface-icon.degraded {
+            color: #ffc107;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(45deg, #012E40, #0A4A63);
+            border: none;
+            border-radius: 25px;
+            padding: 0.75rem 2rem;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .last-update {
+            font-size: 0.9rem;
+            color: #666;
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <i class="bi bi-router-fill text-primary" style="font-size: 3rem;"></i>
+            <h1>Status das Interfaces WAN</h1>
+            <p class="text-muted">Monitoramento em tempo real das conexões de internet</p>
+        </div>
+
+        <div class="text-center mb-4">
+            <button id="refreshBtn" class="refresh-btn">
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                Atualizar Status
+            </button>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="mt-2">Atualizando status das interfaces...</p>
+        </div>
+
+        <div id="wanContainer" class="row">
+            <!-- Interfaces WAN serão carregadas aqui via JavaScript -->
+        </div>
+
+        <div id="lastUpdate" class="last-update">
+            <!-- Última atualização será mostrada aqui -->
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let wanData = null;
+
+        // Função para carregar status das interfaces WAN
+        async function loadWanStatus() {
+            const loading = document.getElementById('loading');
+            const container = document.getElementById('wanContainer');
+            const lastUpdate = document.getElementById('lastUpdate');
+
+            loading.style.display = 'block';
+            container.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/fortigate/wan/status');
+                const data = await response.json();
+
+                if (data.success) {
+                    wanData = data;
+                    renderWanInterfaces(data.wan_interfaces);
+                    lastUpdate.innerHTML = `<i class="bi bi-clock me-1"></i>Última atualização: ${new Date(data.timestamp).toLocaleString('pt-BR')}`;
+                } else {
+                    container.innerHTML = `
+                        <div class="col-12">
+                            <div class="alert alert-danger text-center">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Erro ao carregar status: ${data.message}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-danger text-center">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Erro de conexão: ${error.message}
+                        </div>
+                    </div>
+                `;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Função para renderizar as interfaces WAN
+        function renderWanInterfaces(interfaces) {
+            const container = document.getElementById('wanContainer');
+
+            interfaces.forEach(wan => {
+                const statusClass = getStatusClass(wan.status_geral);
+                const statusBadge = getStatusBadge(wan.status_geral);
+                const iconClass = getIconClass(wan.status_geral);
+
+                const cardHtml = `
+                    <div class="col-md-6">
+                        <div class="card wan-card ${statusClass}">
+                            <div class="card-body text-center">
+                                <div class="interface-icon ${iconClass}">
+                                    <i class="bi bi-router"></i>
+                                </div>
+                                <h5 class="card-title">${wan.interface}</h5>
+                                <span class="status-badge ${statusBadge}">${wan.status_geral.toUpperCase()}</span>
+
+                                <div class="row mt-3">
+                                    <div class="col-6">
+                                        <div class="metric-card">
+                                            <div class="metric-label">IP</div>
+                                            <div class="metric-value">${wan.ip}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Status Físico</div>
+                                            <div class="metric-value">${wan.status_fisico}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Speed</div>
+                                            <div class="metric-value">${wan.speed}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Máscara</div>
+                                            <div class="metric-value">${wan.mascara}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row mt-2">
+                                    ${wan.sdwan_member_id !== 'N/A' ? `
+                                        <div class="col-6">
+                                            <div class="metric-card">
+                                                <div class="metric-label">SD-WAN Member ID</div>
+                                                <div class="metric-value">${wan.sdwan_member_id}</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="metric-card">
+                                                <div class="metric-label">Prioridade SD-WAN</div>
+                                                <div class="metric-value">${wan.sdwan_priority}</div>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    <div class="col-6">
+                                        <div class="metric-card">
+                                            <div class="metric-label">SLA Status</div>
+                                            <div class="metric-value">
+                                                ${wan.sla_status === 'active' ? '<span style="color: #28a745;">ATIVO</span>' : 
+                                                  wan.sla_status === 'inactive' ? '<span style="color: #ffc107;">INATIVO</span>' : 
+                                                  '<span style="color: #6c757d;">UNKNOWN</span>'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                ${wan.saude && wan.saude.message ? `
+                                    <div class="alert alert-info mt-3 small">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        ${wan.saude.message}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                container.innerHTML += cardHtml;
+            });
+        }
+
+        // Funções auxiliares para classes CSS
+        function getStatusClass(status) {
+            switch (status) {
+                case 'online': return 'online';
+                case 'offline':
+                case 'down': return 'offline';
+                case 'degraded': return 'degraded';
+                default: return '';
+            }
+        }
+
+        function getStatusBadge(status) {
+            switch (status) {
+                case 'online': return 'status-online';
+                case 'offline':
+                case 'down': return 'status-offline';
+                case 'degraded': return 'status-degraded';
+                default: return 'status-unknown';
+            }
+        }
+
+        function getIconClass(status) {
+            switch (status) {
+                case 'online': return 'online';
+                case 'offline':
+                case 'down': return 'offline';
+                case 'degraded': return 'degraded';
+                default: return '';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', loadWanStatus);
+
+        // Carregar dados iniciais
+        document.addEventListener('DOMContentLoaded', loadWanStatus);
+
+        // Atualizar automaticamente a cada 30 segundos
+        setInterval(loadWanStatus, 30000);
+    </script>
+</body>
+</html>

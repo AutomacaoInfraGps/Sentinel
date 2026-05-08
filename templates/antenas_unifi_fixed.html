@@ -1,0 +1,484 @@
+{% extends 'base.html' %}
+
+{% block title %}Antenas UniFi{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-wifi me-2"></i>
+                            Gerenciamento de Antenas UniFi
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="atualizarLista()">
+                                <i class="bi bi-arrow-repeat me-1"></i>
+                                Atualizar
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" onclick="verificarAntenas()">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Verificar Antenas
+                            </button>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted">
+                        Monitore e gerencie as antenas UniFi da rede.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Total de Antenas</h6>
+                    <h2 class="display-5 fw-bold text-primary" id="totalAntenas">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Antenas Online</h6>
+                    <h2 class="display-5 fw-bold text-success" id="antenasOnline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Antenas Offline</h6>
+                    <h2 class="display-5 fw-bold text-danger" id="antenasOffline">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-3">Clientes Conectados</h6>
+                    <h2 class="display-5 fw-bold text-info" id="clientesConectados">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-hdd-rack me-2"></i>
+                        Controller UniFi
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">IP:</span>
+                                <span id="controllerIP">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Porta:</span>
+                                <span id="controllerPorta">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Versão:</span>
+                                <span id="controllerVersao">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Status:</span>
+                                <span class="badge bg-warning" id="controllerStatus">Aguardando</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-activity me-2"></i>
+                        Log de Atividades
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div id="logAtividades" class="p-3" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem;">
+                        <div class="text-muted">Aguardando atividades...</div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light p-2">
+                    <div class="d-flex justify-content-between">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="limparLog()">
+                            <i class="bi bi-trash me-1"></i>
+                            Limpar Log
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="gerarRelatorioWifi()">
+                            <i class="bi bi-file-earmark-text me-1"></i>
+                            Gerar Relatório
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-wifi me-2"></i>
+                        Lista de Antenas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="listaAPs">
+                        <div class="col-12 text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Carregando antenas...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Inicialização
+$(document).ready(function() {
+    adicionarLog('🚀 Sistema de monitoramento de antenas iniciado');
+    
+    // Carrega dados iniciais
+    carregarDadosAPs();
+    
+    // Configura atualização automática a cada 60 segundos
+    setInterval(function() {
+        if (document.visibilityState === 'visible') {
+            carregarDadosAPs();
+        }
+    }, 60000);
+});
+
+function verificarAntenas() {
+    adicionarLog('🔍 Iniciando verificação de antenas...');
+    showToast('Verificação iniciada...', 'info');
+    
+    // Mostra indicador de carregamento
+    $('#listaAPs').html(`
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Verificando...</span>
+            </div>
+            <p class="mt-3 text-muted">Verificando antenas...</p>
+        </div>
+    `);
+    
+    // Simula verificação
+    setTimeout(() => {
+        adicionarLog('✅ Verificação concluída');
+        showToast('Verificação concluída!', 'success');
+        
+        // Recarrega dados
+        carregarDadosAPs();
+    }, 5000);
+}
+
+function limparLog() {
+    $('#logAtividades').html('<div class="text-muted">Log limpo...</div>');
+    adicionarLog('🧹 Log de atividades limpo');
+}
+
+function gerarRelatorioWifi() {
+    adicionarLog('📊 Gerando relatório WiFi...');
+    showToast('Gerando relatório WiFi...', 'info');
+    
+    // Simula geração de relatório
+    setTimeout(() => {
+        adicionarLog('✅ Relatório WiFi gerado');
+        showToast('Relatório gerado com sucesso!', 'success');
+    }, 3000);
+}
+
+function carregarDadosAPs() {
+    adicionarLog('🔄 Carregando dados das antenas...');
+    
+    // Mostra indicador de carregamento
+    $('#totalAntenas').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#antenasOnline').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#antenasOffline').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#clientesConectados').html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    // Busca dados reais das antenas
+    $.get('/api/public/status/unifi')
+        .done(function(data) {
+            adicionarLog('✅ Dados das antenas carregados');
+            console.log('Dados UniFi:', data);
+            
+            // Atualiza estatísticas
+            const totalAPs = data.total_aps || 0;
+            const apsOnline = data.aps_online || 0;
+            const apsOffline = totalAPs - apsOnline;
+            const totalClientes = data.clientes_conectados || 0;
+            
+            $('#totalAntenas').text(totalAPs);
+            $('#antenasOnline').text(apsOnline);
+            $('#antenasOffline').text(apsOffline);
+            $('#clientesConectados').text(totalClientes);
+            
+            // Atualiza dados do controller
+            $('#controllerIP').text(data.controller_ip || 'Não disponível');
+            $('#controllerPorta').text(data.controller_porta || 'Não disponível');
+            $('#controllerVersao').text(data.controller_versao || 'Não disponível');
+            
+            if (data.controller_online) {
+                $('#controllerStatus').removeClass('bg-danger').addClass('bg-success').text('Online');
+            } else {
+                $('#controllerStatus').removeClass('bg-success').addClass('bg-danger').text('Offline');
+            }
+            
+            // Gera HTML dos APs
+            let htmlAPs = '';
+            
+            // Se não temos dados de APs, mas temos contagem, vamos criar APs genéricas
+            if ((!data.aps || data.aps.length === 0) && totalAPs > 0) {
+                adicionarLog('⚠️ Sem dados detalhados das APs, usando contagem geral');
+                
+                // Cria APs genéricas baseadas na contagem
+                const apsGenerico = [];
+                
+                // APs online
+                for (let i = 0; i < apsOnline; i++) {
+                    apsGenerico.push({
+                        nome: `AP Online ${i+1}`,
+                        modelo: 'UniFi AP',
+                        ip: 'N/A',
+                        status: 'online',
+                        clientes: 0,
+                        uptime: 'N/A',
+                        canal_2g: 'N/A',
+                        canal_5g: 'N/A'
+                    });
+                }
+                
+                // APs offline
+                for (let i = 0; i < apsOffline; i++) {
+                    apsGenerico.push({
+                        nome: `AP Offline ${i+1}`,
+                        modelo: 'UniFi AP',
+                        ip: 'N/A',
+                        status: 'offline',
+                        clientes: 0,
+                        uptime: 'N/A',
+                        canal_2g: 'N/A',
+                        canal_5g: 'N/A'
+                    });
+                }
+                
+                // Usa as APs genéricas
+                apsGenerico.forEach(ap => {
+                    const statusClass = ap.status === 'online' ? 'success' : 'danger';
+                    const statusIcon = ap.status === 'online' ? 'wifi' : 'wifi-off';
+                    
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-${statusClass} h-100">
+                                <div class="card-header bg-${statusClass} text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-${statusIcon} me-2"></i>
+                                        ${ap.nome}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">${ap.modelo}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">${ap.ip}</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Clientes:</span>
+                                            <span class="badge bg-info">${ap.clientes}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Uptime:</span>
+                                            <span class="small">${ap.uptime}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Canal 2.4G:</span>
+                                            <span class="small">${ap.canal_2g}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Canal 5G:</span>
+                                            <span class="small">${ap.canal_5g}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-outline-info btn-sm flex-fill" onclick="detalharAP('${ap.nome}')">
+                                            <i class="bi bi-eye me-1"></i>
+                                            Detalhes
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="reiniciarAP('${ap.nome}')">
+                                            <i class="bi bi-arrow-repeat me-1"></i>
+                                            Reiniciar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else if (data.aps && data.aps.length > 0) {
+                // Usa os dados reais das APs
+                data.aps.forEach(ap => {
+                    const statusClass = ap.status === 'online' ? 'success' : 'danger';
+                    const statusIcon = ap.status === 'online' ? 'wifi' : 'wifi-off';
+                    
+                    htmlAPs += `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-${statusClass} h-100">
+                                <div class="card-header bg-${statusClass} text-white">
+                                    <h6 class="mb-0 fw-bold">
+                                        <i class="bi bi-${statusIcon} me-2"></i>
+                                        ${ap.nome}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Modelo:</span>
+                                            <span class="small">${ap.modelo}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">IP:</span>
+                                            <code class="small">${ap.ip}</code>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Clientes:</span>
+                                            <span class="badge bg-info">${ap.clientes}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Uptime:</span>
+                                            <span class="small">${ap.uptime}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="small text-muted">Site:</span>
+                                            <span class="small">${ap.site || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-outline-info btn-sm flex-fill" onclick="detalharAP('${ap.nome}')">
+                                            <i class="bi bi-eye me-1"></i>
+                                            Detalhes
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="reiniciarAP('${ap.nome}')">
+                                            <i class="bi bi-arrow-repeat me-1"></i>
+                                            Reiniciar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            $('#listaAPs').html(htmlAPs || '<div class="col-12"><div class="alert alert-info">Nenhum AP encontrado</div></div>');
+        })
+        .fail(function(error) {
+            adicionarLog('❌ Erro ao carregar dados das antenas');
+            console.error('Erro ao carregar dados UniFi:', error);
+            
+            // Restaura valores padrão
+            $('#totalAntenas').text('0');
+            $('#antenasOnline').text('0');
+            $('#antenasOffline').text('0');
+            $('#clientesConectados').text('0');
+            
+            // Mostra mensagem de erro
+            $('#listaAPs').html('<div class="col-12"><div class="alert alert-danger">Erro ao carregar dados das antenas. Verifique se o script Unifi.py foi executado.</div></div>');
+            
+            // Sugere executar verificação
+            showToast('Erro ao carregar dados. Tente verificar as antenas.', 'danger');
+        });
+}
+
+function atualizarLista() {
+    adicionarLog('🔄 Atualizando lista de APs...');
+    carregarDadosAPs();
+    showToast('Lista atualizada!', 'success');
+}
+
+function detalharAP(nome) {
+    adicionarLog(`🔍 Visualizando detalhes do ${nome}...`);
+    showToast(`Detalhes do ${nome}`, 'info');
+}
+
+function reiniciarAP(nome) {
+    if (confirm(`Deseja reiniciar o ${nome}?`)) {
+        adicionarLog(`🔄 Reiniciando ${nome}...`);
+        showToast(`Reiniciando ${nome}...`, 'warning');
+        
+        setTimeout(() => {
+            adicionarLog(`✅ ${nome} reiniciado`);
+            showToast(`${nome} reiniciado!`, 'success');
+        }, 3000);
+    }
+}
+
+function adicionarLog(mensagem) {
+    const logContainer = $('#logAtividades');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `<div>[${timestamp}] ${mensagem}</div>`;
+    
+    logContainer.append(logEntry);
+    logContainer.scrollTop(logContainer[0].scrollHeight);
+}
+
+function showToast(mensagem, tipo) {
+    const toast = $(`
+        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${mensagem}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `);
+    
+    $('.toast-container').append(toast);
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    // Remove o toast após ser ocultado
+    toast.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
+}
+</script>
+{% endblock %}

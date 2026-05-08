@@ -94,21 +94,10 @@ def main():
     if not any([config_status['environment'], config_status['servidores'], config_status['regionais']]):
         print("Sistema nao configurado. Use a interface web para configurar!")
         
-    # Inicia o gerenciador de atualizações em paralelo
-    print("\nIniciando gerenciador de atualizacoes em paralelo...")
-    try:
-        import gerenciador_atualizacoes
-        import threading
-        threading.Thread(target=gerenciador_atualizacoes.start_update_threads, daemon=True).start()
-        print("Gerenciador de atualizacoes iniciado")
-    except Exception as e:
-        print(f"Erro ao iniciar gerenciador de atualizacoes: {e}")
-        print("   Os cards podem nao ser atualizados automaticamente")
-    
-    # Inicia servidor web
-    print("\nIniciando servidor web...")
+    # O serviço web real é sempre iniciado pelo runner dedicado,
+    # com restart controlado para impedir múltiplas instâncias.
+    print("\nReiniciando servico web..." )
     print("URL: http://localhost:5000")
-    print("Para parar: Ctrl+C")
     print("=" * 50)
     
     # Verifica e cria diretórios necessários
@@ -138,22 +127,24 @@ def main():
     
     import threading
     threading.Thread(target=abrir_navegador, daemon=True).start()
-    
-    # Inicia servidor Flask
+
+    # Reinicia o serviço web de forma controlada
     try:
-        from web_config import app
-        app.run(
-            host='0.0.0.0',
-            port=5000,
-            debug=False,
-            use_reloader=False
-        )
+        restart_script = Path(__file__).with_name("restart_web_service.ps1")
+        subprocess.check_call([
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(restart_script)
+        ])
+        print("Servico web reiniciado com sucesso")
     except KeyboardInterrupt:
-        print("\n\nServidor web encerrado")
+        print("\n\nInicializacao interrompida")
     except Exception as e:
-        print(f"\nErro ao iniciar servidor: {e}")
+        print(f"\nErro ao reiniciar servidor: {e}")
         print("\nTente executar diretamente:")
-        print("   python web_config.py")
+        print("   powershell -ExecutionPolicy Bypass -File .\\restart_web_service.ps1")
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,7 @@ Autentica usuários contra AD e verifica se estão na OU autorizada
 import os
 import socket
 import subprocess
-from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
+from ldap3 import Server, Connection, ALL, NTLM, SIMPLE, SUBTREE
 from ldap3.core.exceptions import LDAPException
 from typing import Optional, Dict, Tuple
 import logging
@@ -95,6 +95,44 @@ class AuthAD:
         except Exception as e:
             logger.error(f"Erro na autenticação Windows: {e}")
             return False, f"Erro interno: {str(e)}"
+
+    def _tentar_autenticacao_ntlm(self, username: str, password: str) -> Tuple[bool, str]:
+        """Tenta autenticação NTLM direta no Active Directory."""
+        if not self.server_ip:
+            return False, "Servidor AD não encontrado"
+
+        conn = None
+        try:
+            server = Server(
+                self.server_ip,
+                port=389,
+                get_info=ALL,
+                use_ssl=False
+            )
+
+            user_format = f"{self.domain_netbios}\\{username}"
+            logger.info(f"Tentando autenticação NTLM com: {user_format}")
+
+            conn = Connection(
+                server,
+                user=user_format,
+                password=password,
+                authentication=NTLM,
+                auto_bind=True,
+                raise_exceptions=True
+            )
+
+            logger.info(f"Autenticação NTLM bem-sucedida para {username}")
+            return True, "Autenticação bem-sucedida"
+        except Exception as e:
+            logger.error(f"Falha na autenticação NTLM para {username}: {e}")
+            return False, "Usuário ou senha inválidos"
+        finally:
+            if conn is not None:
+                try:
+                    conn.unbind()
+                except Exception:
+                    pass
     
     def _buscar_dados_usuario_ldap(self, username: str) -> Optional[Dict]:
         """Busca dados do usuário via LDAP simples (sem NTLM)"""
@@ -162,9 +200,13 @@ class AuthAD:
         if not self.server_ip:
             return False, None, "Servidor AD não encontrado"
         
-        # Método 1: Autenticação via comandos Windows (sem MD4)
-        logger.info(f"Tentando autenticação Windows para: {username}")
-        auth_success, auth_message = self._tentar_autenticacao_windows(username, password)
+        # Método 1: autenticação NTLM direta no AD
+        auth_success, auth_message = self._tentar_autenticacao_ntlm(username, password)
+
+        # Método 2: fallback via comandos Windows, preservando compatibilidade
+        if not auth_success:
+            logger.info(f"NTLM falhou, tentando autenticação Windows para: {username}")
+            auth_success, auth_message = self._tentar_autenticacao_windows(username, password)
         
         if not auth_success:
             return False, None, auth_message

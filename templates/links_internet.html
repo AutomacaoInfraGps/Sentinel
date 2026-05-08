@@ -1,0 +1,629 @@
+{% extends "base.html" %}
+
+{% block title %}Links de Internet - Sistema de Automação{% endblock %}
+
+{% block extra_css %}
+<style>
+    .link-card {
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .link-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .link-header {
+        padding: 15px;
+        color: white;
+    }
+    
+    .link-online {
+        background: linear-gradient(135deg, #28a745, #20c997);
+    }
+    
+    .link-offline {
+        background: linear-gradient(135deg, #dc3545, #fd7e14);
+    }
+    
+    .link-body {
+        padding: 20px;
+    }
+    
+    .traffic-indicator {
+        height: 10px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        background: linear-gradient(90deg, #0F6C8C, #012E40);
+    }
+    
+    .stats-card {
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+    
+    .stats-label {
+        font-size: 0.9rem;
+        opacity: 0.8;
+    }
+    
+    .verification-time {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 10px;
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .loading-spinner {
+        width: 80px;
+        height: 80px;
+        border: 8px solid #f3f3f3;
+        border-top: 8px solid #0A4A63;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    
+    .loading-text {
+        color: white;
+        font-size: 24px;
+        text-align: center;
+    }
+    
+    .loading-subtext {
+        color: #cccccc;
+        font-size: 16px;
+        text-align: center;
+        max-width: 80%;
+        margin-top: 10px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .traffic-chart {
+        height: 200px;
+        margin-top: 20px;
+    }
+    
+    .sd-wan-info {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .sd-wan-title {
+        font-weight: 600;
+        margin-bottom: 15px;
+        color: #343a40;
+    }
+    
+    .sd-wan-item {
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .sd-wan-item:last-child {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Tela de carregamento -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Carregando Links de Internet</div>
+    <div class="loading-subtext">Obtendo informações do Fortigate. Isso pode levar alguns instantes...</div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 text-center mb-4">
+            <i class="bi bi-globe me-3"></i>
+            Links de Internet
+        </h1>
+        <p class="lead text-center text-muted">
+            Monitoramento dos links de internet via Fortigate
+        </p>
+    </div>
+</div>
+
+<!-- Estatísticas -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+            <div class="stats-number" id="stats-total-links">
+                {{ links|length }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-globe me-1"></i>
+                Total de Links
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #20c997, #28a745);">
+            <div class="stats-number" id="stats-online">
+                {{ links|selectattr('status', 'equalto', 'online')|list|length }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-check-circle me-1"></i>
+                Links Online
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+            <div class="stats-number" id="stats-offline">
+                {{ links|selectattr('status', 'equalto', 'offline')|list|length }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-x-circle me-1"></i>
+                Links Offline
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Botão para atualizar -->
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <button class="btn btn-primary btn-lg" onclick="verificarLinks(this)">
+            <span class="spinner-border spinner-border-sm btn-spinner" style="display:none;"></span>
+            <span class="btn-text"><i class="bi bi-arrow-clockwise me-2"></i>Atualizar Links</span>
+        </button>
+    </div>
+</div>
+
+<!-- Lista de Links -->
+<div class="row" id="links-container">
+    {% for link in links %}
+    <div class="col-md-6 mb-4">
+        <div class="card link-card h-100" id="link-{{ link.nome|replace('.', '-') }}" data-link="{{ link.nome }}">
+            <div class="card-header link-header {{ 'link-online' if link.status == 'online' else 'link-offline' }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ link.nome }}</h5>
+                    <span class="badge bg-light text-dark">{{ link.status|capitalize }}</span>
+                </div>
+                {% if link.alias %}
+                <div class="small text-white-50">{{ link.alias }}</div>
+                {% endif %}
+            </div>
+            
+            <div class="card-body link-body">
+                <p class="mb-2"><strong>IP:</strong> {{ link.ip }}</p>
+                {% if link.velocidade %}
+                <p class="mb-2"><strong>Velocidade:</strong> {{ link.velocidade }} Mbps</p>
+                {% endif %}
+                {% if link.duplex %}
+                <p class="mb-2"><strong>Duplex:</strong> {{ link.duplex|capitalize }}</p>
+                {% endif %}
+                {% if link.tipo %}
+                <p class="mb-2"><strong>Tipo:</strong> {{ link.tipo|capitalize }}</p>
+                {% endif %}
+                
+                {% if link.estatisticas %}
+                <hr>
+                <h6 class="mb-3">Estatísticas de Tráfego</h6>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Download:</span>
+                        <span class="fw-bold">{{ link.estatisticas.bandwidth_in_readable }}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ (link.estatisticas.bandwidth_in / 1000000) * 100 / 100 }}%" 
+                             aria-valuenow="{{ link.estatisticas.bandwidth_in }}" 
+                             aria-valuemin="0" aria-valuemax="100000000"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Upload:</span>
+                        <span class="fw-bold">{{ link.estatisticas.bandwidth_out_readable }}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ (link.estatisticas.bandwidth_out / 1000000) * 100 / 100 }}%" 
+                             aria-valuenow="{{ link.estatisticas.bandwidth_out }}" 
+                             aria-valuemin="0" aria-valuemax="100000000">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="traffic-chart" id="chart-{{ link.nome|replace('.', '-') }}"></div>
+                {% endif %}
+                
+                <div class="verification-time">
+                    Última verificação: {{ link.ultima_verificacao.split('T')[0] }} {{ link.ultima_verificacao.split('T')[1][:8] }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Informações do SD-WAN (se disponível) -->
+
+{% if sd_wan and sd_wan.members %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h3 class="mb-3">
+            <i class="bi bi-diagram-3 me-2"></i>
+            SD-WAN
+        </h3>
+    </div>
+
+    {% for member in sd_wan.members %}
+    <div class="col-md-6 mb-4">
+        <div class="card link-card h-100">
+
+            <!-- Header -->
+            <div class="card-header link-header
+                {{ 'link-online' if member.status == 'online' else 'link-offline' }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">{{ member.interface }}</h5>
+                    <span class="badge bg-light text-dark">
+                        {{ member.status|capitalize }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="card-body link-body">
+                <p class="mb-2">
+                    <strong>Gateway:</strong>
+                    {{ member.gateway or 'N/A' }}
+                </p>
+
+                <p class="mb-2">
+                    <strong>Volume:</strong>
+                    {{ member.volume or 'N/A' }}
+                </p>
+
+                {% if member.bandwidth %}
+                <p class="mb-2">
+                    <strong>Bandwidth:</strong>
+                    {{ member.bandwidth }}
+                </p>
+                {% endif %}
+
+                {% if member.weight %}
+                <p class="mb-2">
+                    <strong>Peso:</strong>
+                    {{ member.weight }}
+                </p>
+                {% endif %}
+
+                {% if member.priority %}
+                <p class="mb-2">
+                    <strong>Prioridade:</strong>
+                    {{ member.priority }}
+                </p>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+
+
+<!-- Template para novos links (usado pelo JavaScript) -->
+<template id="link-template">
+    <div class="col-md-6 mb-4">
+        <div class="card link-card h-100" id="link-{nome}" data-link="{nome}">
+            <div class="card-header link-header {status-class}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{nome}</h5>
+                    <span class="badge bg-light text-dark">{status}</span>
+                </div>
+                <div class="small text-white-50">{alias}</div>
+            </div>
+            
+            <div class="card-body link-body">
+                <p class="mb-2"><strong>IP:</strong> {ip}</p>
+                <p class="mb-2"><strong>Velocidade:</strong> {velocidade} Mbps</p>
+                <p class="mb-2"><strong>Duplex:</strong> {duplex}</p>
+                <p class="mb-2"><strong>Tipo:</strong> {tipo}</p>
+                
+                <hr>
+                <h6 class="mb-3">Estatísticas de Tráfego</h6>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Download:</span>
+                        <span class="fw-bold">{bandwidth_in}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {bandwidth_in_percent}%" 
+                             aria-valuenow="{bandwidth_in_raw}" 
+                             aria-valuemin="0" aria-valuemax="100000000"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Upload:</span>
+                        <span class="fw-bold">{bandwidth_out}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             aria-valuenow="{bandwidth_out_raw}" 
+                             aria-valuemin="0" aria-valuemax="100000000"></div>
+                    </div>
+                </div>
+                
+                <div class="traffic-chart" id="chart-{nome}"></div>
+                
+                <div class="verification-time">
+                    Última verificação: {ultima_verificacao}
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Adiciona Chart.js para gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Esconde a tela de carregamento quando a página terminar de carregar
+$(document).ready(function() {
+    // Esconde a tela de carregamento
+    $('#loadingOverlay').hide();
+    
+    // Inicializa os gráficos
+    inicializarGraficos();
+});
+
+// Armazena os objetos de gráficos para atualização posterior
+const graficos = {};
+
+function inicializarGraficos() {
+    // Para cada link, cria um gráfico de tráfego
+    $('.traffic-chart').each(function() {
+        const chartId = $(this).attr('id');
+        const linkName = chartId.replace('chart-', '');
+        
+        // Cria o gráfico
+        const canvas = document.getElementById(chartId);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+
+        graficos[linkName] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['0s', '10s', '20s', '30s', '40s', '50s', '60s'],
+                datasets: [
+                    {
+                        label: 'Download (Mbps)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Upload (Mbps)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        borderColor: 'rgba(23, 162, 184, 1)',
+                        backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Mbps'
+                        }
+                    }
+                }
+            }
+        });
+    });
+}
+
+function atualizarGrafico(linkName, downloadMbps, uploadMbps) {
+    // Normaliza o nome do link para o formato usado no ID
+    const normalizedName = linkName.replace(/\./g, '-');
+    
+    // Obtém o gráfico
+    const grafico = graficos[normalizedName];
+    
+    if (!grafico) {
+        console.log(`Gráfico não encontrado para o link: ${linkName}`);
+        return;
+    }
+    
+    // Remove o primeiro ponto de dados e adiciona o novo no final
+    grafico.data.datasets[0].data.shift();
+    grafico.data.datasets[0].data.push(downloadMbps);
+    
+    grafico.data.datasets[1].data.shift();
+    grafico.data.datasets[1].data.push(uploadMbps);
+    
+    // Atualiza o gráfico
+    grafico.update();
+}
+
+function showLoading(button) {
+    button.find('.btn-spinner').show();
+    button.find('.btn-text').hide();
+    button.prop('disabled', true);
+}
+
+function hideLoading(button) {
+    button.find('.btn-spinner').hide();
+    button.find('.btn-text').show();
+    button.prop('disabled', false);
+}
+
+function showToast(message, type) {
+    // Implementação do toast (pode ser personalizada conforme necessário)
+}
+
+function verificarLinks(btn = null) {
+    const $btn = btn ? $(btn) : null;
+
+    if ($btn) {
+        showLoading($btn);
+    }
+
+    $('#loadingOverlay').show();
+
+    $.post('/api/links/verificar')
+        .done(function (response) {
+            console.log('Resposta API:', response);
+
+            if (!response || !response.success) {
+                showToast(`Erro: ${response?.message || 'Erro desconhecido'}`, 'danger');
+                return;
+            }
+
+            const linksPorRegional = response.links_por_regional || {};
+
+            // 🔢 contadores
+            let totalLinks = 0;
+            let onlineLinks = 0;
+            let offlineLinks = 0;
+
+            $('#links-container').empty();
+
+            // 🔁 percorre regionais
+            Object.keys(linksPorRegional).forEach(function (regional) {
+
+                const links = linksPorRegional[regional] || [];
+
+                // título da regional
+                $('#links-container').append(`
+                    <div class="col-12 mb-3">
+                        <h4 class="fw-bold">${regional}</h4>
+                        <hr>
+                    </div>
+                `);
+
+                links.forEach(function (link) {
+                    totalLinks++;
+
+                    if (link.status === 'online') onlineLinks++;
+                    if (link.status === 'offline') offlineLinks++;
+
+                    adicionarOuAtualizarLink(link);
+                });
+            });
+
+            // 📊 atualiza estatísticas
+            $('#stats-total-links').text(totalLinks);
+            $('#stats-online').text(onlineLinks);
+            $('#stats-offline').text(offlineLinks);
+
+            // 📈 gráficos
+            inicializarGraficos();
+        })
+        .fail(function () {
+            showToast('Erro de conexão com a API', 'danger');
+        })
+        .always(function () {
+            // ✅ GARANTE que nunca fique carregando infinito
+            $('#loadingOverlay').hide();
+            if ($btn) hideLoading($btn);
+        });
+}
+
+
+function adicionarOuAtualizarLink(link) {
+    // Obtém o template
+    const template = document.getElementById('link-template').innerHTML;
+    
+    // Substitui os placeholders pelos valores reais
+    let html = template;
+    html = html.replace(/{nome}/g, link.nome.replace(/\./g, '-'));
+    html = html.replace(/{status-class}/g, link.status === 'online' ? 'link-online' : 'link-offline');
+    html = html.replace(/{status}/g, link.status.charAt(0).toUpperCase() + link.status.slice(1));
+    html = html.replace(/{ip}/g, link.ip || 'N/A');
+    html = html.replace(/{velocidade}/g, link.velocidade || 'N/A');
+    html = html.replace(/{duplex}/g, (link.duplex || 'N/A').charAt(0).toUpperCase() + (link.duplex || 'n/a').slice(1));
+    html = html.replace(/{tipo}/g, (link.tipo || 'N/A').charAt(0).toUpperCase() + (link.tipo || 'n/a').slice(1));
+    html = html.replace(/{alias}/g, link.alias || '');
+    
+    // Estatísticas
+    if (link.estatisticas) {
+        html = html.replace(/{bandwidth_in}/g, link.estatisticas.bandwidth_in_readable);
+        html = html.replace(/{bandwidth_out}/g, link.estatisticas.bandwidth_out_readable);
+        
+        // Calcula percentuais para as barras de progresso (assumindo 100 Mbps como máximo)
+        const inPercent = Math.min((link.estatisticas.bandwidth_in / 1000000) * 100 / 100, 100);
+        const outPercent = Math.min((link.estatisticas.bandwidth_out / 1000000) * 100 / 100, 100);
+        
+        html = html.replace(/{bandwidth_in_percent}/g, inPercent);
+        html = html.replace(/{bandwidth_out_percent}/g, outPercent);
+        html = html.replace(/{bandwidth_in_raw}/g, link.estatisticas.bandwidth_in);
+        html = html.replace(/{bandwidth_out_raw}/g, link.estatisticas.bandwidth_out);
+    } else {
+        html = html.replace(/{bandwidth_in}/g, 'N/A');
+        html = html.replace(/{bandwidth_out}/g, 'N/A');
+        html = html.replace(/{bandwidth_in_percent}/g, '0');
+        html = html.replace(/{bandwidth_out_percent}/g, '0');
+        html = html.replace(/{bandwidth_in_raw}/g, '0');
+        html = html.replace(/{bandwidth_out_raw}/g, '0');
+    }
+    
+    // Formata a data
+    const date = new Date(link.ultima_verificacao);
+    const formattedDate = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+    html = html.replace(/{ultima_verificacao}/g, formattedDate);
+    
+    // Adiciona o HTML ao container
+    $('#links-container').append(html);
+}
+</script>
+{% endblock %}

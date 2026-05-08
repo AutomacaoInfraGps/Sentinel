@@ -7,6 +7,8 @@ import requests
 import json
 import urllib3
 import socket
+import builtins
+import unicodedata
 from datetime import datetime
 from typing import Dict, List, Tuple
 import concurrent.futures
@@ -25,6 +27,37 @@ except Exception as e:
 
 # Desabilita warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+_ORIGINAL_PRINT = builtins.print
+_PRINT_REPLACEMENTS = {
+    "✅": "[OK]",
+    "❌": "[ERRO]",
+    "⚠️": "[AVISO]",
+    "⚠": "[AVISO]",
+    "📊": "[INFO]",
+    "🔍": "[CHECK]",
+    "🟢": "[ONLINE]",
+    "🟡": "[WARN]",
+    "🔴": "[OFFLINE]",
+    "🕐": "[TIME]",
+    "📈": "[CHART]",
+    "🏢": "[REGIONAL]",
+}
+
+
+def _sanitize_console_text(value):
+    text = str(value)
+    for old_value, new_value in _PRINT_REPLACEMENTS.items():
+        text = text.replace(old_value, new_value)
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+def print(*args, **kwargs):
+    try:
+        _ORIGINAL_PRINT(*args, **kwargs)
+    except UnicodeEncodeError:
+        _ORIGINAL_PRINT(*(_sanitize_console_text(arg) for arg in args), **kwargs)
 
 class VerificadorServidoresV2:
     """Verificador de servidores com estrutura hierárquica"""

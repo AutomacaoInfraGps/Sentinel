@@ -1,0 +1,1034 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de E-mails SLA - Sistema de Automação{% endblock %}
+
+{% block extra_css %}
+<style>
+    .email-stats-card {
+        border: none;
+        border-radius: 16px;
+        color: #fff;
+        padding: 1.6rem 1.3rem;
+        min-height: 166px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 12px 30px rgba(1, 46, 64, 0.14);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, outline-color 0.2s ease;
+        outline: 3px solid transparent;
+    }
+
+    .email-stats-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 36px rgba(1, 46, 64, 0.18);
+    }
+
+    .email-stats-card.is-active {
+        outline-color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 18px 40px rgba(1, 46, 64, 0.2);
+    }
+
+    .email-stats-card .stats-number {
+        font-size: 2.3rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 0.8rem;
+    }
+
+    .email-stats-card .stats-label {
+        font-weight: 600;
+        font-size: 0.98rem;
+    }
+
+    .email-stats-card .stats-helper {
+        font-size: 0.82rem;
+        opacity: 0.88;
+        margin-top: 0.35rem;
+        line-height: 1.35;
+        min-height: 2.25rem;
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .email-source-card {
+        background: linear-gradient(135deg, rgba(1, 46, 64, 0.08), rgba(15, 108, 140, 0.05));
+        border: 1px solid rgba(15, 108, 140, 0.12);
+        border-radius: 16px;
+        padding: 1rem 1.2rem;
+    }
+
+    .editor-shell {
+        background: linear-gradient(180deg, rgba(248, 249, 250, 0.95), rgba(255, 255, 255, 0.98));
+        border-radius: 18px;
+        padding: 1.2rem;
+        border: 1px solid rgba(1, 46, 64, 0.08);
+    }
+
+    .contact-block {
+        border-radius: 16px;
+        padding: 1rem;
+        border: 1px solid rgba(1, 46, 64, 0.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    }
+
+    .contact-block .block-title {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        margin-bottom: 0.85rem;
+    }
+
+    .contact-block--regional {
+        background: linear-gradient(135deg, rgba(1, 46, 64, 0.08), rgba(10, 74, 99, 0.04));
+        border-left: 5px solid #0A4A63;
+    }
+
+    .contact-block--diretor {
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.08), rgba(13, 202, 240, 0.04));
+        border-left: 5px solid #0d6efd;
+    }
+
+    .contact-block--gerente {
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.09), rgba(32, 201, 151, 0.04));
+        border-left: 5px solid #28a745;
+    }
+
+    .contact-block--apoio1 {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.14), rgba(255, 180, 0, 0.06));
+        border-left: 5px solid #ffc107;
+    }
+
+    .contact-block--apoio2 {
+        background: linear-gradient(135deg, rgba(220, 53, 69, 0.09), rgba(253, 126, 20, 0.05));
+        border-left: 5px solid #fd7e14;
+    }
+
+    .editor-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .table-panel {
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(1, 46, 64, 0.08);
+    }
+
+    .table-panel .table {
+        margin-bottom: 0;
+    }
+
+    .table-panel tbody tr.table-primary {
+        --bs-table-bg: rgba(13, 110, 253, 0.12);
+    }
+
+    .missing-cell {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.16), rgba(255, 180, 0, 0.08));
+        border-left: 4px solid #ffc107;
+        border-radius: 10px;
+        padding: 0.45rem 0.55rem;
+    }
+
+    .missing-cell .missing-value {
+        color: #8a5a00;
+        font-weight: 700;
+        font-size: 0.84rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .missing-cell .missing-hint {
+        color: #8a5a00;
+        font-size: 0.77rem;
+        margin-top: 0.18rem;
+    }
+
+    .field-autofill-hint {
+        font-size: 0.76rem;
+        color: #6c757d;
+        margin-top: 0.3rem;
+    }
+
+    .form-control.field-warning,
+    .form-select.field-warning {
+        border-color: #ffc107;
+        box-shadow: 0 0 0 0.18rem rgba(255, 193, 7, 0.18);
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 255, 255, 0.95));
+    }
+
+    .table-filter-status {
+        font-size: 0.84rem;
+        color: #5c6a75;
+    }
+
+    .stats-reset-btn {
+        white-space: nowrap;
+    }
+
+    .compact-note {
+        font-size: 0.83rem;
+        color: #5c6a75;
+    }
+
+    @media (max-width: 991.98px) {
+        .email-stats-card {
+            min-height: 150px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 text-center mb-4">
+            <i class="bi bi-envelope-at me-3"></i>
+            Cadastro de E-mails SLA
+        </h1>
+        <p class="lead text-center text-muted">
+            Gestão dos contatos da planilha do projeto SLA, com edição rápida por regional.
+        </p>
+    </div>
+</div>
+
+<div id="page-alert"></div>
+
+<div class="row mb-4 g-3">
+    <div class="col-xl-3 col-md-6">
+        <div class="email-stats-card" data-filter-mode="all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+            <div class="stats-number" id="stats-total-regionais">0</div>
+            <div class="stats-label"><i class="bi bi-diagram-3 me-1"></i>Total de Regionais</div>
+            <div class="stats-helper">Clique para ver todas as regionais da planilha SLA</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="email-stats-card" data-filter-mode="missing-diretor" style="background: linear-gradient(135deg, #0d6efd, #0dcaf0);">
+            <div class="stats-number" id="stats-diretores">0</div>
+            <div class="stats-label"><i class="bi bi-person-badge me-1"></i>Diretores Cadastrados</div>
+            <div class="stats-helper" id="stats-sem-diretor">0 sem diretor. Clique para listar pendências.</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="email-stats-card" data-filter-mode="missing-gerente" style="background: linear-gradient(135deg, #28a745, #20c997);">
+            <div class="stats-number" id="stats-gerentes">0</div>
+            <div class="stats-label"><i class="bi bi-person-workspace me-1"></i>Gerentes Cadastrados</div>
+            <div class="stats-helper" id="stats-sem-gerente">0 sem gerente. Clique para listar pendências.</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="email-stats-card" data-filter-mode="pending-emails" style="background: linear-gradient(135deg, #ffc107, #ffb400); color: #24323b;">
+            <div class="stats-number" id="stats-emails-pendentes">0</div>
+            <div class="stats-label"><i class="bi bi-envelope-exclamation me-1"></i>E-mails Pendentes</div>
+            <div class="stats-helper">Clique para listar regionais com e-mails não preenchidos</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="email-stats-card" data-filter-mode="missing-apoio1" style="background: linear-gradient(135deg, #664d03, #ffc107); color: #fff;">
+            <div class="stats-number" id="stats-apoio1">0</div>
+            <div class="stats-label"><i class="bi bi-person-lines-fill me-1"></i>Apoio 1 Cadastrado</div>
+            <div class="stats-helper" id="stats-sem-apoio1">0 sem apoio 1. Clique para listar pendências.</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="email-stats-card" data-filter-mode="missing-apoio2" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+            <div class="stats-number" id="stats-apoio2">0</div>
+            <div class="stats-label"><i class="bi bi-people me-1"></i>Apoio 2 Cadastrado</div>
+            <div class="stats-helper" id="stats-sem-apoio2">0 sem apoio 2. Clique para listar pendências.</div>
+        </div>
+    </div>
+</div>
+
+<div class="email-source-card mb-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+            <div class="fw-semibold mb-1">Fonte da planilha SLA</div>
+            <div class="compact-note"><strong>Arquivo:</strong> {{ config.get('xlsx_path', 'Não configurada') or 'Não configurada' }}</div>
+            <div class="compact-note"><strong>Aba:</strong> {{ config.get('sheet_name', 'Primeira aba') or 'Primeira aba' }}</div>
+        </div>
+        <a href="{{ url_for('configuracoes') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-gear me-1"></i>
+            Configurações Gerais
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0">
+            <i class="bi bi-table me-2"></i>
+            Contatos por Regional
+        </h5>
+        <span class="badge bg-light text-dark" id="badge-registros">{{ registros|length }} registros</span>
+    </div>
+    <div class="card-body">
+        {% if page_error %}
+        <div class="alert alert-warning mb-0">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            {{ page_error }}
+        </div>
+        {% elif not config.get('xlsx_path') %}
+        <div class="alert alert-secondary mb-0 d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>Configure o caminho da planilha em Configurações Gerais para carregar os contatos.</div>
+            <a href="{{ url_for('configuracoes') }}" class="btn btn-primary btn-sm">Abrir configurações</a>
+        </div>
+        {% elif not registros %}
+        <div class="alert alert-secondary mb-0">
+            A planilha foi conectada, mas não retornou registros editáveis.
+        </div>
+        {% else %}
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="table-filter-status" id="table-filter-status">Mostrando todas as regionais.</div>
+            <button type="button" class="btn btn-outline-secondary btn-sm stats-reset-btn" id="reset-table-filter" onclick="limparFiltroEspecial()" style="display: none;">
+                <i class="bi bi-x-circle me-1"></i>
+                Limpar filtro do contador
+            </button>
+        </div>
+        <div class="row g-4">
+            <div class="col-xl-5">
+                <div class="editor-shell h-100">
+                    <div class="editor-toolbar mb-3">
+                        <div>
+                            <div class="fw-semibold fs-5">Editor por Campos</div>
+                            <div class="text-muted small">Selecione a regional, ajuste os dados e salve sem recarregar a página.</div>
+                        </div>
+                        <span class="badge bg-primary-subtle text-primary">Atualização imediata</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="regional-search" class="form-label fw-semibold">Filtrar regional, nome ou e-mail</label>
+                        <input type="text" class="form-control" id="regional-search" placeholder="Digite parte da regional, nome do responsável ou e-mail">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="regional-select" class="form-label fw-semibold">Regional</label>
+                        <select class="form-select" id="regional-select"></select>
+                    </div>
+
+                    <div id="selected-summary" class="alert alert-secondary small mb-3">
+                        Selecione uma regional para carregar os dados de edição.
+                    </div>
+
+                    <form id="edit-form" class="row g-3">
+                        <input type="hidden" id="row_index" name="row_index">
+
+                        <div class="col-12">
+                            <div class="contact-block contact-block--regional">
+                                <div class="block-title">Dados da Regional</div>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="NOME_REGIONAL" class="form-label fw-semibold">Nome Regional</label>
+                                        <input type="text" class="form-control" id="NOME_REGIONAL" name="NOME_REGIONAL">
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="NOME_REG_FORTI" class="form-label fw-semibold">Nome Regional Forti</label>
+                                        <input type="text" class="form-control" id="NOME_REG_FORTI" name="NOME_REG_FORTI">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="contact-block contact-block--diretor">
+                                <div class="block-title">Diretor</div>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="NOME_DIRETOR_1" class="form-label fw-semibold">Nome Diretor</label>
+                                        <input type="text" class="form-control" id="NOME_DIRETOR_1" name="NOME_DIRETOR_1">
+                                        <div class="field-autofill-hint">Se digitar <strong>SEM</strong>, o sistema completa para <strong>SEM_DIRETOR</strong>.</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="EMAIL_DIRETOR" class="form-label fw-semibold">Email Diretor</label>
+                                        <input type="text" class="form-control" id="EMAIL_DIRETOR" name="EMAIL_DIRETOR">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="contact-block contact-block--gerente">
+                                <div class="block-title">Gerente</div>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="NOME_GERENTE" class="form-label fw-semibold">Nome Gerente</label>
+                                        <input type="text" class="form-control" id="NOME_GERENTE" name="NOME_GERENTE">
+                                        <div class="field-autofill-hint">Se digitar <strong>SEM</strong>, o sistema completa para <strong>SEM_GERENTE</strong>.</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="EMAIL_GERENTE" class="form-label fw-semibold">Email Gerente</label>
+                                        <input type="text" class="form-control" id="EMAIL_GERENTE" name="EMAIL_GERENTE">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="contact-block contact-block--apoio1">
+                                <div class="block-title">Apoio 1</div>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="NOME_APOIO_1" class="form-label fw-semibold">Nome Apoio 1</label>
+                                        <input type="text" class="form-control" id="NOME_APOIO_1" name="NOME_APOIO_1">
+                                        <div class="field-autofill-hint">Se digitar <strong>SEM</strong>, o sistema completa para <strong>SEM_APOIO_1</strong>.</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="EMAIL_APOIO_1" class="form-label fw-semibold">Email Apoio 1</label>
+                                        <input type="text" class="form-control" id="EMAIL_APOIO_1" name="EMAIL_APOIO_1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="contact-block contact-block--apoio2">
+                                <div class="block-title">Apoio 2</div>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="NOME_APOIO_2" class="form-label fw-semibold">Nome Apoio 2</label>
+                                        <input type="text" class="form-control" id="NOME_APOIO_2" name="NOME_APOIO_2">
+                                        <div class="field-autofill-hint">Se digitar <strong>SEM</strong>, o sistema completa para <strong>SEM_APOIO_2</strong>.</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="EMAIL_APOIO_2" class="form-label fw-semibold">Email Apoio 2</label>
+                                        <input type="text" class="form-control" id="EMAIL_APOIO_2" name="EMAIL_APOIO_2">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 d-flex gap-2 pt-2 flex-wrap">
+                            <button type="button" class="btn btn-primary" id="save-button" onclick="salvarRegistro()" disabled>
+                                <i class="bi bi-save me-2"></i>
+                                <span id="save-button-text">Salvar alterações</span>
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="previous-button" onclick="irParaRegionalAnterior()" disabled>
+                                <i class="bi bi-arrow-left-circle me-2"></i>
+                                Regional anterior
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="next-button" onclick="irParaProximaRegional()" disabled>
+                                <i class="bi bi-arrow-right-circle me-2"></i>
+                                Próxima regional
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="limparSelecao()">
+                                Limpar seleção
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-xl-7">
+                <div class="table-panel h-100">
+                    <div class="table-responsive" style="max-height: 960px;">
+                        <table class="table table-hover align-middle" id="registros-table">
+                            <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                                <tr>
+                                    <th style="width: 120px;">Ação</th>
+                                    <th>Regional</th>
+                                    <th>Forti</th>
+                                    <th>Diretor</th>
+                                    <th>Gerente</th>
+                                    <th>Apoio 1</th>
+                                    <th>Apoio 2</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for registro in registros %}
+                                <tr data-row-index="{{ registro._row_index }}">
+                                    <td>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="selecionarRegistro({{ registro._row_index }})">
+                                            <i class="bi bi-pencil-square me-1"></i>
+                                            Selecionar
+                                        </button>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold">{{ registro.NOME_REGIONAL }}</div>
+                                        <div class="text-muted small">{{ registro.EMAIL_DIRETOR }}</div>
+                                    </td>
+                                    <td>{{ registro.NOME_REG_FORTI }}</td>
+                                    <td>
+                                        <div>{{ registro.NOME_DIRETOR_1 }}</div>
+                                        <div class="text-muted small">{{ registro.EMAIL_DIRETOR }}</div>
+                                    </td>
+                                    <td>
+                                        <div>{{ registro.NOME_GERENTE }}</div>
+                                        <div class="text-muted small">{{ registro.EMAIL_GERENTE }}</div>
+                                    </td>
+                                    <td>
+                                        <div>{{ registro.NOME_APOIO_1 }}</div>
+                                        <div class="text-muted small">{{ registro.EMAIL_APOIO_1 }}</div>
+                                    </td>
+                                    <td>
+                                        <div>{{ registro.NOME_APOIO_2 }}</div>
+                                        <div class="text-muted small">{{ registro.EMAIL_APOIO_2 }}</div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const registros = {{ registros|tojson }};
+    const requiredColumns = {{ required_columns|tojson }};
+    const regionalSearch = document.getElementById('regional-search');
+    const regionalSelect = document.getElementById('regional-select');
+    const saveButton = document.getElementById('save-button');
+    const saveButtonText = document.getElementById('save-button-text');
+    const previousButton = document.getElementById('previous-button');
+    const nextButton = document.getElementById('next-button');
+    const summaryBox = document.getElementById('selected-summary');
+    const tableSectionCard = document.querySelector('.card:has(#registros-table)');
+    const tableBody = document.querySelector('#registros-table tbody');
+    const badgeRegistros = document.getElementById('badge-registros');
+    const tableFilterStatus = document.getElementById('table-filter-status');
+    const resetTableFilterButton = document.getElementById('reset-table-filter');
+    const statsCards = Array.from(document.querySelectorAll('.email-stats-card'));
+    let filteredRegistros = [...registros];
+    let activeStatsFilter = 'all';
+
+    const placeholderMap = {
+        NOME_DIRETOR_1: 'SEM_DIRETOR',
+        EMAIL_DIRETOR: 'SEM_DIRETOR',
+        NOME_GERENTE: 'SEM_GERENTE',
+        EMAIL_GERENTE: 'SEM_GERENTE',
+        NOME_APOIO_1: 'SEM_APOIO_1',
+        EMAIL_APOIO_1: 'SEM_APOIO_1',
+        NOME_APOIO_2: 'SEM_APOIO_2',
+        EMAIL_APOIO_2: 'SEM_APOIO_2',
+    };
+
+    function showAlert(type, message) {
+        const container = document.getElementById('page-alert');
+        container.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normalizarValor(value) {
+        return String(value || '').trim();
+    }
+
+    function valorAusente(value) {
+        const normalized = normalizarValor(value).toUpperCase();
+        if (!normalized) {
+            return true;
+        }
+
+        return normalized === '-' || normalized === 'N/A' || normalized === 'NA' || normalized === 'NULL' || normalized === 'NONE' || /^SEM([ _-]|$)/.test(normalized);
+    }
+
+    function formatarLabelRegional(registro) {
+        const regional = normalizarValor(registro.NOME_REGIONAL) || 'Sem regional';
+        const forti = normalizarValor(registro.NOME_REG_FORTI) || 'Sem Forti';
+        return `${regional} - ${forti}`;
+    }
+
+    function isSemParcial(value) {
+        const normalized = normalizarValor(value).toUpperCase();
+        return normalized === 'SEM' || normalized === 'SEM_' || normalized === 'SEM-';
+    }
+
+    function valorFormulario(column, value) {
+        if (column === 'NOME_REGIONAL' || column === 'NOME_REG_FORTI') {
+            return value || '';
+        }
+
+        return valorAusente(value) ? '' : (value || '');
+    }
+
+    function combinarBuscaComFiltroEspecial(listaBase) {
+        switch (activeStatsFilter) {
+            case 'missing-diretor':
+                return listaBase.filter((registro) => valorAusente(registro.NOME_DIRETOR_1));
+            case 'missing-gerente':
+                return listaBase.filter((registro) => valorAusente(registro.NOME_GERENTE));
+            case 'missing-apoio1':
+                return listaBase.filter((registro) => valorAusente(registro.NOME_APOIO_1));
+            case 'missing-apoio2':
+                return listaBase.filter((registro) => valorAusente(registro.NOME_APOIO_2));
+            case 'pending-emails':
+                return listaBase.filter((registro) => ['EMAIL_DIRETOR', 'EMAIL_GERENTE', 'EMAIL_APOIO_1', 'EMAIL_APOIO_2'].some((campo) => valorAusente(registro[campo])));
+            case 'all':
+            default:
+                return listaBase;
+        }
+    }
+
+    function descricaoFiltroEspecial() {
+        switch (activeStatsFilter) {
+            case 'missing-diretor':
+                return 'Mostrando regionais sem diretor cadastrado.';
+            case 'missing-gerente':
+                return 'Mostrando regionais sem gerente cadastrado.';
+            case 'missing-apoio1':
+                return 'Mostrando regionais sem apoio 1 cadastrado.';
+            case 'missing-apoio2':
+                return 'Mostrando regionais sem apoio 2 cadastrado.';
+            case 'pending-emails':
+                return 'Mostrando regionais com algum e-mail pendente.';
+            case 'all':
+            default:
+                return 'Mostrando todas as regionais.';
+        }
+    }
+
+    function atualizarEstadoCards() {
+        statsCards.forEach((card) => {
+            card.classList.toggle('is-active', card.dataset.filterMode === activeStatsFilter);
+        });
+
+        if (tableFilterStatus) {
+            tableFilterStatus.textContent = descricaoFiltroEspecial();
+        }
+
+        if (resetTableFilterButton) {
+            resetTableFilterButton.style.display = activeStatsFilter === 'all' ? 'none' : 'inline-flex';
+        }
+    }
+
+    function rolarParaTabela() {
+        const target = document.getElementById('registros-table') || tableSectionCard;
+        if (!target) {
+            return;
+        }
+
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function formatarConteudoCelula(value, labelAusencia) {
+        if (valorAusente(value)) {
+            return `
+                <div class="missing-cell">
+                    <div class="missing-value">${escapeHtml(normalizarValor(value) || 'SEM CADASTRO')}</div>
+                    <div class="missing-hint">${escapeHtml(labelAusencia)}</div>
+                </div>
+            `;
+        }
+
+        return `
+            <div>${escapeHtml(value || '')}</div>
+        `;
+    }
+
+    function atualizarEstadoNavegacao() {
+        if (!nextButton || !previousButton) {
+            return;
+        }
+
+        const currentIndex = Number(document.getElementById('row_index')?.value);
+        const currentPosition = filteredRegistros.findIndex((item) => Number(item._row_index) === currentIndex);
+        previousButton.disabled = currentPosition <= 0;
+        nextButton.disabled = currentPosition < 0 || currentPosition >= filteredRegistros.length - 1;
+    }
+
+    function atualizarEstadoCamposFormulario() {
+        requiredColumns.forEach((column) => {
+            const input = document.getElementById(column);
+            if (!input) {
+                return;
+            }
+
+            const shouldWarn = column !== 'NOME_REGIONAL' && column !== 'NOME_REG_FORTI' && valorAusente(input.value);
+            input.classList.toggle('field-warning', shouldWarn);
+        });
+    }
+
+    function atualizarContadores() {
+        const total = registros.length;
+        const diretores = registros.filter((registro) => !valorAusente(registro.NOME_DIRETOR_1)).length;
+        const gerentes = registros.filter((registro) => !valorAusente(registro.NOME_GERENTE)).length;
+        const apoio1 = registros.filter((registro) => !valorAusente(registro.NOME_APOIO_1)).length;
+        const apoio2 = registros.filter((registro) => !valorAusente(registro.NOME_APOIO_2)).length;
+        const semDiretor = total - diretores;
+        const semGerente = total - gerentes;
+        const semApoio1 = total - apoio1;
+        const semApoio2 = total - apoio2;
+        const emailsPendentes = registros.reduce((acc, registro) => {
+            return acc + ['EMAIL_DIRETOR', 'EMAIL_GERENTE', 'EMAIL_APOIO_1', 'EMAIL_APOIO_2']
+                .filter((campo) => valorAusente(registro[campo]))
+                .length;
+        }, 0);
+
+        document.getElementById('stats-total-regionais').textContent = total;
+        document.getElementById('stats-diretores').textContent = diretores;
+        document.getElementById('stats-gerentes').textContent = gerentes;
+        document.getElementById('stats-apoio1').textContent = apoio1;
+        document.getElementById('stats-apoio2').textContent = apoio2;
+        document.getElementById('stats-emails-pendentes').textContent = emailsPendentes;
+        document.getElementById('stats-sem-diretor').textContent = `${semDiretor} sem diretor`;
+        document.getElementById('stats-sem-gerente').textContent = `${semGerente} sem gerente`;
+        document.getElementById('stats-sem-apoio1').textContent = `${semApoio1} sem apoio 1`;
+        document.getElementById('stats-sem-apoio2').textContent = `${semApoio2} sem apoio 2`;
+        if (badgeRegistros) {
+            badgeRegistros.textContent = `${filteredRegistros.length} de ${total} registros`;
+        }
+    }
+
+    function preencherSelect(lista, keepCurrent = true) {
+        if (!regionalSelect) {
+            return;
+        }
+
+        const currentValue = keepCurrent ? regionalSelect.value : '';
+        regionalSelect.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = lista.length
+            ? 'Selecione uma regional para editar'
+            : 'Nenhuma regional encontrada no filtro';
+        regionalSelect.appendChild(placeholder);
+
+        lista.forEach((registro) => {
+            const option = document.createElement('option');
+            option.value = String(registro._row_index);
+            option.textContent = formatarLabelRegional(registro);
+            regionalSelect.appendChild(option);
+        });
+
+        if (currentValue && lista.some((item) => String(item._row_index) === currentValue)) {
+            regionalSelect.value = currentValue;
+        }
+    }
+
+    function criarLinhaTabela(registro) {
+        const rowIndex = Number(registro._row_index);
+        return `
+            <tr data-row-index="${rowIndex}">
+                <td>
+                    <button class="btn btn-outline-primary btn-sm" onclick="selecionarRegistro(${rowIndex})">
+                        <i class="bi bi-pencil-square me-1"></i>
+                        Selecionar
+                    </button>
+                </td>
+                <td>
+                    <div class="fw-semibold">${escapeHtml(registro.NOME_REGIONAL || '')}</div>
+                    <div class="text-muted small">${escapeHtml(registro.EMAIL_DIRETOR || '')}</div>
+                </td>
+                <td>${escapeHtml(registro.NOME_REG_FORTI || '')}</td>
+                <td>
+                    ${formatarConteudoCelula(registro.NOME_DIRETOR_1, 'Diretor não cadastrado')}
+                    <div class="text-muted small mt-1">${escapeHtml(registro.EMAIL_DIRETOR || '')}</div>
+                </td>
+                <td>
+                    ${formatarConteudoCelula(registro.NOME_GERENTE, 'Gerente não cadastrado')}
+                    <div class="text-muted small mt-1">${escapeHtml(registro.EMAIL_GERENTE || '')}</div>
+                </td>
+                <td>
+                    ${formatarConteudoCelula(registro.NOME_APOIO_1, 'Apoio 1 não cadastrado')}
+                    <div class="text-muted small mt-1">${escapeHtml(registro.EMAIL_APOIO_1 || '')}</div>
+                </td>
+                <td>
+                    ${formatarConteudoCelula(registro.NOME_APOIO_2, 'Apoio 2 não cadastrado')}
+                    <div class="text-muted small mt-1">${escapeHtml(registro.EMAIL_APOIO_2 || '')}</div>
+                </td>
+            </tr>
+        `;
+    }
+
+    function renderTabela(lista) {
+        if (!tableBody) {
+            return;
+        }
+
+        if (!lista.length) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">Nenhuma regional encontrada para o filtro atual.</td>
+                </tr>
+            `;
+            atualizarEstadoNavegacao();
+            return;
+        }
+
+        tableBody.innerHTML = lista.map(criarLinhaTabela).join('');
+        destacarLinha(document.getElementById('row_index')?.value || '');
+        atualizarEstadoNavegacao();
+    }
+
+    function aplicarFiltro() {
+        const term = normalizarValor(regionalSearch?.value).toLowerCase();
+        const listaBase = registros.filter((registro) => {
+            const searchText = [
+                registro.NOME_REGIONAL,
+                registro.NOME_REG_FORTI,
+                registro.NOME_DIRETOR_1,
+                registro.NOME_GERENTE,
+                registro.NOME_APOIO_1,
+                registro.NOME_APOIO_2,
+                registro.EMAIL_DIRETOR,
+                registro.EMAIL_GERENTE,
+                registro.EMAIL_APOIO_1,
+                registro.EMAIL_APOIO_2,
+            ].join(' ').toLowerCase();
+            return !term || searchText.includes(term);
+        });
+
+        filteredRegistros = combinarBuscaComFiltroEspecial(listaBase);
+
+        preencherSelect(filteredRegistros);
+        renderTabela(filteredRegistros);
+        atualizarContadores();
+        atualizarEstadoCards();
+
+        const currentValue = regionalSelect?.value || '';
+        if (currentValue && filteredRegistros.some((item) => String(item._row_index) === String(currentValue))) {
+            selecionarRegistro(currentValue, false);
+        } else if (filteredRegistros.length === 1) {
+            selecionarRegistro(filteredRegistros[0]._row_index, false);
+        } else {
+            limparFormulario(false);
+        }
+    }
+
+    function destacarLinha(rowIndex) {
+        document.querySelectorAll('#registros-table tbody tr').forEach((row) => {
+            row.classList.toggle('table-primary', Number(row.dataset.rowIndex) === Number(rowIndex));
+        });
+    }
+
+    function atualizarResumo(registro) {
+        if (!summaryBox) {
+            return;
+        }
+
+        if (!registro) {
+            summaryBox.className = 'alert alert-secondary small mb-3';
+            summaryBox.textContent = 'Selecione uma regional para carregar os dados de edição.';
+            return;
+        }
+
+        summaryBox.className = 'alert alert-primary small mb-3';
+        summaryBox.innerHTML = `
+            <strong>${escapeHtml(registro.NOME_REGIONAL || 'Sem regional')}</strong><br>
+            Forti: ${escapeHtml(registro.NOME_REG_FORTI || 'Sem Forti')}<br>
+            Diretor: ${escapeHtml(registro.NOME_DIRETOR_1 || '-')} (${escapeHtml(registro.EMAIL_DIRETOR || '-')})<br>
+            Gerente: ${escapeHtml(registro.NOME_GERENTE || '-')} (${escapeHtml(registro.EMAIL_GERENTE || '-')})<br>
+            Apoio 1: ${escapeHtml(registro.NOME_APOIO_1 || '-')} (${escapeHtml(registro.EMAIL_APOIO_1 || '-')})<br>
+            Apoio 2: ${escapeHtml(registro.NOME_APOIO_2 || '-')} (${escapeHtml(registro.EMAIL_APOIO_2 || '-')})
+        `;
+    }
+
+    function limparFormulario(resetSelect = true) {
+        const rowIndexInput = document.getElementById('row_index');
+        if (rowIndexInput) {
+            rowIndexInput.value = '';
+        }
+
+        requiredColumns.forEach((column) => {
+            const input = document.getElementById(column);
+            if (input) {
+                input.value = '';
+            }
+        });
+
+        if (resetSelect && regionalSelect) {
+            regionalSelect.value = '';
+        }
+
+        if (saveButton) {
+            saveButton.disabled = true;
+        }
+
+        if (nextButton) {
+            nextButton.disabled = true;
+        }
+
+        if (previousButton) {
+            previousButton.disabled = true;
+        }
+
+        destacarLinha('');
+        atualizarResumo(null);
+        atualizarEstadoCamposFormulario();
+    }
+
+    function selecionarRegistro(rowIndex, syncSelect = true) {
+        const registro = registros.find((item) => Number(item._row_index) === Number(rowIndex));
+        if (!registro) {
+            limparFormulario(syncSelect);
+            return;
+        }
+
+        document.getElementById('row_index').value = registro._row_index;
+        requiredColumns.forEach((column) => {
+            const input = document.getElementById(column);
+            if (input) {
+                input.value = valorFormulario(column, registro[column]);
+            }
+        });
+
+        if (syncSelect && regionalSelect) {
+            regionalSelect.value = String(registro._row_index);
+        }
+
+        if (saveButton) {
+            saveButton.disabled = false;
+        }
+
+        destacarLinha(registro._row_index);
+        atualizarResumo(registro);
+        atualizarEstadoCamposFormulario();
+        atualizarEstadoNavegacao();
+    }
+
+    function irParaRegionalAnterior() {
+        const currentIndex = Number(document.getElementById('row_index')?.value);
+        const currentPosition = filteredRegistros.findIndex((item) => Number(item._row_index) === currentIndex);
+        if (currentPosition <= 0) {
+            return;
+        }
+
+        selecionarRegistro(filteredRegistros[currentPosition - 1]._row_index);
+    }
+
+    function irParaProximaRegional() {
+        const currentIndex = Number(document.getElementById('row_index')?.value);
+        const currentPosition = filteredRegistros.findIndex((item) => Number(item._row_index) === currentIndex);
+        if (currentPosition < 0 || currentPosition >= filteredRegistros.length - 1) {
+            return;
+        }
+
+        selecionarRegistro(filteredRegistros[currentPosition + 1]._row_index);
+    }
+
+    function aplicarAutocompleteSem(input) {
+        if (!input) {
+            return;
+        }
+
+        const placeholder = placeholderMap[input.id];
+        if (!placeholder) {
+            atualizarEstadoCamposFormulario();
+            return;
+        }
+
+        const normalized = normalizarValor(input.value).toUpperCase().replace(/\s+/g, '_').replace(/-/g, '_');
+        if (isSemParcial(input.value) || normalized.startsWith('SEM_')) {
+            input.value = placeholder;
+        }
+
+        atualizarEstadoCamposFormulario();
+    }
+
+    function aplicarFiltroEspecial(filterMode) {
+        activeStatsFilter = filterMode || 'all';
+        aplicarFiltro();
+    }
+
+    function limparFiltroEspecial() {
+        activeStatsFilter = 'all';
+        aplicarFiltro();
+    }
+
+    function limparSelecao() {
+        if (regionalSearch) {
+            regionalSearch.value = '';
+        }
+        filteredRegistros = [...registros];
+        preencherSelect(filteredRegistros, false);
+        renderTabela(filteredRegistros);
+        atualizarContadores();
+        limparFormulario();
+    }
+
+    async function salvarRegistro() {
+        const rowIndex = document.getElementById('row_index')?.value;
+        if (!rowIndex) {
+            showAlert('warning', 'Selecione uma regional antes de salvar.');
+            return;
+        }
+
+        const payload = {};
+        requiredColumns.forEach((column) => {
+            payload[column] = document.getElementById(column)?.value || '';
+        });
+
+        saveButton.disabled = true;
+        saveButtonText.textContent = 'Salvando...';
+
+        try {
+            const response = await fetch(`/api/emails-contatos/${rowIndex}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                showAlert('danger', data.message || 'Não foi possível salvar o registro.');
+                return;
+            }
+
+            const registroAtualizado = data.registro || { ...payload, _row_index: Number(rowIndex) };
+            const registroExistente = registros.find((item) => Number(item._row_index) === Number(rowIndex));
+            if (registroExistente) {
+                Object.assign(registroExistente, registroAtualizado);
+            }
+
+            aplicarFiltro();
+            selecionarRegistro(rowIndex);
+            showAlert('success', data.message || 'Registro atualizado com sucesso.');
+        } catch (error) {
+            showAlert('danger', 'Falha inesperada ao salvar o registro.');
+        } finally {
+            saveButton.disabled = false;
+            saveButtonText.textContent = 'Salvar alterações';
+        }
+    }
+
+    regionalSearch?.addEventListener('input', aplicarFiltro);
+    regionalSelect?.addEventListener('change', (event) => selecionarRegistro(event.target.value));
+
+    Object.keys(placeholderMap).forEach((fieldId) => {
+        const input = document.getElementById(fieldId);
+        input?.addEventListener('blur', () => aplicarAutocompleteSem(input));
+        input?.addEventListener('input', () => atualizarEstadoCamposFormulario());
+        input?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === 'Tab') {
+                aplicarAutocompleteSem(input);
+            }
+        });
+    });
+
+    statsCards.forEach((card) => {
+        card.addEventListener('click', () => {
+            const nextMode = card.dataset.filterMode || 'all';
+            activeStatsFilter = activeStatsFilter === nextMode ? 'all' : nextMode;
+            aplicarFiltro();
+            rolarParaTabela();
+        });
+    });
+
+    preencherSelect(filteredRegistros, false);
+    renderTabela(filteredRegistros);
+    atualizarContadores();
+    atualizarEstadoCards();
+    limparFormulario();
+</script>
+{% endblock %}

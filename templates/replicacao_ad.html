@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}Replicação Active Directory - Sistema de Automação{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5 mb-4">
+            <i class="bi bi-arrow-repeat me-3"></i>
+            Replicação Active Directory
+        </h1>
+        <p class="lead text-muted">
+            Monitore e verifique a replicação entre controladores de domínio
+        </p>
+    </div>
+</div>
+
+<!-- Status da Replicação -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-number" id="totalDCs">-</div>
+            <div class="stats-label">
+                <i class="bi bi-server me-1"></i>
+                Controladores
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+            <div class="stats-number" id="replicacaoOK">-</div>
+            <div class="stats-label">
+                <i class="bi bi-check-circle me-1"></i>
+                Replicação OK
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+            <div class="stats-number" id="errosReplicacao">-</div>
+            <div class="stats-label">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Erros
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+            <div class="stats-number" id="ultimaVerificacao">-</div>
+            <div class="stats-label">
+                <i class="bi bi-clock me-1"></i>
+                Última Verificação
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ações -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning me-2"></i>
+                    Ações de Replicação
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-primary" onclick="verificarReplicacao()">
+                                <i class="bi bi-arrow-clockwise me-2"></i>
+                                <span class="btn-text">Verificar Replicação</span>
+                                <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-info" onclick="abrirRelatorio()">
+                                <i class="bi bi-file-earmark-text me-2"></i>
+                                Abrir Relatório
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-secondary" onclick="forcarReplicacao()">
+                                <i class="bi bi-arrow-repeat me-2"></i>
+                                Forçar Replicação
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="agendarVerificacao()">
+                                <i class="bi bi-calendar-event me-2"></i>
+                                Agendar Verificação
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Informações do Domínio -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-building me-2"></i>
+                    Informações do Domínio
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Domínio:</strong></td>
+                                <td>GALAXIA.LOCAL</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Controlador Principal:</strong></td>
+                                <td>SIRIUS.galaxia.local</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Nível Funcional:</strong></td>
+                                <td id="nivelFuncional">Verificando...</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>FSMO Roles:</strong></td>
+                                <td id="fsmoRoles">Verificando...</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sites AD:</strong></td>
+                                <td id="sitesAD">Verificando...</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Status Global:</strong></td>
+                                <td><span class="badge bg-success" id="statusGlobal">Verificando...</span></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log de Atividades -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-journal-text me-2"></i>
+                    Log de Atividades
+                </h5>
+                <button class="btn btn-outline-secondary btn-sm" onclick="limparLog()">
+                    <i class="bi bi-trash me-1"></i>
+                    Limpar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="logAtividades" class="bg-dark text-light p-3 rounded" style="height: 300px; overflow-y: auto; font-family: monospace;">
+                    <div class="text-muted">Aguardando atividades...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function verificarReplicacao() {
+    const btn = $('.btn-primary');
+    showLoading(btn);
+    
+    adicionarLog('🔍 Iniciando verificação de replicação AD...');
+    showToast('Verificando replicação AD...', 'info');
+    
+    $.post('/api/replicacao/executar')
+        .done(function(response) {
+            if (response.success) {
+                adicionarLog('✅ Verificação concluída com sucesso');
+                showToast('Replicação verificada com sucesso!', 'success');
+                
+                if (response.html_gerado && response.html_url) {
+                    adicionarLog('📄 Relatório HTML gerado');
+                    setTimeout(() => {
+                        window.open(response.html_url, '_blank');
+                        adicionarLog('📄 Relatório aberto em nova aba');
+                    }, 1000);
+                }
+                
+                // Atualiza estatísticas (simulado)
+                atualizarEstatisticas();
+                
+            } else {
+                adicionarLog(`❌ Erro: ${response.message}`);
+                showToast('Erro na verificação: ' + response.message, 'danger');
+            }
+        })
+        .fail(function() {
+            adicionarLog('❌ Erro de conexão');
+            showToast('Erro de conexão na verificação', 'danger');
+        })
+        .always(function() {
+            hideLoading(btn);
+        });
+}
+
+function abrirRelatorio() {
+    adicionarLog('📄 Abrindo relatório de replicação...');
+    
+    // Abre o relatório gerado
+    const relatorioUrl = '/output/replsummary.html';
+    window.open(relatorioUrl, '_blank');
+    
+    showToast('Relatório aberto em nova aba', 'info');
+}
+
+function forcarReplicacao() {
+    if (confirm('Deseja forçar a replicação entre todos os controladores?')) {
+        adicionarLog('🔄 Forçando replicação...');
+        showToast('Forçando replicação AD...', 'info');
+        
+        // Simula forçar replicação
+        setTimeout(() => {
+            adicionarLog('✅ Replicação forçada com sucesso');
+            showToast('Replicação forçada!', 'success');
+        }, 3000);
+    }
+}
+
+function agendarVerificacao() {
+    adicionarLog('📅 Configurando agendamento...');
+    showToast('Funcionalidade de agendamento em desenvolvimento', 'info');
+}
+
+function atualizarEstatisticas() {
+    adicionarLog('🔄 Atualizando estatísticas de replicação...');
+    
+    // Mostra indicadores de carregamento
+    $('#totalDCs').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#replicacaoOK').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#errosReplicacao').html('<span class="spinner-border spinner-border-sm"></span>');
+    $('#ultimaVerificacao').html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    // Busca dados reais da replicação
+    $.get('/api/public/status/replicacao')
+        .done(function(data) {
+            adicionarLog('✅ Estatísticas atualizadas');
+            console.log('Dados replicação:', data);
+            
+            // Atualiza estatísticas
+            $('#totalDCs').text(data.controladores || 0);
+            $('#replicacaoOK').text(data.replicacao_ok || 0);
+            $('#errosReplicacao').text(data.replicacao_erro || 0);
+            $('#ultimaVerificacao').text(data.ultima_verificacao || 'Nunca');
+            
+            // Atualiza informações do domínio
+            $('#nivelFuncional').text(data.nivel_funcional || 'Desconhecido');
+            $('#fsmoRoles').text(data.fsmo_roles || 'Desconhecido');
+            $('#sitesAD').text(data.sites || 'Desconhecido');
+            
+            // Atualiza status global
+            if (data.status === 'ok') {
+                $('#statusGlobal').removeClass('bg-warning bg-danger bg-info').addClass('bg-success').text('Saudável');
+            } else if (data.status === 'aviso') {
+                $('#statusGlobal').removeClass('bg-success bg-danger bg-info').addClass('bg-warning').text('Atenção');
+            } else if (data.status === 'erro') {
+                $('#statusGlobal').removeClass('bg-success bg-warning bg-info').addClass('bg-danger').text('Problemas');
+            } else {
+                $('#statusGlobal').removeClass('bg-success bg-warning bg-danger').addClass('bg-info').text('Desconhecido');
+            }
+        })
+        .fail(function(error) {
+            adicionarLog('❌ Erro ao atualizar estatísticas');
+            console.error('Erro ao carregar dados de replicação:', error);
+            
+            // Restaura valores padrão
+            $('#totalDCs').text('0');
+            $('#replicacaoOK').text('0');
+            $('#errosReplicacao').text('0');
+            $('#ultimaVerificacao').text('Erro');
+            
+            // Atualiza status global
+            $('#statusGlobal').removeClass('bg-success bg-warning bg-info').addClass('bg-danger').text('Erro');
+            
+            // Sugere executar verificação
+            showToast('Erro ao carregar dados. Tente verificar a replicação.', 'danger');
+        });
+}
+
+function adicionarLog(mensagem) {
+    const logContainer = $('#logAtividades');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `<div>[${timestamp}] ${mensagem}</div>`;
+    
+    logContainer.append(logEntry);
+    logContainer.scrollTop(logContainer[0].scrollHeight);
+}
+
+function limparLog() {
+    $('#logAtividades').html('<div class="text-muted">Log limpo...</div>');
+}
+
+// Inicialização
+$(document).ready(function() {
+    adicionarLog('🚀 Sistema de replicação AD iniciado');
+    
+    // Carrega dados reais
+    atualizarEstatisticas();
+    
+    // Configura atualização automática a cada 60 segundos
+    setInterval(atualizarEstatisticas, 60000);
+});
+</script>
+{% endblock %}

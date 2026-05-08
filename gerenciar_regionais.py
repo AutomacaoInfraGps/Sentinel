@@ -22,6 +22,11 @@ class GerenciadorRegionais:
                 return json.load(f)
         else:
             return {"regionais": {}, "configuracao": {"versao": "2.0"}}
+
+    def recarregar_regionais(self):
+        """Recarrega a estrutura do arquivo para evitar dados defasados em memória."""
+        self.regionais = self._carregar_regionais()
+        return self.regionais
     
     def salvar_regionais(self):
         """Salva a estrutura de regionais no arquivo"""
@@ -32,10 +37,12 @@ class GerenciadorRegionais:
     
     def listar_regionais(self) -> List[str]:
         """Lista todas as regionais"""
+        self.recarregar_regionais()
         return list(self.regionais.get("regionais", {}).keys())
     
     def obter_regional(self, codigo_regional: str) -> Optional[Dict]:
         """Obtém informações de uma regional específica"""
+        self.recarregar_regionais()
         regional = self.regionais.get("regionais", {}).get(codigo_regional)
         if regional:
             # Garante que as chaves existam para compatibilidade
@@ -176,6 +183,7 @@ class GerenciadorRegionais:
     
     def listar_servidores_regional(self, codigo_regional: str) -> List[Dict]:
         """Lista todos os servidores de uma regional"""
+        self.recarregar_regionais()
         regional = self.obter_regional(codigo_regional)
         if regional:
             return regional.get("servidores", [])

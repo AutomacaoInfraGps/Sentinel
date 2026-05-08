@@ -91,6 +91,8 @@ GPS_HTML  = OUTPUT_DIR_PUBLIC / "print_temp.html"          # <-- no Public!
 GPS_IMG   = OUTPUT_DIR_PUBLIC / "gps_amigo.png"            # opcional (salva screenshot)
 APPGATE_HTML = OUTPUT_DIR_PUBLIC / "appgate.html"
 APPGATE_IMG = OUTPUT_DIR_PUBLIC / "appgate.png"
+UNIFI_CLIENTS_HTML = OUTPUT_DIR_PUBLIC / "unifi_clientes_marte.html"
+UNIFI_CLIENTS_IMG = OUTPUT_DIR_PUBLIC / "unifi_clientes_marte.png"
 UNIFI_HTML = OUTPUT_DIR / "dados_aps_unifi.html"
 
 
@@ -152,6 +154,15 @@ UNIFI_CONFIG = ENV_CONFIG.get("unifi_controller", {
     "port": unifi_creds.get('port', 8443),
     "username": unifi_creds.get('username', DOCS_UNIFI_USER),
     "password": unifi_creds.get('password', "")
+})
+
+UNIFI_CLIENTS_DASHBOARD = ENV_CONFIG.get("unifi_clients_dashboard", {
+    "site": "brihqlgm",
+    "clients_path": "/manage/brihqlgm/clients/online",
+    "wifi_filter": "MARTE",
+    "title": "Rede MARTE",
+    "username": "",
+    "password": "",
 })
 
 # Configurações do GPS Amigo
