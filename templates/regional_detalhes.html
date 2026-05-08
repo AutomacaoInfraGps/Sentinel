@@ -175,11 +175,11 @@
                         <div class="card border-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} h-100">
                             <div class="card-header bg-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} text-white d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 fw-bold">
-                                    <i class="bi bi-{{ 'hdd-rack' if servidor.tipo == 'idrac' else 'server' }} me-2"></i>
+                                    <i class="bi bi-server me-2"></i>
                                     {{ servidor.nome }}
                                 </h6>
                                 <span class="badge bg-light text-dark">
-                                    {{ servidor.tipo.upper() }}
+                                    {{ servidor.funcao or 'SERVIDOR' }}
                                 </span>
                             </div>
                             
