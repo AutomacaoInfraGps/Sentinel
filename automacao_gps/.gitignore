@@ -1,0 +1,82 @@
+# Arquivos de configuração com credenciais
+environment.json
+Conexoes.txt
+.credentials/
+
+# Arquivos de saída
+output/
+*.html
+*.png
+*.jpg
+*.jpeg
+
+# Logs
+logs/
+*.log
+
+# Arquivos temporários
+temp/
+tmp/
+screenshot.*
+
+# Arquivos de sessão do Playwright
+auth_state.json
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ambientes virtuais
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Arquivos específicos do Windows
+*.lnk
+
+# Arquivos de configuração sensíveis
+servidores.json
+estrutura_regionais.json
+zabbix_config.json
+*.json.backup
+*.json.bak
+api_response_test.json
+diagnostico.json
+auth_state.json
+data/*.json
+auditoria_*.json
+relatorio_*.json
+
+# Arquivos temporários de segurança
+*.tmp
+*.temp
+audit_*.json
+
+# Backups e snapshots locais
+backup_*/
+backup_limpeza_*/
+backup_organizacao_*/
+backup_projeto_*/
+switches_zabbix.xlsx
+switches_zabbix_corrigido_*.xlsx
+switches_zabbix_backup_*.xlsx
+
+# Ambientes virtuais locais
+.venv/
+snmp_worker/.venv/
+
+# Variáveis de ambiente
+.env
