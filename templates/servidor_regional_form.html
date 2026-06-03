@@ -32,6 +32,7 @@
             <div class="card-body">
                 <form id="formServidor">
                     <input type="hidden" id="regional_codigo" value="{{ regional_codigo }}">
+                    <input type="hidden" id="tipo_monitoramento" value="vm">
                     {% if servidor %}
                     <input type="hidden" id="servidor_id" value="{{ servidor.id }}">
                     {% endif %}
@@ -101,6 +102,9 @@
                                 </option>
                                 <option value="Backup" {{ 'selected' if servidor and servidor.funcao == 'Backup' else '' }}>
                                     Backup
+                                </option>
+                                <option value="PrintServer" {{ 'selected' if servidor and servidor.funcao == 'PrintServer' else '' }}>
+                                    PrintServer
                                 </option>
                                 <option value="Virtualização" {{ 'selected' if servidor and servidor.funcao == 'Virtualização' else '' }}>
                                     Virtualização
@@ -306,6 +310,7 @@ function salvarServidor() {
     
     const dados = {
         id: $('#servidor_id').val() || null,
+        tipo_monitoramento: $('#tipo_monitoramento').val() || 'vm',
         nome: $('#nome').val().trim(),
         sistema_operacional: $('#sistema_operacional').val(),
         ip: ip,

@@ -1,3 +1,8 @@
+param(
+    [int]$Port = $(if ($env:AUTOMACAO_WEB_PORT) { [int]$env:AUTOMACAO_WEB_PORT } else { 5000 }),
+    [string]$PublicBase = $env:AUTOMACAO_PUBLIC_BASE
+)
+
 $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -7,9 +12,14 @@ $logDir = Join-Path $projectDir "logs"
 $monitorLog = Join-Path $logDir "web_monitor.log"
 $stdoutLog = Join-Path $logDir "web_task_stdout.log"
 $stderrLog = Join-Path $logDir "web_task_stderr.log"
-$port = 5000
+$port = $Port
+$startupGraceSeconds = 45
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
+$env:AUTOMACAO_WEB_PORT = [string]$port
+if ($PublicBase) {
+    $env:AUTOMACAO_PUBLIC_BASE = $PublicBase
+}
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -20,13 +30,22 @@ function Write-MonitorLog([string]$message) {
 
 function Get-WebProcess {
     Get-CimInstance Win32_Process | Where-Object {
-        $_.Name -eq "python.exe" -and $_.CommandLine -like "*run_web_service.py*"
+        $_.Name -eq "python.exe" -and $_.CommandLine -like "*$runner*"
     }
 }
 
 function Get-WebListeners {
     Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique
+}
+
+function Test-WebHealth {
+    try {
+        $response = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}/api/test" -f $port) -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        return ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400)
+    } catch {
+        return $false
+    }
 }
 
 function Stop-WebProcesses {
@@ -51,9 +70,20 @@ function Stop-WebProcesses {
 function Ensure-WebRunning {
     $listeners = @(Get-WebListeners)
     $processes = @(Get-WebProcess)
+    $serviceHealthy = Test-WebHealth
 
-    if ($listeners.Count -eq 1 -and $processes.Count -eq 1) {
+    if ($serviceHealthy) {
         return
+    }
+
+    if ($processes.Count -gt 0) {
+        $newestProcess = $processes | Sort-Object CreationDate -Descending | Select-Object -First 1
+        if ($newestProcess -and $newestProcess.CreationDate) {
+            $processAge = (Get-Date) - $newestProcess.CreationDate
+            if ($processAge.TotalSeconds -lt $startupGraceSeconds) {
+                return
+            }
+        }
     }
 
     Stop-WebProcesses
@@ -62,7 +92,7 @@ function Ensure-WebRunning {
     Start-Process -FilePath $pythonExe -ArgumentList $runner -WorkingDirectory $projectDir -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog | Out-Null
 }
 
-Write-MonitorLog "Monitor web iniciado"
+Write-MonitorLog "Monitor web iniciado na porta $port"
 
 while ($true) {
     try {

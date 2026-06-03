@@ -1,10 +1,11 @@
 """
 Gerenciador de Regionais e Servidores
-Estrutura hierárquica: Regional → Servidores (iDRAC/ILO)
+Estrutura hierárquica: Regional → Servidores Virtuais
 """
 
 import json
 import os
+import tempfile
 from typing import Dict, List, Optional
 from datetime import datetime
 
@@ -14,26 +15,79 @@ class GerenciadorRegionais:
     def __init__(self, arquivo_regionais="estrutura_regionais.json"):
         self.arquivo_regionais = arquivo_regionais
         self.regionais = self._carregar_regionais()
+
+    def _estrutura_padrao(self) -> Dict:
+        return {"regionais": {}, "configuracao": {"versao": "2.0"}}
+
+    def _normalizar_estrutura(self, dados: Optional[Dict]) -> Dict:
+        estrutura = dict(dados or {})
+        estrutura.setdefault("regionais", {})
+        estrutura.setdefault("configuracao", {"versao": "2.0"})
+        return estrutura
     
-    def _carregar_regionais(self) -> Dict:
+    def _carregar_regionais(self, fallback: Optional[Dict] = None) -> Dict:
         """Carrega a estrutura de regionais do arquivo"""
         if os.path.exists(self.arquivo_regionais):
-            with open(self.arquivo_regionais, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        else:
-            return {"regionais": {}, "configuracao": {"versao": "2.0"}}
+            try:
+                with open(self.arquivo_regionais, 'r', encoding='utf-8') as f:
+                    conteudo = f.read().strip()
+
+                if not conteudo:
+                    raise ValueError('arquivo vazio')
+
+                dados = json.loads(conteudo)
+                return self._normalizar_estrutura(dados)
+            except (json.JSONDecodeError, OSError, ValueError) as e:
+                if isinstance(fallback, dict) and fallback.get('regionais'):
+                    print(f"⚠️ Erro ao carregar regionais do arquivo; usando dados em memória: {e}")
+                    return self._normalizar_estrutura(fallback)
+
+                print(f"⚠️ Erro ao carregar regionais: {e}")
+                return self._estrutura_padrao()
+
+        return self._estrutura_padrao()
 
     def recarregar_regionais(self):
         """Recarrega a estrutura do arquivo para evitar dados defasados em memória."""
-        self.regionais = self._carregar_regionais()
+        self.regionais = self._carregar_regionais(fallback=self.regionais)
         return self.regionais
     
     def salvar_regionais(self):
         """Salva a estrutura de regionais no arquivo"""
+        self.regionais.setdefault("regionais", {})
+        self.regionais.setdefault("configuracao", {"versao": "2.0"})
         self.regionais["configuracao"]["ultima_atualizacao"] = datetime.now().isoformat()
         print("SALVANDO EM:", os.path.abspath(self.arquivo_regionais))  # << ADICIONA ISSO  
-        with open(self.arquivo_regionais, 'w', encoding='utf-8') as f:
-            json.dump(self.regionais, f, indent=2, ensure_ascii=False)
+        diretorio = os.path.dirname(os.path.abspath(self.arquivo_regionais)) or '.'
+        fd_temp, caminho_temp = tempfile.mkstemp(prefix='regionais_', suffix='.tmp', dir=diretorio, text=True)
+        try:
+            with os.fdopen(fd_temp, 'w', encoding='utf-8') as f:
+                json.dump(self.regionais, f, indent=2, ensure_ascii=False)
+            os.replace(caminho_temp, self.arquivo_regionais)
+        finally:
+            if os.path.exists(caminho_temp):
+                try:
+                    os.remove(caminho_temp)
+                except OSError:
+                    pass
+
+    def _normalizar_servidor(self, servidor: Dict, existente: Optional[Dict] = None) -> Dict:
+        dados = dict(existente or {})
+        dados.update(servidor)
+
+        dados["tipo"] = "vm"
+        dados["tipo_monitoramento"] = "vm"
+        dados["nome"] = str(dados.get("nome") or "").strip()
+        dados["ip"] = str(dados.get("ip") or "").strip()
+        dados["usuario"] = str(dados.get("usuario") or "").strip()
+        dados["senha"] = str(dados.get("senha") or "").strip()
+        dados["funcao"] = str(dados.get("funcao") or "Aplicação").strip()
+        dados["modelo"] = str(dados.get("modelo") or "Servidor Virtual").strip()
+        dados["sistema_operacional"] = str(dados.get("sistema_operacional") or "").strip()
+        dados.setdefault("porta", 443)
+        dados.setdefault("timeout", 10)
+        dados.setdefault("ativo", True)
+        return dados
     
     def listar_regionais(self) -> List[str]:
         """Lista todas as regionais"""
@@ -149,12 +203,8 @@ class GerenciadorRegionais:
             if campo not in servidor:
                 raise ValueError(f"Campo obrigatório '{campo}' não encontrado")
         
-        # Adiciona campos padrão se não existirem
-        servidor.setdefault("porta", 443)
-        servidor.setdefault("timeout", 10)
-        servidor.setdefault("ativo", True)
-        
-        self.regionais["regionais"][codigo_regional]["servidores"].append(servidor)
+        servidor_normalizado = self._normalizar_servidor(servidor)
+        self.regionais["regionais"][codigo_regional]["servidores"].append(servidor_normalizado)
         self.salvar_regionais()
         
     def remover_servidor(self, codigo_regional: str, id_servidor: str):
@@ -209,8 +259,7 @@ class GerenciadorRegionais:
 
         for i, servidor in enumerate(servidores):
             if servidor.get("id") == id_servidor:
-                # Atualiza os campos existentes
-                servidores[i].update(novos_dados)
+                servidores[i] = self._normalizar_servidor(novos_dados, existente=servidor)
 
                 # Salva no JSON
                 self.salvar_regionais()
@@ -347,14 +396,16 @@ class GerenciadorRegionais:
                 servidor_novo = {
                     "id": servidor.get("id", f"srv_{len(self.listar_servidores_regional(codigo_regional)) + 1:02d}"),
                     "nome": f"Servidor {nome.replace('RG_', '')} 01",
-                    "tipo": servidor.get("tipo", "idrac"),
+                    "tipo": "vm",
+                    "tipo_monitoramento": "vm",
                     "ip": servidor.get("ip"),
                     "usuario": servidor.get("usuario"),
                     "senha": servidor.get("senha"),
                     "porta": servidor.get("porta", 443),
                     "timeout": servidor.get("timeout", 10),
                     "ativo": servidor.get("ativo", True),
-                    "modelo": "Dell PowerEdge" if servidor.get("tipo") == "idrac" else "HPE ProLiant",
+                    "modelo": servidor.get("modelo") or "Servidor Virtual",
+                    "sistema_operacional": servidor.get("sistema_operacional", ""),
                     "funcao": "Aplicação"
                 }
                 
@@ -387,7 +438,7 @@ class GerenciadorRegionais:
             
             for servidor in servidores:
                 status = "🟢" if servidor.get("ativo", True) else "🔴"
-                tipo_icon = "🔧" if servidor.get("tipo") == "idrac" else "⚙️"
+                tipo_icon = "🖥️"
                 relatorio.append(f"     {status} {tipo_icon} {servidor.get('nome')} ({servidor.get('ip')})")
             
             relatorio.append("")
@@ -454,11 +505,13 @@ def main():
                 servidor = {
                     "id": input("ID do servidor: "),
                     "nome": input("Nome do servidor: "),
-                    "tipo": input("Tipo (idrac/ilo): ").lower(),
+                    "tipo": "vm",
+                    "tipo_monitoramento": "vm",
                     "ip": input("IP: "),
                     "usuario": input("Usuário: "),
                     "senha": input("Senha: "),
                     "modelo": input("Modelo (opcional): "),
+                    "sistema_operacional": input("Sistema Operacional (opcional): "),
                     "funcao": input("Função (opcional): ")
                 }
                 
@@ -473,7 +526,7 @@ def main():
             print(f"\n🖥️  Servidores ({len(servidores)}):")
             for servidor in servidores:
                 status = "🟢" if servidor.get("ativo", True) else "🔴"
-                tipo_icon = "🔧" if servidor.get("tipo") == "idrac" else "⚙️"
+                tipo_icon = "🖥️"
                 print(f"  {status} {tipo_icon} {servidor.get('nome')} ({servidor.get('ip')}) - {servidor.get('nome_regional')}")
         
         elif opcao == "5":

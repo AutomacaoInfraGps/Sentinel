@@ -114,6 +114,8 @@ class GerenciadorSwitches:
         self.zabbix_url_env = zabbix_url_env
         self.zabbix_username_env = zabbix_username_env
         self.zabbix_password_env = zabbix_password_env
+        self.status_cache_file = Path("output") / "switches_status_cache.json"
+        self.status_cache_file.parent.mkdir(parents=True, exist_ok=True)
         
         # Carrega configurações
         self._carregar_config()
@@ -123,6 +125,40 @@ class GerenciadorSwitches:
         
         # Atualiza todos os IPs para o formato correto
         self.atualizar_ips()
+
+    def _carregar_status_cache(self):
+        try:
+            if self.status_cache_file.exists():
+                with open(self.status_cache_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data if isinstance(data, dict) else {}
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar cache de status dos switches: {e}")
+        return {}
+
+    def _salvar_status_cache(self, cache):
+        try:
+            with open(self.status_cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ Erro ao salvar cache de status dos switches: {e}")
+
+    def _persistir_status_switch(self, switch_info):
+        if not switch_info or not switch_info.get("host"):
+            return
+
+        cache = self._carregar_status_cache()
+        cache[switch_info["host"]] = {
+            "status": switch_info.get("status", "desconhecido"),
+            "ultima_verificacao": switch_info.get("ultima_verificacao"),
+            "ip": switch_info.get("ip"),
+            "zabbix_name": switch_info.get("zabbix_name"),
+            "status_reason": switch_info.get("status_reason"),
+            "status_details": switch_info.get("status_details"),
+            "warning_problemas": switch_info.get("warning_problemas") or [],
+            "warning_resumo": switch_info.get("warning_resumo")
+        }
+        self._salvar_status_cache(cache)
         
     def _converter_ip_numerico(self, ip_numerico):
         """Converte IP numérico para formato padrão (ex: 192.168.1.1)"""
@@ -479,6 +515,8 @@ class GerenciadorSwitches:
     def _carregar_switches(self):
         """Carrega dados dos switches do Excel"""
         try:
+            status_cache = self._carregar_status_cache()
+
             # Verifica se o arquivo existe no caminho atual
             if not os.path.exists(self.arquivo_excel):
                 print(f"⚠️ Arquivo {self.arquivo_excel} não encontrado no diretório atual")
@@ -605,6 +643,19 @@ class GerenciadorSwitches:
                     "ultima_verificacao": None
                 }
 
+                status_salvo = status_cache.get(host_name, {}) if isinstance(status_cache, dict) else {}
+                if status_salvo:
+                    switch["status"] = status_salvo.get("status") or switch["status"]
+                    switch["ultima_verificacao"] = status_salvo.get("ultima_verificacao")
+                    if status_salvo.get("ip"):
+                        switch["ip"] = status_salvo.get("ip")
+                    if status_salvo.get("zabbix_name"):
+                        switch["zabbix_name"] = status_salvo.get("zabbix_name")
+                    switch["status_reason"] = status_salvo.get("status_reason")
+                    switch["status_details"] = status_salvo.get("status_details")
+                    switch["warning_problemas"] = status_salvo.get("warning_problemas") or []
+                    switch["warning_resumo"] = status_salvo.get("warning_resumo")
+
                 self.switches.append(switch)
                                 
                 # Agrupa por regional
@@ -631,7 +682,12 @@ class GerenciadorSwitches:
             
             if not switch_info:
                 print(f"❌ Switch {host_name} não encontrado na lista local")
-                return {"status": "não encontrado", "detalhes": None}
+                return {
+                    "status": "não encontrado",
+                    "detalhes": None,
+                    "status_reason": "Switch não encontrado na lista local carregada da planilha.",
+                    "ultima_verificacao": datetime.now().isoformat()
+                }
             
             # Tenta buscar o host no Zabbix pelo nome
             host_resp = self._call_api("host.get", {
@@ -707,8 +763,19 @@ class GerenciadorSwitches:
                 # Atualiza o status na lista
                 switch_info["status"] = "não encontrado"
                 switch_info["ultima_verificacao"] = datetime.now().isoformat()
+                switch_info["status_reason"] = "Não localizado no Zabbix pelo nome, identificador técnico, IP ou interface."
+                switch_info["status_details"] = f"Host Excel: {host_name} | IP: {switch_info.get('ip') or 'N/A'}"
+                switch_info["warning_problemas"] = []
+                switch_info["warning_resumo"] = None
+                self._persistir_status_switch(switch_info)
                 
-                return {"status": "não encontrado", "detalhes": None}
+                return {
+                    "status": "não encontrado",
+                    "detalhes": None,
+                    "status_reason": switch_info["status_reason"],
+                    "status_details": switch_info["status_details"],
+                    "ultima_verificacao": switch_info["ultima_verificacao"]
+                }
             
             host_id = host_resp["result"][0]["hostid"]
             host_status = "ativo" if host_resp["result"][0]["status"] == "0" else "inativo"
@@ -732,6 +799,7 @@ class GerenciadorSwitches:
             
             problemas = problems_resp.get("result", [])
             print(f"✅ Encontrados {len(problemas)} problemas para o switch: {host_name}")
+            nomes_problemas = [problema.get("name") for problema in problemas if problema.get("name")]
             
             # Busca itens
             print(f"🔍 Buscando itens de monitoramento para o switch: {host_name}")
@@ -843,6 +911,15 @@ class GerenciadorSwitches:
                 status = "warning"
             
             print(f"📊 Status final do switch {host_name}: {status}")
+
+            switch_info["warning_problemas"] = nomes_problemas if status == "warning" else []
+            switch_info["warning_resumo"] = nomes_problemas[0] if status == "warning" and nomes_problemas else None
+            if status == "offline":
+                switch_info["status_reason"] = "Host encontrado no Zabbix, mas está marcado como inativo/desabilitado."
+                switch_info["status_details"] = f"Host Zabbix: {zabbix_name} | Status do host: {host_status}"
+            else:
+                switch_info["status_reason"] = None
+                switch_info["status_details"] = None
             
             # Atualiza o switch na lista
             switch_info["status"] = status
@@ -851,9 +928,16 @@ class GerenciadorSwitches:
             # Se o nome no Zabbix for diferente, armazena para referência
             if zabbix_name != host_name:
                 switch_info["zabbix_name"] = zabbix_name
+
+            self._persistir_status_switch(switch_info)
             
             return {
                 "status": status,
+                "ultima_verificacao": switch_info["ultima_verificacao"],
+                "status_reason": switch_info.get("status_reason"),
+                "status_details": switch_info.get("status_details"),
+                "warning_problemas": switch_info.get("warning_problemas", []),
+                "warning_resumo": switch_info.get("warning_resumo"),
                 "detalhes": {
                     "host_id": host_id,
                     "host_status": host_status,
@@ -864,13 +948,29 @@ class GerenciadorSwitches:
             
         except Exception as e:
             print(f"❌ Erro ao verificar switch {host_name}: {str(e)}")
-            return {"status": "erro", "detalhes": str(e)}
+            if 'switch_info' in locals() and switch_info:
+                switch_info["status"] = "erro"
+                switch_info["ultima_verificacao"] = datetime.now().isoformat()
+                switch_info["status_reason"] = "Falha ao consultar o Zabbix para este switch."
+                switch_info["status_details"] = str(e)
+                switch_info["warning_problemas"] = []
+                switch_info["warning_resumo"] = None
+                self._persistir_status_switch(switch_info)
+
+            return {
+                "status": "erro",
+                "detalhes": str(e),
+                "status_reason": "Falha ao consultar o Zabbix para este switch.",
+                "status_details": str(e),
+                "ultima_verificacao": datetime.now().isoformat()
+            }
     
-    def verificar_todos_switches(self, max_switches=None):
+    def verificar_todos_switches(self, max_switches=None, progress_callback=None):
         """Verifica o status de todos os switches
         
         Args:
             max_switches: Número máximo de switches a verificar (None = todos)
+            progress_callback: Callback opcional chamado a cada switch concluído
         """
         resultados = {}
         
@@ -886,23 +986,40 @@ class GerenciadorSwitches:
             switches_ordenados = switches_ordenados[:max_switches]
         
         # Verifica os switches
-        for switch in switches_ordenados:
+        total_switches = len(switches_ordenados)
+
+        for indice, switch in enumerate(switches_ordenados, start=1):
             host_name = switch["host"]
             resultado = self.verificar_switch(host_name)
             resultados[host_name] = resultado
+
+            if callable(progress_callback):
+                try:
+                    progress_callback(indice, total_switches, host_name, resultado)
+                except Exception as exc:
+                    print(f"⚠️ Erro ao reportar progresso do switch {host_name}: {exc}")
         
         return resultados
     
-    def verificar_regional(self, regional):
+    def verificar_regional(self, regional, progress_callback=None):
         """Verifica o status de todos os switches de uma regional"""
         if regional not in self.regionais:
             return {"error": f"Regional {regional} não encontrada"}
         
         resultados = {}
-        for switch in self.regionais[regional]:
+        switches_regional = self.regionais[regional]
+        total_switches = len(switches_regional)
+
+        for indice, switch in enumerate(switches_regional, start=1):
             host_name = switch["host"]
             resultado = self.verificar_switch(host_name)
             resultados[host_name] = resultado
+
+            if callable(progress_callback):
+                try:
+                    progress_callback(indice, total_switches, host_name, resultado)
+                except Exception as exc:
+                    print(f"⚠️ Erro ao reportar progresso da regional {regional} para o switch {host_name}: {exc}")
         
         return resultados
     

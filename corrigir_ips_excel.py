@@ -13,6 +13,7 @@ except ImportError:
 import os
 from gerenciar_switches import GerenciadorSwitches
 from datetime import datetime
+from switches_backup_utils import create_switch_backup, get_switch_generated_file_path
 
 def main():
     """Função principal"""
@@ -23,15 +24,12 @@ def main():
     # Arquivo Excel original
     arquivo_excel = "switches_zabbix.xlsx"
     
-    # Cria backup do arquivo original
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    arquivo_backup = f"switches_zabbix_backup_{timestamp}.xlsx"
     
     try:
         # Faz uma cópia do arquivo original
         if os.path.exists(arquivo_excel):
-            import shutil
-            shutil.copy2(arquivo_excel, arquivo_backup)
+            arquivo_backup = create_switch_backup(arquivo_excel)
             print(f"✅ Backup criado: {arquivo_backup}")
         else:
             print(f"❌ Arquivo original não encontrado: {arquivo_excel}")
@@ -104,8 +102,8 @@ def main():
                 for idx, ip_zabbix in ips_corrigidos.items():
                     df.at[idx, "IP"] = ip_zabbix
                 
-                # Salva o DataFrame atualizado em um novo arquivo
-                arquivo_saida = f"switches_zabbix_corrigido_{timestamp}.xlsx"
+                # Salva o DataFrame atualizado em uma pasta dedicada
+                arquivo_saida = get_switch_generated_file_path("switches_zabbix_corrigido")
                 
                 # Cria um ExcelWriter
                 with pd.ExcelWriter(arquivo_saida, engine='openpyxl') as writer:

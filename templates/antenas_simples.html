@@ -238,6 +238,30 @@
                     <h5 class="mb-0">Lista de Antenas</h5>
                 </div>
                 <div class="card-body">
+                    <div class="card page-search-card mb-4">
+                        <div class="card-body">
+                            <div class="row align-items-center g-3">
+                                <div class="col-lg-8">
+                                    <label for="antenasSearchInput" class="form-label fw-semibold mb-2">Buscar antena</label>
+                                    <div class="page-search-input-wrap">
+                                        <i class="bi bi-search"></i>
+                                        <input type="text" class="form-control page-search-input" id="antenasSearchInput" placeholder="Digite nome, IP, modelo ou status da antena">
+                                    </div>
+                                </div>
+                                <div class="col-lg-4">
+                                    <div class="page-search-meta text-lg-end">
+                                        <strong id="antenasSearchCount">0 antenas</strong>
+                                        <div>Filtre a grade para localizar uma antena específica.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="antenasSearchEmpty" class="alert alert-info page-search-empty mb-3">
+                        Nenhuma antena encontrada para a busca informada.
+                    </div>
+
                     <div class="row">
                         {% if unifi_data and unifi_data.aps %}
                         
@@ -253,7 +277,7 @@
                                 else 'wifi-off'
                             %}
 
-                            <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="col-md-6 col-lg-4 mb-4 antena-search-item" data-search-text="{{ ap.nome }} {{ ap.modelo }} {{ ap.ip }} {{ ap.status }} {{ ap.clientes | default(0, true) }}">
                                 <div class="card border-{{ status_color }} h-100 shadow-sm">
                                     
                                     <div class="card-header bg-{{ status_color }} text-white">
@@ -366,4 +390,19 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    createPageSearch({
+        inputSelector: '#antenasSearchInput',
+        itemSelector: '.antena-search-item',
+        countSelector: '#antenasSearchCount',
+        emptyStateSelector: '#antenasSearchEmpty',
+        countSuffix: 'antenas',
+        emptyMessage: 'Nenhuma antena corresponde ao texto pesquisado.'
+    });
+});
+</script>
 {% endblock %}

@@ -8,10 +8,28 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+# === CONFIGURACOES DE RUNTIME ===
+def _resolve_public_base() -> Path:
+    configured_base = str(os.environ.get("AUTOMACAO_PUBLIC_BASE") or "").strip()
+    if configured_base:
+        return Path(configured_base).expanduser()
+    return Path(os.environ.get("PUBLIC", "C:/Users/Public")) / "Automacao"
+
+
+def _resolve_web_port() -> int:
+    raw_port = str(os.environ.get("AUTOMACAO_WEB_PORT") or "5000").strip()
+    try:
+        port = int(raw_port)
+    except (TypeError, ValueError):
+        return 5000
+    return port if 1 <= port <= 65535 else 5000
+
+
 # === BASE PÚBLICA (para rodar como serviço/Local System) ===
-PUBLIC_BASE       = Path(os.environ.get("PUBLIC", "C:/Users/Public")) / "Automacao"
+PUBLIC_BASE       = _resolve_public_base()
 DATA_DIR_PUBLIC   = PUBLIC_BASE / "data"
 OUTPUT_DIR_PUBLIC = PUBLIC_BASE / "output"
+WEB_PORT          = _resolve_web_port()
 
 # === DIRETÓRIOS BASE ===
 # Diretório raiz do projeto (onde estão os scripts)

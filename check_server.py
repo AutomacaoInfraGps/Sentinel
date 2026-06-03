@@ -8,6 +8,15 @@ import socket
 import requests
 from time import sleep
 
+
+def resolve_web_port():
+    raw_port = str(__import__('os').environ.get('AUTOMACAO_WEB_PORT') or '5000').strip()
+    try:
+        port = int(raw_port)
+    except (TypeError, ValueError):
+        return 5000
+    return port if 1 <= port <= 65535 else 5000
+
 def check_port(host, port, timeout=2):
     """Verifica se uma porta está aberta"""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,8 +36,8 @@ def check_api(url, timeout=5):
 def main():
     """Função principal"""
     host = "localhost"
-    port = 5000
-    api_url = "http://localhost:5000/api/test"
+    port = resolve_web_port()
+    api_url = f"http://localhost:{port}/api/test"
     
     print(f"Verificando servidor em {host}:{port}...")
     

@@ -1,0 +1,42 @@
+<svg width="1760" height="620" viewBox="0 0 1760 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1760" height="620" fill="transparent"/>
+  <g transform="translate(56 82)">
+    <path d="M306 0L514 120V360L306 480L98 360V120L306 0Z" fill="#E9F1F8" stroke="#0D2846" stroke-width="12"/>
+    <path d="M306 64L461 154V333L306 423L151 333V154L306 64Z" stroke="#78B7E2" stroke-width="5" stroke-dasharray="18 18"/>
+    <circle cx="306" cy="241" r="67" fill="#122845" stroke="#208CD6" stroke-width="4"/>
+    <ellipse cx="306" cy="241" rx="140" ry="46" transform="rotate(-28 306 241)" stroke="#55AEE0" stroke-width="5"/>
+    <ellipse cx="306" cy="241" rx="90" ry="24" transform="rotate(46 306 241)" stroke="#A8D4EE" stroke-width="3.5" stroke-dasharray="12 10"/>
+    <circle cx="273" cy="203" r="18" fill="#50ACDF"/>
+    <circle cx="286" cy="278" r="13" fill="#2B5D90"/>
+    <circle cx="334" cy="260" r="24" fill="#244F7E" opacity="0.9"/>
+    <rect x="248" y="191" width="48" height="27" rx="5" transform="rotate(-28 248 191)" fill="#50ACDF"/>
+    <circle cx="306" cy="0" r="10" fill="#208CD6"/>
+    <circle cx="514" cy="120" r="10" fill="#208CD6"/>
+    <circle cx="514" cy="360" r="10" fill="#208CD6"/>
+    <circle cx="306" cy="480" r="10" fill="#208CD6"/>
+    <circle cx="98" cy="360" r="10" fill="#208CD6"/>
+    <circle cx="98" cy="120" r="10" fill="#208CD6"/>
+    <circle cx="306" cy="27" r="5" fill="#86C3E7"/>
+    <circle cx="119" cy="148" r="5" fill="#86C3E7"/>
+    <circle cx="119" cy="387" r="5" fill="#86C3E7"/>
+    <circle cx="306" cy="453" r="5" fill="#86C3E7"/>
+    <circle cx="493" cy="387" r="5" fill="#86C3E7"/>
+    <circle cx="493" cy="176" r="5" fill="#86C3E7"/>
+  </g>
+  <g transform="translate(610 153)">
+    <path d="M0 82H28V290H0V82Z" fill="#208CD6"/>
+    <path d="M0 82H86V96H14V290H0V82Z" fill="#208CD6"/>
+    <path d="M0 290H86V304H0V290Z" fill="#208CD6"/>
+  </g>
+  <g transform="translate(1688 153)">
+    <path d="M0 82H28V290H0V82Z" fill="#208CD6"/>
+    <path d="M-58 82H28V96H-58V82Z" fill="#208CD6"/>
+    <path d="M-58 290H28V304H-58V290Z" fill="#208CD6"/>
+  </g>
+  <g transform="translate(650 132)">
+    <text x="0" y="138" fill="#0B2343" font-family="'Arial Black', 'Segoe UI', Arial, sans-serif" font-size="124" font-weight="900" letter-spacing="1">SENTINEL</text>
+    <rect x="0" y="170" width="790" height="7" rx="3.5" fill="#0B2343"/>
+    <rect x="0" y="184" width="790" height="6" rx="3" fill="#208CD6"/>
+    <text x="0" y="254" fill="#208CD6" font-family="'Segoe UI', Arial, sans-serif" font-size="46" font-weight="800" letter-spacing="0.6">INFRAESTRUTURA REGIONAL | GRUPO GPS</text>
+  </g>
+</svg>

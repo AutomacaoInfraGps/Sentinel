@@ -4,6 +4,29 @@
 
 {% block extra_css %}
 <style>
+    .regionais-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+    }
+
+    .regionais-hero {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        padding: 0 8px;
+    }
+
+    .regionais-hero-logo {
+        display: block;
+        width: 100%;
+        max-width: 700px;
+        height: auto;
+        margin: 0 auto;
+    }
+
     .transition-all {
         transition: all 0.3s ease;
     }
@@ -24,6 +47,105 @@
         display: none;
     }
 
+    .links-sync-overlay {
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-10px);
+        display: flex;
+        justify-content: center;
+        z-index: 1080;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+        pointer-events: none;
+    }
+
+    .links-sync-overlay.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    .links-sync-overlay-card {
+        width: min(460px, calc(100vw - 24px));
+        border-radius: 20px;
+        background: linear-gradient(160deg, #ffffff 0%, #f3f8fb 100%);
+        box-shadow: 0 24px 60px rgba(1, 46, 64, 0.22);
+        padding: 20px 22px 18px;
+        text-align: left;
+        border: 1px solid rgba(15, 108, 140, 0.16);
+        pointer-events: auto;
+    }
+
+    .links-sync-overlay-spinner {
+        width: 2.7rem;
+        height: 2.7rem;
+        color: #0f6c8c;
+        flex: 0 0 auto;
+    }
+
+    .links-sync-overlay-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .links-sync-overlay-title {
+        margin: 0 0 4px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #012e40;
+    }
+
+    .links-sync-overlay-text {
+        margin: 0;
+        color: #4f6372;
+        font-size: 0.95rem;
+    }
+
+    .links-sync-overlay-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+        font-size: 0.83rem;
+        color: #55707f;
+    }
+
+    .links-sync-overlay-timer {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: #0f6c8c;
+    }
+
+    .links-sync-overlay-percent {
+        min-width: 48px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: #0f6c8c;
+    }
+
+    .links-sync-overlay-progress {
+        position: relative;
+        height: 6px;
+        margin-top: 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(15, 108, 140, 0.12);
+    }
+
+    .links-sync-overlay-progress-bar {
+        position: absolute;
+        inset: 0;
+        width: 0%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0f6c8c 0%, #39a7c9 100%);
+        transition: width 0.35s ease;
+    }
+
     .ip-link {
         color: var(--bs-code-color, #d63384);
         text-decoration: none;
@@ -33,6 +155,82 @@
 
     .ip-link:hover {
         transform: scale(1.03);
+    }
+
+    .stats-card-filter {
+        cursor: pointer;
+        position: relative;
+    }
+
+    .stats-card-filter.active-filter::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border: 3px solid rgba(255, 255, 255, 0.92);
+        border-radius: 16px;
+        pointer-events: none;
+    }
+
+    .stats-card-filter:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .regionais-stats-section {
+        display: grid;
+        gap: 18px;
+    }
+
+    .regionais-stats-grid {
+        display: grid;
+        gap: 18px;
+    }
+
+    .regionais-stats-grid.regionais-stats-grid-servers {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .regionais-stats-grid.regionais-stats-grid-links {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .regionais-stats-card .stats-card {
+        height: 100%;
+        min-height: 145px;
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .regionais-stats-card .stats-label {
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        line-height: 1.35;
+        text-wrap: balance;
+    }
+
+    .regionais-stats-card .stats-label i {
+        flex: 0 0 auto;
+    }
+
+    .regionais-filter-summary {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(1, 46, 64, 0.1);
+    }
+
+    .regionais-filter-summary.show {
+        display: flex;
     }
 
     /* Dropdown do card de regional não fica atrás de outros cards */
@@ -52,6 +250,37 @@
         z-index: 100;
         position: relative;
     }
+
+    @media (max-width: 768px) {
+        .regionais-header {
+            align-items: stretch;
+        }
+
+        .regionais-hero {
+            padding: 0;
+        }
+
+        .regionais-hero-logo {
+            max-width: 100%;
+        }
+
+        .regionais-filter-summary {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .regionais-stats-grid.regionais-stats-grid-servers,
+        .regionais-stats-grid.regionais-stats-grid-links {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 576px) {
+        .regionais-stats-grid.regionais-stats-grid-servers,
+        .regionais-stats-grid.regionais-stats-grid-links {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -62,15 +291,40 @@
      data-regionais='{{ regionais|map(attribute="codigo")|list|tojson }}'
      style="display:none"></div>
 
+<div id="links-sync-config"
+    data-auto-sync="true"
+    data-cooldown-ms="900000"
+    style="display:none"></div>
+
+<div id="links-sync-overlay" class="links-sync-overlay" aria-hidden="true">
+    <div class="links-sync-overlay-card" role="status" aria-live="polite">
+        <div class="links-sync-overlay-header">
+            <div class="spinner-border links-sync-overlay-spinner" aria-hidden="true"></div>
+            <div>
+                <div class="links-sync-overlay-title">Atualizando links das regionais</div>
+                <p id="links-sync-overlay-text" class="links-sync-overlay-text">Iniciando consulta no FortiManager e nas regionais.</p>
+            </div>
+        </div>
+        <div class="links-sync-overlay-meta">
+            <span id="links-sync-overlay-scope">Consultando todas as regionais cadastradas</span>
+            <span id="links-sync-overlay-percent" class="links-sync-overlay-percent">0%</span>
+            <span id="links-sync-overlay-timer" class="links-sync-overlay-timer">00:00</span>
+        </div>
+        <div class="links-sync-overlay-progress" aria-hidden="true">
+            <div id="links-sync-overlay-progress-bar" class="links-sync-overlay-progress-bar"></div>
+        </div>
+    </div>
+</div>
+
 <div class="row mb-4">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h1 class="display-5 mb-2">
-                    <i class="bi bi-building me-3"></i>
-                    Gerenciar Regionais
-                </h1>
-                <p class="text-muted">Gerencie as regionais e seus servidores</p>
+        <div class="regionais-header">
+            <div class="regionais-hero">
+                <img
+                    class="regionais-hero-logo"
+                    src="{{ url_for('static', filename='branding/sentinel_x_men_full.png') }}"
+                    alt="Sentinel Infraestrutura Regional Grupo GPS"
+                >
             </div>
             <div>
                 <a href="{{ url_for('nova_regional') }}" class="btn btn-primary">
@@ -83,43 +337,107 @@
 </div>
 
 <!-- Estatísticas Rápidas -->
-<div class="row mb-4">
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card">
-            <div class="stats-number">{{ regionais|length }}</div>
-            <div class="stats-label">
-                <i class="bi bi-building me-1"></i>
-                Total de Regionais
+<div class="regionais-stats-section mb-4">
+    <div class="regionais-stats-grid regionais-stats-grid-servers">
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter active-filter" data-filter-regional="all" onclick="aplicarFiltroRegional('all')">
+                <div class="stats-number">{{ regionais|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-building me-1"></i>
+                    Total de Regionais
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+                <div class="stats-number">{{ regionais|sum(attribute='total_servidores') }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-server me-1"></i>
+                    Total de Servidores
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="with-servers" onclick="aplicarFiltroRegional('with-servers')" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+                <div class="stats-number">{{ (regionais|selectattr('total_servidores', '>', 0)|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-hdd-network me-1"></i>
+                    Regionais com Servidores
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="without-servers" onclick="aplicarFiltroRegional('without-servers')" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                <div class="stats-number">{{ (regionais|selectattr('total_servidores', 'equalto', 0)|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-server me-1"></i>
+                    Regionais sem Servidores
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
-            <div class="stats-number">{{ regionais|sum(attribute='total_servidores') }}</div>
-            <div class="stats-label">
-                <i class="bi bi-server me-1"></i>
-                Total de Servidores
+
+    <div class="regionais-stats-grid regionais-stats-grid-links">
+        <div class="regionais-stats-card">
+            <div class="stats-card" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
+                <div class="stats-number">{{ regionais|sum(attribute='total_links') }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-router me-1"></i>
+                    Total de Links
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="with-links" onclick="aplicarFiltroRegional('with-links')" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+                <div class="stats-number">{{ (regionais|selectattr('total_links', '>', 0)|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-wifi me-1"></i>
+                    Regionais com Links
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="without-links" onclick="aplicarFiltroRegional('without-links')" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+                <div class="stats-number">{{ (regionais|selectattr('total_links', 'equalto', 0)|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-router-fill me-1"></i>
+                    Regionais sem Links
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
-            <div class="stats-number">{{ regionais|sum(attribute='total_links') }}</div>
-            <div class="stats-label">
-                <i class="bi bi-router me-1"></i>
-                Total de Links
-            </div>
-        </div>
+</div>
+
+<div id="regionaisFilterSummary" class="regionais-filter-summary">
+    <div>
+        <strong>Filtro ativo:</strong>
+        <span id="regionaisFilterSummaryText">Todas as regionais</span>
     </div>
-    
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
-            <div class="stats-number">{{ (regionais|selectattr('total_links', '>', 0)|list)|length }}</div>
-            <div class="stats-label">
-                <i class="bi bi-wifi me-1"></i>
-                Com Links
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroRegional('all')">
+        Limpar filtro
+    </button>
+</div>
+
+<div class="card page-search-card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-8">
+                <label for="regionaisSearchInput" class="form-label fw-semibold mb-2">Buscar regional</label>
+                <div class="page-search-input-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control page-search-input" id="regionaisSearchInput" placeholder="Digite nome, código, servidor, IP ou provedor da regional">
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="page-search-meta text-lg-end">
+                    <strong id="regionaisSearchCount">0 regionais</strong>
+                    <div>Filtre a lista para chegar mais rápido na regional desejada.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -137,7 +455,7 @@
                 <div>
                     <button class="btn btn-outline-info btn-sm" onclick="verificarTodasRegionais()">
                         <i class="bi bi-arrow-clockwise me-1"></i>
-                        Verificar Todas
+                        Verificar Servidores
                     </button>
                     <button class="btn btn-outline-warning btn-sm ms-2"
                             onclick="verificarLinksTodasRegionais()">
@@ -148,9 +466,15 @@
             </div>
             <div class="card-body">
                 {% if regionais %}
+                <div id="regionaisSearchEmpty" class="alert alert-info page-search-empty">
+                    Nenhuma regional encontrada para o termo informado.
+                </div>
                 <div class="row">
                     {% for regional in regionais %}
-                    <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="col-md-6 col-lg-4 mb-4 regional-search-item"
+                        data-total-servidores="{{ regional.total_servidores }}"
+                        data-total-links="{{ regional.total_links }}"
+                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %}">
                         <div class="card border-0 shadow-sm h-100 transition-all regional-card"
                             id="card-regional-{{ regional.codigo }}">
                             <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -223,7 +547,6 @@
                                     <div class="d-flex align-items-center mb-1">
                                         <i class="bi bi-server me-2 text-primary"></i>
                                         <span class="small">{{ servidor.nome }}</span>
-                                        <span class="small text-muted ms-2">{{ servidor.funcao or 'Servidor' }}</span>
                                         <span class="ms-auto d-flex align-items-center">
                                             <a class="small me-2 ip-link" href="https://{{ servidor.ip }}" target="_blank" rel="noopener">
                                                 {{ servidor.ip }}
@@ -257,7 +580,7 @@
                                     <div class="d-flex align-items-center mb-1">
                                         <i class="bi bi-router me-2 text-info"></i>
                                         <span class="small">{{ link.provedor }}:</span>
-                                        <code class="small ms-auto">{{ link.ip }}</code>
+                                        <code class="small ms-auto">{{ link.ip_exibicao or ((link.ip if link.ip else 'sem_ip_publico') ~ (link.mascara if link.ip and link.mascara else '')) }}</code>
                                     </div>
                                     {% endfor %}
                                     
@@ -319,6 +642,189 @@
 
 {% block extra_js %}
 <script>
+let linksSyncTimerHandle = null;
+let linksSyncStartedAt = null;
+let linksSyncPollHandle = null;
+let filtroRegionalAtual = 'all';
+let regionaisSearchController = null;
+
+function setLinksSyncProgress(percent) {
+    const progressValue = Math.max(0, Math.min(100, Math.round(percent || 0)));
+    const progressText = document.getElementById('links-sync-overlay-percent');
+    const progressBar = document.getElementById('links-sync-overlay-progress-bar');
+
+    if (progressText) {
+        progressText.textContent = `${progressValue}%`;
+    }
+
+    if (progressBar) {
+        progressBar.style.width = `${progressValue}%`;
+    }
+}
+
+function formatLinksSyncElapsed(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+}
+
+function updateLinksSyncOverlayProgress() {
+    const timer = document.getElementById('links-sync-overlay-timer');
+    if (!timer || !linksSyncStartedAt) {
+        return;
+    }
+
+    const elapsed = Date.now() - linksSyncStartedAt;
+    timer.textContent = formatLinksSyncElapsed(elapsed);
+}
+
+function pararPollingLinksSync() {
+    if (linksSyncPollHandle) {
+        clearTimeout(linksSyncPollHandle);
+        linksSyncPollHandle = null;
+    }
+}
+
+function aplicarProgressoLinksSync(job) {
+    const scope = document.getElementById('links-sync-overlay-scope');
+    const text = document.getElementById('links-sync-overlay-text');
+
+    if (job && job.created_at) {
+        linksSyncStartedAt = Number(job.created_at) * 1000;
+    }
+
+    setLinksSyncProgress(job?.percent || 0);
+    updateLinksSyncOverlayProgress();
+
+    if (scope) {
+        if ((job?.total || 0) > 0) {
+            scope.textContent = `Concluídas ${job?.completed || 0} de ${job.total} regionais`;
+        } else {
+            scope.textContent = 'Consultando regionais cadastradas';
+        }
+    }
+
+    if (text) {
+        text.textContent = job?.detail || job?.message || 'Sincronizando links das regionais.';
+    }
+}
+
+function finalizarLinksSyncJob(job, btn) {
+    const payload = job?.result || {};
+    const regionais = payload.regionais || {};
+    const totalRegionais = Object.keys(regionais).length;
+    let erros = 0;
+
+    for (const [codigo, resultado] of Object.entries(regionais)) {
+        if (!resultado.success) {
+            erros += 1;
+            console.warn(`Erro em ${codigo}:`, resultado.message);
+        }
+    }
+
+    if (job?.status === 'failed') {
+        hideLoading(btn);
+        hideLinksSyncOverlay();
+        showToast(job.error || job.message || 'Erro ao verificar links', 'danger');
+        return;
+    }
+
+    setLinksSyncProgress(100);
+    setTimeout(() => {
+        hideLoading(btn);
+        hideLinksSyncOverlay();
+    }, 250);
+
+    if (erros > 0) {
+        showToast(
+            `Links verificados. Regionais com erro: ${erros}/${totalRegionais}`,
+            'warning'
+        );
+    } else {
+        showToast(
+            `Links verificados com sucesso em ${totalRegionais} regionais`,
+            'success'
+        );
+    }
+}
+
+function acompanharLinksSyncJob(jobId, btn) {
+    fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success || !data.job) {
+                throw new Error(data.message || 'Job de sincronização não encontrado');
+            }
+
+            const job = data.job;
+            aplicarProgressoLinksSync(job);
+
+            if (job.status === 'running') {
+                pararPollingLinksSync();
+                linksSyncPollHandle = setTimeout(() => acompanharLinksSyncJob(jobId, btn), 1000);
+                return;
+            }
+
+            finalizarLinksSyncJob(job, btn);
+        })
+        .catch((error) => {
+            hideLoading(btn);
+            hideLinksSyncOverlay();
+            showToast(error.message || 'Erro de conexão ao acompanhar links', 'danger');
+        });
+}
+
+function showLinksSyncOverlay() {
+    const overlay = document.getElementById('links-sync-overlay');
+    const scope = document.getElementById('links-sync-overlay-scope');
+    const text = document.getElementById('links-sync-overlay-text');
+    const regionaisData = document.getElementById('regionais-data');
+    if (!overlay) {
+        return;
+    }
+
+    const totalRegionais = regionaisData ? JSON.parse(regionaisData.dataset.regionais || '[]').length : 0;
+    if (scope) {
+        scope.textContent = totalRegionais > 0
+            ? `Consultando ${totalRegionais} regionais cadastradas`
+            : 'Consultando todas as regionais cadastradas';
+    }
+
+    if (text) {
+        text.textContent = 'Iniciando consulta no FortiManager e nas regionais.';
+    }
+
+    pararPollingLinksSync();
+    setLinksSyncProgress(0);
+    linksSyncStartedAt = Date.now();
+    updateLinksSyncOverlayProgress();
+    if (linksSyncTimerHandle) {
+        clearInterval(linksSyncTimerHandle);
+    }
+    linksSyncTimerHandle = setInterval(updateLinksSyncOverlayProgress, 1000);
+
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideLinksSyncOverlay() {
+    const overlay = document.getElementById('links-sync-overlay');
+    if (!overlay) {
+        return;
+    }
+
+    if (linksSyncTimerHandle) {
+        clearInterval(linksSyncTimerHandle);
+        linksSyncTimerHandle = null;
+    }
+    pararPollingLinksSync();
+    linksSyncStartedAt = null;
+
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
 function atualizarIndicadoresStatus(codigo, resultados) {
     // Atualiza os indicadores de status para cada servidor
     resultados.forEach(function(resultado) {
@@ -346,6 +852,71 @@ function atualizarIndicadoresStatus(codigo, resultados) {
             }
         }
     });
+}
+
+function obterTextoFiltroRegional(filtro) {
+    switch (filtro) {
+        case 'with-servers':
+            return 'Regionais com servidores';
+        case 'with-links':
+            return 'Regionais com links';
+        case 'without-links':
+            return 'Regionais sem links';
+        case 'without-servers':
+            return 'Regionais sem servidores';
+        default:
+            return 'Todas as regionais';
+    }
+}
+
+function correspondeFiltroRegional(item) {
+    const totalServidores = Number(item.dataset.totalServidores || '0');
+    const totalLinks = Number(item.dataset.totalLinks || '0');
+
+    switch (filtroRegionalAtual) {
+        case 'with-servers':
+            return totalServidores > 0;
+        case 'with-links':
+            return totalLinks > 0;
+        case 'without-links':
+            return totalLinks === 0;
+        case 'without-servers':
+            return totalServidores === 0;
+        default:
+            return true;
+    }
+}
+
+function atualizarCardsFiltroRegional() {
+    $('.stats-card-filter').removeClass('active-filter');
+    $(`.stats-card-filter[data-filter-regional="${filtroRegionalAtual}"]`).addClass('active-filter');
+}
+
+function atualizarResumoFiltroRegional(term = '', visibleCount = null) {
+    const summary = document.getElementById('regionaisFilterSummary');
+    const textNode = document.getElementById('regionaisFilterSummaryText');
+    if (!summary || !textNode) {
+        return;
+    }
+
+    const partes = [obterTextoFiltroRegional(filtroRegionalAtual)];
+    if (term) {
+        partes.push(`busca: "${term}"`);
+    }
+    if (typeof visibleCount === 'number') {
+        partes.push(`${visibleCount} regional(is)`);
+    }
+
+    textNode.textContent = partes.join(' | ');
+    summary.classList.toggle('show', filtroRegionalAtual !== 'all' || Boolean(term));
+}
+
+function aplicarFiltroRegional(filtro) {
+    filtroRegionalAtual = filtro || 'all';
+    atualizarCardsFiltroRegional();
+    if (regionaisSearchController) {
+        regionaisSearchController.apply();
+    }
 }
 
 function excluirRegional(codigo) {
@@ -376,12 +947,15 @@ function verificarRegional(codigo) {
     const btn = $(event.currentTarget);
     showLoading(btn);
 
-    showToast(`Verificando regional ${codigo}...`, 'info');
+    showToast(`Verificando servidores da regional ${codigo}...`, 'info', { delay: 8000 });
 
     const card = $(`#card-regional-${codigo}`);
 
-    $.get(`/api/regional/${encodeURIComponent(codigo)}/verificar`)
-        .done(function(response) {
+    fetch(`/api/regional/${encodeURIComponent(codigo)}/servidores/testar-todos`, {
+        method: 'POST'
+    })
+        .then(res => res.json())
+        .then(function(response) {
             if (response.success) {
                 const resumo = response.resumo;
                 const resultados = response.resultados;
@@ -403,10 +977,10 @@ function verificarRegional(codigo) {
                 showToast(`Erro ao verificar ${codigo}: ${response.message}`, 'danger');
             }
         })
-        .fail(function() {
+        .catch(function() {
             showToast(`Erro de conexão ao verificar ${codigo}`, 'danger');
         })
-        .always(function() {
+        .finally(function() {
             hideLoading(btn);
         });
 }
@@ -415,7 +989,7 @@ function verificarTodasRegionais() {
     const btn = $(event.currentTarget);
     showLoading(btn);
 
-    showToast('Verificando todas as regionais...', 'info');
+    showToast('Verificando servidores de todas as regionais...', 'info', { delay: 8000 });
 
     // ✅ CORREÇÃO DO ERRO: Jinja saiu do JS e veio do HTML (div escondida)
     const regionais = JSON.parse(
@@ -444,17 +1018,19 @@ function verificarTodasRegionais() {
 
             if (totalErros > 0) {
                 showToast(
-                    `Verificação concluída: ${totalOnline}/${totalServidores} online (${percentOnline}%) | Erros: ${totalErros}`,
-                    'warning'
+                    `Verificação de servidores concluída: ${totalOnline}/${totalServidores} online (${percentOnline}%) | Erros: ${totalErros}`,
+                    'info',
+                    { delay: 9000 }
                 );
             } else {
                 showToast(
-                    `Verificação concluída: ${totalOnline}/${totalServidores} online (${percentOnline}%)`,
-                    totalOnline === totalServidores ? 'success' : 'warning'
+                    `Verificação de servidores concluída: ${totalOnline}/${totalServidores} online (${percentOnline}%)`,
+                    totalOnline === totalServidores ? 'success' : 'info',
+                    { delay: 9000 }
                 );
             }
         } else {
-            showToast(`Verificação concluída: Nenhum servidor encontrado`, 'info');
+            showToast(`Verificação de servidores concluída: Nenhum servidor encontrado`, 'info', { delay: 9000 });
         }
     }
 
@@ -466,8 +1042,11 @@ function verificarTodasRegionais() {
 
         const codigo = regionais[indice];
 
-        $.get(`/api/regional/${encodeURIComponent(codigo)}/verificar`)
-            .done(function(response) {
+        fetch(`/api/regional/${encodeURIComponent(codigo)}/servidores/testar-todos`, {
+            method: 'POST'
+        })
+            .then(res => res.json())
+            .then(function(response) {
                 const card = $(`#card-regional-${codigo}`);
 
                 if (!response.success) {
@@ -493,12 +1072,12 @@ function verificarTodasRegionais() {
                     card.removeClass('border-success border-warning border-danger').addClass('border-secondary');
                 }
             })
-            .fail(function() {
+            .catch(function() {
                 totalErros++;
                 const card = $(`#card-regional-${codigo}`);
                 card.removeClass('border-success border-warning border-secondary').addClass('border-danger');
             })
-            .always(function() {
+            .finally(function() {
                 verificacoesConcluidas++;
                 processarRegional(indice + 1);
             });
@@ -510,50 +1089,116 @@ function verificarTodasRegionais() {
 function verificarLinksTodasRegionais() {
     const btn = $(event.currentTarget);
     showLoading(btn);
+    showLinksSyncOverlay();
 
     showToast('Atualizando links de todas as regionais...', 'info');
+
+    fetch('/api/regionais/verificar-links', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ async: true })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success || !data.job_id) {
+            throw new Error(data.message || 'Não foi possível iniciar a sincronização dos links');
+        }
+
+        acompanharLinksSyncJob(data.job_id, btn);
+    })
+    .catch((error) => {
+        hideLoading(btn);
+        hideLinksSyncOverlay();
+        showToast(error.message || 'Erro de conexão ao verificar links', 'danger');
+    });
+}
+
+function autoSincronizarLinksRegionaisEmBackground() {
+    const config = document.getElementById('links-sync-config');
+    if (!config || config.dataset.autoSync !== 'true') {
+        return;
+    }
+
+    const cooldownMs = Number(config.dataset.cooldownMs || '900000');
+    const storageKey = 'regionais-auto-links-sync-at';
+    const inFlightKey = 'regionais-auto-links-sync-running';
+    const lastRun = Number(sessionStorage.getItem(storageKey) || '0');
+    const now = Date.now();
+
+    if ((now - lastRun) < cooldownMs) {
+        return;
+    }
+
+    if (sessionStorage.getItem(inFlightKey) === '1') {
+        return;
+    }
+
+    sessionStorage.setItem(inFlightKey, '1');
 
     fetch('/api/regionais/verificar-links', {
         method: 'POST'
     })
     .then(res => res.json())
     .then(data => {
+        sessionStorage.setItem(storageKey, String(Date.now()));
 
         if (!data.success) {
-            showToast(data.message || 'Erro ao verificar links', 'danger');
+            console.warn('Falha na sincronização automática dos links:', data.message);
             return;
         }
 
-        let totalRegionais = Object.keys(data.regionais).length;
-        let erros = 0;
+        const resultados = Object.values(data.regionais || {});
+        const houveMudanca = resultados.some(item => (item.total_atualizados || 0) > 0);
 
-        for (const [codigo, resultado] of Object.entries(data.regionais)) {
-            if (!resultado.success) {
-                erros++;
-                // aqui depois podemos marcar o card da regional
-                console.warn(`Erro em ${codigo}:`, resultado.message);
-            }
-        }
-
-        if (erros > 0) {
-            showToast(
-                `Links verificados. Regionais com erro: ${erros}/${totalRegionais}`,
-                'warning'
-            );
-        } else {
-            showToast(
-                `Links verificados com sucesso em ${totalRegionais} regionais`,
-                'success'
-            );
+        if (houveMudanca) {
+            showToast('Links atualizados automaticamente a partir do Forti', 'success');
+            setTimeout(() => window.location.reload(), 1200);
         }
     })
-    .catch(() => {
-        showToast('Erro de conexão ao verificar links', 'danger');
+    .catch(error => {
+        console.warn('Erro na sincronização automática dos links:', error);
     })
     .finally(() => {
-        hideLoading(btn);
+        sessionStorage.removeItem(inFlightKey);
     });
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(autoSincronizarLinksRegionaisEmBackground, 800);
+
+    regionaisSearchController = createPageSearch({
+        inputSelector: '#regionaisSearchInput',
+        itemSelector: '.regional-search-item',
+        countSelector: '#regionaisSearchCount',
+        emptyStateSelector: '#regionaisSearchEmpty',
+        countSuffix: 'regionais',
+        emptyMessage: 'Nenhuma regional corresponde ao texto pesquisado.',
+        matchItem(item, term, matchesTerm) {
+            return matchesTerm && correspondeFiltroRegional(item);
+        },
+        onAfterFilter({ term, visibleCount }) {
+            const emptyState = document.getElementById('regionaisSearchEmpty');
+            if (emptyState) {
+                if (term && filtroRegionalAtual !== 'all') {
+                    emptyState.textContent = 'Nenhuma regional corresponde ao filtro e ao texto pesquisado.';
+                } else if (term) {
+                    emptyState.textContent = 'Nenhuma regional corresponde ao texto pesquisado.';
+                } else if (filtroRegionalAtual !== 'all') {
+                    emptyState.textContent = 'Nenhuma regional encontrada para o filtro selecionado.';
+                } else {
+                    emptyState.textContent = 'Nenhuma regional encontrada para o termo informado.';
+                }
+            }
+
+            atualizarResumoFiltroRegional(term, visibleCount);
+            atualizarCardsFiltroRegional();
+        }
+    });
+
+    atualizarCardsFiltroRegional();
+});
 
 </script>
 {% endblock %}

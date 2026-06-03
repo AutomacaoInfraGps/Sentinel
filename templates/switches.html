@@ -4,48 +4,103 @@
 
 {% block extra_css %}
 <style>
-    /* Estilos para a tela de carregamento */
-    .loading-overlay {
+    .switches-sync-overlay {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-10px);
         display: flex;
-        flex-direction: column;
         justify-content: center;
+        z-index: 1080;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+        pointer-events: none;
+    }
+
+    .switches-sync-overlay.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    .switches-sync-overlay-card {
+        width: min(460px, calc(100vw - 24px));
+        border-radius: 20px;
+        background: linear-gradient(160deg, #ffffff 0%, #f3f8fb 100%);
+        box-shadow: 0 24px 60px rgba(1, 46, 64, 0.22);
+        padding: 20px 22px 18px;
+        text-align: left;
+        border: 1px solid rgba(15, 108, 140, 0.16);
+        pointer-events: auto;
+    }
+
+    .switches-sync-overlay-spinner {
+        width: 2.7rem;
+        height: 2.7rem;
+        color: #0f6c8c;
+        flex: 0 0 auto;
+    }
+
+    .switches-sync-overlay-header {
+        display: flex;
         align-items: center;
-        z-index: 9999;
+        gap: 16px;
     }
-    
-    .loading-spinner {
-        width: 80px;
-        height: 80px;
-        border: 8px solid #f3f3f3;
-        border-top: 8px solid #0A4A63;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 20px;
+
+    .switches-sync-overlay-title {
+        margin: 0 0 4px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #012e40;
     }
-    
-    .loading-text {
-        color: white;
-        font-size: 24px;
-        text-align: center;
+
+    .switches-sync-overlay-text {
+        margin: 0;
+        color: #4f6372;
+        font-size: 0.95rem;
     }
-    
-    .loading-subtext {
-        color: #cccccc;
-        font-size: 16px;
-        text-align: center;
-        max-width: 80%;
-        margin-top: 10px;
+
+    .switches-sync-overlay-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+        font-size: 0.83rem;
+        color: #55707f;
     }
-    
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+
+    .switches-sync-overlay-timer {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: #0f6c8c;
+    }
+
+    .switches-sync-overlay-percent {
+        min-width: 48px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: #0f6c8c;
+    }
+
+    .switches-sync-overlay-progress {
+        position: relative;
+        height: 6px;
+        margin-top: 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(15, 108, 140, 0.12);
+    }
+
+    .switches-sync-overlay-progress-bar {
+        position: absolute;
+        inset: 0;
+        width: 0%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0f6c8c 0%, #39a7c9 100%);
+        transition: width 0.35s ease;
     }
 
     .switch-card {
@@ -81,7 +136,7 @@
         background-color: #6c757d;
     }
     
-    .loading-spinner {
+    .btn-loading-spinner {
         display: none;
     }
     
@@ -92,15 +147,125 @@
         border-radius: 5px;
         margin-bottom: 20px;
     }
+
+    .stats-card-filter {
+        cursor: pointer;
+        position: relative;
+    }
+
+    .stats-card-filter.active-filter::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        border-radius: 16px;
+        pointer-events: none;
+    }
+
+    .stats-card-filter:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .verification-meta {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 10px 12px;
+        margin: 8px 0 12px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+    }
+
+    .verification-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #6c757d;
+    }
+
+    .verification-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #012E40;
+    }
+
+    .warning-cause {
+        margin: 10px 0 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #fff8e1;
+        border: 1px solid #ffe08a;
+    }
+
+    .warning-cause-label {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #8a6d00;
+        margin-bottom: 4px;
+    }
+
+    .warning-cause-value {
+        display: block;
+        color: #5c4500;
+        font-size: 0.92rem;
+        line-height: 1.35;
+    }
+
+    .warning-cause-list {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        color: #5c4500;
+        font-size: 0.88rem;
+    }
+
+    .warning-cause-list li + li {
+        margin-top: 4px;
+    }
+
+    .switches-filter-summary {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+    }
+
+    .switches-empty-filter {
+        display: none;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- Tela de carregamento -->
-<div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">Carregando Switches</div>
-    <div class="loading-subtext">Verificando o status de todos os switches no Zabbix. Isso pode levar alguns instantes...</div>
+<div id="loadingOverlay" class="switches-sync-overlay" aria-hidden="true">
+    <div class="switches-sync-overlay-card" role="status" aria-live="polite">
+        <div class="switches-sync-overlay-header">
+            <div class="spinner-border switches-sync-overlay-spinner" aria-hidden="true"></div>
+            <div>
+                <div id="loadingOverlayText" class="switches-sync-overlay-title">Atualizando switches</div>
+                <p id="loadingOverlaySubtext" class="switches-sync-overlay-text">Iniciando consulta no Zabbix e consolidando os switches encontrados.</p>
+            </div>
+        </div>
+        <div class="switches-sync-overlay-meta">
+            <span id="loadingOverlayScope">Consultando todos os switches cadastrados</span>
+            <span id="loadingOverlayPercent" class="switches-sync-overlay-percent">0%</span>
+            <span id="loadingOverlayTimer" class="switches-sync-overlay-timer">00:00</span>
+        </div>
+        <div class="switches-sync-overlay-progress" aria-hidden="true">
+            <div id="loadingOverlayProgressBar" class="switches-sync-overlay-progress-bar"></div>
+        </div>
+    </div>
 </div>
 
 <div class="row mb-4">
@@ -118,7 +283,7 @@
 <!-- Estatísticas -->
 <div class="row mb-4">
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+        <div class="stats-card stats-card-filter" data-filter-status="all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroStatus('all')">
             <div class="stats-number" id="stats-total-switches">
                 {{ regionais|map(attribute='total_switches')|sum }}
             </div>
@@ -130,7 +295,7 @@
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+        <div class="stats-card stats-card-filter" data-filter-status="online" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroStatus('online')">
             <div class="stats-number" id="stats-online">
                 {{ regionais|map(attribute='online')|sum }}
             </div>
@@ -142,7 +307,7 @@
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+        <div class="stats-card stats-card-filter" data-filter-status="offline" style="background: linear-gradient(135deg, #dc3545, #fd7e14);" onclick="aplicarFiltroStatus('offline')">
             <div class="stats-number" id="stats-offline">
                 {{ regionais|map(attribute='offline')|sum }}
             </div>
@@ -154,13 +319,43 @@
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #ffc107, #ffb400);">
+        <div class="stats-card stats-card-filter" data-filter-status="warning" style="background: linear-gradient(135deg, #ffc107, #ffb400);" onclick="aplicarFiltroStatus('warning')">
             <div class="stats-number" id="stats-warning">
                 {{ regionais|map(attribute='warning')|sum }}
             </div>
             <div class="stats-label">
                 <i class="bi bi-exclamation-triangle me-1"></i>
                 Warning
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="switchesFilterSummary" class="switches-filter-summary">
+    <div>
+        <strong>Filtro ativo:</strong>
+        <span id="switchesFilterSummaryText">Todos os switches</span>
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroStatus('all')">
+        Limpar filtro
+    </button>
+</div>
+
+<div class="card page-search-card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-8">
+                <label for="switchesSearchInput" class="form-label fw-semibold mb-2">Buscar switch ou regional</label>
+                <div class="page-search-input-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control page-search-input" id="switchesSearchInput" placeholder="Digite regional, host, IP, modelo ou local do switch">
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="page-search-meta text-lg-end">
+                    <strong id="switchesSearchCount">0 switches</strong>
+                    <div>A busca funciona junto com os filtros de status.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -180,8 +375,8 @@
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <div class="d-grid">
-                            <button class="btn btn-primary btn-lg" onclick="verificarTodosSwitches()">
-                                <span class="loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
+                            <button id="btn-verificar-todos" class="btn btn-primary btn-lg" onclick="verificarTodosSwitches(this)">
+                                <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
                                 <span class="btn-text">
                                     <i class="bi bi-arrow-clockwise me-2"></i>
                                     Verificar Todos os Switches
@@ -194,7 +389,7 @@
                         <div class="d-grid">
                             <a href="{{ url_for('listar_switches') }}" class="btn btn-outline-primary btn-lg">
                                 <i class="bi bi-arrow-repeat me-2"></i>
-                                Atualizar Lista
+                                Recarregar Lista da Planilha
                             </a>
                         </div>
                     </div>
@@ -208,6 +403,9 @@
                         </div>
                     </div>
                 </div>
+                <p class="text-muted small mb-0">
+                    Verificar Todos consulta o Zabbix e atualiza os status agora. Recarregar Lista lê novamente a planilha de switches e mantém o último status salvo.
+                </p>
             </div>
         </div>
     </div>
@@ -215,13 +413,16 @@
 
 <!-- Switches por Regional -->
 {% if regionais %}
+<div id="switchesEmptyFilter" class="alert alert-info switches-empty-filter">
+    Nenhuma regional encontrada para o filtro selecionado.
+</div>
 {% for regional in regionais %}
-<div class="row mb-4">
+<div class="row mb-4 regional-switch-section" data-regional="{{ regional.nome }}">
     <div class="col-12">
         <div class="regional-header d-flex justify-content-between align-items-center">
             <h3 class="mb-0">{{ regional.nome }}</h3>
-            <button class="btn btn-light btn-sm" onclick="verificarRegional('{{ regional.nome }}')">
-                <span class="loading-spinner spinner-border spinner-border-sm me-1" style="display: none;"></span>
+            <button class="btn btn-light btn-sm" onclick="verificarRegional('{{ regional.nome }}', this)">
+                <span class="btn-loading-spinner spinner-border spinner-border-sm me-1" style="display: none;"></span>
                 <span class="btn-text">
                     <i class="bi bi-arrow-clockwise me-1"></i>
                     Verificar
@@ -234,7 +435,7 @@
             <div class="col-md-3 col-sm-6 mb-2">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h5 class="mb-0">{{ regional.total_switches }}</h5>
+                        <h5 class="mb-0 regional-total">{{ regional.total_switches }}</h5>
                         <small class="text-muted">Total</small>
                     </div>
                 </div>
@@ -243,7 +444,7 @@
             <div class="col-md-3 col-sm-6 mb-2">
                 <div class="card bg-success text-white">
                     <div class="card-body text-center">
-                        <h5 class="mb-0">{{ regional.online }}</h5>
+                        <h5 class="mb-0 regional-online">{{ regional.online }}</h5>
                         <small>Online</small>
                     </div>
                 </div>
@@ -252,7 +453,7 @@
             <div class="col-md-3 col-sm-6 mb-2">
                 <div class="card bg-danger text-white">
                     <div class="card-body text-center">
-                        <h5 class="mb-0">{{ regional.offline }}</h5>
+                        <h5 class="mb-0 regional-offline">{{ regional.offline }}</h5>
                         <small>Offline</small>
                     </div>
                 </div>
@@ -261,7 +462,7 @@
             <div class="col-md-3 col-sm-6 mb-2">
                 <div class="card bg-warning text-dark">
                     <div class="card-body text-center">
-                        <h5 class="mb-0">{{ regional.warning }}</h5>
+                        <h5 class="mb-0 regional-warning">{{ regional.warning }}</h5>
                         <small>Warning</small>
                     </div>
                 </div>
@@ -271,14 +472,14 @@
         <!-- Lista de Switches -->
         <div class="row">
             {% for switch in regional.switches %}
-            <div class="col-md-4 mb-3">
-                <div class="card switch-card h-100" id="switch-{{ switch.host|replace('.', '-') }}" data-host="{{ switch.host }}">
+            <div class="col-md-4 mb-3 switch-card-wrapper" data-status="{{ switch.status or 'desconhecido' }}" data-search-text="{{ regional.nome }} {{ switch.host }} {{ switch.ip }} {{ switch.modelo }} {{ switch.local }} {{ switch.status or 'desconhecido' }}">
+                <div class="card switch-card h-100" id="switch-{{ switch.host|replace(' ', '-')|replace('.', '-') }}" data-host="{{ switch.host }}" data-regional="{{ regional.nome }}" data-status="{{ switch.status or 'desconhecido' }}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">{{ switch.host }}</h6>
                         <span>
                             {% if switch.status == 'online' %}
                             <span class="status-badge status-online" title="Online"></span>
-                            {% elif switch.status == 'offline' %}
+                            {% elif switch.status in ['offline', 'não encontrado', 'erro', 'desconhecido'] %}
                             <span class="status-badge status-offline" title="Offline"></span>
                             {% elif switch.status == 'warning' %}
                             <span class="status-badge status-warning" title="Warning"></span>
@@ -291,9 +492,26 @@
                         <p class="mb-1"><strong>IP:</strong> {{ switch.ip }}</p>
                         <p class="mb-1"><strong>Modelo:</strong> {{ switch.modelo }}</p>
                         <p class="mb-1"><strong>Local:</strong> {{ switch.local }}</p>
-                        {% if switch.ultima_verificacao %}
-                        <p class="mb-1"><small class="text-muted">Última verificação: {{ switch.ultima_verificacao.split('T')[0] }} {{ switch.ultima_verificacao.split('T')[1][:8] }}</small></p>
-                        {% endif %}
+                        <div class="verification-meta{% if not switch.ultima_verificacao_formatada %} d-none{% endif %}">
+                            <span class="verification-label">Última verificação</span>
+                            <span class="verification-value">{{ switch.ultima_verificacao_formatada or 'Ainda não verificado' }}</span>
+                        </div>
+                        <div class="warning-cause{% if switch.status != 'warning' or not switch.warning_problemas %} d-none{% endif %}">
+                            <span class="warning-cause-label">Motivo do warning</span>
+                            <span class="warning-cause-value">{{ switch.warning_resumo or 'Alerta identificado no Zabbix' }}</span>
+                            <ul class="warning-cause-list{% if not switch.warning_problemas or (switch.warning_problemas|length <= 1) %} d-none{% endif %}">
+                                {% for problema in switch.warning_problemas[1:] %}
+                                <li>{{ problema }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="warning-cause indisponivel-cause{% if switch.status in ['online', 'warning'] %} d-none{% endif %}">
+                            <span class="warning-cause-label">Motivo da indisponibilidade</span>
+                            <span class="indisponivel-cause-value">{{ switch.status_reason or ('Host encontrado no Zabbix, mas marcado como inativo.' if switch.status == 'offline' else 'Não localizado no Zabbix pelo nome, identificador técnico, IP ou interface.' if switch.status == 'não encontrado' else 'Falha na última verificação deste switch.' if switch.status == 'erro' else 'Switch ainda não verificado nesta sessão.') }}</span>
+                            <ul class="warning-cause-list{% if not switch.status_details %} d-none{% endif %}">
+                                <li class="indisponivel-cause-details">{{ switch.status_details }}</li>
+                            </ul>
+                        </div>
                         <p class="mb-0"><strong>Status:</strong> 
                             <span class="switch-status">
                                 {% if switch.status == 'online' %}
@@ -302,6 +520,10 @@
                                 <span class="text-danger">Offline</span>
                                 {% elif switch.status == 'warning' %}
                                 <span class="text-warning">Warning</span>
+                                {% elif switch.status == 'não encontrado' %}
+                                <span class="text-danger">Não encontrado</span>
+                                {% elif switch.status == 'erro' %}
+                                <span class="text-danger">Erro</span>
                                 {% else %}
                                 <span class="text-muted">Desconhecido</span>
                                 {% endif %}
@@ -339,113 +561,675 @@
 
 {% block extra_js %}
 <script>
-// Esconde a tela de carregamento quando a página terminar de carregar
+let filtroStatusAtual = 'all';
+let filtroBuscaAtual = '';
+let switchesSyncTimerHandle = null;
+let switchesSyncStartedAt = null;
+let switchesSyncMode = 'all';
+let switchesSyncPollHandle = null;
+
+function setSwitchesSyncProgress(percent) {
+    const progressValue = Math.max(0, Math.min(100, Math.round(percent || 0)));
+    const progressText = document.getElementById('loadingOverlayPercent');
+    const progressBar = document.getElementById('loadingOverlayProgressBar');
+
+    if (progressText) {
+        progressText.textContent = `${progressValue}%`;
+    }
+
+    if (progressBar) {
+        progressBar.style.width = `${progressValue}%`;
+    }
+}
+
 $(document).ready(function() {
-    // Esconde a tela de carregamento
-    $('#loadingOverlay').hide();
+    recalcularContadores();
+
+    $('#switchesSearchInput').on('input', function() {
+        filtroBuscaAtual = normalizeSearchText(this.value);
+        atualizarFiltroStatusAtivo();
+    });
+
+    const totalSwitches = lerNumero('#stats-total-switches');
+    const totalConhecidos = lerNumero('#stats-online') + lerNumero('#stats-offline') + lerNumero('#stats-warning');
+
+    if (totalSwitches > 0 && totalConhecidos === 0) {
+        showLoadingOverlay(
+            'Carregando Switches',
+            'Verificando o status de todos os switches no Zabbix. Isso pode levar alguns instantes...'
+        );
+        verificarTodosSwitches(null, {
+            automatico: true,
+            exibirOverlay: true,
+            exibirToast: false
+        });
+        return;
+    }
+
+    hideLoadingOverlay();
 });
 
-function showLoading(button) {
-    button.find('.loading-spinner').show();
-    button.find('.btn-text').hide();
-    button.prop('disabled', true);
+function showLoadingOverlay(title, subtext) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (!overlay) {
+        return;
+    }
+
+    document.getElementById('loadingOverlayText').textContent = title || 'Atualizando switches';
+    document.getElementById('loadingOverlaySubtext').textContent =
+        subtext || 'Iniciando consulta no Zabbix e consolidando os switches encontrados.';
+
+    stopSwitchesSyncPolling();
+    setSwitchesSyncProgress(0);
+    switchesSyncStartedAt = Date.now();
+    updateLoadingOverlayProgress();
+
+    if (switchesSyncTimerHandle) {
+        clearInterval(switchesSyncTimerHandle);
+    }
+    switchesSyncTimerHandle = setInterval(updateLoadingOverlayProgress, 1000);
+
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
 }
 
-function hideLoading(button) {
-    button.find('.loading-spinner').hide();
-    button.find('.btn-text').show();
-    button.prop('disabled', false);
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (!overlay) {
+        return;
+    }
+
+    if (switchesSyncTimerHandle) {
+        clearInterval(switchesSyncTimerHandle);
+        switchesSyncTimerHandle = null;
+    }
+
+    stopSwitchesSyncPolling();
+    switchesSyncStartedAt = null;
+    switchesSyncMode = 'all';
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
 }
 
-function verificarTodosSwitches() {
-    const btn = $(event.currentTarget);
-    showLoading(btn);
-    
-    // Mostra a tela de carregamento
-    $('#loadingOverlay').show();
-    
-    showToast('Verificando todos os switches...', 'info');
-    
-    $.post('/api/switches/verificar')
-        .done(function(response) {
-            console.log('Resposta da verificação de todos os switches:', response);
-            
-            if (response.success) {
-                const resumo = response.resumo;
-                showToast(`Verificação concluída: ${resumo.online}/${resumo.total} switches online`, 'success');
-                
-                // Atualiza estatísticas
-                $('#stats-total-switches').text(resumo.total);
-                $('#stats-online').text(resumo.online);
-                $('#stats-offline').text(resumo.offline);
-                $('#stats-warning').text(resumo.warning);
-                
-                // Atualiza status dos switches
-                console.log(`Atualizando status de ${Object.keys(response.resultados).length} switches`);
-                
-                for (const [host, resultado] of Object.entries(response.resultados)) {
-                    console.log(`Atualizando switch ${host} para status ${resultado.status}`);
-                    atualizarStatusSwitch(host, resultado.status);
+function formatSwitchesSyncElapsed(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+}
+
+function updateLoadingOverlayProgress() {
+    const timer = document.getElementById('loadingOverlayTimer');
+    if (!timer) {
+        return;
+    }
+
+    if (!switchesSyncStartedAt) {
+        timer.textContent = '00:00';
+        return;
+    }
+
+    const elapsed = Date.now() - switchesSyncStartedAt;
+    timer.textContent = formatSwitchesSyncElapsed(elapsed);
+}
+
+function stopSwitchesSyncPolling() {
+    if (switchesSyncPollHandle) {
+        clearTimeout(switchesSyncPollHandle);
+        switchesSyncPollHandle = null;
+    }
+}
+
+function aplicarProgressoJobSwitches(job) {
+    if (job && job.created_at) {
+        switchesSyncStartedAt = Number(job.created_at) * 1000;
+    }
+
+    setSwitchesSyncProgress(job?.percent || 0);
+    updateLoadingOverlayProgress();
+
+    if ((job?.total || 0) > 0) {
+        $('#loadingOverlayScope').text(`Concluídos ${job?.completed || 0} de ${job.total} switches`);
+    }
+
+    if (job?.detail) {
+        $('#loadingOverlaySubtext').text(job.detail);
+    } else if (job?.message) {
+        $('#loadingOverlaySubtext').text(job.message);
+    }
+
+    if (job?.partial_results) {
+        aplicarResultadosSwitches(job.partial_results);
+    }
+}
+
+function acompanharJobSwitches(jobId, handlers = {}) {
+    fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success || !data.job) {
+                throw new Error(data.message || 'Job de switches não encontrado');
+            }
+
+            const job = data.job;
+            aplicarProgressoJobSwitches(job);
+
+            if (job.status === 'running') {
+                stopSwitchesSyncPolling();
+                switchesSyncPollHandle = setTimeout(() => acompanharJobSwitches(jobId, handlers), 1000);
+                return;
+            }
+
+            if (job.status === 'failed') {
+                if (typeof handlers.onError === 'function') {
+                    handlers.onError(job);
                 }
-                
-                // Atualiza a página após 2 segundos para garantir que todos os status estejam corretos
-                setTimeout(function() {
-                    location.reload();
-                }, 2000);
-            } else {
-                showToast(`Erro: ${response.message}`, 'danger');
+                return;
+            }
+
+            if (typeof handlers.onComplete === 'function') {
+                handlers.onComplete(job.result || {}, job);
             }
         })
-        .fail(function() {
-            showToast('Erro de conexão ao verificar switches', 'danger');
-        })
-        .always(function() {
-            hideLoading(btn);
-            // Esconde a tela de carregamento
-            $('#loadingOverlay').hide();
+        .catch((error) => {
+            if (typeof handlers.onError === 'function') {
+                handlers.onError({ error: error.message, message: error.message });
+            }
         });
 }
 
-function verificarRegional(regional) {
-    const btn = $(event.currentTarget);
-    showLoading(btn);
+function contarSwitchesVisiveisRegional(regional) {
+    const section = $(`.regional-switch-section[data-regional="${regional}"]`);
+    if (!section.length) {
+        return 0;
+    }
+
+    return section.find('.switch-card-wrapper:visible').length;
+}
+
+function showLoading(button) {
+    const btn = button ? $(button) : $();
+    if (!btn.length) {
+        return;
+    }
+
+    btn.find('.btn-loading-spinner').show();
+    btn.find('.btn-text').hide();
+    btn.prop('disabled', true);
+}
+
+function hideLoading(button) {
+    const btn = button ? $(button) : $();
+    if (!btn.length) {
+        return;
+    }
+
+    btn.find('.btn-loading-spinner').hide();
+    btn.find('.btn-text').show();
+    btn.prop('disabled', false);
+}
+
+function lerNumero(selector) {
+    return parseInt($(selector).text(), 10) || 0;
+}
+
+function normalizarHostId(host) {
+    return String(host || '').replace(/[\s\.]+/g, '-').replace(/[^A-Za-z0-9_-]/g, '-');
+}
+
+function obterCardSwitch(host) {
+    let card = $(`.switch-card[data-host="${host}"]`).first();
+
+    if (!card.length) {
+        card = $(`#switch-${normalizarHostId(host)}`).first();
+    }
+
+    return card;
+}
+
+function formatarUltimaVerificacao(valor) {
+    if (!valor) {
+        return 'Ainda não verificado';
+    }
+
+    const data = new Date(valor);
+    if (!Number.isNaN(data.getTime())) {
+        return data.toLocaleString('pt-BR');
+    }
+
+    return valor;
+}
+
+function obterClasseBadge(status) {
+    if (status === 'online') return 'status-online';
+    if (['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status)) return 'status-offline';
+    if (status === 'warning') return 'status-warning';
+    return 'status-unknown';
+}
+
+function obterClasseTextoStatus(status) {
+    if (status === 'online') return 'text-success';
+    if (['offline', 'não encontrado', 'erro'].includes(status)) return 'text-danger';
+    if (status === 'warning') return 'text-warning';
+    return 'text-muted';
+}
+
+function obterTextoStatus(status) {
+    if (status === 'online') return 'Online';
+    if (status === 'offline') return 'Offline';
+    if (status === 'warning') return 'Warning';
+    if (status === 'não encontrado') return 'Não encontrado';
+    if (status === 'erro') return 'Erro';
+    return 'Desconhecido';
+}
+
+function atualizarMetaVerificacao(card, ultimaVerificacao) {
+    const meta = card.find('.verification-meta');
+    const valor = meta.find('.verification-value');
+
+    if (!meta.length || !valor.length) {
+        return;
+    }
+
+    if (ultimaVerificacao) {
+        valor.text(formatarUltimaVerificacao(ultimaVerificacao));
+        meta.removeClass('d-none');
+        return;
+    }
+
+    valor.text('Ainda não verificado');
+    meta.addClass('d-none');
+}
+
+function atualizarMotivoWarning(card, status, warningProblemas = [], warningResumo = null) {
+    const bloco = card.find('.warning-cause');
+    const resumo = bloco.find('.warning-cause-value');
+    const lista = bloco.find('.warning-cause-list');
+
+    if (!bloco.length || !resumo.length || !lista.length) {
+        return;
+    }
+
+    const problemas = Array.isArray(warningProblemas) ? warningProblemas.filter(Boolean) : [];
+    const textoResumo = warningResumo || problemas[0] || 'Alerta identificado no Zabbix';
+
+    if (status === 'warning' && (warningResumo || problemas.length)) {
+        resumo.text(textoResumo);
+        lista.empty();
+
+        const adicionais = problemas.slice(1);
+        if (adicionais.length) {
+            adicionais.forEach(function(problema) {
+                lista.append(`<li>${problema}</li>`);
+            });
+            lista.removeClass('d-none');
+        } else {
+            lista.addClass('d-none');
+        }
+
+        bloco.removeClass('d-none');
+        return;
+    }
+
+    resumo.text('');
+    lista.empty().addClass('d-none');
+    bloco.addClass('d-none');
+}
+
+function obterMotivoIndisponivelPadrao(status) {
+    if (status === 'offline') return 'Host encontrado no Zabbix, mas está marcado como inativo/desabilitado.';
+    if (status === 'não encontrado') return 'Não localizado no Zabbix pelo nome, identificador técnico, IP ou interface.';
+    if (status === 'erro') return 'Falha na última verificação deste switch.';
+    return 'Switch ainda não verificado nesta sessão.';
+}
+
+function atualizarMotivoIndisponivel(card, status, statusReason = null, statusDetails = null) {
+    const bloco = card.find('.indisponivel-cause');
+    const resumo = bloco.find('.indisponivel-cause-value');
+    const lista = bloco.find('.warning-cause-list');
+    const detalhe = bloco.find('.indisponivel-cause-details');
+
+    if (!bloco.length || !resumo.length || !lista.length || !detalhe.length) {
+        return;
+    }
+
+    if (['online', 'warning'].includes(status)) {
+        resumo.text('');
+        detalhe.text('');
+        lista.addClass('d-none');
+        bloco.addClass('d-none');
+        return;
+    }
+
+    resumo.text(statusReason || obterMotivoIndisponivelPadrao(status));
+    if (statusDetails) {
+        detalhe.text(statusDetails);
+        lista.removeClass('d-none');
+    } else {
+        detalhe.text('');
+        lista.addClass('d-none');
+    }
+    bloco.removeClass('d-none');
+}
+
+function atualizarContadoresGlobais() {
+    const cards = $('.switch-card');
+    let online = 0;
+    let offline = 0;
+    let warning = 0;
+
+    cards.each(function() {
+        const status = $(this).attr('data-status');
+        if (status === 'online') online += 1;
+        else if (status === 'warning') warning += 1;
+        else offline += 1;
+    });
+
+    $('#stats-total-switches').text(cards.length);
+    $('#stats-online').text(online);
+    $('#stats-offline').text(offline);
+    $('#stats-warning').text(warning);
+}
+
+function atualizarContadoresRegionais() {
+    $('.regional-switch-section').each(function() {
+        const section = $(this);
+        const cards = section.find('.switch-card');
+        let online = 0;
+        let offline = 0;
+        let warning = 0;
+
+        cards.each(function() {
+            const status = $(this).attr('data-status');
+            if (status === 'online') online += 1;
+            else if (status === 'warning') warning += 1;
+            else offline += 1;
+        });
+
+        section.find('.regional-total').text(cards.length);
+        section.find('.regional-online').text(online);
+        section.find('.regional-offline').text(offline);
+        section.find('.regional-warning').text(warning);
+    });
+}
+
+function recalcularContadores() {
+    atualizarContadoresGlobais();
+    atualizarContadoresRegionais();
+    atualizarFiltroStatusAtivo();
+}
+
+function obterTextoFiltroStatus(status) {
+    if (status === 'online') return 'Somente switches online';
+    if (status === 'offline') return 'Somente switches indisponíveis';
+    if (status === 'warning') return 'Somente switches com warning';
+    return 'Todos os switches';
+}
+
+function atualizarResumoFiltro() {
+    const summary = $('#switchesFilterSummary');
+    const summaryText = $('#switchesFilterSummaryText');
+
+    const partes = [];
+    if (filtroStatusAtual !== 'all') {
+        partes.push(obterTextoFiltroStatus(filtroStatusAtual));
+    }
+    if (filtroBuscaAtual) {
+        partes.push(`Busca: "${$('#switchesSearchInput').val()}"`);
+    }
+
+    if (!partes.length) {
+        summary.hide();
+        return;
+    }
+
+    summaryText.text(partes.join(' | '));
+    summary.css('display', 'flex');
+}
+
+function atualizarCardsFiltro() {
+    $('.stats-card-filter').removeClass('active-filter');
+    $(`.stats-card-filter[data-filter-status="${filtroStatusAtual}"]`).addClass('active-filter');
+}
+
+function atualizarEmptyStateFiltro() {
+    const existeRegionalVisivel = $('.regional-switch-section:visible').length > 0;
+    const termo = $('#switchesSearchInput').val();
+    const mensagem = termo
+        ? `Nenhum switch encontrado para a busca "${termo}".`
+        : 'Nenhuma regional encontrada para o filtro selecionado.';
+
+    $('#switchesEmptyFilter').text(mensagem);
+    $('#switchesEmptyFilter').toggle(!existeRegionalVisivel);
+}
+
+function atualizarFiltroStatusAtivo() {
+    let switchesVisiveis = 0;
+
+    $('.regional-switch-section').each(function() {
+        const section = $(this);
+        let visibleCount = 0;
+        const regionalTerm = normalizeSearchText(section.attr('data-regional') || '');
+
+        section.find('.switch-card-wrapper').each(function() {
+            const wrapper = $(this);
+            const card = wrapper.find('.switch-card');
+            const status = card.attr('data-status') || wrapper.attr('data-status') || 'desconhecido';
+            const statusEhOffline = !['online', 'warning'].includes(status);
+            const buscaTexto = normalizeSearchText(wrapper.attr('data-search-text') || '');
+            const correspondeBusca = !filtroBuscaAtual
+                || buscaTexto.includes(filtroBuscaAtual)
+                || regionalTerm.includes(filtroBuscaAtual);
+            const mostrarStatus = filtroStatusAtual === 'all'
+                || status === filtroStatusAtual
+                || (filtroStatusAtual === 'offline' && statusEhOffline);
+            const mostrar = mostrarStatus && correspondeBusca;
+
+            wrapper.toggle(mostrar);
+            if (mostrar) {
+                visibleCount += 1;
+                switchesVisiveis += 1;
+            }
+        });
+
+        section.toggle(visibleCount > 0);
+    });
+
+    $('#switchesSearchCount').text(`${switchesVisiveis} switches`);
+
+    atualizarCardsFiltro();
+    atualizarResumoFiltro();
+    atualizarEmptyStateFiltro();
+}
+
+function aplicarFiltroStatus(status) {
+    filtroStatusAtual = status || 'all';
+    atualizarFiltroStatusAtivo();
+}
+
+function atualizarStatusSwitch(host, status, ultimaVerificacao = null, recalcular = true, warningProblemas = [], warningResumo = null, statusReason = null, statusDetails = null) {
+    const card = obterCardSwitch(host);
+
+    if (!card.length) {
+        console.log(`Não foi possível encontrar o card para o switch: ${host}`);
+        return;
+    }
+
+    card.attr('data-status', status || 'desconhecido');
+    card.closest('.switch-card-wrapper').attr('data-status', status || 'desconhecido');
+
+    const badge = card.find('.status-badge');
+    if (badge.length) {
+        badge.removeClass('status-online status-offline status-warning status-unknown');
+        badge.addClass(obterClasseBadge(status));
+        badge.attr('title', obterTextoStatus(status));
+    }
+
+    const statusText = card.find('.switch-status');
+    if (statusText.length) {
+        statusText.html(`<span class="${obterClasseTextoStatus(status)}">${obterTextoStatus(status)}</span>`);
+    }
+
+    atualizarMetaVerificacao(card, ultimaVerificacao);
+    atualizarMotivoWarning(card, status, warningProblemas, warningResumo);
+    atualizarMotivoIndisponivel(card, status, statusReason, statusDetails);
+
+    if (recalcular) {
+        recalcularContadores();
+    }
+}
+
+function aplicarResultadosSwitches(resultados) {
+    for (const [host, resultado] of Object.entries(resultados || {})) {
+        atualizarStatusSwitch(
+            host,
+            resultado.status,
+            resultado.ultima_verificacao,
+            false,
+            resultado.warning_problemas || [],
+            resultado.warning_resumo || null,
+            resultado.status_reason || null,
+            resultado.status_details || null
+        );
+    }
+
+    recalcularContadores();
+}
+
+function verificarTodosSwitches(button, options = {}) {
+    const config = Object.assign({
+        automatico: false,
+        exibirOverlay: true,
+        exibirToast: true
+    }, options);
+
+    showLoading(button);
+    switchesSyncMode = 'all';
+
+    if (config.exibirOverlay) {
+        const total = lerNumero('#stats-total-switches');
+        $('#loadingOverlayScope').text(
+            total > 0 ? `Consultando ${total} switches cadastrados` : 'Consultando todos os switches cadastrados'
+        );
+        showLoadingOverlay(
+            'Atualizando switches',
+            'Iniciando consulta no Zabbix e consolidando os switches encontrados.'
+        );
+    }
+
+    if (config.exibirToast) {
+        showToast('Verificando todos os switches...', 'info');
+    }
+
+    $.ajax({
+        url: '/api/switches/verificar',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ async: true })
+    })
+        .done(function(response) {
+            if (!response.success || !response.job_id) {
+                showToast(`Erro: ${response.message || 'Não foi possível iniciar a verificação'}`, 'danger');
+                hideLoading(button);
+                hideLoadingOverlay();
+                return;
+            }
+
+            acompanharJobSwitches(response.job_id, {
+                onComplete: function(result) {
+                    aplicarResultadosSwitches(result.resultados || {});
+                    setSwitchesSyncProgress(100);
+
+                    if (config.exibirToast) {
+                        const online = lerNumero('#stats-online');
+                        const total = lerNumero('#stats-total-switches');
+                        showToast(`Verificação concluída: ${online}/${total} switches online`, 'success');
+                    }
+
+                    setTimeout(() => {
+                        hideLoading(button);
+                        hideLoadingOverlay();
+                    }, 250);
+                },
+                onError: function(job) {
+                    showToast(
+                        job.error || job.message || (config.automatico
+                            ? 'Não foi possível atualizar os switches automaticamente.'
+                            : 'Erro de conexão ao verificar switches'),
+                        'danger'
+                    );
+                    hideLoading(button);
+                    hideLoadingOverlay();
+                }
+            });
+        });
+}
+
+function verificarRegional(regional, button) {
+    showLoading(button);
+    switchesSyncMode = 'regional';
+    const totalRegional = contarSwitchesVisiveisRegional(regional);
+    $('#loadingOverlayScope').text(
+        totalRegional > 0
+            ? `Consultando ${totalRegional} switches da regional ${regional}`
+            : `Consultando switches da regional ${regional}`
+    );
+    showLoadingOverlay(
+        `Atualizando switches da ${regional}`,
+        `Iniciando consulta no Zabbix para os switches da regional ${regional}.`
+    );
     
     showToast(`Verificando switches da regional ${regional}...`, 'info');
     
-    $.post(`/api/switches/regional/${regional}`)
+    $.ajax({
+        url: `/api/switches/regional/${encodeURIComponent(regional)}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ async: true })
+    })
         .done(function(response) {
-            if (response.success) {
-                const resumo = response.resumo;
-                showToast(`${regional}: ${resumo.online}/${resumo.total} switches online`, 'success');
-                
-                // Atualiza status dos switches
-                for (const [host, resultado] of Object.entries(response.resultados)) {
-                    atualizarStatusSwitch(host, resultado.status);
-                }
-            } else {
-                showToast(`Erro: ${response.message}`, 'danger');
+            if (!response.success || !response.job_id) {
+                showToast(`Erro: ${response.message || 'Não foi possível iniciar a verificação da regional'}`, 'danger');
+                hideLoading(button);
+                hideLoadingOverlay();
+                return;
             }
-        })
-        .fail(function() {
-            showToast(`Erro de conexão ao verificar ${regional}`, 'danger');
-        })
-        .always(function() {
-            hideLoading(btn);
+
+            acompanharJobSwitches(response.job_id, {
+                onComplete: function(result) {
+                    aplicarResultadosSwitches(result.resultados || {});
+                    setSwitchesSyncProgress(100);
+
+                    const section = $(`.regional-switch-section[data-regional="${regional}"]`);
+                    const online = parseInt(section.find('.regional-online').text(), 10) || 0;
+                    const total = parseInt(section.find('.regional-total').text(), 10) || 0;
+                    showToast(`${regional}: ${online}/${total} switches online`, 'success');
+                    setTimeout(() => {
+                        hideLoading(button);
+                        hideLoadingOverlay();
+                    }, 250);
+                },
+                onError: function(job) {
+                    showToast(job.error || job.message || `Erro de conexão ao verificar ${regional}`, 'danger');
+                    hideLoading(button);
+                    hideLoadingOverlay();
+                }
+            });
         });
 }
 
 function verificarSwitch(host, regional) {
+    switchesSyncMode = 'single';
+    $('#loadingOverlayScope').text(`Consultando o switch ${host}`);
+    showLoadingOverlay(
+        'Atualizando switch',
+        `Iniciando consulta no Zabbix para o switch ${host}.`
+    );
     showToast(`Verificando switch ${host}...`, 'info');
-    
-    // Normaliza o host para o formato usado no ID
-    const hostNormalizado = host.replace(/\./g, '-');
-    
-    // Encontra o card do switch
-    const cardSelector = `#switch-${hostNormalizado}`;
-    const card = $(cardSelector);
+    const card = obterCardSwitch(host);
     
     if (card.length === 0) {
-        console.log(`Não foi possível encontrar o card para o switch: ${host} (seletor: ${cardSelector})`);
+        hideLoadingOverlay();
         showToast(`Erro: Não foi possível encontrar o card para o switch ${host}`, 'danger');
         return;
     }
@@ -453,27 +1237,47 @@ function verificarSwitch(host, regional) {
     // Adiciona efeito de loading
     card.addClass('border-primary');
     
-    // Faz a requisição para verificar o switch específico
-    $.post(`/api/switches/verificar/${encodeURIComponent(host)}`)
+    $.ajax({
+        url: `/api/switches/verificar/${encodeURIComponent(host)}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ async: true })
+    })
         .done(function(response) {
-            console.log(`Resposta da verificação do switch ${host}:`, response);
-            
-            if (response.success) {
-                // Atualiza o status do switch
-                atualizarStatusSwitch(host, response.status);
-                showToast(`${host}: ${response.status}`, 
-                    response.status === 'online' ? 'success' : 
-                    response.status === 'offline' ? 'danger' : 'warning');
-            } else {
-                showToast(`Erro: ${response.message}`, 'danger');
+            if (!response.success || !response.job_id) {
+                showToast(`Erro: ${response.message || 'Não foi possível iniciar a verificação do switch'}`, 'danger');
+                card.removeClass('border-primary');
+                hideLoadingOverlay();
+                return;
             }
-        })
-        .fail(function() {
-            showToast(`Erro de conexão ao verificar ${host}`, 'danger');
-        })
-        .always(function() {
-            // Remove efeito de loading
-            card.removeClass('border-primary');
+
+            acompanharJobSwitches(response.job_id, {
+                onComplete: function(result) {
+                    atualizarStatusSwitch(
+                        host,
+                        result.status,
+                        result.ultima_verificacao,
+                        true,
+                        result.warning_problemas || [],
+                        result.warning_resumo || null,
+                        result.status_reason || null,
+                        result.status_details || null
+                    );
+                    setSwitchesSyncProgress(100);
+                    showToast(`${host}: ${result.status}`,
+                        result.status === 'online' ? 'success' :
+                        result.status === 'offline' ? 'danger' : 'warning');
+                    setTimeout(() => {
+                        card.removeClass('border-primary');
+                        hideLoadingOverlay();
+                    }, 250);
+                },
+                onError: function(job) {
+                    showToast(job.error || job.message || `Erro de conexão ao verificar ${host}`, 'danger');
+                    card.removeClass('border-primary');
+                    hideLoadingOverlay();
+                }
+            });
         });
 }
 
@@ -501,6 +1305,7 @@ function excluirSwitch(host) {
                 const switchId = `switch-${host.replace(/[\s\.]+/g, '-')}`;
                 $(`#${switchId}`).parent().fadeOut(500, function() {
                     $(this).remove();
+                    recalcularContadores();
                 });
                 setTimeout(function() {
                     window.location.href = '/switches';
@@ -513,107 +1318,6 @@ function excluirSwitch(host) {
             showToast(`Erro de conexão ao excluir switch ${host}`, 'danger');
         }
     });
-}
-
-function atualizarStatusSwitch(host, status) {
-    console.log(`Tentando atualizar status do switch ${host} para ${status}`);
-    
-    // Tenta encontrar o card pelo atributo data-host primeiro
-    let card = $(`.switch-card[data-host="${host}"]`);
-    
-    // Se não encontrou, tenta pelo ID normalizado
-    if (card.length === 0) {
-        const hostNormalizado = host.replace(/\./g, '-');
-        const cardSelector = `#switch-${hostNormalizado}`;
-        card = $(cardSelector);
-        
-        // Se ainda não encontrou, tenta com outras normalizações
-        if (card.length === 0) {
-            const hostNormalizado2 = host.replace(/\s+/g, '-');
-            const cardSelector2 = `#switch-${hostNormalizado2}`;
-            card = $(cardSelector2);
-            
-            if (card.length === 0) {
-                const hostNormalizado3 = host.replace(/[\s\.]+/g, '-');
-                const cardSelector3 = `#switch-${hostNormalizado3}`;
-                card = $(cardSelector3);
-            }
-        }
-    }
-    
-    if (card.length === 0) {
-        console.log(`Não foi possível encontrar o card para o switch: ${host}`);
-        
-        // Tenta listar todos os IDs de cards para debug
-        const allCards = $('.switch-card');
-        console.log(`Total de cards encontrados: ${allCards.length}`);
-        allCards.each(function() {
-            console.log(`Card ID: ${this.id}, data-host: ${$(this).data('host')}`);
-        });
-        
-        return;
-    }
-    
-    console.log(`Card encontrado! Atualizando status do switch ${host} para ${status}`);
-    
-    // Atualiza o badge de status
-    const badge = card.find('.status-badge');
-    if (badge.length > 0) {
-        badge.removeClass('status-online status-offline status-warning status-unknown');
-        badge.addClass(`status-${status}`);
-        badge.attr('title', status.charAt(0).toUpperCase() + status.slice(1));
-        console.log(`Badge atualizado para ${status}`);
-    } else {
-        console.log('Badge não encontrado');
-    }
-    
-    // Atualiza o texto de status
-    const statusText = card.find('.switch-status');
-    if (statusText.length > 0) {
-        statusText.empty();
-        
-        // Cria o novo texto de status com a cor apropriada
-        let statusClass = '';
-        if (status === 'online') statusClass = 'text-success';
-        else if (status === 'offline') statusClass = 'text-danger';
-        else if (status === 'warning') statusClass = 'text-warning';
-        else statusClass = 'text-muted';
-        
-        const statusCapitalized = status.charAt(0).toUpperCase() + status.slice(1);
-        statusText.html(`<span class="${statusClass}">${statusCapitalized}</span>`);
-        console.log(`Texto de status atualizado para ${statusCapitalized}`);
-    } else {
-        console.log('Texto de status não encontrado');
-    }
-    
-    // Atualiza a hora da verificação
-    const now = new Date();
-    const formattedDate = now.toLocaleString();
-    const verificationTimeElement = card.find('small.text-muted');
-    
-    if (verificationTimeElement.length > 0) {
-        verificationTimeElement.text(`Última verificação: ${formattedDate}`);
-        console.log(`Hora de verificação atualizada para ${formattedDate}`);
-    } else {
-        // Se não existir, cria um novo elemento
-        const newTimeElement = $(`<p class="mb-1"><small class="text-muted">Última verificação: ${formattedDate}</small></p>`);
-        card.find('.card-body p:last').before(newTimeElement);
-        console.log('Elemento de hora de verificação criado');
-    }
-    
-    if (status === 'online') {
-        badge.addClass('status-online').attr('title', 'Online');
-        statusText.html('<span class="text-success">Online</span>');
-    } else if (status === 'offline') {
-        badge.addClass('status-offline').attr('title', 'Offline');
-        statusText.html('<span class="text-danger">Offline</span>');
-    } else if (status === 'warning') {
-        badge.addClass('status-warning').attr('title', 'Warning');
-        statusText.html('<span class="text-warning">Warning</span>');
-    } else {
-        badge.addClass('status-unknown').attr('title', 'Status desconhecido');
-        statusText.html('<span class="text-muted">Desconhecido</span>');
-    }
 }
 </script>
 {% endblock %}

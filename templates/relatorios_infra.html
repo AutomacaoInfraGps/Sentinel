@@ -113,9 +113,33 @@
 </div>
 
 <!-- Categorias de Relatórios -->
-<div class="row">
+<div class="card page-search-card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-8">
+                <label for="relatoriosSearchInput" class="form-label fw-semibold mb-2">Buscar relatório</label>
+                <div class="page-search-input-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control page-search-input" id="relatoriosSearchInput" placeholder="Digite nome do relatório, categoria, data ou tamanho">
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="page-search-meta text-lg-end">
+                    <strong id="relatoriosSearchCount">0 itens</strong>
+                    <div>A busca filtra os relatórios e dashboards carregados na tela.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="relatoriosSearchEmpty" class="alert alert-info page-search-empty mb-4">
+    Nenhum relatório encontrado para a busca informada.
+</div>
+
+<div class="row" id="relatoriosCatalogo">
     <!-- Servidores -->
-    <div class="col-md-6 mb-4">
+    <div class="col-md-6 mb-4 report-category">
         <div class="card h-100">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
@@ -144,7 +168,7 @@
     </div>
     
     <!-- Replicação AD -->
-    <div class="col-md-6 mb-4">
+    <div class="col-md-6 mb-4 report-category">
         <div class="card h-100">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
@@ -173,7 +197,7 @@
     </div>
     
     <!-- Antenas UniFi -->
-    <div class="col-md-6 mb-4">
+    <div class="col-md-6 mb-4 report-category">
         <div class="card h-100">
             <div class="card-header bg-info text-white">
                 <h5 class="mb-0">
@@ -202,7 +226,7 @@
     </div>
     
     <!-- Dashboards -->
-    <div class="col-md-6 mb-4">
+    <div class="col-md-6 mb-4 report-category">
         <div class="card h-100">
             <div class="card-header bg-warning text-dark">
                 <h5 class="mb-0">
@@ -257,6 +281,8 @@
 
 {% block extra_js %}
 <script>
+let relatoriosSearch = null;
+
 function gerarRelatorioCompleto() {
     const btn = $('.btn-primary');
     showLoading(btn);
@@ -401,7 +427,7 @@ function gerarListaRelatorios(containerId, relatorios) {
     
     relatorios.forEach(relatorio => {
         html += `
-            <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="list-group-item d-flex justify-content-between align-items-center report-entry" data-search-text="${containerId} ${relatorio.nome} ${relatorio.data} ${relatorio.tamanho}">
                 <div>
                     <div class="fw-bold">${relatorio.nome}</div>
                     <small class="text-muted">${relatorio.data} • ${relatorio.tamanho}</small>
@@ -420,6 +446,10 @@ function gerarListaRelatorios(containerId, relatorios) {
     }
     
     $(`#${containerId}`).html(html);
+
+    if (relatoriosSearch) {
+        relatoriosSearch.apply();
+    }
 }
 
 function atualizarEstatisticas() {
@@ -445,6 +475,22 @@ function limparLog() {
 // Inicialização
 $(document).ready(function() {
     adicionarLog('📊 Sistema de relatórios iniciado');
+
+    relatoriosSearch = createPageSearch({
+        inputSelector: '#relatoriosSearchInput',
+        itemSelector: '.report-entry',
+        countSelector: '#relatoriosSearchCount',
+        emptyStateSelector: '#relatoriosSearchEmpty',
+        countSuffix: 'itens',
+        emptyMessage: 'Nenhum relatório ou dashboard corresponde ao texto pesquisado.',
+        onAfterFilter: function() {
+            document.querySelectorAll('.report-category').forEach((category) => {
+                const visibleEntries = category.querySelectorAll('.report-entry:not(.d-none)').length;
+                const hasPlaceholder = category.textContent.includes('Nenhum relatório disponível');
+                category.classList.toggle('d-none', visibleEntries === 0 && !hasPlaceholder && normalizeSearchText(document.getElementById('relatoriosSearchInput')?.value || ''));
+            });
+        }
+    });
     
     // Carrega dados iniciais
     setTimeout(() => {
