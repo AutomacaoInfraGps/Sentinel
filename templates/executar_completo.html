@@ -317,51 +317,105 @@ function executarCompleto() {
         });
 }
 
+function acompanharExecucaoCompleta(jobId, regionais, resolve, reject) {
+    const pollIntervalMs = 3000;
+    const maxFalhasConsecutivas = 20;
+    let progressoVisual = 0;
+    let falhasConsecutivas = 0;
+
+    function consultar() {
+        $.ajax({
+            url: `/api/background-jobs/${jobId}`,
+            method: 'GET',
+            dataType: 'json',
+            cache: false,
+            timeout: 15000
+        })
+            .done(function(response) {
+                falhasConsecutivas = 0;
+
+                if (!response.success || !response.job) {
+                    reject(response.message || 'Job de execução não encontrado');
+                    return;
+                }
+
+                const job = response.job;
+                const texto = job.detail || job.message || 'Processando execução completa...';
+                const percentualJob = Number(job.percent || 0);
+
+                if (job.status === 'completed') {
+                    atualizarProgresso(100, job.message || 'Execução concluída');
+                    const resultado = job.result || {};
+                    resolve({
+                        success: true,
+                        regionais_verificadas: regionais.length,
+                        dashboard_url: resultado.dashboard_url || null,
+                        message: job.message || 'Execução completa realizada com sucesso!'
+                    });
+                    return;
+                }
+
+                if (job.status === 'failed') {
+                    reject(job.detail || job.error || job.message || 'Falha ao executar rotina completa');
+                    return;
+                }
+
+                progressoVisual = Math.max(progressoVisual, Math.min(percentualJob, 99));
+                atualizarProgresso(progressoVisual, texto);
+                setTimeout(consultar, pollIntervalMs);
+            })
+            .fail(function(xhr, textStatus) {
+                falhasConsecutivas += 1;
+
+                if (falhasConsecutivas < maxFalhasConsecutivas) {
+                    const detalheErro = xhr && xhr.status ? `Servidor respondeu ${xhr.status}.` : 'Sem resposta do servidor.';
+                    atualizarProgresso(
+                        Math.max(progressoVisual, 5),
+                        `Reconectando ao servidor (${falhasConsecutivas}/${maxFalhasConsecutivas}). ${detalheErro}`
+                    );
+                    setTimeout(consultar, pollIntervalMs);
+                    return;
+                }
+
+                const mensagemBase = xhr && xhr.status === 404
+                    ? 'Job de execução não encontrado após várias tentativas de consulta.'
+                    : 'Erro de conexão ao consultar o status da execução';
+
+                reject(`${mensagemBase} Último retorno: ${textStatus || 'falha desconhecida'}`);
+            });
+    }
+
+    consultar();
+}
+
 function simularExecucao(regionais) {
     return new Promise((resolve, reject) => {
-        let progresso = 0;
-        const etapas = [
-            'Executando checklists das regionais...',
-            'Capturando print do GPS Amigo...',
-            'Verificando replicação Active Directory...',
-            'Coletando dados das antenas UniFi...',
-            'Gerando dashboard final consolidado...'
-        ];
-        
-        let etapaAtual = 0;
-        
-        const interval = setInterval(() => {
-            progresso += Math.random() * 20;
-            
-            if (progresso >= 100) {
-                progresso = 100;
-                clearInterval(interval);
-                
-                // Chama API real
-                $.post('/api/executar/completo')
-                    .done(function(response) {
-                        if (response.success) {
-                            resolve({
-                                success: true,
-                                regionais_verificadas: regionais.length,
-                                dashboard_url: response.dashboard_url,
-                                message: response.message
-                            });
-                        } else {
-                            reject(response.message);
-                        }
-                    })
-                    .fail(function() {
-                        reject('Erro de conexão com o servidor');
+        atualizarProgresso(2, 'Solicitando início da execução completa...');
+
+        $.ajax({
+            url: '/api/executar/completo?async=1',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ async: true })
+        })
+            .done(function(response) {
+                if (response.success && response.job_id) {
+                    atualizarProgresso(4, 'Execução iniciada no servidor. Acompanhando progresso real...');
+                    acompanharExecucaoCompleta(response.job_id, regionais, resolve, reject);
+                } else if (response.success) {
+                    resolve({
+                        success: true,
+                        regionais_verificadas: regionais.length,
+                        dashboard_url: response.dashboard_url,
+                        message: response.message
                     });
-            } else {
-                if (progresso > (etapaAtual + 1) * 20) {
-                    etapaAtual++;
+                } else {
+                    reject(response.message);
                 }
-                
-                atualizarProgresso(progresso, etapas[etapaAtual] || 'Processando...');
-            }
-        }, 500);
+            })
+            .fail(function() {
+                reject('Erro de conexão com o servidor');
+            });
     });
 }
 

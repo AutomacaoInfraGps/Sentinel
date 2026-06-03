@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 # garante que importações peguem C:\Automacao primeiro
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
-from web_config import gerenciador_fortigate
+from web_config import gerenciador_fortigate, coletar_hardware_vm
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG, UNIFI_CLIENTS_HTML, UNIFI_CLIENTS_IMG, UNIFI_CLIENTS_DASHBOARD, UNIFI_CONFIG
 
@@ -26,8 +26,9 @@ except Exception:
     REPLICACAO_HTML_FRAGMENT = None
 
 # --- GPS: helpers de renderização (substitua sua função atual por estas duas) ---
-import re, base64
+import re, base64, io
 from datetime import datetime
+from PIL import Image
 
 def _montar_gps_html():
     """Retorna o HTML a ser exibido no dashboard (preferindo <body> do print_temp;
@@ -193,6 +194,39 @@ def _montar_unifi_clientes_html():
     )
 
 
+def _carregar_logo_sentinel_src():
+    logo_path = PROJECT_ROOT / "static" / "branding" / "sentinel_x_men_full.png"
+
+    try:
+        if logo_path.exists() and logo_path.stat().st_size > 0:
+            image = Image.open(logo_path).convert("RGBA")
+            pixels = image.load()
+
+            for y in range(image.height):
+                for x in range(image.width):
+                    red, green, blue, alpha = pixels[x, y]
+                    if alpha == 0:
+                        continue
+
+                    is_light_blue = (
+                        blue >= 150
+                        and green >= 95
+                        and blue >= green
+                        and blue - red >= 25
+                    )
+                    if is_light_blue:
+                        pixels[x, y] = (255, 255, 255, alpha)
+
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+            return f"data:image/png;base64,{b64}"
+    except Exception as e:
+        print("[LOGO] Falha ao carregar logo Sentinel:", e)
+
+    return "/static/branding/sentinel_x_men_full.png"
+
+
 def render_replicacao_card():
     """
     Exibe a replicação usando 1) fragmento, 2) HTML completo, ou 3) JSON
@@ -234,6 +268,43 @@ def render_replicacao_card():
         '<section class="card"><h2>Replicação AD</h2>'
         '<div class="card-body error">Arquivo não encontrado.</div></section>'
     )
+
+
+def _carregar_replicacao_html():
+    """Carrega o melhor artefato de replicação disponível para o dashboard final."""
+    if REPLICACAO_HTML_FRAGMENT and Path(REPLICACAO_HTML_FRAGMENT).exists():
+        return Path(REPLICACAO_HTML_FRAGMENT).read_text(encoding="utf-8")
+
+    if Path(REPLICACAO_HTML).exists():
+        return Path(REPLICACAO_HTML).read_text(encoding="utf-8")
+
+    if Path(REPLICACAO_JSON).exists():
+        data = json.loads(Path(REPLICACAO_JSON).read_text(encoding="utf-8"))
+        payload = data.get("legacy") or data.get("data") or data
+        linhas = []
+        for ctrl in payload.get("detalhes", {}).get("controladores", []):
+            linhas.append(
+                "<tr>"
+                f"<td>{html.escape(str(ctrl.get('nome', '')))}</td>"
+                f"<td>{html.escape(str(ctrl.get('latencia', '')))}</td>"
+                f"<td>{html.escape(str(ctrl.get('sucesso_total', '')))}</td>"
+                f"<td>{html.escape(str(ctrl.get('erros', '')))}</td>"
+                "</tr>"
+            )
+
+        return (
+            "<table class='tabela'><thead><tr>"
+            "<th>Servidor</th><th>Latência</th><th>SucessoTotal</th><th>Erros</th>"
+            "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table>"
+        )
+
+    return """
+<div class="error-container">
+    <div class="error-icon">[ERROR]</div>
+    <div class="error-title">Arquivo não encontrado</div>
+    <div class="error-message">Artefatos de replicação AD não encontrados</div>
+</div>
+"""
 
 
 # Configuração para Windows - força UTF-8
@@ -331,12 +402,14 @@ def _carregar_servidores_da_estrutura():
             if not servidor.get("ativo", True):
                 continue
 
-            tipo = (servidor.get("tipo") or "").strip().lower()
+            tipo = "vm"
             ip = (servidor.get("ip") or "").strip()
             usuario = (servidor.get("usuario") or "").strip()
             senha = str(servidor.get("senha") or "").strip()
 
-            if not all([tipo, ip, usuario, senha]):
+            # O consolidado precisa refletir servidores offline mesmo quando ainda
+            # não existem credenciais cadastradas para coleta detalhada.
+            if not ip:
                 continue
 
             servidores.append({
@@ -347,6 +420,9 @@ def _carregar_servidores_da_estrutura():
                 'senha': senha,
                 'ativo': True,
                 'servidor_nome': (servidor.get('nome') or '').strip(),
+                'funcao': (servidor.get('funcao') or '').strip(),
+                'modelo': (servidor.get('modelo') or '').strip(),
+                'sistema_operacional': (servidor.get('sistema_operacional') or '').strip(),
                 'regional_codigo': (regional.get('codigo') or '').strip(),
             })
 
@@ -538,21 +614,17 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     candidatos.extend(_gerar_tokens_regional(codigo_vpn))
     candidatos = [c for c in candidatos if c]
 
-    # 1) Match exato por token
     for cand in candidatos:
         for reg in indice_regionais:
             if cand in reg["tokens"]:
                 return reg
 
-    # 2) Match aproximado por contenção (evita perder abreviações simples)
     melhor = None
     melhor_score = 0
     for cand in candidatos:
-        if len(cand) < 3:
-            continue
         for reg in indice_regionais:
             for token in reg["tokens"]:
-                if len(token) < 3:
+                if not token:
                     continue
                 if cand in token or token in cand:
                     score = min(len(cand), len(token))
@@ -604,7 +676,11 @@ def _carregar_links_cadastrados_fortigate(regiao):
         return []
 
     regional = (data.get("regionais") or {}).get(regional_codigo) or {}
-    return [link for link in regional.get("links", []) if link.get("ativo", True)]
+    links_internet_auto = regional.get("links_internet_auto")
+    if isinstance(links_internet_auto, list) and links_internet_auto:
+        return [dict(link) for link in links_internet_auto if link.get("ativo", True)]
+
+    return [dict(link) for link in regional.get("links", []) if link.get("ativo", True)]
 
 
 def _mesclar_links_fortigate_com_cadastro(regiao, links_fortigate):
@@ -701,6 +777,258 @@ def _regional_html_indicates_error(file_content):
     ]
     return any(marker in lowered for marker in error_markers)
 
+
+def _ensure_trusted_host_for_dashboard(ip):
+    if os.name != "nt":
+        return True, None
+
+    if not ip:
+        return False, "IP vazio"
+
+    try:
+        get_cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "(Get-Item WSMan:\\localhost\\Client\\TrustedHosts).Value",
+        ]
+        result = subprocess.run(get_cmd, capture_output=True, text=True)
+        current = (result.stdout or "").strip()
+
+        if current == "*" or ip in [item.strip() for item in current.split(",") if item.strip()]:
+            return True, None
+
+        new_value = ip if not current else f"{current},{ip}"
+        set_cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f"Set-Item WSMan:\\localhost\\Client\\TrustedHosts -Value '{new_value}' -Force",
+        ]
+        set_result = subprocess.run(set_cmd, capture_output=True, text=True)
+        if set_result.returncode != 0:
+            return False, (set_result.stderr or "Falha ao configurar TrustedHosts").strip()
+
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _dashboard_safe_text(value, default="N/A"):
+    text = str(value or "").strip()
+    return html.escape(text) if text else default
+
+
+def _dashboard_storage_text(value):
+    text = str(value or "").strip()
+    if not text:
+        return "N/A"
+    lowered = text.lower()
+    if any(unit in lowered for unit in ["gb", "tb", "mb"]):
+        return html.escape(text)
+    return html.escape(f"{text} GB")
+
+
+def _dashboard_disk_list_html(disks):
+    items = []
+    for disk in disks or []:
+        drive = _dashboard_safe_text(disk.get("drive"))
+        free_gb = _dashboard_storage_text(disk.get("freeGB"))
+        total_gb = _dashboard_storage_text(disk.get("totalGB"))
+        items.append(f"<li><strong>{drive}</strong>: {free_gb} livres de {total_gb}</li>")
+
+    if not items:
+        items.append("<li>Nenhum disco retornado</li>")
+
+    return "".join(items)
+
+
+def _dashboard_bitdefender_html(bitdefender, available=True):
+    if not available:
+        return """
+    <div class="regional-server-metric regional-server-metric-full regional-server-security regional-server-security-warning">
+        <span class="metric-label">Bitdefender</span>
+        <span class="metric-value">INDISPONÍVEL</span>
+        <span class="metric-helper">A validação remota não retornou dados suficientes nesta coleta</span>
+        <ul class="regional-server-list"><li>Sem confirmação de instalação nesta execução</li></ul>
+    </div>
+    """
+
+    installed = bool((bitdefender or {}).get("installed"))
+    services = (bitdefender or {}).get("services") or []
+    products = (bitdefender or {}).get("products") or []
+    running_services = int((bitdefender or {}).get("runningServices", 0) or 0)
+
+    status_class = "success" if installed else "danger"
+    status_label = "INSTALADO" if installed else "NÃO INSTALADO"
+
+    detail_items = []
+    if products:
+        detail_items.extend(f"<li>{_dashboard_safe_text(product)}</li>" for product in products)
+    elif services:
+        detail_items.extend(
+            f"<li>{_dashboard_safe_text(service.get('displayName') or service.get('name'))} - {_dashboard_safe_text(service.get('status'))}</li>"
+            for service in services
+        )
+    else:
+        detail_items.append("<li>Nenhum serviço Bitdefender encontrado</li>")
+
+    return f"""
+    <div class="regional-server-metric regional-server-metric-full regional-server-security regional-server-security-{status_class}">
+        <span class="metric-label">Bitdefender</span>
+        <span class="metric-value">{status_label}</span>
+        <span class="metric-helper">Serviços em execução: {running_services}</span>
+        <ul class="regional-server-list">{''.join(detail_items)}</ul>
+    </div>
+    """
+
+
+def _extrair_bitdefender_do_relatorio_vm(relatorio):
+    services = []
+    for service in relatorio.get("servicos", []) or []:
+        if service.get("error"):
+            continue
+
+        display_name = str(service.get("DisplayName") or service.get("displayName") or "")
+        name = str(service.get("Name") or service.get("name") or "")
+        if "bitdefender" not in display_name.lower() and "bitdefender" not in name.lower():
+            continue
+
+        services.append({
+            "name": name,
+            "displayName": display_name,
+            "status": str(service.get("Status") or service.get("status") or ""),
+            "startMode": str(service.get("StartMode") or service.get("startMode") or ""),
+        })
+
+    return {
+        "installed": bool(services),
+        "runningServices": sum(1 for service in services if str(service.get("status") or "").lower() == "running"),
+        "services": services,
+        "products": [],
+    }
+
+
+def _extrair_detalhes_card_vm(relatorio, servidor):
+    sistema = relatorio.get("sistema") or {}
+    if sistema.get("error"):
+        sistema = {}
+
+    detalhes = {
+        "operatingSystem": sistema.get("OperatingSystem") or servidor.get("sistema_operacional") or "N/A",
+        "model": sistema.get("Model") or servidor.get("modelo") or "Servidor Virtual",
+        "processorName": relatorio.get("cpu_resumo") or sistema.get("ProcessorName") or "N/A",
+        "memory": sistema.get("Memory") or "N/A",
+        "uptime": sistema.get("Uptime") or "N/A",
+        "disks": [],
+        "bitdefender": _extrair_bitdefender_do_relatorio_vm(relatorio),
+    }
+
+    for disco in relatorio.get("discos", []) or []:
+        if disco.get("error"):
+            continue
+        detalhes["disks"].append({
+            "drive": disco.get("Drive") or disco.get("drive") or "N/A",
+            "freeGB": disco.get("FreeSpace") or disco.get("freeGB") or "N/A",
+            "totalGB": disco.get("TotalSpace") or disco.get("totalGB") or "N/A",
+        })
+
+    return detalhes
+
+
+def _extrair_detalhes_card_vm_hardware(resultado_hardware, servidor):
+    hardware = (resultado_hardware or {}).get("hardware") or {}
+    cpu = hardware.get("cpu") or {}
+    cpu_model = str(cpu.get("model") or "").strip()
+    cpu_count = cpu.get("count")
+    if cpu_model and cpu_count not in (None, ""):
+        processador = f"{cpu_model} ({cpu_count} CPU)"
+    else:
+        processador = cpu_model or "N/A"
+
+    return {
+        "operatingSystem": hardware.get("sistema_operacional") or servidor.get("sistema_operacional") or "N/A",
+        "model": hardware.get("modelo") or servidor.get("modelo") or "Servidor Virtual",
+        "processorName": processador,
+        "memory": hardware.get("memoria_gib"),
+        "uptime": hardware.get("uptime") or "N/A",
+        "disks": hardware.get("discos") or [],
+        "bitdefender": hardware.get("bitdefender") or {"installed": False, "runningServices": 0, "services": [], "products": []},
+    }
+
+
+def _montar_vm_regional_card(servidor, tempo_resposta=None, details=None, error_message=None, details_available=True, status_class=None, status_label=None):
+    nome_servidor = servidor.get("servidor_nome") or servidor.get("nome") or servidor.get("ip") or "Servidor"
+    funcao_servidor = servidor.get("funcao") or "Servidor Virtual"
+    ip = servidor.get("ip") or "N/A"
+    info = details or {}
+
+    resolved_status_class = status_class or ("success" if not error_message else "danger")
+    resolved_status_label = status_label or ("ONLINE" if resolved_status_class != "danger" else "OFFLINE")
+
+    sistema_operacional = info.get("operatingSystem") or servidor.get("sistema_operacional") or "N/A"
+    modelo = info.get("model") or servidor.get("modelo") or "Servidor Virtual"
+    processador = info.get("processorName") or "N/A"
+    memory_value = info.get("memory")
+    if memory_value in (None, "", "N/A"):
+        memoria = "N/A"
+    else:
+        memory_text = str(memory_value).strip()
+        memoria = memory_text if any(unit in memory_text.lower() for unit in ["gb", "tb", "mb"]) else f"{memory_text} GB"
+    uptime = info.get("uptime") or "N/A"
+    tempo_display = f"{tempo_resposta}s" if tempo_resposta is not None else "N/A"
+    disks_html = _dashboard_disk_list_html(info.get("disks", [])) if details_available else "<li>Dados de disco indisponíveis nesta coleta</li>"
+    bitdefender_html = _dashboard_bitdefender_html(info.get("bitdefender", {}), available=details_available)
+
+    observacao_html = ""
+    if error_message:
+        alert_prefix = "[ERROR]" if resolved_status_class == "danger" else "[WARN]"
+        observacao_html = f"<div class=\"regional-server-alert\">{alert_prefix} {_dashboard_safe_text(error_message)}</div>"
+
+    return f"""
+    <article class="regional-server-card regional-server-card-{resolved_status_class}">
+        <div class="regional-server-card-header">
+            <div>
+                <div class="regional-server-card-title">{_dashboard_safe_text(nome_servidor)}</div>
+                <div class="regional-server-card-subtitle">{_dashboard_safe_text(funcao_servidor)} - {_dashboard_safe_text(ip)}</div>
+            </div>
+            <span class="status-badge {resolved_status_class}">{resolved_status_label}</span>
+        </div>
+        <div class="regional-server-metrics-grid">
+            <div class="regional-server-metric">
+                <span class="metric-label">Tempo de resposta</span>
+                <span class="metric-value">{_dashboard_safe_text(tempo_display)}</span>
+            </div>
+            <div class="regional-server-metric">
+                <span class="metric-label">Sistema Operacional</span>
+                <span class="metric-value">{_dashboard_safe_text(sistema_operacional)}</span>
+            </div>
+            <div class="regional-server-metric">
+                <span class="metric-label">Modelo</span>
+                <span class="metric-value">{_dashboard_safe_text(modelo)}</span>
+            </div>
+            <div class="regional-server-metric">
+                <span class="metric-label">CPU</span>
+                <span class="metric-value">{_dashboard_safe_text(processador)}</span>
+            </div>
+            <div class="regional-server-metric">
+                <span class="metric-label">Memória</span>
+                <span class="metric-value">{_dashboard_safe_text(memoria)}</span>
+            </div>
+            <div class="regional-server-metric">
+                <span class="metric-label">Uptime</span>
+                <span class="metric-value">{_dashboard_safe_text(uptime)}</span>
+            </div>
+            <div class="regional-server-metric regional-server-metric-full">
+                <span class="metric-label">Discos</span>
+                <ul class="regional-server-list">{disks_html}</ul>
+            </div>
+            {bitdefender_html}
+        </div>
+        {observacao_html}
+    </article>
+    """
+
 # Processa cada servidor configurado
 for servidor in servidores_configurados:
     # Pula servidores inativos
@@ -719,28 +1047,50 @@ for servidor in servidores_configurados:
 
     # Executa o script de checklist apropriado baseado no 'tipo'
     try:
-        if tipo == "idrac":
-            print(f"[EXEC] Coletando {nome} ({ip}) - iDRAC")
-            chelist_path = PROJECT_ROOT / "Chelist.py"
-            subprocess.run(["python", str(chelist_path), ip, usuario, senha, str(html_path)], 
-                         check=True, cwd=str(PROJECT_ROOT), capture_output=True, text=True)
-        elif tipo == "ilo":
-            print(f"[EXEC] Coletando {nome} ({ip}) - iLO")
-            ilo_path = PROJECT_ROOT / "iLOcheck.py"
-            subprocess.run(["python", str(ilo_path), ip, usuario, senha, str(html_path)], 
-                         check=True, cwd=str(PROJECT_ROOT), capture_output=True, text=True)
+        from vm_manager import verificar_vm_online
+
+        nome_servidor = servidor.get('servidor_nome') or ip
+        print(f"[EXEC] Verificando servidor virtual {nome_servidor} ({ip})")
+
+        inicio = datetime.now()
+        online = verificar_vm_online(ip)
+        tempo_resposta = round((datetime.now() - inicio).total_seconds(), 2)
+
+        if online:
+            resultado_hardware = coletar_hardware_vm(servidor)
+            if resultado_hardware.get('success'):
+                current_regional_html_content = _montar_vm_regional_card(
+                    servidor,
+                    tempo_resposta=tempo_resposta,
+                    details=_extrair_detalhes_card_vm_hardware(resultado_hardware, servidor),
+                    details_available=True,
+                    status_class="success",
+                    status_label="ONLINE",
+                )
+            else:
+                current_regional_html_content = _montar_vm_regional_card(
+                    servidor,
+                    tempo_resposta=tempo_resposta,
+                    details={},
+                    error_message=resultado_hardware.get('message') or 'Falha ao obter detalhes da VM',
+                    details_available=False,
+                    status_class="warning",
+                    status_label="ONLINE",
+                )
         else:
-            # Trata tipos desconhecidos escrevendo uma mensagem de erro no arquivo HTML
-            current_regional_html_content = f"""
-            <div class="error-container">
-                <div class="error-icon">[ERRO]</div>
-                <div class="error-title">Tipo desconhecido</div>
-                <div class="error-message">Tipo: {tipo}</div>
-            </div>
-            """
+            current_regional_html_content = _montar_vm_regional_card(
+                servidor,
+                tempo_resposta=tempo_resposta,
+                details={},
+                error_message='Servidor virtual não acessível no momento',
+                details_available=False,
+                status_class="danger",
+                status_label="OFFLINE",
+            )
             has_error_for_regional = True
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(current_regional_html_content)
+
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(current_regional_html_content)
     except subprocess.CalledProcessError as e:
         error_details = f"Código de saída: {e.returncode}"
         if hasattr(e, 'stdout') and e.stdout:
@@ -800,19 +1150,15 @@ for servidor in servidores_configurados:
         {
             "nome": nome,
             "has_error": False,
-            "server_blocks": [],
+            "server_entries": [],
         },
     )
     regional_data["has_error"] = regional_data["has_error"] or has_error_for_regional
-    regional_data["server_blocks"].append(
-        f"""
-        <div class="regional-server-block" style="margin-bottom: 24px;">
-            <div style="font-size: 0.95rem; font-weight: 700; color: #4a5568; margin-bottom: 12px;">
-                {html.escape(tipo.upper())} - {html.escape(ip)}
-            </div>
-            {current_regional_html_content}
-        </div>
-        """
+    regional_data["server_entries"].append(
+        {
+            "html": current_regional_html_content,
+            "has_error": has_error_for_regional,
+        }
     )
 
 blocos_html_regionais_with_status = []
@@ -821,8 +1167,8 @@ servidores_offline_total = 0
 regionais_servidor_status = {}
 for regional_data in regionais_processadas.values():
     dados_regional = regionais_servidor_status.setdefault(regional_data["nome"].strip().upper(), {"online": 0, "offline": 0})
-    for bloco in regional_data.get("server_blocks", []):
-        if _regional_html_indicates_error(bloco):
+    for server_entry in regional_data.get("server_entries", []):
+        if server_entry.get("has_error"):
             servidores_offline_total += 1
             dados_regional["offline"] += 1
         else:
@@ -834,8 +1180,8 @@ for regional_data in regionais_processadas.values():
     regional_html_block = f"""
     <details class="regional-item" data-status="{regional_status}"{regional_open_attr}>
         <summary><strong>{regional_data['nome']}</strong></summary>
-        <div class="regional-content">
-            {''.join(regional_data['server_blocks'])}
+        <div class="regional-content regional-servers-grid">
+            {''.join(entry['html'] for entry in regional_data['server_entries'])}
         </div>
     </details>
     """
@@ -1475,6 +1821,13 @@ links_online = 0
 links_offline = 0
 links_html_content = ""
 
+
+def _link_percentual_trafego(valor):
+    try:
+        return max(0.0, min((float(valor) / 1000000.0), 100.0))
+    except (TypeError, ValueError):
+        return 0.0
+
 try:
     from gerenciar_fortigate import GerenciadorFortigate
     from config import ENV_CONFIG
@@ -1599,14 +1952,18 @@ try:
                 status_class = "success" if link["status"] == "online" else "danger"
                 estat = link["estatisticas"]
                 match_confiavel = bool(link.get("match_confiavel", True))
-                monitorada = link.get("interface_monitorada") or "N/A"
-                esperada = link.get("interface_esperada") or "não definida"
                 download = estat.get('bandwidth_in_readable', 'N/A')
                 upload = estat.get('bandwidth_out_readable', 'N/A')
+                download_percentual = _link_percentual_trafego(estat.get('bandwidth_in'))
+                upload_percentual = _link_percentual_trafego(estat.get('bandwidth_out'))
+                aviso_correlacao = ""
 
                 if not match_confiavel:
                     download = "N/A (sem correspondência da interface)"
                     upload = "N/A (sem correspondência da interface)"
+                    download_percentual = 0.0
+                    upload_percentual = 0.0
+                    aviso_correlacao = "<p class='link-data-warning'>Tráfego indisponível na coleta atual para este link.</p>"
 
                 links_html_content += f"""
                     <div class="link-item" data-status="{link['status']}">
@@ -1619,16 +1976,34 @@ try:
                                 <span class="status-pill {status_class}">{link['status'].title()}</span>
                             </div>
                             <div class="card-body">
-                                <p class="link-monitor"><strong>Interface monitorada:</strong> {monitorada} <span class="link-monitor-note">(esperada: {esperada})</span></p>
                                 <div class="link-meta-grid">
-                                    <p><strong>Tipo:</strong> {link['tipo']}</p>
+                                    <p><strong>IP:</strong> {link['ip']}</p>
                                     <p><strong>Velocidade:</strong> {link['velocidade']}</p>
+                                    <p><strong>Tipo:</strong> {link['tipo']}</p>
                                 </div>
                                 <hr>
-                                <div class="link-bandwidth-grid">
-                                    <p><strong>Download:</strong> {download}</p>
-                                    <p><strong>Upload:</strong> {upload}</p>
+                                <h6 class="link-traffic-title">Estatísticas de Tráfego</h6>
+                                <div class="link-traffic-stack">
+                                    <div class="link-traffic-row">
+                                        <div class="link-traffic-head">
+                                            <span>Download:</span>
+                                            <strong>{download}</strong>
+                                        </div>
+                                        <div class="link-progress">
+                                            <div class="link-progress-bar download" style="width: {download_percentual:.2f}%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="link-traffic-row">
+                                        <div class="link-traffic-head">
+                                            <span>Upload:</span>
+                                            <strong>{upload}</strong>
+                                        </div>
+                                        <div class="link-progress">
+                                            <div class="link-progress-bar upload" style="width: {upload_percentual:.2f}%"></div>
+                                        </div>
+                                    </div>
                                 </div>
+                                {aviso_correlacao}
                                 <p class="link-last-check"><strong>Última verificação:</strong> {link['ultima_verificacao']}</p>
                             </div>
                         </div>
@@ -1729,8 +2104,8 @@ regionais_ok = sum(1 for _, has_error in blocos_html_regionais_with_status if no
 regionais_erro = sum(1 for _, has_error in blocos_html_regionais_with_status if has_error)
 regionais_sem_erro = max(total_regionais_cadastradas - regionais_erro, 0)
 regionais_disponibilidade = (regionais_sem_erro / total_regionais_cadastradas * 100) if total_regionais_cadastradas else 0
-regionais_servidor_com_offline = regionais_erro
-regionais_servidor_sem_offline = regionais_sem_erro
+regionais_servidor_com_offline = sum(1 for dados in regionais_servidor_status.values() if dados["offline"] > 0)
+regionais_servidor_sem_offline = max(len(regionais_servidor_status) - regionais_servidor_com_offline, 0)
 
 
 # Debug Regionais
@@ -2142,6 +2517,7 @@ except Exception as e:
 
 # === 10. MONTA DASHBOARD FINAL ===
 # Construct the final HTML dashboard using f-strings for dynamic content insertion.
+sentinel_logo_uri = _carregar_logo_sentinel_src()
 dashboard_html = f"""
 <!DOCTYPE html>
 <html>
@@ -2198,17 +2574,45 @@ dashboard_html = f"""
             color: #ffffff;
             font-size: 3.5rem;
             font-weight: 800;
-            text-align: center;
+            text-align: left;
             margin-bottom: 10px;
             letter-spacing: -0.02em;
         }}
         
         .page-subtitle {{
-            text-align: center;
+            text-align: left;
             color: rgba(45, 55, 72, 0.8);
             font-size: 1.1rem;
             font-weight: 500;
             margin-bottom: 40px;
+        }}
+
+        .dashboard-hero {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 32px;
+            margin-bottom: 28px;
+        }}
+
+        .dashboard-hero-copy {{
+            flex: 1 1 420px;
+            min-width: 0;
+        }}
+
+        .dashboard-hero-brand {{
+            flex: 0 0 auto;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }}
+
+        .dashboard-hero-logo {{
+            display: block;
+            width: min(100%, 460px);
+            max-width: 460px;
+            height: auto;
+            filter: drop-shadow(0 14px 28px rgba(1, 46, 64, 0.22));
         }}
         
         .kpi-container {{
@@ -2776,6 +3180,128 @@ dashboard_html = f"""
             background: rgba(255, 255, 255, 0.9);
         }}
 
+        .regional-servers-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 18px;
+            align-items: start;
+        }}
+
+        .regional-server-card {{
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 247, 255, 0.96) 100%);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        }}
+
+        .regional-server-card-success {{
+            border-top: 4px solid #38a169;
+        }}
+
+        .regional-server-card-danger {{
+            border-top: 4px solid #e53e3e;
+        }}
+
+        .regional-server-card-header {{
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }}
+
+        .regional-server-card-title {{
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #0f172a;
+        }}
+
+        .regional-server-card-subtitle {{
+            margin-top: 4px;
+            color: #475569;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }}
+
+        .regional-server-metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }}
+
+        .regional-server-metric {{
+            background: rgba(248, 250, 252, 0.95);
+            border: 1px solid rgba(203, 213, 225, 0.9);
+            border-radius: 14px;
+            padding: 12px 14px;
+        }}
+
+        .regional-server-metric-full {{
+            grid-column: 1 / -1;
+        }}
+
+        .regional-server-security-success {{
+            border-color: rgba(56, 161, 105, 0.35);
+            background: rgba(240, 253, 244, 0.95);
+        }}
+
+        .regional-server-security-warning {{
+            border-color: rgba(221, 107, 32, 0.35);
+            background: rgba(255, 247, 237, 0.98);
+        }}
+
+        .regional-server-security-danger {{
+            border-color: rgba(229, 62, 62, 0.35);
+            background: rgba(254, 242, 242, 0.95);
+        }}
+
+        .metric-label {{
+            display: block;
+            font-size: 0.74rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 6px;
+        }}
+
+        .metric-value {{
+            display: block;
+            font-size: 0.97rem;
+            font-weight: 700;
+            color: #0f172a;
+            line-height: 1.4;
+        }}
+
+        .metric-helper {{
+            display: block;
+            margin-top: 8px;
+            font-size: 0.82rem;
+            color: #475569;
+        }}
+
+        .regional-server-list {{
+            margin: 10px 0 0;
+            padding-left: 18px;
+            color: #334155;
+            font-size: 0.88rem;
+        }}
+
+        .regional-server-list li + li {{
+            margin-top: 6px;
+        }}
+
+        .regional-server-alert {{
+            margin-top: 14px;
+            border-radius: 12px;
+            padding: 10px 12px;
+            background: rgba(254, 242, 242, 0.96);
+            color: #991b1b;
+            font-size: 0.88rem;
+            font-weight: 600;
+        }}
+
         #replicacao table th {{
             color: #000 !important;
             background-color: #dbeafe !important;
@@ -2822,9 +3348,36 @@ dashboard_html = f"""
                 margin: 10px;
                 padding: 20px;
             }}
+
+            .dashboard-hero {{
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                gap: 18px;
+            }}
+
+            .dashboard-hero-copy {{
+                flex-basis: auto;
+                width: 100%;
+            }}
+
+            .dashboard-hero-brand {{
+                width: 100%;
+                justify-content: center;
+            }}
+
+            .dashboard-hero-logo {{
+                max-width: 100%;
+                width: min(100%, 360px);
+            }}
             
             .page-title {{
                 font-size: 2.5rem;
+                text-align: center;
+            }}
+
+            .page-subtitle {{
+                text-align: center;
             }}
             
             .kpi-container {{
@@ -2984,21 +3537,67 @@ dashboard_html = f"""
             gap: 8px 14px;
         }}
 
+        .link-traffic-title {{
+            margin: 0 0 12px;
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: #1f2937;
+        }}
+
+        .link-traffic-stack {{
+            display: grid;
+            gap: 14px;
+        }}
+
+        .link-traffic-row {{
+            display: grid;
+            gap: 6px;
+        }}
+
+        .link-traffic-head {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.95rem;
+        }}
+
+        .link-progress {{
+            width: 100%;
+            height: 9px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            overflow: hidden;
+        }}
+
+        .link-progress-bar {{
+            height: 100%;
+            border-radius: 999px;
+            min-width: 0;
+        }}
+
+        .link-progress-bar.download {{
+            background: #0f4c5c;
+        }}
+
+        .link-progress-bar.upload {{
+            background: #1d7186;
+        }}
+
+        .link-data-warning {{
+            margin-top: 12px;
+            padding: 9px 11px;
+            border-radius: 10px;
+            background: #fff7ed;
+            border: 1px solid #fbd38d;
+            color: #9a3412 !important;
+            font-size: 0.86rem;
+        }}
+
         .link-last-check {{
             margin-top: 10px;
             font-size: 0.9rem;
             color: #1a202c !important;
-        }}
-
-        .link-monitor {{
-            margin-bottom: 8px;
-            color: #1a202c !important;
-            font-size: 0.9rem;
-        }}
-
-        .link-monitor-note {{
-            color: #4a5568;
-            font-size: 0.82rem;
         }}
 
         .vpn-container {{
@@ -3024,22 +3623,27 @@ dashboard_html = f"""
         }}
 
         .vpn-regional-badge {{
-            background: #ffffff;
-            border: 1px solid #d5dfef;
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
             border-left: 5px solid #2f855a;
             border-radius: 12px;
             padding: 10px 12px;
             box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
-            color: #1f2937;
+            color: #2d3748;
         }}
 
+        .vpn-regional-badge strong {{ color: #374151; }}
         .vpn-regional-badge .ok {{ color: #2f855a; }}
         .vpn-regional-badge .alert {{ color: #c53030; }}
-        .vpn-regional-badge.vpn-regional-alert {{ border-left-color: #dd6b20; }}
+        .vpn-regional-badge.vpn-regional-alert {{
+            background: #fff5f5;
+            border-color: #feb2b2;
+            border-left-color: #dd6b20;
+        }}
 
         .vpn-offline-box {{
             background: #fff7ed;
-            border: 1px solid #fbd38d;
+            border: 1px solid #fdba74;
             border-left: 6px solid #dd6b20;
             border-radius: 12px;
             padding: 12px 14px;
@@ -3056,8 +3660,8 @@ dashboard_html = f"""
         }}
 
         .vpn-regional-group {{
-            background: rgba(255, 255, 255, 0.92);
-            border: 1px solid #dbe3f2;
+            background: linear-gradient(180deg, #eefaf2 0%, #e2f6ea 100%);
+            border: 1px solid #9ae6b4;
             border-radius: 12px;
             padding: 12px;
             display: grid;
@@ -3075,11 +3679,21 @@ dashboard_html = f"""
             justify-content: space-between;
             align-items: center;
             gap: 10px;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.92);
             border: 1px solid #e2e8f0;
             border-radius: 10px;
             padding: 10px 12px;
             color: #1f2937;
+        }}
+
+        .vpn-tunnel-card.vpn-online {{
+            background: linear-gradient(90deg, rgba(236, 253, 243, 0.96), rgba(255, 255, 255, 0.96));
+            border-left: 4px solid #2f855a;
+        }}
+
+        .vpn-tunnel-card.vpn-offline {{
+            background: linear-gradient(90deg, rgba(255, 241, 242, 0.96), rgba(255, 255, 255, 0.96));
+            border-left: 4px solid #dd6b20;
         }}
 
         .vpn-status-pill {{
@@ -3103,8 +3717,15 @@ dashboard_html = f"""
 </head>
 <body>
     <div class="main-container">
-        <h1 class="page-title">Dashboard Consolidado</h1>
-        <p class="page-subtitle"><strong>Executado em:</strong> {data_execucao}</p>
+        <div class="dashboard-hero">
+            <div class="dashboard-hero-copy">
+                <h1 class="page-title">Dashboard Consolidado</h1>
+                <p class="page-subtitle"><strong>Executado em:</strong> {data_execucao}</p>
+            </div>
+            <div class="dashboard-hero-brand">
+                <img class="dashboard-hero-logo" src="{sentinel_logo_uri}" alt="Sentinel Infraestrutura Regional Grupo GPS">
+            </div>
+        </div>
 
         <div class="regionais-parent nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
             <div class="regionais-parent-top">
@@ -3199,30 +3820,6 @@ dashboard_html = f"""
                 </div>
                 {"<ul>" + ''.join(f"<li>{srv}</li>" for srv in replication_errors_list) + "</ul>" if replication_errors_list else ""}
             </div>
-            <div class="kpi nav-detail-trigger" data-detail-target="vms" role="button" tabindex="0">
-                <div class="kpi-header">
-                    <div class="kpi-icon success">
-                        <i class="fas fa-desktop"></i>
-                    </div>
-                    <h3>VMs (Regionais)</h3>
-                </div>
-                <div class="kpi-groups">
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Dispositivos</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vms-online" role="button" tabindex="0"><span>VMs online</span><strong>{vms_online}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vms-offline" role="button" tabindex="0"><span>VMs offline</span><strong>{vms_offline}</strong></div>
-                        </div>
-                    </div>
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Regionais</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vms-online" role="button" tabindex="0"><span>Sem offline</span><strong>{vms_regionais_sem_offline}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vms-offline" role="button" tabindex="0"><span>Com offline</span><strong>{vms_regionais_com_offline}</strong></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
             <div class="kpi nav-detail-trigger" data-detail-target="switches" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon success">
@@ -3311,9 +3908,6 @@ dashboard_html = f"""
                 <div class="chart-wrapper nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0">
                     <canvas id="chartReplicacao"></canvas>
                 </div>
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="vms" role="button" tabindex="0">
-                    <canvas id="chartVMs"></canvas>
-                </div>
                 <div class="chart-wrapper nav-detail-trigger" data-detail-target="switches" role="button" tabindex="0">
                     <canvas id="chartSwitches"></canvas>
                 </div>
@@ -3329,7 +3923,7 @@ dashboard_html = f"""
         <hr class="divider">
 
         <details id="regionais" class="details-section">
-            <summary>[SERVER] Status das Regionais (iDRAC/iLO)</summary>
+            <summary>[SERVER] Status das Regionais (Servidores Virtuais)</summary>
             <div class="details-content">
                 {regionais_html}
             </div>
@@ -3374,13 +3968,6 @@ dashboard_html = f"""
             <summary> Status das Antenas UniFi (por site)</summary>
             <div class="details-content">
                 {unifi_html}
-            </div>
-        </details>
-
-        <details id="vms" class="details-section">
-            <summary>[PC] Status das Máquinas Virtuais</summary>
-            <div class="details-content">
-                {relatorio_vms}
             </div>
         </details>
 
@@ -3466,12 +4053,6 @@ function resetSwitchesSection(detail) {{
     }});
 }}
 
-function resetVmsSection(detail) {{
-    detail.querySelectorAll('.vm-item').forEach((item) => {{
-        item.style.display = '';
-    }});
-}}
-
 function resetRegionaisSection(detail) {{
     detail.querySelectorAll('.regional-item').forEach((item) => {{
         item.style.display = '';
@@ -3495,7 +4076,6 @@ function resetSectionFilters(detail) {{
     if (detail.id === 'regionais') resetRegionaisSection(detail);
     if (detail.id === 'unifi') resetUnifiSections(detail);
     if (detail.id === 'switches') resetSwitchesSection(detail);
-    if (detail.id === 'vms') resetVmsSection(detail);
     if (detail.id === 'links') resetLinksSection(detail);
     if (detail.id === 'vpn-details') resetVpnSection(detail);
 }}
@@ -3561,17 +4141,6 @@ function abrirEIrParaDetalhe(detailTarget) {{
         }}
     }}
 
-    if (detailId === 'vms') {{
-        const vmItems = detail.querySelectorAll('.vm-item');
-        if (action === 'offline' || action === 'online') {{
-            vmItems.forEach((item) => {{
-                item.style.display = item.dataset.status === action ? '' : 'none';
-            }});
-        }} else {{
-            resetVmsSection(detail);
-        }}
-    }}
-
     if (detailId === 'links') {{
         const linkItems = detail.querySelectorAll('.link-item');
         if (action === 'offline' || action === 'online') {{
@@ -3611,7 +4180,6 @@ function navegarPeloGrafico(chartId, datasetIndex) {{
         chartRegionais: ['regionais-online', 'regionais-offline'],
         chartUnifi: ['unifi-online', 'unifi-offline'],
         chartReplicacao: ['replicacao', 'replicacao'],
-        chartVMs: ['vms-online', 'vms-offline'],
         chartSwitches: ['switches-online', 'switches-offline'],
         chartLinks: ['links-online', 'links-offline'],
         chartVpn: ['vpn-details-online', 'vpn-details-offline'],
@@ -3764,43 +4332,6 @@ new Chart(document.getElementById('chartReplicacao'), {{
             title: {{
                 display: true,
                 text: 'Replicação AD',
-                font: {{
-                    size: 16
-                }},
-                color: '#333'
-            }},
-            legend: {{
-                position: 'bottom',
-                labels: {{
-                    font: {{
-                        size: 14
-                    }},
-                    color: '#555'
-                }}
-            }}
-        }}
-    }}
-}});
-
-new Chart(document.getElementById('chartVMs'), {{
-    type: 'doughnut',
-    data: {{
-        labels: ['Online', 'Offline'],
-        datasets: [{{
-            data: [{vms_online}, {vms_offline}],
-            backgroundColor: ['#4CAF50', '#F44336'],
-            borderColor: '#ffffff',
-            borderWidth: 2
-        }}]
-    }},
-    options: {{
-        onClick: function() {{
-            abrirEIrParaDetalhe('vms');
-        }},
-        plugins: {{
-            title: {{
-                display: true,
-                text: 'Status das VMs',
                 font: {{
                     size: 16
                 }},

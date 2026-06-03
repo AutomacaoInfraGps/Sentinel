@@ -2,14 +2,17 @@ param(
     [ValidateSet("install", "start", "stop", "restart", "status", "uninstall")]
     [string]$Action = "status",
 
+    [string]$ProjectDir = $PSScriptRoot,
+    [int]$Port = $(if ($env:AUTOMACAO_WEB_PORT) { [int]$env:AUTOMACAO_WEB_PORT } else { 5000 }),
+    [string]$PublicBase = $env:AUTOMACAO_PUBLIC_BASE,
     [string]$ServiceName = "AutomacaoWeb",
     [string]$TaskName = "AutomacaoWebStartup",
     [string]$DisplayName = "Automacao Web",
     [string]$Description = "Sistema de Automacao Web (Flask + Waitress)",
-    [string]$PythonPath = "C:\Automacao\.venv\Scripts\python.exe",
-    [string]$RunnerPath = "C:\Automacao\run_web_service.py",
-    [string]$StarterPath = "C:\Automacao\start_web_background.ps1",
-    [string]$MonitorPath = "C:\Automacao\monitor_web_background.ps1"
+    [string]$PythonPath = (Join-Path $PSScriptRoot ".venv\Scripts\python.exe"),
+    [string]$RunnerPath = (Join-Path $PSScriptRoot "run_web_service.py"),
+    [string]$StarterPath = (Join-Path $PSScriptRoot "start_web_background.ps1"),
+    [string]$MonitorPath = (Join-Path $PSScriptRoot "monitor_web_background.ps1")
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,7 +43,7 @@ function Invoke-RequiringAdmin([string]$InnerAction) {
 
 function Stop-WebProcesses {
     $processes = Get-CimInstance Win32_Process | Where-Object {
-        $_.Name -eq 'python.exe' -and $_.CommandLine -like '*run_web_service.py*'
+        $_.Name -eq 'python.exe' -and $_.CommandLine -like "*$RunnerPath*"
     }
 
     foreach ($process in $processes) {
@@ -66,7 +69,11 @@ function Install-Service {
     & $PythonPath -m pip install --disable-pip-version-check waitress | Out-Null
 
     schtasks /delete /tn $TaskName /f 2>$null | Out-Null
-    schtasks /create /tn $TaskName /sc onstart /ru SYSTEM /rl HIGHEST /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MonitorPath" /f | Out-Null
+    $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$MonitorPath`" -Port $Port"
+    if ($PublicBase) {
+        $taskCommand += " -PublicBase `"$PublicBase`""
+    }
+    schtasks /create /tn $TaskName /sc onstart /ru SYSTEM /rl HIGHEST /tr $taskCommand /f | Out-Null
 
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
         sc.exe config $ServiceName start= demand | Out-Null
@@ -109,7 +116,7 @@ function Show-Status {
     if ($LASTEXITCODE -ne 0) {
         $taskOutput = $null
     }
-    $listener = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue
+    $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 
     if ($taskOutput) {
@@ -124,9 +131,9 @@ function Show-Status {
     }
 
     if ($listener) {
-        Write-Host "Porta 5000 ativa no PID $($listener.OwningProcess)"
+        Write-Host "Porta $Port ativa no PID $($listener.OwningProcess)"
     } else {
-        Write-Host "Porta 5000 sem listener."
+        Write-Host "Porta $Port sem listener."
     }
 }
 

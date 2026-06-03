@@ -23,10 +23,7 @@ class DashboardHierarquico:
     def coletar_dados_completos(self):
         """Coleta dados completos de todas as regionais"""
         print("[CHECK] Coletando dados de todas as regionais...")
-        
-        # Verifica status de todos os servidores
-        resultados_verificacao = self.verificador.verificar_todas_regionais()
-        
+
         # Monta dados completos
         dados_completos = {
             "timestamp": datetime.now().isoformat(),
@@ -52,42 +49,36 @@ class DashboardHierarquico:
                 "descricao": regional_info.get("descricao", ""),
                 "servidores": []
             }
-            
-            # Processa servidores da regional
-            resultados_regional = resultados_verificacao.get(codigo_regional, [])
-            
-            for resultado in resultados_regional:
-                # Busca dados completos do servidor
-                servidor_info = None
-                for srv in regional_info.get("servidores", []):
-                    if srv.get("ip") == resultado.get("ip"):
-                        servidor_info = srv
-                        break
-                
-                if servidor_info:
-                    dados_servidor = {
-                        "id": servidor_info.get("id"),
-                        "nome": servidor_info.get("nome"),
-                        "ip": servidor_info.get("ip"),
-                        "tipo": servidor_info.get("tipo"),
-                        "modelo": servidor_info.get("modelo", "N/A"),
-                        "funcao": servidor_info.get("funcao", "N/A"),
-                        "status": resultado.get("status"),
-                        "tempo_resposta": resultado.get("tempo_resposta"),
-                        "erro": resultado.get("erro"),
-                        "ultima_verificacao": resultado.get("timestamp")
-                    }
-                    
-                    dados_regional["servidores"].append(dados_servidor)
-                    
-                    # Atualiza estatísticas
-                    dados_completos["estatisticas_gerais"]["total_servidores"] += 1
-                    if resultado.get("status") == "online":
-                        dados_completos["estatisticas_gerais"]["servidores_online"] += 1
-                    elif resultado.get("status") == "offline":
-                        dados_completos["estatisticas_gerais"]["servidores_offline"] += 1
-                    else:
-                        dados_completos["estatisticas_gerais"]["servidores_warning"] += 1
+
+            # Usa o último status persistido dos servidores no JSON.
+            for servidor_info in regional_info.get("servidores", []):
+                status = str(servidor_info.get("status") or "warning").strip().lower()
+                if status not in {"online", "offline", "warning"}:
+                    status = "warning"
+
+                dados_servidor = {
+                    "id": servidor_info.get("id"),
+                    "nome": servidor_info.get("nome"),
+                    "ip": servidor_info.get("ip"),
+                    "tipo": servidor_info.get("tipo") or "vm",
+                    "modelo": servidor_info.get("modelo", "N/A"),
+                    "funcao": servidor_info.get("funcao", "N/A"),
+                    "status": status,
+                    "tempo_resposta": servidor_info.get("tempo_resposta"),
+                    "erro": servidor_info.get("erro"),
+                    "ultima_verificacao": servidor_info.get("ultima_verificacao")
+                }
+
+                dados_regional["servidores"].append(dados_servidor)
+
+                # Atualiza estatísticas
+                dados_completos["estatisticas_gerais"]["total_servidores"] += 1
+                if status == "online":
+                    dados_completos["estatisticas_gerais"]["servidores_online"] += 1
+                elif status == "offline":
+                    dados_completos["estatisticas_gerais"]["servidores_offline"] += 1
+                else:
+                    dados_completos["estatisticas_gerais"]["servidores_warning"] += 1
             
             dados_completos["regionais"][codigo_regional] = dados_regional
             dados_completos["estatisticas_gerais"]["total_regionais"] += 1

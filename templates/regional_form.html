@@ -2,21 +2,102 @@
 
 {% block title %}{{ acao }} Regional - Sistema de Automação{% endblock %}
 
+{% block extra_css %}
+<style>
+    .regional-form-header-center {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .regional-form-header-center .btn {
+        align-self: flex-start;
+    }
+
+    .regional-form-intro-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.75rem;
+    }
+
+    .regional-form-title {
+        display: flex;
+        align-items: center;
+    }
+
+    .regional-form-title-center {
+        justify-content: center;
+    }
+
+    .regional-form-card-title {
+        display: flex;
+        align-items: center;
+    }
+
+    .regional-form-card-title-center {
+        justify-content: center;
+        text-align: center;
+    }
+
+    .regional-form-brand-hero {
+        width: 138px;
+        height: auto;
+        object-fit: contain;
+        display: block;
+    }
+
+    .regional-form-brand-icon {
+        width: 2em;
+        height: 2em;
+        object-fit: contain;
+        flex: 0 0 auto;
+        transform: translateY(3px);
+    }
+
+    .regional-form-brand-icon-sm {
+        width: 1.7em;
+        height: 1.7em;
+        object-fit: contain;
+        flex: 0 0 auto;
+        transform: translateY(2px);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
+        {% if regional %}
         <div class="d-flex align-items-center">
             <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary me-3">
                 <i class="bi bi-arrow-left"></i>
             </a>
             <div>
-                <h1 class="display-5 mb-2">
+                <h1 class="display-5 mb-2 regional-form-title">
+                    {% if regional %}
                     <i class="bi bi-building me-3"></i>
+                    {% else %}
+                    <img class="regional-form-brand-icon me-3" src="{{ url_for('static', filename='branding/sentinel_icon.svg') }}" alt="Sentinel">
+                    {% endif %}
                     {{ acao }} Regional
                 </h1>
                 <p class="text-muted">{{ 'Edite os dados da regional' if regional else 'Adicione uma nova regional ao sistema' }}</p>
             </div>
         </div>
+        {% else %}
+        <div class="regional-form-header-center">
+            <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div class="regional-form-intro-center">
+                <img class="regional-form-brand-hero" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                <h1 class="display-5 mb-0 regional-form-title regional-form-title-center">{{ acao }} Regional</h1>
+                <p class="text-muted mb-0">Adicione uma nova regional ao sistema</p>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -24,8 +105,12 @@
     <div class="col-md-8 mx-auto">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-{{ 'pencil' if regional else 'plus-circle' }} me-2"></i>
+                <h5 class="mb-0 regional-form-card-title {{ '' if regional else 'regional-form-card-title-center' }}">
+                    {% if regional %}
+                    <i class="bi bi-pencil me-2"></i>
+                    {% else %}
+                    <img class="regional-form-brand-icon-sm me-2" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                    {% endif %}
                     Dados da Regional
                 </h5>
             </div>
@@ -39,7 +124,11 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="nome" class="form-label">
+                                {% if regional %}
                                 <i class="bi bi-building me-1"></i>
+                                {% else %}
+                                <img class="regional-form-brand-icon-sm me-1" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                                {% endif %}
                                 Nome da Regional *
                             </label>
                             <input type="text" 
@@ -93,7 +182,11 @@
                             Cancelar
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-{{ 'check-circle' if regional else 'plus-circle' }} me-1"></i>
+                            {% if regional %}
+                            <i class="bi bi-check-circle me-1"></i>
+                            {% else %}
+                            <img class="regional-form-brand-icon-sm me-1" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                            {% endif %}
                             <span class="btn-text">{{ 'Atualizar' if regional else 'Criar' }} Regional</span>
                             <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
                         </button>

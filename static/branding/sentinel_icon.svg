@@ -1,0 +1,18 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="32" fill="transparent"/>
+  <path d="M128 16L216 66V166L128 216L40 166V66L128 16Z" fill="#E9F1F8" stroke="#0D2846" stroke-width="6"/>
+  <path d="M128 43L191 80V153L128 190L65 153V80L128 43Z" stroke="#78B7E2" stroke-width="3" stroke-dasharray="10 9"/>
+  <circle cx="128" cy="118" r="33" fill="#122845" stroke="#208CD6" stroke-width="2.5"/>
+  <ellipse cx="128" cy="118" rx="68" ry="22" transform="rotate(-28 128 118)" stroke="#55AEE0" stroke-width="3"/>
+  <ellipse cx="128" cy="118" rx="42" ry="11" transform="rotate(46 128 118)" stroke="#A8D4EE" stroke-width="2.2" stroke-dasharray="7 6"/>
+  <circle cx="111" cy="99" r="9" fill="#50ACDF"/>
+  <circle cx="116" cy="137" r="6.5" fill="#2B5D90"/>
+  <circle cx="142" cy="128" r="12" fill="#244F7E" opacity="0.9"/>
+  <rect x="98" y="94" width="23" height="13" rx="3" transform="rotate(-28 98 94)" fill="#50ACDF"/>
+  <circle cx="128" cy="16" r="5" fill="#208CD6"/>
+  <circle cx="216" cy="66" r="5" fill="#208CD6"/>
+  <circle cx="216" cy="166" r="5" fill="#208CD6"/>
+  <circle cx="128" cy="216" r="5" fill="#208CD6"/>
+  <circle cx="40" cy="166" r="5" fill="#208CD6"/>
+  <circle cx="40" cy="66" r="5" fill="#208CD6"/>
+</svg>

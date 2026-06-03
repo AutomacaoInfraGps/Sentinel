@@ -14,6 +14,32 @@
     .ip-link:hover {
         transform: scale(1.03);
     }
+
+    .verification-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.4rem 0.7rem;
+        border-radius: 999px;
+        background: #f8f9fa;
+        color: #6c757d;
+        font-size: 0.78rem;
+        line-height: 1;
+        border: 1px solid rgba(13, 110, 253, 0.08);
+    }
+
+    .verification-meta strong {
+        color: #495057;
+        font-weight: 600;
+    }
+
+    .verification-time {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: #0d6efd;
+        font-weight: 600;
+    }
 </style>
 <div class="row mb-4">
     <div class="col-12">
@@ -32,11 +58,18 @@
     </div>
 </div>
 
+<div id="regional-detail-data"
+     data-codigo="{{ regional.codigo }}"
+     data-links='{{ regional.links|tojson }}'
+    data-servidores='{{ regional.servidores|tojson }}'
+     data-novo-link-url="{{ url_for('novo_link_regional', codigo_regional=regional.codigo) }}"
+     style="display:none"></div>
+
 <!-- Estatísticas da Regional -->
 <div class="row mb-4">
     <div class="col-md-3 col-sm-6 mb-3">
         <div class="stats-card">
-            <div class="stats-number">{{ regional.servidores|length }}</div>
+            <div class="stats-number" id="regional-servidores-total">{{ regional.servidores|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-server me-1"></i>
                 Total de Servidores
@@ -46,7 +79,7 @@
     
     <div class="col-md-3 col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
-            <div class="stats-number">{{ regional.servidores|selectattr('status', 'equalto', 'online')|list|length }}</div>
+            <div class="stats-number" id="regional-servidores-online">{{ regional.servidores|selectattr('status', 'equalto', 'online')|list|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-wifi me-1"></i>
                 Servidores Online
@@ -56,7 +89,7 @@
     
     <div class="col-md-3 col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
-            <div class="stats-number">{{ regional.servidores|selectattr('status', 'equalto', 'offline')|list|length }}</div>
+            <div class="stats-number" id="regional-servidores-offline">{{ regional.servidores|selectattr('status', 'equalto', 'offline')|list|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-wifi-off me-1"></i>
                 Servidores Offline
@@ -66,7 +99,7 @@
     
     <div class="col-md-3 col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
-            <div class="stats-number">{{ regional.servidores|selectattr('status', 'equalto', 'warning')|list|length }}</div>
+            <div class="stats-number" id="regional-servidores-warning">{{ regional.servidores|selectattr('status', 'equalto', 'warning')|list|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-exclamation-triangle me-1"></i>
                 Com Problemas
@@ -76,7 +109,7 @@
     
     <div class="col-md-3 col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
-            <div class="stats-number">{{ regional.links|length }}</div>
+            <div class="stats-number" id="regional-links-total">{{ regional.links|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-router me-1"></i>
                 Links de Internet
@@ -163,7 +196,8 @@
                 <div>
                     <button class="btn btn-outline-info btn-sm" onclick="verificarTodosServidores()">
                         <i class="bi bi-arrow-clockwise me-1"></i>
-                        Verificar Todos
+                        <span class="btn-text">Verificar Servidores</span>
+                        <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
                     </button>
                 </div>
             </div>
@@ -172,14 +206,14 @@
                 <div class="row">
                     {% for servidor in regional.servidores %}
                     <div class="col-md-6 col-lg-4 mb-4">
-                        <div class="card border-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} h-100">
-                            <div class="card-header bg-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} text-white d-flex justify-content-between align-items-center">
+                        <div id="servidor-card-{{ servidor.id }}" class="card border-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} h-100">
+                            <div id="servidor-card-header-{{ servidor.id }}" class="card-header bg-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} text-white d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 fw-bold">
                                     <i class="bi bi-server me-2"></i>
                                     {{ servidor.nome }}
                                 </h6>
                                 <span class="badge bg-light text-dark">
-                                    {{ servidor.funcao or 'SERVIDOR' }}
+                                    VM
                                 </span>
                             </div>
                             
@@ -191,20 +225,6 @@
                                             {{ servidor.ip }}
                                         </a>
                                     </div>
-                                    {% if regional.links %}
-                                    <div class="mb-2">
-                                        <span class="small text-muted">Links:</span>
-                                        <div class="mt-1">
-                                            {% for link in regional.links %}
-                                            <div class="d-flex align-items-center mb-1">
-                                                <i class="bi bi-router text-primary me-1" style="font-size: 0.8em;"></i>
-                                                <small class="text-muted me-1">{{ link.provedor }}:</small>
-                                                <code class="small">{{ link.ip }}</code>
-                                            </div>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    {% endif %}
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">Status:</span>
                                         <span id="status-badge-{{ servidor.id }}"
@@ -239,10 +259,17 @@
                                 </div>
                                 {% endif %}
                                 
-                                {% if servidor.ultima_verificacao %}
-                                <div class="text-muted small">
-                                    <i class="bi bi-clock me-1"></i>
-                                    Última verificação: {{ servidor.ultima_verificacao }}
+                                {% if servidor.ultima_verificacao_formatada %}
+                                <div class="verification-meta mt-2">
+                                    <i class="bi bi-clock-history"></i>
+                                    <strong>Última verificação</strong>
+                                    <span>{{ servidor.ultima_verificacao_formatada.data }}</span>
+                                    {% if servidor.ultima_verificacao_formatada.hora %}
+                                    <span class="verification-time">
+                                        <i class="bi bi-dot"></i>
+                                        {{ servidor.ultima_verificacao_formatada.hora }}
+                                    </span>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                             </div>
@@ -318,17 +345,56 @@
                 <div>
                     <button class="btn btn-outline-info btn-sm" onclick="verificarTodosLinks()">
                         <i class="bi bi-arrow-clockwise me-1"></i>
-                        Verificar Todos
-                    </button>
-                    <button class="btn btn-outline-success btn-sm ms-2" onclick="sincronizarLinksRegional()">
-                        <i class="bi bi-arrow-down-up me-1"></i>
-                        Sincronizar IPs
+                        Atualizar Links
                     </button>
                 </div>
             </div>
             <div class="card-body">
+                <div id="regional-links-container">
                 {% if regional.links %}
+                {% set ns = namespace(local_link=None) %}
+                {% for link in regional.links %}
+                    {% if not ns.local_link and (link.interface_local or link.ip_local or link.mascara_local) %}
+                        {% set ns.local_link = link %}
+                    {% endif %}
+                {% endfor %}
                 <div class="row">
+                    {% if ns.local_link %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card border-primary h-100">
+                            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-bold">
+                                    <i class="bi bi-diagram-3 me-2"></i>
+                                    Rede Local
+                                </h6>
+                                <span class="badge bg-light text-dark">REGIONAL</span>
+                            </div>
+
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    {% if ns.local_link.interface_local %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Interface Local / LAN:</span>
+                                        <span class="small">{{ ns.local_link.interface_local }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if ns.local_link.ip_local %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">IP Local:</span>
+                                        <code class="small">{{ ns.local_link.ip_local }}</code>
+                                    </div>
+                                    {% endif %}
+                                    {% if ns.local_link.mascara_local %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Máscara Local:</span>
+                                        <span class="small fw-semibold">{{ ns.local_link.mascara_local }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     {% for link in regional.links %}
                     <div class="col-md-6 col-lg-4 mb-4">
                         <div class="card border-{{ 'success' if link.ativo else 'secondary' }} h-100">
@@ -346,12 +412,36 @@
                                 <div class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">IP:</span>
-                                        <code class="small">{{ link.ip }}</code>
+                                        <code class="small">{{ link.ip_exibicao or ((link.ip if link.ip else 'sem_ip_publico') ~ (link.mascara if link.ip and link.mascara else '')) }}</code>
                                     </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Porta/Interface:</span>
+                                        <span class="small fw-semibold">{{ link.interface_monitorada or link.nome or 'N/A' }}</span>
+                                    </div>
+                                    {% if link.velocidade and link.velocidade != 'N/A' %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Banda:</span>
+                                        <span class="small">{{ link.velocidade }}</span>
+                                    </div>
+                                    {% endif %}
                                     {% if link.provedor %}
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">Provedor:</span>
                                         <span class="small">{{ link.provedor }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if link.sla_status %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">SD-WAN/SLA:</span>
+                                        <span class="badge bg-{{ 'success' if link.sla_status == 'active' else 'danger' if link.sla_status == 'inactive' else 'secondary' }}">
+                                            {{ link.sla_status|upper }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                    {% if link.modo_verificacao %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Validação:</span>
+                                        <span class="small text-uppercase">{{ link.modo_verificacao }}</span>
                                     </div>
                                     {% endif %}
                                     
@@ -365,10 +455,17 @@
                                     </div>
                                     {% endif %}
                                     
-                                    {% if link.ultima_verificacao %}
-                                    <div class="text-muted small">
-                                        <i class="bi bi-clock me-1"></i>
-                                        Última verificação: {{ link.ultima_verificacao }}
+                                    {% if link.ultima_verificacao_formatada %}
+                                    <div class="verification-meta mt-2">
+                                        <i class="bi bi-clock-history"></i>
+                                        <strong>Última verificação</strong>
+                                        <span>{{ link.ultima_verificacao_formatada.data }}</span>
+                                        {% if link.ultima_verificacao_formatada.hora %}
+                                        <span class="verification-time">
+                                            <i class="bi bi-dot"></i>
+                                            {{ link.ultima_verificacao_formatada.hora }}
+                                        </span>
+                                        {% endif %}
                                     </div>
                                     {% endif %}
                                 </div>
@@ -411,6 +508,7 @@
                     </a>
                 </div>
                 {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -451,10 +549,6 @@ function verificarRegional(codigo) {
         });
 }
 
-
-function verificarTodosServidores() {
-    verificarRegional('{{ regional.codigo }}');
-}
 
 function editarServidor(codigoRegional, servidorId) {
     // redireciona para página de edição
@@ -499,26 +593,19 @@ function testarServidor(codigoRegional, idServidor, nomeServidor) {
             const icone = document.getElementById(`status-icon-${idServidor}`);
 
             if (response.status === "online") {
-                showToast(`${nomeServidor}: ONLINE`, 'success');
-
-                badge.classList.remove("bg-danger", "bg-warning");
-                badge.classList.add("bg-success");
-
-                texto.innerText = "Online";
-                icone.className = "bi bi-wifi me-1";
+                showToast(`${nomeServidor}: ONLINE`, 'success', { delay: 9000 });
 
             } else {
-                showToast(`${nomeServidor}: OFFLINE`, 'danger');
-
-                badge.classList.remove("bg-success", "bg-warning");
-                badge.classList.add("bg-danger");
-
-                texto.innerText = "Offline";
-                icone.className = "bi bi-wifi-off me-1";
+                showToast(`${nomeServidor}: OFFLINE`, 'danger', { delay: 9000 });
             }
 
-            // ✅ Recarrega a página para atualizar os contadores do topo
-            setTimeout(() => location.reload(), 800);
+            aplicarResultadoTesteServidor({
+                id: idServidor,
+                status: response.status,
+                erro: response.status === 'online' ? null : 'Timeout',
+                timestamp: new Date().toISOString()
+            });
+            atualizarResumoServidoresRegional(servidoresRegionaisAtuais);
         })
         .fail(function () {
             showToast(`Erro de conexão ao testar ${nomeServidor}`, 'danger');
@@ -526,43 +613,43 @@ function testarServidor(codigoRegional, idServidor, nomeServidor) {
 }
 
 function verificarTodosServidores() {
-    showToast("Testando todos os servidores...", "info");
+    const btn = $(`.btn[onclick="verificarTodosServidores()"]`);
+    showLoading(btn);
+    showToast("Verificando servidores da regional...", "info", { delay: 9000 });
 
-    $.get(`/api/regional/{{ regional.codigo }}/testar_todos`)
-        .done(function (response) {
+    fetch(`/api/regional/{{ regional.codigo }}/servidores/testar-todos`, {
+        method: 'POST'
+    })
+        .then(res => res.json())
+        .then(function (response) {
+            hideLoading(btn);
 
             if (!response.success) {
                 showToast(response.message, "danger");
                 return;
             }
 
+            if (!Array.isArray(response.resultados) || response.resultados.length === 0) {
+                atualizarResumoServidoresRegional([]);
+                showToast("Nenhum servidor cadastrado nesta regional", "info", { delay: 9000 });
+                return;
+            }
+
             response.resultados.forEach((srv) => {
-
-                const badge = document.getElementById(`status-badge-${srv.id}`);
-                const texto = document.getElementById(`status-text-${srv.id}`);
-                const icone = document.getElementById(`status-icon-${srv.id}`);
-
-                if (!badge || !texto || !icone) return;
-
-                if (srv.status === "online") {
-                    badge.classList.remove("bg-danger", "bg-warning");
-                    badge.classList.add("bg-success");
-                    texto.innerText = "Online";
-                    icone.className = "bi bi-wifi me-1";
-                } else {
-                    badge.classList.remove("bg-success", "bg-warning");
-                    badge.classList.add("bg-danger");
-                    texto.innerText = "Offline";
-                    icone.className = "bi bi-wifi-off me-1";
-                }
+                aplicarResultadoTesteServidor(srv);
             });
 
-            showToast("Verificação concluída!", "success");
+            atualizarResumoServidoresRegional(servidoresRegionaisAtuais);
 
-            // ✅ opcional: recarrega para atualizar contadores
-            setTimeout(() => location.reload(), 1200);
+            const resumo = response.resumo || {};
+            showToast(
+                `Verificação concluída: ${resumo.total ?? response.resultados.length} servidor(es), ${resumo.online ?? 0} online, ${resumo.offline ?? 0} offline`,
+                (resumo.offline ?? 0) === 0 ? "success" : "info",
+                { delay: 9000 }
+            );
         })
-        .fail(function () {
+        .catch(function () {
+            hideLoading(btn);
             showToast("Erro de conexão ao verificar todos", "danger");
         });
 }
@@ -583,30 +670,59 @@ function carregarHardware(codigoRegional, idServidor) {
             }
 
             const hw = data.hardware;
+            const discos = Array.isArray(hw.discos) ? hw.discos : [];
+            const servicosBitdefender = Array.isArray(hw.bitdefender?.services) ? hw.bitdefender.services : [];
 
             let html = "";
 
+            html += `<div><strong>Sistema Operacional:</strong> ${hw.sistema_operacional ?? "N/A"}</div>`;
+            html += `<div><strong>Fabricante:</strong> ${hw.fabricante ?? "N/A"}</div>`;
+            html += `<div><strong>Modelo:</strong> ${hw.modelo ?? "N/A"}</div>`;
             html += `<div><strong>Memória:</strong> ${hw.memoria_gib ?? "N/A"} GiB</div>`;
             html += `<div><strong>CPU:</strong> ${hw.cpu?.model ?? "N/A"} (${hw.cpu?.count ?? "?"} CPU)</div>`;
+            html += `<div><strong>Uptime:</strong> ${hw.uptime ?? "N/A"}</div>`;
             html += `<hr class="my-2">`;
 
-            html += `<div><strong>Temperaturas:</strong></div>`;
-            if (hw.temperaturas && hw.temperaturas.length > 0) {
-                hw.temperaturas.slice(0, 6).forEach(t => {
-                    html += `<div>- ${t.name}: ${t.celsius}°C (${t.health ?? "N/A"})</div>`;
+            html += `<div><strong>Discos:</strong></div>`;
+            if (discos.length > 0) {
+                discos.forEach(disco => {
+                    const total = disco.totalGB ?? "N/A";
+                    const livre = disco.freeGB ?? "N/A";
+                    const volume = disco.volumeName && disco.volumeName !== "Sem nome"
+                        ? ` - ${disco.volumeName}`
+                        : "";
+                    const percentualLivre = (typeof disco.totalGB === 'number' && disco.totalGB > 0 && typeof disco.freeGB === 'number')
+                        ? ` (${((disco.freeGB / disco.totalGB) * 100).toFixed(2)}% livre)`
+                        : "";
+                    html += `<div>- ${disco.drive ?? "N/A"}${volume}: ${livre} GB livres de ${total} GB${percentualLivre}</div>`;
                 });
             } else {
-                html += `<div class="text-muted">Nenhum sensor encontrado</div>`;
+                html += `<div class="text-muted">Nenhum disco encontrado</div>`;
             }
 
             html += `<hr class="my-2">`;
-            html += `<div><strong>Ventoinhas:</strong></div>`;
+            html += `<div><strong>Bitdefender:</strong> ${hw.bitdefender?.installed ? "Instalado" : "Não identificado"}</div>`;
+            if (servicosBitdefender.length > 0) {
+                html += `<div class="text-muted">Serviços em execução: ${hw.bitdefender?.runningServices ?? 0}</div>`;
+                servicosBitdefender.slice(0, 5).forEach(servico => {
+                    html += `<div>- ${servico.displayName ?? servico.name ?? "Serviço"}: ${servico.status ?? "N/A"}</div>`;
+                });
+            }
+
+            if (hw.temperaturas && hw.temperaturas.length > 0) {
+                html += `<hr class="my-2">`;
+                html += `<div><strong>Temperaturas:</strong></div>`;
+                hw.temperaturas.slice(0, 6).forEach(t => {
+                    html += `<div>- ${t.name}: ${t.celsius}°C (${t.health ?? "N/A"})</div>`;
+                });
+            }
+
             if (hw.ventoinhas && hw.ventoinhas.length > 0) {
+                html += `<hr class="my-2">`;
+                html += `<div><strong>Ventoinhas:</strong></div>`;
                 hw.ventoinhas.slice(0, 6).forEach(f => {
                     html += `<div>- ${f.name}: ${f.rpm} RPM (${f.health ?? "N/A"})</div>`;
                 });
-            } else {
-                html += `<div class="text-muted">Nenhuma ventoinha encontrada</div>`;
             }
 
             content.innerHTML = html;
@@ -633,8 +749,8 @@ function verificarTodosLinks() {
     showToast("Verificando todos os links...", "info");
     
     // Obtém todos os links da regional atual
-    const codigoRegional = '{{ regional.codigo }}';
-    const links = {{ regional.links|tojson }};
+    const codigoRegional = codigoRegionalAtual;
+    const links = regionalLinksAtuais;
     
     if (!links || links.length === 0) {
         hideLoading(btn);
@@ -651,9 +767,10 @@ function verificarTodosLinks() {
         if (index >= links.length) {
             // Todos os testes concluídos
             hideLoading(btn);
-            const message = `Verificação concluída: ${successCount}/${links.length} links online`;
-            showToast(message, successCount === links.length ? 'success' : 'warning');
-            setTimeout(() => location.reload(), 1000);
+            atualizarLinksRegionalTempoReal(regionalLinksAtuais);
+            const offlineCount = Math.max(links.length - successCount, 0);
+            const message = `Verificação concluída: ${links.length} link(s) verificado(s), ${successCount} online, ${offlineCount} offline`;
+            showToast(message, successCount === links.length ? 'success' : 'info', { delay: 9000 });
             return;
         }
         
@@ -666,6 +783,7 @@ function verificarTodosLinks() {
                 } else {
                     errorCount++;
                 }
+                aplicarResultadoTesteLink(link.id, response);
             })
             .fail(function() {
                 completed++;
@@ -677,33 +795,6 @@ function verificarTodosLinks() {
     }
     
     testarProximoLink(0);
-}
-
-function sincronizarLinksRegional() {
-    const btn = $(`.btn[onclick="sincronizarLinksRegional()"]`);
-    showLoading(btn);
-
-    const codigoRegional = '{{ regional.codigo }}';
-    showToast("Sincronizando IPs dos links...", "info");
-
-    fetch(`/api/regional/${codigoRegional}/links/sincronizar`, {
-        method: "POST"
-    })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading(btn);
-        if (data.success) {
-            const total = data.total_atualizados ?? 0;
-            showToast(`Sincronização concluída: ${total} link(s) atualizado(s)`, "success");
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(data.message || "Erro ao sincronizar links", "danger");
-        }
-    })
-    .catch(() => {
-        hideLoading(btn);
-        showToast("Erro ao sincronizar links", "danger");
-    });
 }
 
 function testarLink(codigoRegional, linkId, nomeLink) {
@@ -719,15 +810,14 @@ function testarLink(codigoRegional, linkId, nomeLink) {
             if (response.success) {
                 const status = response.status;
                 const message = response.message;
+                aplicarResultadoTesteLink(linkId, response);
+                atualizarLinksRegionalTempoReal(regionalLinksAtuais);
                 
                 if (status === 'online') {
-                    showToast(message, 'success');
+                    showToast(message, 'success', { delay: 9000 });
                 } else {
-                    showToast(message, 'warning');
+                    showToast(message, 'info', { delay: 9000 });
                 }
-                
-                // Atualiza o status visual do link na interface
-                setTimeout(() => location.reload(), 1000);
             } else {
                 showToast(response.message || 'Erro ao testar link', 'danger');
             }
@@ -742,6 +832,306 @@ function testarLink(codigoRegional, linkId, nomeLink) {
 function editarLink(codigoRegional, linkId) {
     // redireciona para página de edição
     window.location.href = `/regional/${codigoRegional}/link/${linkId}/editar`;
+}
+
+const regionalDetailData = document.getElementById('regional-detail-data');
+const codigoRegionalAtual = regionalDetailData?.dataset.codigo || '';
+let regionalLinksAtuais = JSON.parse(regionalDetailData?.dataset.links || '[]');
+let servidoresRegionaisAtuais = JSON.parse(regionalDetailData?.dataset.servidores || '[]');
+const novoLinkRegionalUrl = regionalDetailData?.dataset.novoLinkUrl || '';
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function badgeStatusClass(status) {
+    if (status === 'online') return 'success';
+    if (status === 'offline') return 'danger';
+    return 'warning';
+}
+
+function extractLocalNetworkInfo(links) {
+    const lista = Array.isArray(links) ? links : [];
+    return lista.find((link) => link && (link.interface_local || link.ip_local || link.mascara_local)) || null;
+}
+
+function renderLocalNetworkCard(link) {
+    if (!link) return '';
+
+    const interfaceLocal = link.interface_local ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Interface Local / LAN:</span>
+            <span class="small">${escapeHtml(link.interface_local)}</span>
+        </div>` : '';
+    const ipLocal = link.ip_local ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">IP Local:</span>
+            <code class="small">${escapeHtml(link.ip_local)}</code>
+        </div>` : '';
+    const mascaraLocal = link.mascara_local ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Máscara Local:</span>
+            <span class="small fw-semibold">${escapeHtml(link.mascara_local)}</span>
+        </div>` : '';
+
+    const porta = link.fortigate_porta ? `:${escapeHtml(link.fortigate_porta)}` : '';
+    return `
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card border-primary h-100">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold">
+                        <i class="bi bi-diagram-3 me-2"></i>
+                        Rede Local
+                    </h6>
+                    <span class="badge bg-light text-dark">REGIONAL</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        ${interfaceLocal}
+                        ${ipLocal}
+                        ${mascaraLocal}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function formatUltimaVerificacao(link) {
+    const ultima = link.ultima_verificacao_formatada;
+    if (!ultima || !ultima.data) return '';
+    const hora = ultima.hora ? `
+        <span class="verification-time">
+            <i class="bi bi-dot"></i>
+            ${escapeHtml(ultima.hora)}
+        </span>` : '';
+    return `
+        <div class="verification-meta mt-2">
+            <i class="bi bi-clock-history"></i>
+            <strong>Última verificação</strong>
+            <span>${escapeHtml(ultima.data)}</span>
+            ${hora}
+        </div>`;
+}
+
+function formatarUltimaVerificacaoISO(isoText) {
+    if (!isoText) {
+        return null;
+    }
+
+    const data = new Date(isoText);
+    if (Number.isNaN(data.getTime())) {
+        return { completa: isoText, data: isoText, hora: '' };
+    }
+
+    const pad = (valor) => String(valor).padStart(2, '0');
+    const dataTexto = `${pad(data.getDate())}/${pad(data.getMonth() + 1)}/${data.getFullYear()}`;
+    const horaTexto = `${pad(data.getHours())}:${pad(data.getMinutes())}:${pad(data.getSeconds())}`;
+    return {
+        completa: `${dataTexto} às ${horaTexto}`,
+        data: dataTexto,
+        hora: horaTexto
+    };
+}
+
+function aplicarResultadoTesteServidor(resultado) {
+    const idServidor = String(resultado?.id || '');
+    if (!idServidor) {
+        return;
+    }
+
+    const indice = servidoresRegionaisAtuais.findIndex((item) => String(item.id || '') === idServidor);
+    if (indice !== -1) {
+        servidoresRegionaisAtuais[indice] = {
+            ...servidoresRegionaisAtuais[indice],
+            status: resultado.status || servidoresRegionaisAtuais[indice].status,
+            erro: resultado.erro ?? (resultado.status === 'online' ? null : servidoresRegionaisAtuais[indice].erro),
+            ultima_verificacao: resultado.timestamp || resultado.ultima_verificacao || servidoresRegionaisAtuais[indice].ultima_verificacao
+        };
+    }
+
+    const badge = document.getElementById(`status-badge-${idServidor}`);
+    const texto = document.getElementById(`status-text-${idServidor}`);
+    const icone = document.getElementById(`status-icon-${idServidor}`);
+    const card = document.getElementById(`servidor-card-${idServidor}`);
+    const cardHeader = document.getElementById(`servidor-card-header-${idServidor}`);
+    const status = resultado.status || 'warning';
+    const tone = status === 'online' ? 'success' : (status === 'offline' ? 'danger' : 'warning');
+
+    if (badge && texto && icone) {
+        badge.classList.remove('bg-success', 'bg-danger', 'bg-warning');
+        badge.classList.add(`bg-${tone}`);
+        texto.innerText = status === 'online' ? 'Online' : (status === 'offline' ? 'Offline' : 'Warning');
+        icone.className = `bi bi-${status === 'online' ? 'wifi' : (status === 'offline' ? 'wifi-off' : 'exclamation-triangle')} me-1`;
+    }
+
+    if (card) {
+        card.classList.remove('border-success', 'border-danger', 'border-warning');
+        card.classList.add(`border-${tone}`);
+    }
+
+    if (cardHeader) {
+        cardHeader.classList.remove('bg-success', 'bg-danger', 'bg-warning');
+        cardHeader.classList.add(`bg-${tone}`);
+    }
+}
+
+function atualizarResumoServidoresRegional(resultados) {
+    const lista = Array.isArray(resultados) ? resultados : [];
+    const total = lista.length;
+    const online = lista.filter((item) => String(item.status || '').toLowerCase() === 'online').length;
+    const offline = lista.filter((item) => String(item.status || '').toLowerCase() === 'offline').length;
+    const warning = Math.max(total - online - offline, 0);
+
+    const totalElement = document.getElementById('regional-servidores-total');
+    const onlineElement = document.getElementById('regional-servidores-online');
+    const offlineElement = document.getElementById('regional-servidores-offline');
+    const warningElement = document.getElementById('regional-servidores-warning');
+
+    if (totalElement) totalElement.textContent = String(total);
+    if (onlineElement) onlineElement.textContent = String(online);
+    if (offlineElement) offlineElement.textContent = String(offline);
+    if (warningElement) warningElement.textContent = String(warning);
+}
+
+function aplicarResultadoTesteLink(linkId, response) {
+    const indice = regionalLinksAtuais.findIndex((item) => String(item.id || '') === String(linkId));
+    if (indice === -1 || !response || !response.success) {
+        return;
+    }
+
+    const linkAtual = { ...regionalLinksAtuais[indice] };
+    linkAtual.status = response.status || linkAtual.status;
+    linkAtual.sla_status = response.sla_status || linkAtual.sla_status;
+    linkAtual.modo_verificacao = response.modo_verificacao || linkAtual.modo_verificacao;
+    linkAtual.interface_monitorada = response.interface_monitorada || linkAtual.interface_monitorada;
+    linkAtual.fortigate_host = response.fortigate_host || linkAtual.fortigate_host;
+    linkAtual.fortigate_porta = response.fortigate_porta || linkAtual.fortigate_porta;
+    linkAtual.sdwan_member_id = response.sdwan_member_id ?? linkAtual.sdwan_member_id;
+    linkAtual.ultima_verificacao = response.ultima_verificacao || linkAtual.ultima_verificacao;
+    linkAtual.ultima_verificacao_formatada = formatarUltimaVerificacaoISO(linkAtual.ultima_verificacao);
+    regionalLinksAtuais[indice] = linkAtual;
+}
+
+function renderLinkCard(link) {
+    const ativo = link.ativo !== false;
+    const borderClass = ativo ? 'success' : 'secondary';
+    const statusClass = badgeStatusClass(link.status);
+    const ipExibicao = link.ip_exibicao || ((link.ip || 'sem_ip_publico') + ((link.ip && link.mascara) ? link.mascara : ''));
+    const banda = link.velocidade && link.velocidade !== 'N/A' ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Banda:</span>
+            <span class="small">${escapeHtml(link.velocidade)}</span>
+        </div>` : '';
+    const provedor = link.provedor ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Provedor:</span>
+            <span class="small">${escapeHtml(link.provedor)}</span>
+        </div>` : '';
+    const sla = link.sla_status ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">SD-WAN/SLA:</span>
+            <span class="badge bg-${link.sla_status === 'active' ? 'success' : link.sla_status === 'inactive' ? 'danger' : 'secondary'}">${escapeHtml(String(link.sla_status).toUpperCase())}</span>
+        </div>` : '';
+    const validacao = link.modo_verificacao ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Validação:</span>
+            <span class="small text-uppercase">${escapeHtml(link.modo_verificacao)}</span>
+        </div>` : '';
+    const status = link.status && link.status !== 'unknown' ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Status:</span>
+            <span class="badge bg-${statusClass}">
+                <i class="bi bi-${link.status === 'online' ? 'router' : link.status === 'offline' ? 'router-off' : 'exclamation-triangle'} me-1"></i>
+                ${escapeHtml(link.status.charAt(0).toUpperCase() + link.status.slice(1))}
+            </span>
+        </div>` : '';
+
+    return `
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card border-${borderClass} h-100">
+                <div class="card-header bg-${borderClass} text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold">
+                        <i class="bi bi-router me-2"></i>
+                        ${escapeHtml(link.nome || 'N/A')}
+                    </h6>
+                    <span class="badge bg-light text-dark">${escapeHtml((link.provedor || 'N/A').toUpperCase())}</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small text-muted">IP:</span>
+                            <code class="small">${escapeHtml(ipExibicao)}</code>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small text-muted">Porta/Interface:</span>
+                            <span class="small fw-semibold">${escapeHtml(link.interface_monitorada || link.nome || 'N/A')}</span>
+                        </div>
+                        ${banda}
+                        ${provedor}
+                        ${sla}
+                        ${validacao}
+                        ${status}
+                        ${formatUltimaVerificacao(link)}
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-info btn-sm flex-fill" onclick='testarLink(${JSON.stringify(codigoRegionalAtual)}, ${JSON.stringify(String(link.id || ''))}, ${JSON.stringify(String(link.nome || ''))})'>
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            Testar
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm flex-fill" onclick='editarLink(${JSON.stringify(codigoRegionalAtual)}, ${JSON.stringify(String(link.id || ''))})'>
+                            <i class="bi bi-pencil me-1"></i>
+                            Editar
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm flex-fill" onclick='excluirLink(${JSON.stringify(codigoRegionalAtual)}, ${JSON.stringify(String(link.id || ''))}, ${JSON.stringify(String(link.nome || ''))})'>
+                            <i class="bi bi-trash me-1"></i>
+                            Excluir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function renderLinksEmptyState() {
+    return `
+        <div class="text-center py-5">
+            <i class="bi bi-router text-muted" style="font-size: 4rem;"></i>
+            <h4 class="text-muted mt-3">Nenhum link cadastrado</h4>
+            <p class="text-muted">Adicione links de internet a esta regional</p>
+            <a href="${escapeHtml(novoLinkRegionalUrl)}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>
+                Adicionar Primeiro Link
+            </a>
+        </div>`;
+}
+
+function atualizarLinksRegionalTempoReal(links) {
+    regionalLinksAtuais = Array.isArray(links) ? links : [];
+    const container = document.getElementById('regional-links-container');
+    const totalElement = document.getElementById('regional-links-total');
+    const localNetworkCard = renderLocalNetworkCard(extractLocalNetworkInfo(regionalLinksAtuais));
+
+    if (totalElement) {
+        totalElement.textContent = String(regionalLinksAtuais.length);
+    }
+
+    if (!container) {
+        return;
+    }
+
+    if (!regionalLinksAtuais.length) {
+        container.innerHTML = renderLinksEmptyState();
+        return;
+    }
+
+    container.innerHTML = `<div class="row">${localNetworkCard}${regionalLinksAtuais.map(renderLinkCard).join('')}</div>`;
 }
 
 function excluirLink(codigoRegional, linkId, nomeLink) {

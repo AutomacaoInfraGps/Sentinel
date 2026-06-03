@@ -128,6 +128,16 @@
             color: white;
         }
 
+        .toast.toast-readable-warning {
+            background: linear-gradient(135deg, #a35a00, #d97706) !important;
+            color: #fff !important;
+        }
+
+        .toast.toast-readable-info {
+            background: linear-gradient(135deg, #0f6c8c, #0a4a63) !important;
+            color: #fff !important;
+        }
+
         .btn-info {
             background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
             border: none;
@@ -150,6 +160,40 @@
             border-radius: 10px;
             border: 2px solid #e9ecef;
             padding: 12px 15px;
+        }
+
+        .page-search-card {
+            border: 1px solid rgba(1, 46, 64, 0.08);
+            border-radius: 16px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 250, 0.98));
+            box-shadow: 0 10px 24px rgba(1, 46, 64, 0.08);
+        }
+
+        .page-search-input-wrap {
+            position: relative;
+        }
+
+        .page-search-input-wrap .bi-search {
+            position: absolute;
+            top: 50%;
+            left: 16px;
+            transform: translateY(-50%);
+            color: #5c6a75;
+            pointer-events: none;
+        }
+
+        .page-search-input {
+            padding-left: 44px;
+        }
+
+        .page-search-meta {
+            font-size: 0.9rem;
+            color: #5c6a75;
+        }
+
+        .page-search-empty {
+            display: none;
+            border-radius: 14px;
         }
 
         .alert {
@@ -247,6 +291,8 @@
             z-index: 1040;
             overflow-y: auto;
             transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
         }
         
         .sidebar-header {
@@ -260,72 +306,40 @@
         .sidebar-header a {
             display: flex;
             align-items: center;
-            gap: 0;
-            width: 100%;
-            position: relative;
+            justify-content: flex-start;
+            width: auto;
             color: var(--primary-color);
             font-weight: 700;
             font-size: 1.2rem;
-            background: rgba(1, 46, 64, 0.04);
-            border: 1px solid rgba(1, 46, 64, 0.08);
-            border-radius: 16px;
-            padding: 8px 12px;
-        }
-
-        .sidebar-header a::after {
-            content: "";
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 1px;
-            height: 28px;
-            background: rgba(1, 46, 64, 0.14);
-            transform: translate(-50%, -50%);
-            pointer-events: none;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 0;
+            gap: 0.5rem;
         }
 
         .sidebar-brand-logo {
-            width: 112px;
+            width: auto;
+            max-width: 52px;
+            max-height: 52px;
             height: auto;
             display: block;
-            flex: 0 0 auto;
-            padding-right: 10px;
+            transform: translateY(4px);
         }
 
-        .sidebar-brand-name {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            letter-spacing: 0.02em;
-            white-space: nowrap;
-            flex: 1 1 auto;
-            margin-left: 10px;
-            padding-left: 12px;
-            padding-right: 10px;
-            min-height: 32px;
-            min-width: 0;
-            transform: translateX(-6px);
-        }
-
-        .sidebar-brand-name i {
-            font-size: 0.95rem;
-            color: var(--accent-color);
-            flex: 0 0 auto;
-        }
-
-        .sidebar-brand-name span:last-child {
-            font-weight: 800;
-            color: var(--primary-color);
-            letter-spacing: 0.02em;
-            font-size: 1.02rem;
+        .sidebar-brand-wordmark {
+            font-size: 2.15rem;
             line-height: 1;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            color: #0b2754;
         }
         
         .sidebar-menu {
             list-style: none;
             padding: 0;
             margin: 0;
+            flex: 1 1 auto;
         }
         
         .sidebar-item {
@@ -339,6 +353,15 @@
             color: var(--dark-color);
             text-decoration: none;
             transition: all 0.3s ease;
+        }
+
+        .sidebar-link-icon-image {
+            width: 38px;
+            height: 38px;
+            object-fit: contain;
+            margin-right: 0.5rem;
+            flex: 0 0 38px;
+            transform: translateY(2px);
         }
         
         .sidebar-link:hover, .sidebar-link.active {
@@ -388,7 +411,28 @@
         .sidebar-user-info {
             background-color: rgba(1, 46, 64, 0.05);
         }
-        
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 16px 20px 20px;
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+            background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,249,250,0.98));
+        }
+
+        .sidebar-footer-brand {
+            display: inline-flex;
+            align-items: flex-end;
+            text-decoration: none;
+            color: var(--primary-color);
+            gap: 0;
+        }
+
+        .sidebar-footer-brand svg {
+            width: 118px;
+            height: auto;
+            display: block;
+        }
+
         /* Overlay para dispositivos móveis */
         .sidebar-overlay {
             position: fixed;
@@ -438,6 +482,10 @@
                 display: flex;
                 padding: 10px;
             }
+
+            .sidebar-footer {
+                padding-bottom: 24px;
+            }
             
             .sidebar-overlay.show {
                 display: block;
@@ -469,6 +517,21 @@
                 padding: 20px;
                 border-radius: 15px;
             }
+
+            .navbar-brand img {
+                width: 34px;
+                height: auto;
+                display: block;
+            }
+
+            .navbar-brand {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.55rem;
+                color: #0b2754;
+                font-weight: 900;
+                letter-spacing: 0.06em;
+            }
             
             .stats-number {
                 font-size: 2rem;
@@ -483,14 +546,8 @@
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <a href="{{ url_for('index') }}" class="d-flex align-items-center text-decoration-none">
-                <svg class="sidebar-brand-logo" viewBox="0 0 360 90" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Grupo GPS">
-                    <text x="0" y="63" font-size="34" font-weight="500" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GRUPO</text>
-                    <text x="112" y="68" font-size="72" font-weight="900" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GPS</text>
-                </svg>
-                <span class="sidebar-brand-name">
-                    <i class="bi bi-gear-fill"></i>
-                    <span>SENTINEL</span>
-                </span>
+                <img class="sidebar-brand-logo" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                <span class="sidebar-brand-wordmark">SENTINEL</span>
             </a>
             <button class="btn-close d-md-none" id="closeSidebar"></button>
         </div>
@@ -505,7 +562,7 @@
             
             <li class="sidebar-item">
                 <a href="#" class="sidebar-link sidebar-toggle" data-target="regionais-menu">
-                    <i class="bi bi-building me-2"></i>
+                    <img class="sidebar-link-icon-image" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
                     <span>Regionais</span>
                     <i class="bi bi-chevron-right ms-auto"></i>
                 </a>
@@ -654,6 +711,15 @@
             </li>
             {% endif %}
         </ul>
+
+        <div class="sidebar-footer">
+            <a href="{{ url_for('index') }}" class="sidebar-footer-brand" aria-label="Grupo GPS">
+                <svg viewBox="0 0 360 90" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <text x="0" y="63" font-size="34" font-weight="500" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GRUPO</text>
+                    <text x="112" y="68" font-size="72" font-weight="900" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GPS</text>
+                </svg>
+            </a>
+        </div>
     </div>
     
     <!-- Navbar para dispositivos móveis -->
@@ -663,14 +729,8 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <a class="navbar-brand" href="{{ url_for('index') }}">
-                <svg width="42" height="18" viewBox="0 0 160 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <text x="0" y="24" font-size="13" font-weight="500" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GRUPO</text>
-                    <text x="48" y="26" font-size="28" font-weight="900" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GPS</text>
-                </svg>
-                <span class="navbar-brand-label">
-                    <small>PAINEL</small>
-                    <span>SENTINEL</span>
-                </span>
+                <img src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                <span>SENTINEL</span>
             </a>
             {% if current_user.is_authenticated %}
             <div class="dropdown">
@@ -743,6 +803,90 @@
     
     <!-- Custom JS -->
     <script>
+        function normalizeSearchText(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        }
+
+        function createPageSearch(config) {
+            const input = document.querySelector(config.inputSelector);
+            if (!input) {
+                return null;
+            }
+
+            const emptyState = config.emptyStateSelector
+                ? document.querySelector(config.emptyStateSelector)
+                : null;
+            const countNode = config.countSelector
+                ? document.querySelector(config.countSelector)
+                : null;
+            const itemsProvider = () => Array.from(document.querySelectorAll(config.itemSelector));
+            const emptyMessage = config.emptyMessage || 'Nenhum resultado encontrado para a busca informada.';
+
+            const setVisible = (item, visible) => {
+                if (typeof config.setVisible === 'function') {
+                    config.setVisible(item, visible);
+                    return;
+                }
+                item.classList.toggle('d-none', !visible);
+            };
+
+            const apply = () => {
+                const term = normalizeSearchText(input.value);
+                let visibleCount = 0;
+
+                itemsProvider().forEach((item) => {
+                    const rawText = typeof config.getText === 'function'
+                        ? config.getText(item)
+                        : (item.dataset.searchText || item.textContent || '');
+                    const matchesTerm = !term || normalizeSearchText(rawText).includes(term);
+                    const visible = typeof config.matchItem === 'function'
+                        ? config.matchItem(item, term, matchesTerm)
+                        : matchesTerm;
+
+                    setVisible(item, visible);
+                    if (visible) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (countNode) {
+                    const suffix = config.countSuffix || 'resultado(s)';
+                    countNode.textContent = `${visibleCount} ${suffix}`;
+                }
+
+                if (emptyState) {
+                    emptyState.textContent = term ? emptyMessage : (config.defaultEmptyMessage || emptyMessage);
+                    const totalItems = itemsProvider().length;
+                    const shouldShowEmpty = visibleCount === 0 && (Boolean(term) || totalItems > 0 || Boolean(config.showEmptyWithoutTerm));
+                    emptyState.style.display = shouldShowEmpty ? 'block' : 'none';
+                }
+
+                if (typeof config.onAfterFilter === 'function') {
+                    config.onAfterFilter({ term, visibleCount, items: itemsProvider() });
+                }
+
+                return { term, visibleCount };
+            };
+
+            input.addEventListener('input', apply);
+            apply();
+
+            return {
+                apply,
+                clear() {
+                    input.value = '';
+                    return apply();
+                },
+                getTerm() {
+                    return normalizeSearchText(input.value);
+                }
+            };
+        }
+
         // Função para mostrar loading
         function showLoading(element) {
             const spinner = element.find('.loading-spinner');
@@ -764,12 +908,19 @@
         }
 
         // Função para mostrar toast
-        function showToast(message, type = 'success') {
+        function showToast(message, type = 'success', options = {}) {
+            const delay = Number(options.delay ?? 6500);
+            const extraToastClass = type === 'warning'
+                ? 'toast-readable-warning'
+                : (type === 'info' ? 'toast-readable-info' : '');
+            const icon = type === 'success'
+                ? 'check-circle'
+                : (type === 'danger' ? 'x-circle' : 'exclamation-triangle');
             const toastHtml = `
-                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                <div class="toast align-items-center text-white bg-${type} border-0 ${extraToastClass}" role="alert" data-bs-delay="${delay}">
                     <div class="d-flex">
                         <div class="toast-body">
-                            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                            <i class="bi bi-${icon} me-2"></i>
                             ${message}
                         </div>
                         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
@@ -785,7 +936,7 @@
             const $toast = $(toastHtml);
             $('#toast-container').append($toast);
             
-            const toast = new bootstrap.Toast($toast[0]);
+            const toast = new bootstrap.Toast($toast[0], { delay });
             toast.show();
             
             // Remove o toast após ser escondido

@@ -82,6 +82,9 @@ powershell -ExecutionPolicy Bypass -File .\restart_web_service.ps1
 # Listar servidores
 python manage.py list
 
+# Adicionar servidor
+python manage.py add --nome "Servidor SP" --tipo idrac --ip "10.1.1.100" --usuario root --senha "senha123"
+
 # Testar conectividade
 python manage.py test-all
 
@@ -98,7 +101,7 @@ python executar_tudo.py
 ```
 
 O sistema irá:
-1. Verificar todas as regionais e servidores configurados
+1. Verificar todas as regionais (iDRAC/iLO)
 2. Capturar screenshot do GPS Amigo
 3. Verificar replicação do Active Directory
 4. Coletar dados das antenas UniFi
@@ -119,11 +122,9 @@ O sistema irá:
 - **Design Responsivo**: Funciona em desktop e mobile
 
 ### Monitoramento Incluído
-- ✅ Status de servidores por regional com função operacional
-- ✅ Cadastro e monitoramento de switches via Zabbix
+- ✅ Status de servidores (iDRAC/iLO)
 - ✅ Replicação do Active Directory
 - ✅ Status das antenas UniFi
-- ✅ Cadastro de E-mails SLA com edição por regional
 - ✅ Status das VPNS(IPSEC) com tuneis 
 - ✅ Screenshot do GPS Amigo
 - ✅ Análise de melhores práticas (BPA)
@@ -132,12 +133,16 @@ O sistema irá:
 
 ### Adicionando Novas Regionais
 
-Use preferencialmente a interface web em `http://localhost:5000`:
+1. Edite o arquivo `Conexoes.txt`
+2. Adicione o bloco da nova regional:
 
-1. Abra `Regionais` para cadastrar ou editar a estrutura.
-2. Em cada regional, use `Adicionar Servidor` e preencha a função do servidor, como `RODC`, `DC`, `WSUS`, `API` ou outra função operacional.
-3. Use `Switches` para cadastrar e manter os equipamentos monitorados via Zabbix.
-4. Use `Cadastro de E-mails SLA` para manter os contatos por regional na planilha externa configurada no sistema.
+```
+Nome: NOVA_REGIONAL
+Tipo: idrac  # ou 'ilo'
+IP: 192.168.1.200
+Usuario: root
+Senha: calvin
+```
 
 ### Modificando Configurações
 
@@ -162,26 +167,7 @@ O design pode ser personalizado editando as variáveis CSS em `executar_tudo.py`
 
 - **Credenciais Separadas**: Senhas ficam no `environment.json` (não no código)
 - **Arquivo .gitignore**: Evita commit acidental de credenciais
-- **Planilhas Sensíveis Fora do Git**: Bases como `Lideres.xlsx`, `switches_zabbix.xlsx` e backups `.xlsx` devem permanecer apenas no ambiente local
 - **Validação de Entrada**: Verificação de configurações antes da execução
-
-### Arquivos Que Não Devem Ser Versionados
-
-Antes de publicar o projeto em Git, mantenha fora do repositório:
-
-- `environment.json`
-- `Conexoes.txt`
-- planilhas operacionais e backups (`*.xlsx`, `*.xls`, `*.xlsm`, `*.csv`)
-- arquivos de autenticação e sessão (`auth_state.json`, perfis locais do navegador)
-- saídas geradas automaticamente (`output/`, `logs/`, relatórios e auditorias locais)
-
-Se em algum momento for necessário versionar a estrutura de uma planilha, use apenas um arquivo de exemplo sanitizado, sem nomes reais, e-mails reais, senhas, IPs, tokens ou qualquer dado operacional.
-
-### Antes de Subir Para Git
-
-1. Revise se não existem credenciais, e-mails reais, IPs internos ou planilhas operacionais na área de commit.
-2. Confirme que o `.gitignore` está cobrindo os arquivos locais do ambiente.
-3. Se algum arquivo sensível já tiver sido adicionado anteriormente ao Git, remova-o do índice antes do push com `git rm --cached <arquivo>`.
 
 ## 📝 Logs
 

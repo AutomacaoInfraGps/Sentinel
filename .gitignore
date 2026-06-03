@@ -2,17 +2,9 @@
 environment.json
 Conexoes.txt
 
-# Planilhas e bases locais sensíveis
-*.xlsx
-*.xls
-*.xlsm
-*.csv
-
 # Arquivos de saída
 output/
 *.html
-!templates/*.html
-!templates/**/*.html
 *.png
 *.jpg
 *.jpeg
@@ -73,7 +65,10 @@ backup_limpeza_*/
 backup_organizacao_*/
 backup_projeto_*/
 automacao_gps/
-automacao_gps_history_rebuild/
+backups/
+switches_zabbix.xlsx
+switches_zabbix_backup_*.xlsx
+switches_zabbix_corrigido_*.xlsx
 
 # Arquivos temporários de segurança
 *.tmp

@@ -85,6 +85,27 @@ class GerenciadorFortigate:
         self.token = None
         self.last_login = None
         self.session_timeout = 900  # 15 minutos em segundos
+        self.request_timeout = int(os.environ.get('FORTIGATE_REQUEST_TIMEOUT', '15'))
+
+    def _session_get(self, url, headers=None, timeout=None, **kwargs):
+        if not self.session:
+            raise RuntimeError('Sessão do Fortigate não inicializada')
+        return self.session.get(
+            url,
+            headers=headers,
+            timeout=timeout or self.request_timeout,
+            **kwargs,
+        )
+
+    def _session_post(self, url, data=None, timeout=None, **kwargs):
+        if not self.session:
+            raise RuntimeError('Sessão do Fortigate não inicializada')
+        return self.session.post(
+            url,
+            data=data,
+            timeout=timeout or self.request_timeout,
+            **kwargs,
+        )
         
     def autenticar(self):
         """Autentica no Fortigate usando autenticação básica"""
@@ -113,7 +134,7 @@ class GerenciadorFortigate:
             
             # Faz a requisição de teste
             try:
-                response = self.session.get(test_url, headers=headers, timeout=10)
+                response = self._session_get(test_url, headers=headers)
                 
                 # Verifica se a autenticação foi bem-sucedida
                 if response.status_code == 200:
@@ -138,7 +159,7 @@ class GerenciadorFortigate:
                     }
                     
                     # Faz a requisição de login
-                    login_response = self.session.post(login_url, data=login_data, timeout=10)
+                    login_response = self._session_post(login_url, data=login_data)
                     
                     # Verifica cookies de sessão
                     cookies = str(self.session.cookies)
@@ -186,7 +207,7 @@ class GerenciadorFortigate:
             "Content-Type": "application/json"
         }
 
-        response = self.session.get(url, headers=headers)
+        response = self._session_get(url, headers=headers)
         if response.status_code != 200:
             return {
                 "success": False,
@@ -271,7 +292,7 @@ class GerenciadorFortigate:
             }
             
             # Faz a requisição
-            response = self.session.get(url, headers=headers)
+            response = self._session_get(url, headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
@@ -583,7 +604,7 @@ class GerenciadorFortigate:
             }
             
             # Faz a requisição para obter todas as interfaces
-            response = self.session.get(url, headers=headers)
+            response = self._session_get(url, headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
@@ -699,7 +720,7 @@ class GerenciadorFortigate:
                 "Content-Type": "application/json"
             }
 
-            response = self.session.get(url, headers=headers)
+            response = self._session_get(url, headers=headers)
 
             if response.status_code == 200:
                 data = response.json()

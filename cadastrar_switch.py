@@ -12,7 +12,7 @@ except ImportError:
     pd = None
 import os
 from gerenciar_switches import GerenciadorSwitches
-from datetime import datetime
+from switches_backup_utils import create_switch_backup
 
 def main():
     """Função principal"""
@@ -151,12 +151,8 @@ def main():
         # Adiciona o novo registro ao DataFrame
         df = pd.concat([df, pd.DataFrame([novo_switch])], ignore_index=True)
         
-        # Cria backup do arquivo original
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        arquivo_backup = f"switches_zabbix_backup_{timestamp}.xlsx"
-        
-        import shutil
-        shutil.copy2(arquivo_excel, arquivo_backup)
+        # Cria backup do arquivo original em pasta dedicada
+        arquivo_backup = create_switch_backup(arquivo_excel)
         print(f"\n✅ Backup criado: {arquivo_backup}")
         
         # Salva o DataFrame atualizado

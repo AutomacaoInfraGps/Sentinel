@@ -4,41 +4,32 @@
 
 {% block extra_css %}
 <style>
-    .vpn-card {
-        transition: all 0.3s ease;
-        margin-bottom: 15px;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-
-    .vpn-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-    }
-
-    .vpn-header {
-        padding: 15px;
-        color: white;
-    }
-
-    .vpn-up {
-        background: linear-gradient(135deg, #28a745, #20c997);
-    }
-
-    .vpn-down {
-        background: linear-gradient(135deg, #dc3545, #fd7e14);
-    }
-
-    .vpn-body {
-        padding: 20px;
-    }
-
     .stats-card {
         border-radius: 10px;
         padding: 20px;
         margin-bottom: 20px;
         color: white;
         text-align: center;
+    }
+
+    .stats-card-filter {
+        cursor: pointer;
+        position: relative;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .stats-card-filter.active-filter::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        border-radius: 16px;
+        pointer-events: none;
+    }
+
+    .stats-card-filter:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
     }
 
     .stats-number {
@@ -75,6 +66,148 @@
     @keyframes spin {
         to { transform: rotate(360deg); }
     }
+
+    .vpn-filter-summary {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+    }
+
+    .vpn-empty-filter {
+        display: none;
+    }
+
+    .vpn-regions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 18px;
+    }
+
+    .vpn-region-block {
+        background: #f8fafc;
+        border: 1px solid #d8e2ec;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 24px rgba(0,0,0,0.06);
+    }
+
+    .vpn-region-block.region-online {
+        background: linear-gradient(180deg, #eefaf2 0%, #e2f6ea 100%);
+        border-color: #86efac;
+    }
+
+    .vpn-region-block.region-offline {
+        background: linear-gradient(180deg, #fff4ef 0%, #ffe7dc 100%);
+        border-color: #fdba74;
+    }
+
+    .vpn-region-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(90deg, rgba(247,250,252,0.96), rgba(237,242,247,0.92));
+        border-bottom: 1px solid #d8e2ec;
+    }
+
+    .vpn-region-block.region-online .vpn-region-header {
+        background: linear-gradient(90deg, rgba(223, 246, 232, 0.98), rgba(209, 243, 223, 0.94));
+        border-bottom-color: #86efac;
+    }
+
+    .vpn-region-block.region-offline .vpn-region-header {
+        background: linear-gradient(90deg, rgba(255, 233, 223, 0.98), rgba(255, 223, 207, 0.94));
+        border-bottom-color: #fdba74;
+    }
+
+    .vpn-region-header h4 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #374151;
+        text-transform: uppercase;
+    }
+
+    .vpn-region-counts {
+        display: flex;
+        gap: 10px;
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+
+    .vpn-region-counts .ok {
+        color: #198754;
+    }
+
+    .vpn-region-counts .alert-text {
+        color: #dc3545;
+    }
+
+    .vpn-region-body {
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+    }
+
+    .vpn-tunnel-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid #dbe5f0;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.92);
+    }
+
+    .vpn-tunnel-row.up {
+        border-left: 4px solid #198754;
+        background: linear-gradient(90deg, rgba(236, 253, 243, 0.96), rgba(255, 255, 255, 0.96));
+    }
+
+    .vpn-tunnel-row.down {
+        border-left: 4px solid #dc3545;
+        background: linear-gradient(90deg, rgba(255, 241, 242, 0.96), rgba(255, 255, 255, 0.96));
+    }
+
+    .vpn-tunnel-name {
+        font-weight: 700;
+        color: #374151;
+    }
+
+    .vpn-tunnel-meta {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+
+    .vpn-status-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 82px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+    }
+
+    .vpn-status-pill.up {
+        background: #198754;
+    }
+
+    .vpn-status-pill.down {
+        background: #dc3545;
+    }
 </style>
 {% endblock %}
 
@@ -100,27 +233,46 @@
 <!-- KPIs -->
 <div class="row mb-4">
     <div class="col-md-4">
-        <div class="stats-card" style="background:linear-gradient(135deg,#012E40,#0A4A63,#0F6C8C)">
-            <div class="stats-number">{{ vpns|length }}</div>
+        <div class="stats-card stats-card-filter active-filter" data-filter-vpn="all" onclick="aplicarFiltroVpn('all')" style="background:linear-gradient(135deg,#012E40,#0A4A63,#0F6C8C)">
+            <div class="stats-number">{{ vpn_total }}</div>
             <div class="stats-label">Total de Túneis</div>
         </div>
     </div>
 
     <div class="col-md-4">
-        <div class="stats-card" style="background:linear-gradient(135deg,#20c997,#28a745)">
-            <div class="stats-number">
-                {{ vpns|selectattr('status','equalto','up')|list|length }}
-            </div>
+        <div class="stats-card stats-card-filter" data-filter-vpn="online" onclick="aplicarFiltroVpn('online')" style="background:linear-gradient(135deg,#20c997,#28a745)">
+            <div class="stats-number">{{ vpn_online }}</div>
             <div class="stats-label">Túneis Ativos</div>
         </div>
     </div>
 
     <div class="col-md-4">
-        <div class="stats-card" style="background:linear-gradient(135deg,#dc3545,#fd7e14)">
-            <div class="stats-number">
-                {{ vpns|selectattr('status','equalto','down')|list|length }}
-            </div>
+        <div class="stats-card stats-card-filter" data-filter-vpn="offline" onclick="aplicarFiltroVpn('offline')" style="background:linear-gradient(135deg,#dc3545,#fd7e14)">
+            <div class="stats-number">{{ vpn_offline }}</div>
             <div class="stats-label">Túneis Inativos</div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stats-card stats-card-filter" data-filter-vpn="regional-all" onclick="aplicarFiltroVpn('regional-all')" style="background:linear-gradient(135deg,#0F6C8C,#0A4A63)">
+            <div class="stats-number">{{ vpn_total_regionais }}</div>
+            <div class="stats-label">Total de Regionais</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="stats-card stats-card-filter" data-filter-vpn="regional-online" onclick="aplicarFiltroVpn('regional-online')" style="background:linear-gradient(135deg,#20c997,#28a745)">
+            <div class="stats-number">{{ vpn_regionais_sem_offline }}</div>
+            <div class="stats-label">Regionais com VPN Online</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="stats-card stats-card-filter" data-filter-vpn="regional-offline" onclick="aplicarFiltroVpn('regional-offline')" style="background:linear-gradient(135deg,#f59e0b,#ea580c)">
+            <div class="stats-number">{{ regionais_com_offline|length }}</div>
+            <div class="stats-label">Regionais com VPN Offline</div>
         </div>
     </div>
 </div>
@@ -134,39 +286,177 @@
     </div>
 </div>
 
-<!-- Lista -->
-<div class="row" id="vpn-container">
-{% for vpn in vpns %}
-    <div class="col-md-6 mb-4">
-        <div class="card vpn-card h-100">
-            <div class="card-header vpn-header {{ 'vpn-up' if vpn.status == 'up' else 'vpn-down' }}">
-                <div class="d-flex justify-content-between">
-                    <h5 class="mb-0">{{ vpn.tunel }}</h5>
-                    <span class="badge bg-light text-dark">
-                        {{ vpn.status|upper }}
-                    </span>
+<div class="card page-search-card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-8">
+                <label for="vpnSearchInput" class="form-label fw-semibold mb-2">Buscar túnel VPN</label>
+                <div class="page-search-input-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control page-search-input" id="vpnSearchInput" placeholder="Digite nome do túnel, status ou interface">
                 </div>
             </div>
-
-            <div class="card-body vpn-body">
-                <!-- <p><strong>Interface:</strong> {{ vpn.interface }}</p> -->
-                <p><strong>Status:</strong>
-                    {{ 'Online' if vpn.status == 'up' else 'Offline' }}
-                </p>
-                <p class="text-muted small">
-                    Última verificação: {{ vpn.ultima_verificacao }}
-                </p>
+            <div class="col-lg-4">
+                <div class="page-search-meta text-lg-end">
+                    <strong id="vpnSearchCount">0 túneis</strong>
+                    <div>Use a busca para localizar rapidamente a VPN desejada.</div>
+                </div>
             </div>
         </div>
     </div>
+</div>
+
+<div id="vpnSearchEmpty" class="alert alert-info page-search-empty mb-4">
+    Nenhum túnel VPN encontrado para a busca informada.
+</div>
+
+<div id="vpnFilterSummary" class="vpn-filter-summary">
+    <div>
+        <strong>Filtro ativo:</strong>
+        <span id="vpnFilterSummaryText">Todos os túneis</span>
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroVpn('all')">
+        Limpar filtro
+    </button>
+</div>
+
+<div id="vpnEmptyFilter" class="alert alert-info vpn-empty-filter mb-4">
+    Nenhuma regional encontrada para o filtro selecionado.
+</div>
+
+<div class="vpn-regions-grid" id="vpn-container">
+{% for regional in regionais_vpn %}
+    {% set dados = vpns_por_regional[regional] %}
+    <section class="vpn-region-block {{ 'region-offline' if dados.offline > 0 else 'region-online' }}" data-regional-block data-regional-status="{{ 'offline' if dados.offline > 0 else 'online' }}" data-regional-name="{{ dados.nome_exibicao or regional }}">
+        <div class="vpn-region-header">
+            <h4>{{ dados.nome_exibicao or regional }}</h4>
+            <div class="vpn-region-counts">
+                <span class="ok">Online: {{ dados.online }}</span>
+                <span class="alert-text">Offline: {{ dados.offline }}</span>
+            </div>
+        </div>
+        <div class="vpn-region-body">
+        {% for vpn in dados.tunels %}
+            <article class="vpn-tunnel-row vpn-search-item {{ 'up' if vpn.status == 'up' else 'down' }}" data-status="{{ 'online' if vpn.status == 'up' else 'offline' }}" data-search-text="{{ dados.nome_exibicao or regional }} {{ vpn.tunel }} {{ vpn.interface or '' }} {{ vpn.status }} {{ vpn.ultima_verificacao or '' }}">
+                <div>
+                    <div class="vpn-tunnel-name">{{ vpn.tunel }}</div>
+                    <div class="vpn-tunnel-meta">Última verificação: {{ vpn.ultima_verificacao }}</div>
+                </div>
+                <span class="vpn-status-pill {{ 'up' if vpn.status == 'up' else 'down' }}">{{ vpn.status|upper }}</span>
+            </article>
+        {% endfor %}
+        </div>
+    </section>
 {% endfor %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+let filtroVpnAtual = 'all';
+let vpnBuscaAtual = '';
+
+function obterTextoFiltroVpn(filtro) {
+    if (filtro === 'online') return 'Somente túneis online';
+    if (filtro === 'offline') return 'Somente túneis offline';
+    if (filtro === 'regional-online') return 'Somente regionais com VPN online';
+    if (filtro === 'regional-offline') return 'Somente regionais com VPN offline';
+    if (filtro === 'regional-all') return 'Todas as regionais com VPN';
+    return 'Todos os túneis';
+}
+
+function atualizarCardsFiltroVpn() {
+    $('.stats-card-filter').removeClass('active-filter');
+    $(`.stats-card-filter[data-filter-vpn="${filtroVpnAtual}"]`).addClass('active-filter');
+}
+
+function atualizarResumoFiltroVpn() {
+    const summary = $('#vpnFilterSummary');
+    const summaryText = $('#vpnFilterSummaryText');
+    const partes = [];
+
+    if (filtroVpnAtual !== 'all') {
+        partes.push(obterTextoFiltroVpn(filtroVpnAtual));
+    }
+    if (vpnBuscaAtual) {
+        partes.push(`Busca: "${$('#vpnSearchInput').val()}"`);
+    }
+
+    if (!partes.length) {
+        summary.hide();
+        return;
+    }
+
+    summaryText.text(partes.join(' | '));
+    summary.css('display', 'flex');
+}
+
+function atualizarEmptyStateVpn() {
+    const existeRegionalVisivel = $('[data-regional-block]:visible').length > 0;
+    const termo = $('#vpnSearchInput').val();
+    const mensagem = termo
+        ? `Nenhum túnel VPN encontrado para a busca "${termo}".`
+        : 'Nenhuma regional encontrada para o filtro selecionado.';
+
+    $('#vpnSearchEmpty').hide();
+    $('#vpnEmptyFilter').text(mensagem).toggle(!existeRegionalVisivel);
+}
+
+function atualizarFiltroVpnAtivo() {
+    let tuneisVisiveis = 0;
+
+    $('[data-regional-block]').each(function() {
+        const block = $(this);
+        const regionalStatus = block.attr('data-regional-status') || 'online';
+        const regionalTerm = normalizeSearchText(block.attr('data-regional-name') || '');
+        const filtroRegional = (filtroVpnAtual === 'regional-offline' && regionalStatus !== 'offline')
+            || (filtroVpnAtual === 'regional-online' && regionalStatus !== 'online');
+        let visibleCount = 0;
+
+        block.find('.vpn-search-item').each(function() {
+            const item = $(this);
+            const status = item.attr('data-status') || 'offline';
+            const buscaTexto = normalizeSearchText(item.attr('data-search-text') || '');
+            const correspondeBusca = !vpnBuscaAtual
+                || buscaTexto.includes(vpnBuscaAtual)
+                || regionalTerm.includes(vpnBuscaAtual);
+            const correspondeStatus = filtroVpnAtual === 'all'
+                || filtroVpnAtual === 'regional-all'
+                || filtroVpnAtual === 'regional-online'
+                || filtroVpnAtual === 'regional-offline'
+                || status === filtroVpnAtual;
+            const mostrar = !filtroRegional && correspondeBusca && correspondeStatus;
+
+            item.toggleClass('d-none', !mostrar);
+            if (mostrar) {
+                visibleCount += 1;
+                tuneisVisiveis += 1;
+            }
+        });
+
+        block.toggle(visibleCount > 0);
+    });
+
+    $('#vpnSearchCount').text(`${tuneisVisiveis} túneis`);
+    atualizarCardsFiltroVpn();
+    atualizarResumoFiltroVpn();
+    atualizarEmptyStateVpn();
+}
+
+function aplicarFiltroVpn(filtro) {
+    filtroVpnAtual = filtro || 'all';
+    atualizarFiltroVpnAtivo();
+}
+
 $(document).ready(function() {
     $('#loadingOverlay').hide();
+
+    $('#vpnSearchInput').on('input', function() {
+        vpnBuscaAtual = normalizeSearchText(this.value);
+        atualizarFiltroVpnAtivo();
+    });
+
+    atualizarFiltroVpnAtivo();
 });
 
 function verificarVPN() {

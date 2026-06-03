@@ -1,7 +1,5 @@
 def gerar_print_rede_universo(timeout: int = 30) -> None:
-    # Gera um "print" do portal Rede Universo no Public:
-    #   - C:/Users/Public/Automacao/output/public/rede_universo.png
-    #   - C:/Users/Public/Automacao/output/public/rede_universo.html (HTML com a imagem em base64)
+    # Gera um "print" do portal Rede Universo na base publica configurada.
     #
     # Sem Selenium: usa Edge/Chrome headless por CLI (subprocess). Com Selenium instalado, usa Selenium.
     # Logs do navegador são silenciados.
@@ -24,7 +22,7 @@ def gerar_print_rede_universo(timeout: int = 30) -> None:
     ano = str(now.year)
     mes = f"{now.month:02d}"
     dia = f"{now.day:02d}"
-    public_base = Path(r"C:/Users/Public/Automacao/output/public")
+    public_base = OUTPUT_DIR_PUBLIC / "public"
     public_dir = public_base / ano / mes / dia
     public_dir.mkdir(parents=True, exist_ok=True)
     print(f"[DEBUG] public_dir: {public_dir}")
@@ -32,8 +30,8 @@ def gerar_print_rede_universo(timeout: int = 30) -> None:
     UNIVERSO_IMG = public_dir / "rede_universo.png"
     UNIVERSO_HTML = public_dir / "rede_universo.html"
     # Caminho absoluto para debug
-    UNIVERSO_IMG = Path(r"C:/Users/Public/Automacao/output/public/rede_universo.png")
-    UNIVERSO_HTML = Path(r"C:/Users/Public/Automacao/output/public/rede_universo.html")
+    UNIVERSO_IMG = public_base / "rede_universo.png"
+    UNIVERSO_HTML = public_base / "rede_universo.html"
     print(f"[DEBUG] UNIVERSO_IMG: {UNIVERSO_IMG}")
     print(f"[DEBUG] UNIVERSO_HTML: {UNIVERSO_HTML}")
     print(f"[DEBUG] OUTPUT_DIR_PUBLIC exists: {OUTPUT_DIR_PUBLIC.exists()}")
@@ -137,7 +135,7 @@ def gerar_print_rede_universo(timeout: int = 30) -> None:
         if not browser:
             raise RuntimeError("Não encontrei msedge.exe nem chrome.exe. Instale Edge ou Chrome no servidor.")
         screenshot_name = "screenshot_universo.png"
-        screenshot_path = Path(r"C:/Users/Public/Automacao/output/public/screenshot_universo.png")
+        screenshot_path = public_base / "screenshot_universo.png"
         try:
             if screenshot_path.exists():
                 screenshot_path.unlink()
@@ -967,7 +965,7 @@ if __name__ == "__main__":
     try:
         gerar_print_rede_universo()
         print("OK - print Rede Universo gerado em:")
-        print("  C:/Users/Public/Automacao/output/public/rede_universo.png")
-        print("  C:/Users/Public/Automacao/output/public/rede_universo.html")
+        print("  ", OUTPUT_DIR_PUBLIC / "public" / "rede_universo.png")
+        print("  ", OUTPUT_DIR_PUBLIC / "public" / "rede_universo.html")
     except Exception as e:
         print("Falha ao gerar print Rede Universo:", e)

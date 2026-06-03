@@ -57,6 +57,20 @@
     "username": "admin",
     "password": "ALTERE_AQUI"
   },
+  "microsoft_graph": {
+    "tenant_id": "SEU_TENANT_ID",
+    "client_id": "SEU_CLIENT_ID_APLICACAO_PUBLICA",
+    "sender_upn": "usuario@empresa.com.br",
+    "token_cache_path": "authtoken/graph_token_cache.bin",
+    "allow_interactive_login": false,
+    "scopes": [
+      "https://graph.microsoft.com/Mail.Send",
+      "https://graph.microsoft.com/User.Read",
+      "offline_access",
+      "openid",
+      "profile"
+    ]
+  },
   "app_host_ip": "203.0.113.63",
   "timeouts": {
     "connection_timeout": 10,

@@ -29,6 +29,7 @@ ldap3==2.9.1
 lxml==6.0.0
 MarkupSafe==3.0.2
 more-itertools==10.7.0
+msal==1.31.1
 mpmath==1.3.0
 networkx==3.5
 ninja==1.11.1.4

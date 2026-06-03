@@ -8,6 +8,14 @@ import subprocess
 import tempfile
 from datetime import datetime
 
+
+def _ensure_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
 # Caminho raiz do projeto
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -272,6 +280,19 @@ def obter_detalhes_vm(ip, username, password):
                     $cs = Get-CimInstance Win32_ComputerSystem
                     $proc = Get-CimInstance Win32_Processor
                     $disk = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+                    $bitdefenderServices = @(
+                        Get-CimInstance Win32_Service | Where-Object {{
+                            $_.DisplayName -match 'Bitdefender' -or $_.Name -match 'Bitdefender'
+                        }} | Select-Object Name, DisplayName, State, StartMode
+                    )
+                    $bitdefenderProducts = @(
+                        Get-ItemProperty \
+                            'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', \
+                            'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' \
+                            -ErrorAction SilentlyContinue | Where-Object {{
+                                $_.DisplayName -match 'Bitdefender'
+                            }} | Select-Object DisplayName
+                    )
                     
                     $diskInfo = @()
                     foreach ($d in $disk) {{
@@ -299,9 +320,15 @@ def obter_detalhes_vm(ip, username, password):
                         LastBoot = $os.LastBootUpTime
                         Uptime = (Get-Date) - $os.LastBootUpTime
                         Disks = $diskInfo
+                        Bitdefender = [PSCustomObject]@{{
+                            Installed = (($bitdefenderServices.Count -gt 0) -or ($bitdefenderProducts.Count -gt 0))
+                            RunningServices = @($bitdefenderServices | Where-Object {{ $_.State -eq 'Running' }}).Count
+                            Services = $bitdefenderServices
+                            Products = $bitdefenderProducts
+                        }}
                     }}
                     
-                    $info | ConvertTo-Json -Depth 3
+                    $info | ConvertTo-Json -Depth 5
                 }} -ErrorAction Stop
                 
                 $info
@@ -336,6 +363,10 @@ def obter_detalhes_vm(ip, username, password):
             vm_info = json.loads(result.stdout)
             
             # Formata os detalhes da VM
+            bitdefender_raw = vm_info.get("Bitdefender") or {}
+            installed_raw = bitdefender_raw.get("Installed", False)
+            installed = installed_raw if isinstance(installed_raw, bool) else str(installed_raw).strip().lower() == "true"
+
             details = {
                 "computerName": vm_info.get("ComputerName", ""),
                 "operatingSystem": vm_info.get("OperatingSystem", ""),
@@ -347,7 +378,13 @@ def obter_detalhes_vm(ip, username, password):
                 "memory": vm_info.get("Memory", 0),
                 "lastBoot": vm_info.get("LastBoot", ""),
                 "uptime": str(vm_info.get("Uptime", "")),
-                "disks": []
+                "disks": [],
+                "bitdefender": {
+                    "installed": installed,
+                    "runningServices": int(bitdefender_raw.get("RunningServices", 0) or 0),
+                    "services": [],
+                    "products": [],
+                },
             }
             
             # Adiciona informações de disco
@@ -358,6 +395,19 @@ def obter_detalhes_vm(ip, username, password):
                     "totalGB": disk.get("TotalGB", 0),
                     "percentFree": disk.get("PercentFree", 0)
                 })
+
+            for service in _ensure_list(bitdefender_raw.get("Services")):
+                details["bitdefender"]["services"].append({
+                    "name": service.get("Name", ""),
+                    "displayName": service.get("DisplayName", ""),
+                    "status": service.get("State", ""),
+                    "startMode": service.get("StartMode", ""),
+                })
+
+            for product in _ensure_list(bitdefender_raw.get("Products")):
+                display_name = product.get("DisplayName", "")
+                if display_name:
+                    details["bitdefender"]["products"].append(display_name)
             
             return {
                 "success": True,
