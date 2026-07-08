@@ -131,6 +131,10 @@
     .status-warning {
         background-color: #ffc107;
     }
+
+    .status-inativo {
+        background-color: #6c757d;
+    }
     
     .status-unknown {
         background-color: #6c757d;
@@ -282,7 +286,7 @@
 
 <!-- Estatísticas -->
 <div class="row mb-4">
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <div class="stats-card stats-card-filter" data-filter-status="all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroStatus('all')">
             <div class="stats-number" id="stats-total-switches">
                 {{ regionais|map(attribute='total_switches')|sum }}
@@ -294,7 +298,7 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <div class="stats-card stats-card-filter" data-filter-status="online" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroStatus('online')">
             <div class="stats-number" id="stats-online">
                 {{ regionais|map(attribute='online')|sum }}
@@ -306,7 +310,7 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <div class="stats-card stats-card-filter" data-filter-status="offline" style="background: linear-gradient(135deg, #dc3545, #fd7e14);" onclick="aplicarFiltroStatus('offline')">
             <div class="stats-number" id="stats-offline">
                 {{ regionais|map(attribute='offline')|sum }}
@@ -318,7 +322,7 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <div class="stats-card stats-card-filter" data-filter-status="warning" style="background: linear-gradient(135deg, #ffc107, #ffb400);" onclick="aplicarFiltroStatus('warning')">
             <div class="stats-number" id="stats-warning">
                 {{ regionais|map(attribute='warning')|sum }}
@@ -326,6 +330,18 @@
             <div class="stats-label">
                 <i class="bi bi-exclamation-triangle me-1"></i>
                 Warning
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
+        <div class="stats-card stats-card-filter" data-filter-status="inativo" style="background: linear-gradient(135deg, #6c757d, #495057);" onclick="aplicarFiltroStatus('inativo')">
+            <div class="stats-number" id="stats-inativo">
+                {{ regionais|map(attribute='inativo')|sum }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-pause-circle me-1"></i>
+                Inativos
             </div>
         </div>
     </div>
@@ -373,7 +389,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <div class="d-grid">
                             <button id="btn-verificar-todos" class="btn btn-primary btn-lg" onclick="verificarTodosSwitches(this)">
                                 <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
@@ -385,26 +401,17 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <div class="d-grid">
                             <a href="{{ url_for('listar_switches') }}" class="btn btn-outline-primary btn-lg">
                                 <i class="bi bi-arrow-repeat me-2"></i>
-                                Recarregar Lista da Planilha
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4 mb-3">
-                        <div class="d-grid">
-                            <a href="{{ url_for('cadastrar_switch') }}" class="btn btn-success btn-lg">
-                                <i class="bi bi-plus-circle me-2"></i>
-                                Cadastrar Novo Switch
+                                Recarregar do Zabbix
                             </a>
                         </div>
                     </div>
                 </div>
                 <p class="text-muted small mb-0">
-                    Verificar Todos consulta o Zabbix e atualiza os status agora. Recarregar Lista lê novamente a planilha de switches e mantém o último status salvo.
+                    Verificar Todos consulta o Zabbix e atualiza os status agora. Recarregar do Zabbix busca novamente os hosts e mantém a separação por regional.
                 </p>
             </div>
         </div>
@@ -432,7 +439,7 @@
         
         <!-- Estatísticas da Regional -->
         <div class="row mb-3">
-            <div class="col-md-3 col-sm-6 mb-2">
+            <div class="col-md col-sm-6 mb-2">
                 <div class="card bg-light">
                     <div class="card-body text-center">
                         <h5 class="mb-0 regional-total">{{ regional.total_switches }}</h5>
@@ -441,7 +448,7 @@
                 </div>
             </div>
             
-            <div class="col-md-3 col-sm-6 mb-2">
+            <div class="col-md col-sm-6 mb-2">
                 <div class="card bg-success text-white">
                     <div class="card-body text-center">
                         <h5 class="mb-0 regional-online">{{ regional.online }}</h5>
@@ -450,7 +457,7 @@
                 </div>
             </div>
             
-            <div class="col-md-3 col-sm-6 mb-2">
+            <div class="col-md col-sm-6 mb-2">
                 <div class="card bg-danger text-white">
                     <div class="card-body text-center">
                         <h5 class="mb-0 regional-offline">{{ regional.offline }}</h5>
@@ -459,11 +466,20 @@
                 </div>
             </div>
             
-            <div class="col-md-3 col-sm-6 mb-2">
+            <div class="col-md col-sm-6 mb-2">
                 <div class="card bg-warning text-dark">
                     <div class="card-body text-center">
                         <h5 class="mb-0 regional-warning">{{ regional.warning }}</h5>
                         <small>Warning</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md col-sm-6 mb-2">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body text-center">
+                        <h5 class="mb-0 regional-inativo">{{ regional.inativo }}</h5>
+                        <small>Inativos</small>
                     </div>
                 </div>
             </div>
@@ -479,6 +495,8 @@
                         <span>
                             {% if switch.status == 'online' %}
                             <span class="status-badge status-online" title="Online"></span>
+                            {% elif switch.status == 'inativo' %}
+                            <span class="status-badge status-inativo" title="Inativo"></span>
                             {% elif switch.status in ['offline', 'não encontrado', 'erro', 'desconhecido'] %}
                             <span class="status-badge status-offline" title="Offline"></span>
                             {% elif switch.status == 'warning' %}
@@ -506,8 +524,8 @@
                             </ul>
                         </div>
                         <div class="warning-cause indisponivel-cause{% if switch.status in ['online', 'warning'] %} d-none{% endif %}">
-                            <span class="warning-cause-label">Motivo da indisponibilidade</span>
-                            <span class="indisponivel-cause-value">{{ switch.status_reason or ('Host encontrado no Zabbix, mas marcado como inativo.' if switch.status == 'offline' else 'Não localizado no Zabbix pelo nome, identificador técnico, IP ou interface.' if switch.status == 'não encontrado' else 'Falha na última verificação deste switch.' if switch.status == 'erro' else 'Switch ainda não verificado nesta sessão.') }}</span>
+                            <span class="warning-cause-label">{% if switch.status == 'inativo' %}Motivo do inativo{% else %}Motivo da indisponibilidade{% endif %}</span>
+                            <span class="indisponivel-cause-value">{{ switch.status_reason or ('Host encontrado no Zabbix, mas marcado como inativo.' if switch.status == 'inativo' else 'Não localizado no Zabbix pelo nome, identificador técnico, IP ou interface.' if switch.status == 'não encontrado' else 'Falha na última verificação deste switch.' if switch.status == 'erro' else 'Switch ainda não verificado nesta sessão.') }}</span>
                             <ul class="warning-cause-list{% if not switch.status_details %} d-none{% endif %}">
                                 <li class="indisponivel-cause-details">{{ switch.status_details }}</li>
                             </ul>
@@ -520,6 +538,8 @@
                                 <span class="text-danger">Offline</span>
                                 {% elif switch.status == 'warning' %}
                                 <span class="text-warning">Warning</span>
+                                {% elif switch.status == 'inativo' %}
+                                <span class="text-secondary">Inativo</span>
                                 {% elif switch.status == 'não encontrado' %}
                                 <span class="text-danger">Não encontrado</span>
                                 {% elif switch.status == 'erro' %}
@@ -591,7 +611,7 @@ $(document).ready(function() {
     });
 
     const totalSwitches = lerNumero('#stats-total-switches');
-    const totalConhecidos = lerNumero('#stats-online') + lerNumero('#stats-offline') + lerNumero('#stats-warning');
+    const totalConhecidos = lerNumero('#stats-online') + lerNumero('#stats-offline') + lerNumero('#stats-warning') + lerNumero('#stats-inativo');
 
     if (totalSwitches > 0 && totalConhecidos === 0) {
         showLoadingOverlay(
@@ -802,6 +822,7 @@ function formatarUltimaVerificacao(valor) {
 
 function obterClasseBadge(status) {
     if (status === 'online') return 'status-online';
+    if (status === 'inativo') return 'status-inativo';
     if (['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status)) return 'status-offline';
     if (status === 'warning') return 'status-warning';
     return 'status-unknown';
@@ -809,6 +830,7 @@ function obterClasseBadge(status) {
 
 function obterClasseTextoStatus(status) {
     if (status === 'online') return 'text-success';
+    if (status === 'inativo') return 'text-secondary';
     if (['offline', 'não encontrado', 'erro'].includes(status)) return 'text-danger';
     if (status === 'warning') return 'text-warning';
     return 'text-muted';
@@ -818,6 +840,7 @@ function obterTextoStatus(status) {
     if (status === 'online') return 'Online';
     if (status === 'offline') return 'Offline';
     if (status === 'warning') return 'Warning';
+    if (status === 'inativo') return 'Inativo';
     if (status === 'não encontrado') return 'Não encontrado';
     if (status === 'erro') return 'Erro';
     return 'Desconhecido';
@@ -877,7 +900,7 @@ function atualizarMotivoWarning(card, status, warningProblemas = [], warningResu
 }
 
 function obterMotivoIndisponivelPadrao(status) {
-    if (status === 'offline') return 'Host encontrado no Zabbix, mas está marcado como inativo/desabilitado.';
+    if (status === 'inativo') return 'Host encontrado no Zabbix, mas está marcado como inativo/desabilitado.';
     if (status === 'não encontrado') return 'Não localizado no Zabbix pelo nome, identificador técnico, IP ou interface.';
     if (status === 'erro') return 'Falha na última verificação deste switch.';
     return 'Switch ainda não verificado nesta sessão.';
@@ -917,18 +940,21 @@ function atualizarContadoresGlobais() {
     let online = 0;
     let offline = 0;
     let warning = 0;
+    let inativo = 0;
 
     cards.each(function() {
         const status = $(this).attr('data-status');
         if (status === 'online') online += 1;
         else if (status === 'warning') warning += 1;
-        else offline += 1;
+        else if (status === 'inativo') inativo += 1;
+        else if (['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status)) offline += 1;
     });
 
     $('#stats-total-switches').text(cards.length);
     $('#stats-online').text(online);
     $('#stats-offline').text(offline);
     $('#stats-warning').text(warning);
+    $('#stats-inativo').text(inativo);
 }
 
 function atualizarContadoresRegionais() {
@@ -938,18 +964,21 @@ function atualizarContadoresRegionais() {
         let online = 0;
         let offline = 0;
         let warning = 0;
+        let inativo = 0;
 
         cards.each(function() {
             const status = $(this).attr('data-status');
             if (status === 'online') online += 1;
             else if (status === 'warning') warning += 1;
-            else offline += 1;
+            else if (status === 'inativo') inativo += 1;
+            else if (['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status)) offline += 1;
         });
 
         section.find('.regional-total').text(cards.length);
         section.find('.regional-online').text(online);
         section.find('.regional-offline').text(offline);
         section.find('.regional-warning').text(warning);
+        section.find('.regional-inativo').text(inativo);
     });
 }
 
@@ -963,6 +992,7 @@ function obterTextoFiltroStatus(status) {
     if (status === 'online') return 'Somente switches online';
     if (status === 'offline') return 'Somente switches indisponíveis';
     if (status === 'warning') return 'Somente switches com warning';
+    if (status === 'inativo') return 'Somente switches inativos';
     return 'Todos os switches';
 }
 
@@ -1015,7 +1045,7 @@ function atualizarFiltroStatusAtivo() {
             const wrapper = $(this);
             const card = wrapper.find('.switch-card');
             const status = card.attr('data-status') || wrapper.attr('data-status') || 'desconhecido';
-            const statusEhOffline = !['online', 'warning'].includes(status);
+            const statusEhOffline = ['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status);
             const buscaTexto = normalizeSearchText(wrapper.attr('data-search-text') || '');
             const correspondeBusca = !filtroBuscaAtual
                 || buscaTexto.includes(filtroBuscaAtual)
@@ -1060,7 +1090,7 @@ function atualizarStatusSwitch(host, status, ultimaVerificacao = null, recalcula
 
     const badge = card.find('.status-badge');
     if (badge.length) {
-        badge.removeClass('status-online status-offline status-warning status-unknown');
+        badge.removeClass('status-online status-offline status-warning status-inativo status-unknown');
         badge.addClass(obterClasseBadge(status));
         badge.attr('title', obterTextoStatus(status));
     }
@@ -1266,7 +1296,8 @@ function verificarSwitch(host, regional) {
                     setSwitchesSyncProgress(100);
                     showToast(`${host}: ${result.status}`,
                         result.status === 'online' ? 'success' :
-                        result.status === 'offline' ? 'danger' : 'warning');
+                        ['offline', 'não encontrado', 'erro'].includes(result.status) ? 'danger' :
+                        result.status === 'inativo' ? 'secondary' : 'warning');
                     setTimeout(() => {
                         card.removeClass('border-primary');
                         hideLoadingOverlay();

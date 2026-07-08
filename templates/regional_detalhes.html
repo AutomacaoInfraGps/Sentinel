@@ -4,6 +4,11 @@
 
 {% block content %}
 <style>
+    .license-critical { background-color: #ffe5e5 !important; border-left: 4px solid #dc3545 !important; }
+    .license-warning  { background-color: #fff3cd !important; border-left: 4px solid #ffc107 !important; }
+    .license-ok       { background-color: #d4edda !important; border-left: 4px solid #28a745 !important; }
+    .license-expired  { background-color: #f8d7da !important; border-left: 4px solid #842029 !important; }
+
     .ip-link {
         color: var(--bs-code-color, #d63384);
         text-decoration: none;
@@ -49,7 +54,7 @@
             </a>
             <div>
                 <h1 class="display-5 mb-2">
-                    <i class="bi bi-building me-3"></i>
+                    <i class="bi bi-geo-alt-fill me-3"></i>
                     {{ regional.nome }}
                 </h1>
                 <p class="text-muted">{{ regional.descricao or 'Sem descrição' }}</p>
@@ -387,7 +392,7 @@
                                     {% if ns.local_link.mascara_local %}
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">Máscara Local:</span>
-                                        <span class="small fw-semibold">{{ ns.local_link.mascara_local }}</span>
+                                        <span class="small fw-semibold" id="mascara-local-jinja">{{ ns.local_link.mascara_local }}</span>
                                     </div>
                                     {% endif %}
                                 </div>
@@ -412,8 +417,14 @@
                                 <div class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">IP:</span>
-                                        <code class="small">{{ link.ip_exibicao or ((link.ip if link.ip else 'sem_ip_publico') ~ (link.mascara if link.ip and link.mascara else '')) }}</code>
+                                        <code class="small">{{ link.ip if link.ip else (link.ip_exibicao or 'sem_ip_publico') }}</code>
                                     </div>
+                                    {% if link.mascara_completa %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Máscara:</span>
+                                        <code class="small">{{ link.mascara_completa }}</code>
+                                    </div>
+                                    {% endif %}
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">Porta/Interface:</span>
                                         <span class="small fw-semibold">{{ link.interface_monitorada or link.nome or 'N/A' }}</span>
@@ -513,6 +524,132 @@
         </div>
     </div>
 </div>
+
+<!-- Seção de Firewalls (Licenças) -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C); border-bottom: 3px solid rgba(1,46,64,0.3);">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0 text-white">
+                        <i class="bi bi-shield-check me-2"></i>
+                        Firewalls &amp; Licenças
+                    </h5>
+                    <span class="badge bg-light text-dark">{{ regional.firewalls|length }} {% if regional.firewalls|length == 1 %}dispositivo{% else %}dispositivos{% endif %}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="regional-firewalls-container">
+                {% if regional.firewalls %}
+                <div class="row">
+                    {% for firewall in regional.firewalls %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+                                <h6 class="mb-0 fw-bold">
+                                    <i class="bi bi-shield-shaded me-2"></i>
+                                    {{ firewall.nome }}
+                                </h6>
+                                {%- if firewall.status == 'ready' %}
+                                <span class="badge bg-success">Online</span>
+                                {%- elif firewall.status in ('offline','down') %}
+                                <span class="badge bg-danger">Offline</span>
+                                {%- endif %}
+                            </div>
+                            
+                            <div class="card-body">
+                                <!-- Informações do Dispositivo -->
+                                <div class="mb-3 pb-3 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Hostname:</span>
+                                        <code class="small">{{ firewall.hostname or 'N/A' }}</code>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">IP:</span>
+                                        <code class="small">{{ firewall.ip or 'N/A' }}</code>
+                                    </div>
+                                    {% if firewall.model %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Modelo:</span>
+                                        <span class="small">{{ firewall.model }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if firewall.serial %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Serial:</span>
+                                        <span class="small" style="font-family: monospace;">{{ firewall.serial }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Licenças -->
+                                {% set forticare_lics = firewall.licencas|selectattr('nome','equalto','forticare')|list %}
+                                {% if forticare_lics %}
+                                <div class="mb-0">
+                                    <div class="list-group list-group-sm">
+                                        {% for licenca in forticare_lics %}
+                                        <div class="list-group-item px-2 py-2 {% if licenca.notificacao_expirada %}license-expired{% elif licenca.notificacao_critica %}license-critical{% elif licenca.dias_restantes <= 60 %}license-warning{% else %}license-ok{% endif %}">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <small class="fw-semibold">FortiCare</small>
+                                                    <small class="text-muted ms-2">Status:
+                                                        <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
+                                                            {%- if licenca.status == 'offline' %}Sem Sinal
+                                                            {%- elif licenca.status in ('valid','licensed') %}Válida
+                                                            {%- elif licenca.status == 'registered' %}Registrada
+                                                            {%- elif licenca.status == 'expired' %}Expirada
+                                                            {%- elif licenca.status == 'no_license' %}Sem Licença
+                                                            {%- else %}{{ licenca.status|title }}{%- endif %}
+                                                        </span>
+                                                    </small>
+                                                </div>
+                                                <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
+                                                    {%- if licenca.status == 'offline' %}Sem Sinal
+                                                    {%- elif licenca.notificacao_expirada %}Expirada
+                                                    {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="alert alert-info py-2 mb-0" role="alert">
+                                    <small><i class="bi bi-info-circle me-1"></i> Nenhuma licença encontrada</small>
+                                </div>
+                                {% endif %}
+
+                                {% if firewall.erro %}
+                                <div class="alert alert-warning py-2 mb-0 mt-2" role="alert">
+                                    <small><i class="bi bi-exclamation-triangle me-1"></i> {{ firewall.erro }}</small>
+                                </div>
+                                {% endif %}
+
+                                {% if firewall.ultima_verificacao %}
+                                <div class="verification-meta mt-2">
+                                    <i class="bi bi-clock-history"></i>
+                                    <strong>Verificado</strong>
+                                    <span style="font-size: 0.75rem;">{{ firewall.ultima_verificacao }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-shield-check text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">Nenhum firewall detectado</h4>
+                    <p class="text-muted">Configure links de internet com fortigates para esta regional</p>
+                </div>
+                {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -840,6 +977,17 @@ let regionalLinksAtuais = JSON.parse(regionalDetailData?.dataset.links || '[]');
 let servidoresRegionaisAtuais = JSON.parse(regionalDetailData?.dataset.servidores || '[]');
 const novoLinkRegionalUrl = regionalDetailData?.dataset.novoLinkUrl || '';
 
+function cidrToDotted(valor) {
+    // Converte /23 ou "255.255.254.0" para notação dotted. Retorna o valor original se não for CIDR.
+    const s = String(valor || '').trim();
+    const m = s.match(/^\/(\d+)$/);
+    if (!m) return s; // já está em dotted ou vazio
+    const prefix = parseInt(m[1], 10);
+    if (isNaN(prefix) || prefix < 0 || prefix > 32) return s;
+    const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0;
+    return [(mask >>> 24) & 0xFF, (mask >>> 16) & 0xFF, (mask >>> 8) & 0xFF, mask & 0xFF].join('.');
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -876,7 +1024,7 @@ function renderLocalNetworkCard(link) {
     const mascaraLocal = link.mascara_local ? `
         <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="small text-muted">Máscara Local:</span>
-            <span class="small fw-semibold">${escapeHtml(link.mascara_local)}</span>
+            <span class="small fw-semibold">${escapeHtml(cidrToDotted(link.mascara_local))}</span>
         </div>` : '';
 
     const porta = link.fortigate_porta ? `:${escapeHtml(link.fortigate_porta)}` : '';
@@ -1021,7 +1169,20 @@ function renderLinkCard(link) {
     const ativo = link.ativo !== false;
     const borderClass = ativo ? 'success' : 'secondary';
     const statusClass = badgeStatusClass(link.status);
-    const ipExibicao = link.ip_exibicao || ((link.ip || 'sem_ip_publico') + ((link.ip && link.mascara) ? link.mascara : ''));
+    const ipSemMascara = link.ip || link.ip_exibicao || 'sem_ip_publico';
+    const mascaraCompleta = link.mascara_completa || (() => {
+        const m = String(link.mascara || '').trim();
+        if (!m) return '';
+        const prefix = m.startsWith('/') ? parseInt(m.slice(1)) : parseInt(m);
+        if (isNaN(prefix) || prefix < 0 || prefix > 32) return m;
+        const mi = (0xFFFFFFFF << (32 - prefix)) >>> 0;
+        return [(mi >>> 24) & 0xFF, (mi >>> 16) & 0xFF, (mi >>> 8) & 0xFF, mi & 0xFF].join('.');
+    })();
+    const mascaraRow = mascaraCompleta ? `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small text-muted">Máscara:</span>
+            <code class="small">${escapeHtml(mascaraCompleta)}</code>
+        </div>` : '';
     const banda = link.velocidade && link.velocidade !== 'N/A' ? `
         <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="small text-muted">Banda:</span>
@@ -1065,8 +1226,9 @@ function renderLinkCard(link) {
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="small text-muted">IP:</span>
-                            <code class="small">${escapeHtml(ipExibicao)}</code>
+                            <code class="small">${escapeHtml(ipSemMascara)}</code>
                         </div>
+                        ${mascaraRow}
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="small text-muted">Porta/Interface:</span>
                             <span class="small fw-semibold">${escapeHtml(link.interface_monitorada || link.nome || 'N/A')}</span>
@@ -1155,6 +1317,11 @@ function excluirLink(codigoRegional, linkId, nomeLink) {
         showToast("Erro ao excluir link", "danger");
     });
 }
+
+// Converte máscara CIDR (/23) para dotted notation na parte renderizada pelo servidor
+document.querySelectorAll('#mascara-local-jinja').forEach(function(el) {
+    el.textContent = cidrToDotted(el.textContent.trim());
+});
 </script>
 
 

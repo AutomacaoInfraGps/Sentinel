@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Validade de Certificados - Sistema de Automação{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5 mb-4">
+            <i class="bi bi-shield-check me-3"></i>
+            Validade de Certificados
+        </h1>
+        <p class="lead text-muted">
+            Boas-vindas! Esta é a página de validade de certificados.
+        </p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-success" role="alert">
+            <strong>Sucesso!</strong> A rota foi carregada e o template está sendo renderizado corretamente.
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <p class="mb-0">
+                    Se você está vendo esta página, a rota <code>/validade_certificados</code> está funcionando.
+                </p>
+                <p class="mb-0">
+                    Para validação pública direta sem login, use <code>/validade_certificados/ok</code>.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

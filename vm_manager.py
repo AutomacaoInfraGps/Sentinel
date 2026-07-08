@@ -1,4 +1,4 @@
-"""
+﻿"""
 Módulo para gerenciar máquinas virtuais e obter informações detalhadas
 usando PowerShell remoto.
 """
@@ -20,27 +20,37 @@ def _ensure_list(value):
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 def verificar_vm_online(ip):
-    """Verifica se uma VM está online usando ping"""
+    """Verifica se uma VM esta online usando ping."""
     try:
-        # Tenta fazer ping na VM
-        ping_result = subprocess.run(
-            ["ping", "-n", "1", "-w", "1000", ip],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        # Verifica se o ping foi bem-sucedido (suporta respostas em inglês e português)
-        if "Reply from" in ping_result.stdout or "Resposta de" in ping_result.stdout:
-            print(f"VM {ip} está online!")
-            return True
-        else:
-            print(f"VM {ip} não respondeu ao ping. Saída: {ping_result.stdout}")
-            return False
+        ultimo_output = ""
+        for tentativa in range(1, 4):
+            ping_result = subprocess.run(
+                ["ping", "-n", "1", "-w", "3000", ip],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            ultimo_output = ping_result.stdout or ""
+            output_lower = ultimo_output.lower()
+            resposta_invalida = (
+                "destination host unreachable" in output_lower
+                or "host de destino inacess" in output_lower
+                or "request timed out" in output_lower
+                or "esgotado o tempo" in output_lower
+                or "100% loss" in output_lower
+                or "100% de perda" in output_lower
+            )
+
+            if ("ttl=" in output_lower or "ttl " in output_lower) and not resposta_invalida:
+                print(f"VM {ip} esta online! Tentativa {tentativa}/3")
+                return True
+
+        print(f"VM {ip} nao respondeu ao ping apos 3 tentativas. Saida: {ultimo_output}")
+        return False
     except Exception as ping_error:
         print(f"Erro ao verificar conectividade: {str(ping_error)}")
         return False
-
 def obter_servicos_vm(ip, username, password):
     """Obtém os serviços de uma VM usando PowerShell remoto"""
     try:
