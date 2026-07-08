@@ -1,0 +1,223 @@
+.sofia-widget {
+    --sofia-navy: #012e40;
+    --sofia-blue: #0f6c8c;
+    --sofia-border: #d9e2ec;
+    --sofia-surface: #ffffff;
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 1080;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.sofia-launcher {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    background: var(--sofia-navy);
+    box-shadow: 0 8px 24px rgba(1, 46, 64, 0.3);
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sofia-launcher:hover,
+.sofia-launcher:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(1, 46, 64, 0.38);
+}
+
+.sofia-launcher:focus-visible,
+.sofia-icon-button:focus-visible,
+.sofia-send:focus-visible,
+.sofia-composer textarea:focus-visible {
+    outline: 3px solid rgba(15, 108, 140, 0.28);
+    outline-offset: 2px;
+}
+
+.sofia-launcher img {
+    width: 46px;
+    height: 46px;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.sofia-unread {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 11px;
+    height: 11px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #e53e3e;
+}
+
+.sofia-panel {
+    position: absolute;
+    right: 0;
+    bottom: 72px;
+    width: min(380px, calc(100vw - 32px));
+    height: min(560px, calc(100vh - 120px));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    overflow: hidden;
+    border: 1px solid var(--sofia-border);
+    border-radius: 8px;
+    background: var(--sofia-surface);
+    box-shadow: 0 18px 50px rgba(1, 46, 64, 0.28);
+}
+
+.sofia-panel[hidden] { display: none; }
+
+.sofia-header {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    color: #fff;
+    background: var(--sofia-navy);
+}
+
+.sofia-identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.sofia-avatar {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 50%;
+}
+
+.sofia-identity strong,
+.sofia-identity span { display: block; }
+.sofia-identity strong { font-size: 1rem; }
+.sofia-identity span { color: #cfe8f2; font-size: 0.76rem; }
+
+.sofia-icon-button,
+.sofia-send {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 38px;
+    padding: 0;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.sofia-icon-button {
+    border: 0;
+    color: #fff;
+    background: transparent;
+}
+.sofia-icon-button:hover { background: rgba(255, 255, 255, 0.12); }
+
+.sofia-messages {
+    overflow-y: auto;
+    padding: 14px;
+    background: #f5f8fa;
+    scrollbar-gutter: stable;
+}
+
+.sofia-message {
+    width: fit-content;
+    max-width: 86%;
+    margin-bottom: 12px;
+    padding: 9px 11px;
+    border-radius: 6px;
+    overflow-wrap: anywhere;
+}
+
+.sofia-message p {
+    margin: 2px 0 0;
+    white-space: pre-wrap;
+    font-size: 0.88rem;
+    line-height: 1.42;
+}
+
+.sofia-message-author {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #627d98;
+}
+
+.sofia-message-assistant {
+    border: 1px solid var(--sofia-border);
+    color: #243b53;
+    background: #fff;
+}
+
+.sofia-message-user {
+    margin-left: auto;
+    color: #fff;
+    background: var(--sofia-blue);
+}
+.sofia-message-user .sofia-message-author { color: #d8f1f8; }
+
+.sofia-composer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid var(--sofia-border);
+    background: #fff;
+}
+
+.sofia-composer textarea {
+    width: 100%;
+    min-height: 42px;
+    max-height: 112px;
+    resize: none;
+    padding: 9px 11px;
+    border: 1px solid #bcccdc;
+    border-radius: 6px;
+    color: #102a43;
+    background: #fff;
+}
+
+.sofia-send {
+    border: 0;
+    color: #fff;
+    background: var(--sofia-blue);
+}
+.sofia-send:hover { background: #0a4a63; }
+.sofia-send:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.sofia-status {
+    min-height: 22px;
+    padding: 0 12px 7px;
+    color: #627d98;
+    background: #fff;
+    font-size: 0.72rem;
+}
+.sofia-status.is-error { color: #c53030; }
+
+@media (max-width: 575.98px) {
+    .sofia-widget { right: 12px; bottom: 12px; }
+    .sofia-panel {
+        position: fixed;
+        inset: 12px;
+        width: auto;
+        height: auto;
+        max-height: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sofia-launcher { transition: none; }
+}
+
