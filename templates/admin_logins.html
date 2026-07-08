@@ -1,0 +1,595 @@
+{% extends "base.html" %}
+{# Monitor config-based: compara lista atual de admins vs baseline aprovada #}
+{% block title %}Monitor de Admins - Sistema de Automação{% endblock %}
+
+{% block content %}
+<style>
+    .admin-header {
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        color: white;
+        padding: 1.5rem 2rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .admin-header h4 { margin: 0; font-weight: 600; }
+    .admin-header p  { margin: 0.25rem 0 0 0; opacity: 0.85; font-size: 0.9rem; }
+
+    /* Stat cards */
+    .stat-card {
+        border: none; border-radius: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, outline-color 0.15s ease;
+        outline: 3px solid transparent;
+        outline-offset: 3px;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 5px 14px rgba(0,0,0,0.18); }
+    .stat-card:focus-visible { outline-color: #0dcaf0; }
+    .stat-card.active { outline-color: #0dcaf0; box-shadow: 0 5px 14px rgba(0,0,0,0.22); }
+    .stat-card .stat-num   { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+    .stat-card .stat-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.9; }
+    .stat-card .stat-icon  { font-size: 2rem; opacity: 0.8; }
+    .stat-total   { background: linear-gradient(135deg, #012E40, #0A4A63); color: white; }
+    .stat-alerta  { background: linear-gradient(135deg, #7b1524, #dc3545); color: white; }
+    .stat-offline { background: linear-gradient(135deg, #3d3d3d, #6c757d); color: white; }
+    .stat-ok      { background: linear-gradient(135deg, #155724, #28a745); color: white; }
+
+    /* Device cards */
+    .device-card {
+        border: 2px solid #dee2e6;
+        border-radius: 0.5rem;
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .device-card.alerta   { border-color: #dc3545; }
+    .device-card.offline  { border-color: #6c757d; }
+    .device-card.ok       { border-color: #28a745; }
+    .device-card.sem-base { border-color: #ffc107; }
+    .device-card.sem-perm { border-color: #6610f2; }
+    .device-card.limitado  { border-color: #0dcaf0; }
+
+    .device-header {
+        padding: 0.75rem 1rem;
+        display: flex; align-items: center; gap: 0.5rem;
+        cursor: pointer; user-select: none;
+    }
+    .device-card.alerta   .device-header { background: #fff5f5; }
+    .device-card.offline  .device-header { background: #f8f9fa; }
+    .device-card.ok       .device-header { background: #f0fff4; }
+    .device-card.sem-base .device-header { background: #fffbf0; }
+    .device-card.sem-perm .device-header { background: #f5f0ff; }
+    .device-card.limitado .device-header { background: #e8fafd; }
+
+    .device-tipo-badge {
+        font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.04em; padding: 0.2em 0.6em;
+        border-radius: 999px;
+    }
+    .tipo-fgt  { background: #cfe2ff; color: #084298; }
+    .tipo-fmg  { background: #d1ecf1; color: #0c5460; }
+    .tipo-faz  { background: #d4edda; color: #155724; }
+
+    /* Status badges */
+    .badge-alerta  { background: #dc3545 !important; }
+    .badge-ok      { background: #28a745 !important; }
+    .badge-offline { background: #6c757d !important; }
+    .badge-sembase { background: #ffc107 !important; color: #212529 !important; }
+
+    /* Admin pills */
+    .admin-pill {
+        display: inline-block;
+        padding: 0.25em 0.7em;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        margin: 0.15em;
+        font-family: monospace;
+    }
+    .admin-normal  { background: #e9ecef; color: #212529; }
+    .admin-novo    { background: #dc3545; color: white; }
+    .admin-removido{ background: #ffc107; color: #212529; }
+
+    /* Alert box */
+    .alerta-box {
+        background: #fff5f5;
+        border: 1px solid #f5c6cb;
+        border-radius: 0.4rem;
+        padding: 0.75rem 1rem;
+        margin: 0.5rem 0;
+    }
+    .alerta-box.removido {
+        background: #fffbf0;
+        border-color: #ffc107;
+    }
+
+    /* Botões de ação */
+    .btn-aprovar  { font-size: 0.78rem; padding: 0.2em 0.7em; }
+    .btn-remover  { font-size: 0.78rem; padding: 0.2em 0.7em; }
+
+    /* Seção de admins OK */
+    .admins-ok-list {
+        padding: 0.5rem 1rem;
+        border-top: 1px solid #dee2e6;
+    }
+
+    /* Empty */
+    .empty-state {
+        text-align: center; padding: 3rem 1rem; color: #6c757d;
+    }
+    .empty-state i { font-size: 3rem; display: block; margin-bottom: 0.75rem; opacity: 0.4; }
+
+    /* Filtro */
+    .filter-bar {
+        background: white; border: 1px solid #dee2e6;
+        border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1.25rem;
+    }
+
+    /* Abas */
+    .nav-tabs .nav-link { color: #495057; font-weight: 500; }
+    .nav-tabs .nav-link.active { color: #0A4A63; border-bottom: 3px solid #0A4A63; font-weight: 600; }
+
+    /* Tabela de eventos de log */
+    .log-table th { background: #f8f9fa; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #495057; }
+    .log-table td { vertical-align: middle; font-size: 0.85rem; }
+
+    .badge-add    { background: #dc3545 !important; }
+    .badge-delete { background: #fd7e14 !important; }
+    .badge-edit   { background: #0dcaf0 !important; color: #212529 !important; }
+
+    /* Time pill */
+    .time-pill {
+        cursor: pointer; border: 1px solid #dee2e6; background: white; color: #495057;
+        border-radius: 999px; padding: 0.3em 0.85em; font-size: 0.8rem;
+        transition: all 0.15s; text-decoration: none; display: inline-block;
+    }
+    .time-pill:hover, .time-pill.active {
+        background: #0A4A63; color: white; border-color: #0A4A63; text-decoration: none;
+    }
+</style>
+
+<div class="container-fluid px-4 py-3">
+
+    <!-- Cabeçalho -->
+    <div class="admin-header">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <h4><i class="fas fa-user-shield me-2"></i>Monitor de Admins — FortiGates, FortiManager e FortiAnalyzer</h4>
+                <p>Comparação em tempo real dos usuários admin com a baseline de acessos aprovados. Qualquer diferença gera alerta.</p>
+            </div>
+            <div>
+                <a href="{{ url_for('listar_admin_logins') }}" class="btn btn-sm btn-light">
+                    <i class="fas fa-sync-alt me-1"></i>Atualizar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards totais -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card stat-card stat-total p-3 active" data-filter="total" role="button"
+                 tabindex="0" aria-pressed="true" aria-label="Mostrar todos os dispositivos">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-num">{{ total_disp }}</div>
+                        <div class="stat-label">Dispositivos</div>
+                    </div>
+                    <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card stat-card stat-alerta p-3" data-filter="alerta" role="button"
+                 tabindex="0" aria-pressed="false" aria-label="Mostrar somente dispositivos com alertas">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-num">{{ total_alertas }}</div>
+                        <div class="stat-label">Com Alertas</div>
+                    </div>
+                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                </div>
+                {% if total_alertas > 0 %}
+                <div style="font-size:0.78rem;opacity:0.85">Admins fora da baseline</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card stat-card stat-offline p-3" data-filter="offline" role="button"
+                 tabindex="0" aria-pressed="false" aria-label="Mostrar somente dispositivos offline">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-num">{{ total_offline }}</div>
+                        <div class="stat-label">Offline</div>
+                    </div>
+                    <div class="stat-icon"><i class="fas fa-plug"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card stat-card stat-ok p-3" data-filter="ok" role="button"
+                 tabindex="0" aria-pressed="false" aria-label="Mostrar somente dispositivos OK">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-num">{{ total_ok }}</div>
+                        <div class="stat-label">OK</div>
+                    </div>
+                    <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtro -->
+    <div class="filter-bar d-flex align-items-center gap-3 flex-wrap">
+        <span class="text-muted" style="font-size:0.82rem"><i class="fas fa-filter me-1"></i>Mostrar:</span>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="chkAlerta"  checked onchange="filtrarCards()">
+            <label class="form-check-label text-danger" for="chkAlerta">Com alerta</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="chkOk"     checked onchange="filtrarCards()">
+            <label class="form-check-label text-success" for="chkOk">OK</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="chkOffline" checked onchange="filtrarCards()">
+            <label class="form-check-label text-secondary" for="chkOffline">Offline</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="chkSemBase" checked onchange="filtrarCards()">
+            <label class="form-check-label text-warning" for="chkSemBase">Sem baseline</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="chkSemPerm" checked onchange="filtrarCards()">
+            <label class="form-check-label" style="color:#6610f2" for="chkSemPerm">Sem permissão</label>
+        </div>
+        <input type="text" id="searchInput" class="form-control form-control-sm ms-auto"
+               placeholder="Buscar dispositivo…" style="width:220px" oninput="filtrarCards()">
+    </div>
+
+    <!-- Cards por dispositivo -->
+    <div id="deviceList">
+        {% if dispositivos %}
+
+        {# --- Ordenação: alertas primeiro, depois sem_permissao, offline, sem_base, ok --- #}
+        {% set ordered = [] %}
+        {% for k, d in dispositivos.items() %}
+            {% if d.novos or d.removidos %}{% set _ = ordered.append((0, k, d)) %}{% endif %}
+        {% endfor %}
+        {% for k, d in dispositivos.items() %}
+            {% if d.sem_permissao %}{% set _ = ordered.append((1, k, d)) %}{% endif %}
+        {% endfor %}
+        {% for k, d in dispositivos.items() %}
+            {% if d.offline %}{% set _ = ordered.append((2, k, d)) %}{% endif %}
+        {% endfor %}
+        {% for k, d in dispositivos.items() %}
+            {% if not d.novos and not d.removidos and not d.offline and not d.sem_permissao and not baseline.get(k) %}{% set _ = ordered.append((3, k, d)) %}{% endif %}
+        {% endfor %}
+        {% for k, d in dispositivos.items() %}
+            {% if not d.novos and not d.removidos and not d.offline and not d.sem_permissao and baseline.get(k) %}{% set _ = ordered.append((4, k, d)) %}{% endif %}
+        {% endfor %}
+
+        {% for _, dev_key, d in ordered %}
+        {%   set tem_alerta  = d.novos or d.removidos %}
+        {%   set tem_base    = baseline.get(dev_key) %}
+        {%   set card_class  = 'alerta' if tem_alerta else ('sem-perm' if d.sem_permissao else ('limitado' if d.monitoramento_limitado else ('offline' if d.offline else ('sem-base' if not tem_base else 'ok')))) %}
+
+        <div class="device-card {{ card_class }}" data-state="{{ card_class }}" data-nome="{{ d.nome }}">
+            <!-- Cabeçalho clicável -->
+            <div class="device-header" onclick="toggleCard('{{ dev_key | replace('.', '_') | replace(' ', '_') }}')">
+                <!-- Ícone de tipo -->
+                {% if d.tipo == 'fortimanager' %}
+                    <span class="device-tipo-badge tipo-fmg"><i class="fas fa-server me-1"></i>FortiManager</span>
+                {% elif d.tipo == 'fortianalyzer' %}
+                    <span class="device-tipo-badge tipo-faz"><i class="fas fa-chart-bar me-1"></i>FortiAnalyzer</span>
+                {% else %}
+                    <span class="device-tipo-badge tipo-fgt"><i class="fas fa-shield-alt me-1"></i>FortiGate</span>
+                {% endif %}
+
+                <strong class="ms-1">{{ d.nome }}</strong>
+
+                <!-- Status badge -->
+                {% if d.offline %}
+                    <span class="badge badge-offline text-white ms-2"><i class="fas fa-plug me-1"></i>Offline</span>
+                {% elif d.sem_permissao %}
+                    <span class="badge text-white ms-2" style="background:#6610f2"><i class="fas fa-eye-slash me-1"></i>{{ 'Visibilidade limitada' if d.tipo == 'fortianalyzer' else 'Sem permissão na API key' }}</span>
+                {% elif d.monitoramento_limitado %}
+                    <span class="badge text-dark ms-2" style="background:#0dcaf0"><i class="fas fa-info-circle me-1"></i>Monitoramento limitado</span>
+                {% elif tem_alerta %}
+                    <span class="badge badge-alerta text-white ms-2">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        {% if d.novos | length > 0 %}{{ d.novos | length }} novo{{ 's' if d.novos | length != 1 else '' }}{% endif %}
+                        {% if d.novos and d.removidos %} · {% endif %}
+                        {% if d.removidos | length > 0 %}{{ d.removidos | length }} removido{{ 's' if d.removidos | length != 1 else '' }}{% endif %}
+                    </span>
+                {% elif not tem_base %}
+                    <span class="badge badge-sembase ms-2"><i class="fas fa-question-circle me-1"></i>Sem baseline</span>
+                {% else %}
+                    <span class="badge badge-ok text-white ms-2"><i class="fas fa-check me-1"></i>OK</span>
+                {% endif %}
+
+                <!-- Qtd total de admins -->
+                <span class="ms-auto text-muted" style="font-size:0.82rem">
+                    {{ d.admins | length }} admin{{ 's' if d.admins | length != 1 else '' }}
+                </span>
+                <i class="fas fa-chevron-down text-muted ms-2" id="icon-{{ dev_key | replace('.', '_') | replace(' ', '_') }}"></i>
+            </div>
+
+            <!-- Corpo -->
+            <div id="body-{{ dev_key | replace('.', '_') | replace(' ', '_') }}"
+                 style="{{ 'display:none' if card_class == 'ok' else '' }}">
+
+                <!-- Alertas de novos admins -->
+                {% for usuario in d.novos %}
+                <div class="alerta-box mx-3 mt-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fas fa-user-plus text-danger"></i>
+                        <span><strong class="text-danger">NOVO ADMIN detectado:</strong>
+                            <code class="admin-pill admin-novo">{{ usuario }}</code>
+                        </span>
+                        <span class="text-muted ms-1" style="font-size:0.8rem">
+                            Este usuário não está na baseline aprovada.
+                        </span>
+                        <div class="ms-auto d-flex gap-2">
+                            <form method="POST"
+                                  action="{{ url_for('admin_aprovar_usuario', device_key=dev_key, usuario=usuario) }}"
+                                  style="display:inline">
+                                <button type="submit" class="btn btn-success btn-sm btn-aprovar"
+                                        title="Adiciona à baseline e resolve o alerta">
+                                    <i class="fas fa-check me-1"></i>Aprovar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Alertas de admins removidos da baseline -->
+                {% for usuario in d.removidos %}
+                <div class="alerta-box removido mx-3 mt-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fas fa-user-minus" style="color:#856404"></i>
+                        <span><strong style="color:#856404">ADMIN REMOVIDO do dispositivo:</strong>
+                            <code class="admin-pill admin-removido">{{ usuario }}</code>
+                        </span>
+                        <span class="text-muted ms-1" style="font-size:0.8rem">
+                            Estava na baseline mas não existe mais no dispositivo.
+                        </span>
+                        <div class="ms-auto d-flex gap-2">
+                            <form method="POST"
+                                  action="{{ url_for('admin_remover_baseline', device_key=dev_key, usuario=usuario) }}"
+                                  style="display:inline">
+                                <button type="submit" class="btn btn-warning btn-sm btn-remover"
+                                        title="Remove da baseline e resolve o alerta">
+                                    <i class="fas fa-check me-1"></i>Confirmar remoção
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Lista completa de admins atuais -->
+                <div class="admins-ok-list">
+                    <div class="mb-1" style="font-size:0.8rem;color:#6c757d;font-weight:600">
+                        <i class="fas fa-users me-1"></i>Admins atuais no dispositivo
+                    </div>
+                    {% if d.offline %}
+                        <span class="text-muted"><i class="fas fa-plug me-1"></i>Dispositivo offline — não foi possível consultar</span>
+                    {% elif d.sem_permissao %}
+                        <div class="alert alert-warning py-2 mb-0" style="font-size:0.85rem">
+                            <i class="fas fa-eye-slash me-1"></i>
+                            <strong>{{ 'A API REST não disponibilizou os administradores locais.' if d.tipo == 'fortianalyzer' else 'API key sem permissão de leitura de usuários.' }}</strong><br>
+                            <small class="text-muted">{{ d.motivo }}</small><br>
+                            {% if d.tipo != 'fortianalyzer' %}
+                            <small>Para resolver: no FortiManager, edite o perfil da API key e habilite a permissão <strong>Read</strong> em <em>System Settings → Admin</em>.</small>
+                            {% endif %}
+                        </div>
+                    {% elif d.monitoramento_limitado %}
+                        <div class="alert alert-info py-2 mb-0" style="font-size:0.85rem">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Monitoramento limitado ao usuário da API key.</strong><br>
+                            <small>{{ d.motivo }}</small>
+                        </div>
+                    {% elif d.admins %}
+                        {% for admin in d.admins %}
+                            {% if admin in d.novos %}
+                                <code class="admin-pill admin-novo" title="Novo — fora da baseline">{{ admin }} ⚠</code>
+                            {% else %}
+                                <code class="admin-pill admin-normal">{{ admin }}</code>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">Nenhum admin retornado</span>
+        {% endif %}
+    </div>
+                <!-- Definir baseline (se ainda não tem) -->
+                {% if not d.offline and d.admins and not tem_base %}
+                <div class="px-3 pb-3">
+                    <form method="POST" action="{{ url_for('admin_definir_baseline') }}" class="d-flex align-items-center gap-2 flex-wrap">
+                        <input type="hidden" name="device_key" value="{{ dev_key }}">
+                        <input type="hidden" name="admins" value="{{ d.admins | join(',') }}">
+                        <small class="text-muted">Nenhuma baseline definida para este dispositivo.</small>
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-database me-1"></i>Definir baseline agora ({{ d.admins | length }} admin{{ 's' if d.admins | length != 1 else '' }})
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+
+            </div><!-- /body -->
+        </div><!-- /device-card -->
+        {% endfor %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-network-wired"></i>
+            <strong>Nenhum dispositivo consultado</strong>
+            <p class="mt-1 mb-0">Verifique a conexão com o FortiManager.</p>
+        </div>
+        {% endif %}
+    </div><!-- /deviceList -->
+    <div id="filterEmpty" class="empty-state" style="display:none">
+        <i class="fas fa-filter"></i>
+        <strong>Nenhum dispositivo corresponde ao filtro selecionado</strong>
+    </div>
+
+    <!-- Histórico de eventos de admin (via logs FAZ) -->
+    {% if admin_eventos is defined %}
+    <div class="mt-4">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <h6 class="mb-0 fw-bold" style="color:#012E40">
+                <i class="fas fa-history me-2"></i>Histórico de Alterações de Admins
+            </h6>
+            <span class="badge bg-secondary">via logs FortiAnalyzer</span>
+            {% if admin_eventos %}
+            <span class="badge" style="background:#0A4A63">{{ admin_eventos | length }} evento{{ 's' if admin_eventos | length != 1 else '' }}</span>
+            {% endif %}
+        </div>
+
+        {% if admin_eventos %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle" style="font-size:0.83rem">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Dispositivo</th>
+                        <th>Ação</th>
+                        <th>Admin Afetado</th>
+                        <th>Operador</th>
+                        <th>Origem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for ev in admin_eventos %}
+                <tr>
+                    <td class="text-nowrap text-muted">{{ ev.timestamp }}</td>
+                    <td><code style="font-size:0.78rem">{{ ev.device_name or ev.device_id or '—' }}</code></td>
+                    <td>
+                        {% if ev.acao in ('add',) %}
+                            <span class="badge bg-success">{{ ev.acao | upper }}</span>
+                        {% elif ev.acao in ('delete',) %}
+                            <span class="badge bg-danger">{{ ev.acao | upper }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ ev.acao | upper }}</span>
+                        {% endif %}
+                    </td>
+                    <td><code class="admin-pill admin-normal py-0" style="font-size:0.78rem">{{ ev.objeto or '—' }}</code></td>
+                    <td class="text-muted">{{ ev.usuario_op or '—' }}</td>
+                    <td class="text-muted" style="font-size:0.78rem">{{ ev.interface or '—' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-light border py-2 mb-0" style="font-size:0.85rem">
+            <i class="fas fa-info-circle me-1 text-muted"></i>
+            Nenhum evento de criação, edição ou deleção de admin encontrado no período monitorado.
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+function toggleCard(id) {
+    const body = document.getElementById('body-' + id);
+    const icon = document.getElementById('icon-' + id);
+    if (!body) return;
+    if (body.style.display === 'none') {
+        body.style.display = '';
+        if (icon) icon.className = 'fas fa-chevron-up text-muted ms-2';
+    } else {
+        body.style.display = 'none';
+        if (icon) icon.className = 'fas fa-chevron-down text-muted ms-2';
+    }
+}
+
+function filtrarCards() {
+    const wantAlerta  = document.getElementById('chkAlerta').checked;
+    const wantOk      = document.getElementById('chkOk').checked;
+    const wantOffline = document.getElementById('chkOffline').checked;
+    const wantSemBase = document.getElementById('chkSemBase').checked;
+    const wantSemPerm = document.getElementById('chkSemPerm').checked;
+    const search      = document.getElementById('searchInput').value.toLowerCase();
+
+    let visibleCount = 0;
+    document.querySelectorAll('.device-card').forEach(card => {
+        const state = card.dataset.state;
+        const nome  = (card.dataset.nome || '').toLowerCase();
+
+        let visible = true;
+        if (state === 'alerta'   && !wantAlerta)  visible = false;
+        if (state === 'ok'       && !wantOk)      visible = false;
+        if (state === 'offline'  && !wantOffline) visible = false;
+        if (state === 'sem-base' && !wantSemBase) visible = false;
+        if (state === 'sem-perm' && !wantSemPerm) visible = false;
+        if (state === 'limitado' && !wantOk)      visible = false;
+        if (search && !nome.includes(search))     visible = false;
+
+        card.style.display = visible ? '' : 'none';
+        if (visible) visibleCount += 1;
+    });
+
+    const empty = document.getElementById('filterEmpty');
+    if (empty) empty.style.display = visibleCount === 0 ? '' : 'none';
+    sincronizarContadorAtivo();
+}
+
+const statusCheckboxes = {
+    alerta: document.getElementById('chkAlerta'),
+    ok: document.getElementById('chkOk'),
+    offline: document.getElementById('chkOffline'),
+    semBase: document.getElementById('chkSemBase'),
+    semPerm: document.getElementById('chkSemPerm')
+};
+
+function aplicarFiltroContador(filtro) {
+    const todos = filtro === 'total';
+    statusCheckboxes.alerta.checked = todos || filtro === 'alerta';
+    statusCheckboxes.ok.checked = todos || filtro === 'ok';
+    statusCheckboxes.offline.checked = todos || filtro === 'offline';
+    // Sem baseline e monitoramento limitado fazem parte do total estatistico de OK.
+    statusCheckboxes.semBase.checked = todos || filtro === 'ok';
+    statusCheckboxes.semPerm.checked = todos;
+
+    filtrarCards();
+    document.getElementById('deviceList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function sincronizarContadorAtivo() {
+    const selecionados = Object.fromEntries(
+        Object.entries(statusCheckboxes).map(([nome, checkbox]) => [nome, checkbox.checked])
+    );
+    let ativo = null;
+    if (Object.values(selecionados).every(Boolean)) ativo = 'total';
+    else if (selecionados.alerta && !selecionados.ok && !selecionados.offline && !selecionados.semBase && !selecionados.semPerm) ativo = 'alerta';
+    else if (!selecionados.alerta && selecionados.ok && !selecionados.offline && selecionados.semBase && !selecionados.semPerm) ativo = 'ok';
+    else if (!selecionados.alerta && !selecionados.ok && selecionados.offline && !selecionados.semBase && !selecionados.semPerm) ativo = 'offline';
+
+    document.querySelectorAll('.stat-card[data-filter]').forEach(card => {
+        const isActive = card.dataset.filter === ativo;
+        card.classList.toggle('active', isActive);
+        card.setAttribute('aria-pressed', String(isActive));
+    });
+}
+
+document.querySelectorAll('.stat-card[data-filter]').forEach(card => {
+    const executar = () => aplicarFiltroContador(card.dataset.filter);
+    card.addEventListener('click', executar);
+    card.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            executar();
+        }
+    });
+});
+
+// Alertas: expand automático
+document.querySelectorAll('.device-card.alerta').forEach(card => {
+    const id = card.querySelector('[id^="body-"]');
+    if (id) id.style.display = '';
+});
+
+</script>
+{% endblock %}

@@ -8,6 +8,40 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 
+# Mapeamento de código interno → nome amigável do modelo
+UNIFI_MODEL_NAMES = {
+    "U6MP":      "U6 Mesh Pro",
+    "U7HD":      "U7 HD",
+    "U7LR":      "U7 Long-Range",
+    "U7LT":      "U7 Lite",
+    "U7MP":      "U7 Mesh Pro",
+    "U7NHD":     "U7 nanoHD",
+    "U7PG2":     "U7 Pro Gen2",
+    "U7PRO":     "U7 Pro",
+    "U7PROMAX":  "U7 Pro Max",
+    "UAL6":      "AP Lite 6",
+    "UALR6v2":   "AP Long-Range 6 v2",
+    "UAP6MP":    "U6 Mesh Pro",
+    "UAPA693":   "AP Pro Gen3",
+    "UKPW":      "UniFi Swiss Wall",
+    # modelos legados comuns
+    "UAP":       "AP Classic",
+    "UAPLR":     "AP Long-Range",
+    "UAPOUTDOOR":"AP Outdoor",
+    "UAPPRO":    "AP Pro",
+    "UAPMESH":   "AP Mesh",
+    "UAPMESPH":  "AP Mesh Pro",
+    "UAP6LR":    "U6 Long-Range",
+    "UAP6":      "U6 Lite",
+    "U6LR":      "U6 Long-Range",
+    "U6LITE":    "U6 Lite",
+    "U6EXTD":    "U6 Extender",
+    "ULTE":      "LTE",
+}
+
+def modelo_amigavel(codigo):
+    return UNIFI_MODEL_NAMES.get(codigo, codigo)
+
 # === CONFIGURAÇÕES ===
 controller_host = UNIFI_CONFIG["host"]
 controller_port = UNIFI_CONFIG["port"]
@@ -78,7 +112,8 @@ html = """
 """
 
 # === PERCORRER SITES ===
-canal_5ghz_map = {}
+# Rastreia co-canal por site (interferência real = mesmo canal, mesmo local físico)
+canal_5ghz_por_site = {}  # {site_desc: {canal: {aps, signal_vals}}}
 
 for site in sites:
     site_id = site.get("name")
@@ -112,57 +147,72 @@ for site in sites:
 
         # ========= COLETA 5GHz =========
         for ap in aps:
+            # === Adiciona ao all_aps independente de status/rádio ===
+            status_ap = "online" if ap.get("state") == 1 else "offline"
+            all_aps.append({
+                "nome": ap.get("name", ""),
+                "ip": ap.get("ip", ""),
+                "mac": ap.get("mac", ""),
+                "modelo": modelo_amigavel(ap.get("model", "")),
+                "firmware": ap.get("version", ""),
+                "status": status_ap,
+                "clientes": ap.get("num_sta", 0),
+                "uptime": ap.get("uptime", 0),
+                "site": site_desc
+            })
+
+            # Configuração do rádio 5GHz (canal)
             radio_5ghz = next(
                 (r for r in ap.get("radio_table", []) if r.get("radio") == "na"),
                 None
             )
-
-            if radio_5ghz:
-                print(f"[DEBUG] AP {ap.get('name')} | radio_5ghz keys: {radio_5ghz.keys()}")
+            # Estatísticas em tempo real do rádio 5GHz
+            radio_5ghz_stats = next(
+                (r for r in ap.get("radio_table_stats", []) if r.get("radio") == "na"),
+                None
+            )
 
             if not radio_5ghz:
                 continue
 
             canal = radio_5ghz.get("channel")
-            signal = radio_5ghz.get("signal") or radio_5ghz.get("rssi")
 
-            if canal is None:
+            # Ignora canal 'auto' (seleção dinâmica — não representa canal fixo)
+            if canal is None or str(canal).strip().lower() in ("auto", "0", ""):
                 continue
 
-            if canal not in canal_5ghz_map:
-                canal_5ghz_map[canal] = {
-                    "aps": [],
-                    "signal_vals": []
-                }
+            # Channel Utilization: % do airtime sendo usado neste canal
+            cu_total    = radio_5ghz_stats.get("cu_total", 0)    if radio_5ghz_stats else 0
+            cu_self_tx  = radio_5ghz_stats.get("cu_self_tx", 0)  if radio_5ghz_stats else 0
+            cu_self_rx  = radio_5ghz_stats.get("cu_self_rx", 0)  if radio_5ghz_stats else 0
+            tx_retry    = radio_5ghz_stats.get("tx_retries_pct", 0) if radio_5ghz_stats else 0
 
-            canal_5ghz_map[canal]["aps"].append(ap.get("name"))
+            if site_desc not in canal_5ghz_por_site:
+                canal_5ghz_por_site[site_desc] = {}
+            if canal not in canal_5ghz_por_site[site_desc]:
+                canal_5ghz_por_site[site_desc][canal] = {"aps": [], "cu_vals": [], "retry_vals": []}
 
-            if signal is not None:
-                canal_5ghz_map[canal]["signal_vals"].append(signal)
+            canal_5ghz_por_site[site_desc][canal]["aps"].append({
+                "nome": ap.get("name"),
+                "cu_total": cu_total,
+                "cu_self_tx": cu_self_tx,
+                "cu_self_rx": cu_self_rx,
+                "tx_retry": round(tx_retry, 1),
+                "clientes": ap.get("num_sta", 0),
+            })
+            canal_5ghz_por_site[site_desc][canal]["cu_vals"].append(cu_total)
+            canal_5ghz_por_site[site_desc][canal]["retry_vals"].append(tx_retry)
 
             # ===== HTML NORMAL =====
             status = "Online" if ap.get("state") == 1 else "Offline"
             status_class = "ap-online" if status == "Online" else "ap-offline"
-
-            ap_data = {
-                "nome": ap.get("name", ""),
-                "ip": ap.get("ip", ""),
-                "mac": ap.get("mac", ""),
-                "modelo": ap.get("model", ""),
-                "firmware": ap.get("version", ""),
-                "status": status.lower(),
-                "clientes": ap.get("num_sta", 0),
-                "uptime": ap.get("uptime", 0),
-                "site": site_desc
-            }
-            all_aps.append(ap_data)
 
             html += f"""
             <tr>
                 <td>{ap.get("name", "")}</td>
                 <td>{ap.get("ip", "")}</td>
                 <td>{ap.get("mac", "")}</td>
-                <td>{ap.get("model", "")}</td>
+                <td>{modelo_amigavel(ap.get("model", ""))}</td>
                 <td>{ap.get("version", "")}</td>
                 <td class="{status_class}">{status}</td>
                 <td>{ap.get("num_sta", 0)}</td>
@@ -179,37 +229,54 @@ for site in sites:
 # === FECHAR HTML ===
 html += "</body></html>"
 
-# === CONSOLIDAÇÃO DE INTERFERÊNCIA POR CANAL (5GHz) ===
-consolidado_canais = []
+# === CONSOLIDAÇÃO DE INTERFERÊNCIA POR CANAL (5GHz) — POR SITE ===
+# Regra baseada em Channel Utilization (cu_total) real do canal:
+#   > 70% → CONGESTIONADO (canal saturado)
+#   > 40% → ATENCAO (tráfego moderado-alto)
+#   ≤ 40% → OK
+# Também registra co-canal (qtd_aps > 1) como contexto adicional
+interferencia_por_site = {}
 
-for canal, dados in canal_5ghz_map.items():
-    qtd_aps = len(dados["aps"])
-    signals = dados["signal_vals"]
+for site_nome in sorted(canal_5ghz_por_site.keys()):
+    canais = canal_5ghz_por_site[site_nome]
+    site_canais = []
+    for canal, dados in canais.items():
+        aps_info = dados["aps"]
+        cu_vals = dados["cu_vals"]
+        retry_vals = dados["retry_vals"]
+        qtd_aps = len(aps_info)
 
-    print(f"[TESTE] Canal {canal} | Signals coletados: {signals}")
+        max_cu = max(cu_vals) if cu_vals else 0
+        avg_cu = round(sum(cu_vals) / len(cu_vals), 1) if cu_vals else 0
+        avg_retry = round(sum(retry_vals) / len(retry_vals), 1) if retry_vals else 0
 
-    avg_signal_dbm = (
-        round(sum(signals) / len(signals), 1)
-        if signals else None
-    )
+        def _risco_combinado(cu, retry):
+            if cu > 90 or retry >= 20:
+                return "CRITICO"
+            elif cu >= 80 or retry >= 13:
+                return "ATENCAO"
+            return "OK"
 
-    risco = "OK"
-    if avg_signal_dbm is not None:
-        if avg_signal_dbm > -80:
-            risco = "CRITICO"
-        elif avg_signal_dbm > -90:
-            risco = "ATENCAO"
+        # Calcula risco combinado por AP e armazena
+        for ap in aps_info:
+            ap["risco"] = _risco_combinado(ap["cu_total"], ap["tx_retry"])
 
-    if qtd_aps >= 4:
-        risco = "CONGESTIONADO"
+        # Risco do canal = pior AP
+        ordem = {"CRITICO": 2, "ATENCAO": 1, "OK": 0}
+        risco = max((ap["risco"] for ap in aps_info), key=lambda r: ordem.get(r, 0), default="OK")
 
-    consolidado_canais.append({
-        "canal": canal,
-        "qtd_aps": qtd_aps,
-        "avg_signal_dbm": avg_signal_dbm,
-        "risco": risco,
-        "aps": dados["aps"]
-    })
+        site_canais.append({
+            "canal": canal,
+            "qtd_aps": qtd_aps,
+            "max_cu": max_cu,
+            "avg_cu": avg_cu,
+            "avg_retry": avg_retry,
+            "risco": risco,
+            "aps": aps_info,
+        })
+    # Inclui todos os sites que têm dados 5GHz (não filtra por risco)
+    if site_canais:
+        interferencia_por_site[site_nome] = site_canais
 
 # === SALVAR HTML ===
 with open(UNIFI_HTML, "w", encoding="utf-8") as f:
@@ -223,7 +290,7 @@ json_data = {
     "aps_online": aps_online,
     "aps_offline": total_aps - aps_online,
     "clientes_conectados": total_clientes,
-    "interferencia_5ghz": consolidado_canais,
+    "interferencia_5ghz_por_site": interferencia_por_site,
     "controller": {
         "ip": controller_host,
         "porta": controller_port,

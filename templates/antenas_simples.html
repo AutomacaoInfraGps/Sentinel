@@ -2,23 +2,101 @@
 
 {% block title %}Antenas UniFi{% endblock %}
 
+{% block extra_css %}
+<style>
+    .stats-card-filter {
+        cursor: pointer;
+        transition: transform .15s, box-shadow .15s, opacity .15s;
+        user-select: none;
+    }
+    .stats-card-filter:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+    .stats-card-filter.active-filter { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.35); outline: 3px solid #fff; }
+    .stats-card-filter:not(.active-filter) { opacity: .7; }
+
+    .antena-region-block {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: .75rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,.06);
+        overflow: hidden;
+    }
+    .antena-region-header {
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        color: #fff;
+        padding: .75rem 1.2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .antena-region-header h4 { margin: 0; font-size: 1rem; font-weight: 700; }
+    .antena-region-counts { display: flex; gap: 1rem; font-size: .85rem; }
+    .antena-region-counts .ok  { color: #6ee7b7; }
+    .antena-region-counts .alert-text { color: #fca5a5; }
+    .antena-region-body {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .antena-card { border-radius: .5rem; border: 1px solid #dee2e6; overflow: hidden; }
+    .antena-card-header { padding: .5rem .75rem; font-weight: 600; font-size: .9rem; display: flex; align-items: center; gap: .5rem; }
+    .antena-card-header.online { background: #28a745; color: #fff; }
+    .antena-card-header.offline { background: #dc3545; color: #fff; }
+    .antena-card-body { padding: .65rem .75rem; font-size: .85rem; }
+    .antena-card-body .row-item { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .3rem; }
+    .antena-card-body .label { color: #6c757d; min-width: 72px; flex-shrink: 0; }
+    .antena-card-body .row-item > :last-child { margin-left: auto; text-align: right; }
+
+    .antena-filter-summary {
+        display: flex; justify-content: space-between; align-items: center;
+        background: #e8f3f8; border: 1px solid #bee5eb; border-radius: .5rem;
+        padding: .6rem 1rem; margin-bottom: 1rem; display: none;
+    }
+    .antena-empty-filter { display: none; }
+
+    /* Interferência - accordion por site */
+    .interf-site-block { border: 1px solid #dee2e6; border-radius: .5rem; overflow: hidden; }
+    .interf-site-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: .65rem 1rem; cursor: pointer; user-select: none; background: #f8f9fa;
+        transition: background .15s;
+    }
+    .interf-site-header:hover { background: #e9ecef; }
+    .interf-site-header .chevron { transition: transform .25s; }
+    .interf-site-header.collapsed .chevron { transform: rotate(-90deg); }
+    .interf-site-block[data-site-risco="CRITICO"] { border-left: 4px solid #dc3545; }
+    .interf-site-block[data-site-risco="CONGESTIONADO"] { border-left: 4px solid #dc3545; }
+    .interf-site-block[data-site-risco="ATENCAO"] { border-left: 4px solid #ffc107; }
+    .interf-site-block[data-site-risco="OK"] { border-left: 4px solid #28a745; }
+    .interf-site-body { border-top: 1px solid #dee2e6; }
+    .interf-canais-filter-summary {
+        display: none; align-items: center; justify-content: space-between;
+        background: #e8f3f8; border: 1px solid #bee5eb; border-radius: .4rem;
+        padding: .4rem .85rem; margin-bottom: .75rem; font-size: .88rem;
+    }
+</style>
+{% endblock %}
 
     {% block content %}
-        {% set ns = namespace(
-        congestionado=0,
-        atencao=0,
-        ok=0
-    ) %}
+        {% set ns = namespace(critico=0, atencao=0, ok=0, sites_com_issue=0) %}
 
-    {% for canal in unifi_data.interferencia_5ghz %}
-        {% if canal.risco == 'CONGESTIONADO' or canal.risco == 'CRITICO' %}
-            {% set ns.congestionado = ns.congestionado + 1 %}
-        {% elif canal.risco == 'ATENCAO' %}
-            {% set ns.atencao = ns.atencao + 1 %}
-        {% elif canal.risco == 'OK' %}
-            {% set ns.ok = ns.ok + 1 %}
-        {% endif %}
-    {% endfor %}
+        {% for site_nome, canais in (unifi_data.interferencia_5ghz_por_site or {}).items() %}
+            {% set site_tem_issue = namespace(val=false) %}
+            {% for canal in canais %}
+                {% if canal.risco == 'CRITICO' %}
+                    {% set ns.critico = ns.critico + 1 %}
+                    {% set site_tem_issue.val = true %}
+                {% elif canal.risco == 'ATENCAO' %}
+                    {% set ns.atencao = ns.atencao + 1 %}
+                    {% set site_tem_issue.val = true %}
+                {% else %}
+                    {% set ns.ok = ns.ok + 1 %}
+                {% endif %}
+            {% endfor %}
+            {% if site_tem_issue.val %}{% set ns.sites_com_issue = ns.sites_com_issue + 1 %}{% endif %}
+        {% endfor %}
 
     <div class="container py-4">
         
@@ -34,32 +112,46 @@
             </div>
         </div>
         <div class="row mb-4">
-            <div class="col-md-4 mb-3">
-                <div class="card text-white shadow-sm h-100"
-                    style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+            <div class="col-md-3 mb-3">
+                <div class="card text-white shadow-sm h-100 stats-card-filter active-filter" data-filter-canal="issues" onclick="filtrarCanais('issues')"
+                    style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
                     <div class="card-body text-center">
-                        <h2 class="fw-bold mb-1">{{ ns.congestionado }}</h2>
-                        <div>Canais Congestionados</div>
+                        <h2 class="fw-bold mb-1">{{ ns.sites_com_issue }}</h2>
+                        <div>Sites Afetados</div>
+                        <small class="opacity-75">Sites com co-canal 5GHz</small>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-4 mb-3">
-                <div class="card text-white shadow-sm h-100"
+            <div class="col-md-3 mb-3">
+                <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-canal="CRITICO" onclick="filtrarCanais('CRITICO')"
+                    style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+                    <div class="card-body text-center">
+                        <h2 class="fw-bold mb-1">{{ ns.critico }}</h2>
+                        <div>Crítico</div>
+                        <small class="opacity-75">CU &gt; 90% no canal</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-3">
+                <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-canal="ATENCAO" onclick="filtrarCanais('ATENCAO')"
                     style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
                     <div class="card-body text-center">
                         <h2 class="fw-bold mb-1">{{ ns.atencao }}</h2>
-                        <div>Canais em Atenção</div>
+                        <div>Atenção</div>
+                        <small class="opacity-75">CU 80–90% no canal</small>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-4 mb-3">
-                <div class="card text-white shadow-sm h-100"
+            <div class="col-md-3 mb-3">
+                <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-canal="OK" onclick="filtrarCanais('OK')"
                     style="background: linear-gradient(135deg, #20c997, #28a745);">
                     <div class="card-body text-center">
                         <h2 class="fw-bold mb-1">{{ ns.ok }}</h2>
-                        <div>Canais OK</div>
+                        <div>OK</div>
+                        <small class="opacity-75">CU &lt; 80% no canal</small>
                     </div>
                 </div>
             </div>
@@ -68,104 +160,147 @@
         <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow-sm">
-                <div class="card-header bg-warning">
-                    <strong>📡 Interferência 5GHz por Canal</strong>
+                <div class="card-header" style="background: linear-gradient(135deg,#012E40,#0A4A63); color:#fff;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong><i class="bi bi-broadcast me-2"></i>Interferência Co-Canal 5GHz por Regional</strong>
+                        <form action="/executar_unifi_direto" method="post">
+                            <button type="submit" class="btn btn-light btn-sm">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Atualizar Dados
+                            </button>
+                        </form>
+                    </div>
                 </div>
                 <div class="card-body">
-                        <div class="row mb-4">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header bg-primary text-white">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h5 class="mb-0">Controle</h5>
-                                        <form action="/executar_unifi_direto" method="post">
-                                            <button type="submit" class="btn btn-light btn-sm">
-                                                <i class="bi bi-arrow-clockwise me-1"></i>
-                                                Atualizar Dados
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    {% with messages = get_flashed_messages(with_categories=true) %}
-                                        {% if messages %}
-                                            {% for category, message in messages %}
-                                                <div class="alert alert-{{ category }}">{{ message }}</div>
-                                            {% endfor %}
-                                        {% else %}
-                                            <div class="alert alert-info">
-                                                Clique em "Atualizar Dados" para verificar o status das antenas.
-                                            </div>
-                                        {% endif %}
-                                    {% endwith %}
-                                </div>
-                            </div>
-                        </div>
+                    <div class="alert alert-info mb-3 py-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Como funciona:</strong> Interferência co-canal 5GHz ocorre quando múltiplas APs do <em>mesmo site</em> operam no mesmo canal. 
+                        APs com canal automático são excluídas. 
+                        <strong>ATENÇÃO</strong> = 2 APs mesmo canal no site &nbsp;|&nbsp; <strong>CONGESTIONADO</strong> = 3+ APs.
                     </div>
 
-                    {% if unifi_data.interferencia_5ghz %}
-                    <table class="table table-sm table-bordered align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 80px;">Canal</th>
-                                <th style="width: 100px;">Qtd APs</th>
-                                <th style="width: 160px;">Risco</th>
-                                <th style="width: 160px;">Antenas</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                    <div id="interfCanaisFiltroSummary" class="interf-canais-filter-summary">
+                        <span><strong>Filtro:</strong> <span id="interfCanaisFiltroTexto"></span></span>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="filtrarCanais('all')" data-filter-canal="all">Mostrar todos</button>
+                    </div>
 
-                        {% for canal in unifi_data.interferencia_5ghz | sort(attribute='qtd_aps', reverse=True) %}
-                            <tr>
-                                <td><strong>{{ canal.canal }}</strong></td>
-                                <td>{{ canal.qtd_aps }}</td>
-                                <td>
-                                    {% if canal.risco in ['CRITICO', 'CONGESTIONADO'] %}
-                                        <span class="badge bg-danger">{{ canal.risco }}</span>
-                                    {% elif canal.risco == 'ATENCAO' %}
-                                        <span class="badge bg-warning text-dark">{{ canal.risco }}</span>
-                                    {% else %}
-                                        <span class="badge bg-success">{{ canal.risco }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm
-                                        {% if canal.risco in ['CRITICO', 'CONGESTIONADO'] %}
-                                            btn-outline-danger
-                                        {% elif canal.risco == 'ATENCAO' %}
-                                            btn-outline-warning
+                    <div class="alert alert-info mb-3 py-2 small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Como funciona:</strong> Status combinado de <strong>Channel Utilization</strong> e <strong>Retransmissão</strong> — o pior dos dois define o status.
+                        <br><strong>Channel:</strong> <span class="badge bg-danger">Crítico</span> &gt;90% &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Atenção</span> 80–90% &nbsp;|&nbsp; <span class="badge bg-success">OK</span> &lt;80%
+                        <br><strong>Retransmissão:</strong> <span class="badge bg-danger">Crítico</span> ≥20% &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Atenção</span> 13–19% &nbsp;|&nbsp; <span class="badge bg-success">OK</span> &lt;13%
+                    </div>
+
+                    {% if unifi_data.interferencia_5ghz_por_site %}
+                        {% for site_nome, canais in unifi_data.interferencia_5ghz_por_site.items() | sort %}
+                            {% set site_ns = namespace(pior='OK') %}
+                            {% for c in canais %}
+                                {% if c.risco == 'CRITICO' %}{% set site_ns.pior = 'CRITICO' %}
+                                {% elif c.risco == 'ATENCAO' and site_ns.pior != 'CRITICO' %}{% set site_ns.pior = 'ATENCAO' %}{% endif %}
+                            {% endfor %}
+                            <div class="interf-site-block mb-2" data-site-risco="{{ site_ns.pior }}">
+                                <div class="interf-site-header collapsed" onclick="toggleSite(this)">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-router text-secondary"></i>
+                                        <strong>{{ site_nome }}</strong>
+                                        {% if site_ns.pior == 'CRITICO' %}
+                                            <span class="badge bg-danger">CRÍTICO</span>
+                                        {% elif site_ns.pior == 'ATENCAO' %}
+                                            <span class="badge bg-warning text-dark">ATENÇÃO</span>
                                         {% else %}
-                                            btn-outline-secondary
+                                            <span class="badge bg-success">OK</span>
                                         {% endif %}
-                                    "
-                                    data-bs-toggle="collapse"
-                                    data-bs-target="#canal_{{ canal.canal }}">
-                                        Ver antenas
-                                    </button>
-                                </td>
-                            </tr>
-
-                            <tr class="table-light">
-                                <td colspan="4" class="p-0">
-                                    <div class="collapse" id="canal_{{ canal.canal }}">
-                                        <div class="p-3">
-                                            <strong>Antenas no canal {{ canal.canal }}:</strong>
-                                            <ul class="mb-0 mt-2">
-                                                {% for ap in canal.aps %}
-                                                    <li>{{ ap }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        </div>
+                                        <small class="text-muted">{{ canais | length }} canal(is)</small>
                                     </div>
-                                </td>
-                            </tr>
-
+                                    <i class="bi bi-chevron-down chevron text-muted"></i>
+                                </div>
+                                <div class="interf-site-body" style="display:none;">
+                                    <table class="table table-sm table-bordered align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width:70px;">Canal</th>
+                                                <th style="width:60px;">APs</th>
+                                                <th>Antena</th>
+                                                <th style="width:160px;">Channel (CU)</th>
+                                                <th style="width:130px;">Interferência</th>
+                                                <th style="width:160px;">Retransmissão</th>
+                                                <th style="width:70px;">Clientes</th>
+                                                <th style="width:110px;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        {% for canal in canais %}
+                                            {% for ap in canal.aps %}
+                                                {% set ap_status = ap.risco | default('OK') %}
+                                                {# cu_status e retry_status para colorir as barras #}
+                                                {% if ap.cu_total > 90 %}{% set cu_status = 'CRITICO' %}
+                                                {% elif ap.cu_total >= 80 %}{% set cu_status = 'ATENCAO' %}
+                                                {% else %}{% set cu_status = 'OK' %}{% endif %}
+                                                {% if ap.tx_retry >= 20 %}{% set retry_status = 'CRITICO' %}
+                                                {% elif ap.tx_retry >= 13 %}{% set retry_status = 'ATENCAO' %}
+                                                {% else %}{% set retry_status = 'OK' %}{% endif %}
+                                                <tr data-canal-risco="{{ ap_status }}">
+                                                    <td><strong>{{ canal.canal }}</strong></td>
+                                                    <td class="text-center text-muted small">{{ canal.qtd_aps }}</td>
+                                                    <td class="small fw-semibold">{{ ap.nome }}</td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <div class="progress flex-grow-1" style="height:8px; min-width:50px;">
+                                                                <div class="progress-bar
+                                                                    {% if cu_status == 'CRITICO' %}bg-danger
+                                                                    {% elif cu_status == 'ATENCAO' %}bg-warning
+                                                                    {% else %}bg-success{% endif %}"
+                                                                    style="width:{{ ap.cu_total }}%"></div>
+                                                            </div>
+                                                            <span class="small fw-bold">{{ ap.cu_total }}%</span>
+                                                        </div>
+                                                    </td>
+                                                    {% set cu_interf = [ap.cu_total - ap.cu_self_tx - ap.cu_self_rx, 0] | max %}
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <div class="progress flex-grow-1" style="height:8px; min-width:50px; background:#eee;">
+                                                                <div class="progress-bar" style="width:{{ cu_interf }}%; background:#ffc107;"></div>
+                                                            </div>
+                                                            <span class="small fw-bold {% if cu_interf > 20 %}text-warning{% else %}text-muted{% endif %}">{{ cu_interf }}%</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <div class="progress flex-grow-1" style="height:8px; min-width:50px;">
+                                                                <div class="progress-bar
+                                                                    {% if retry_status == 'CRITICO' %}bg-danger
+                                                                    {% elif retry_status == 'ATENCAO' %}bg-warning
+                                                                    {% else %}bg-success{% endif %}"
+                                                                    style="width:{{ [ap.tx_retry, 100] | min }}%"></div>
+                                                            </div>
+                                                            <span class="small {% if retry_status == 'CRITICO' %}text-danger fw-bold{% elif retry_status == 'ATENCAO' %}text-warning{% else %}text-muted{% endif %}">
+                                                                {{ ap.tx_retry }}%
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-info">{{ ap.clientes | default(0) }}</span>
+                                                    </td>
+                                                    <td>
+                                                        {% if ap_status == 'CRITICO' %}
+                                                            <span class="badge bg-danger">Crítico</span>
+                                                        {% elif ap_status == 'ATENCAO' %}
+                                                            <span class="badge bg-warning text-dark">Atenção</span>
+                                                        {% else %}
+                                                            <span class="badge bg-success">OK</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         {% endfor %}
-                        </tbody>
-                    </table>
                     {% else %}
-                        <div class="alert alert-info">
-                            Nenhum dado de interferência disponível.
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Nenhuma interferência co-canal detectada, ou dados ainda não coletados. Clique em "Atualizar Dados".
                         </div>
                     {% endif %}
 
@@ -178,7 +313,7 @@
 
         <!-- TOTAL DE ANTENAS -->
         <div class="col-md-3 mb-3">
-            <div class="card text-white shadow-sm h-100"
+            <div class="card text-white shadow-sm h-100 stats-card-filter active-filter" data-filter-antena="all" onclick="aplicarFiltroAntena('all')"
                 style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
                 <div class="card-body text-center">
                     <h2 class="fw-bold mb-1">
@@ -191,7 +326,7 @@
 
         <!-- ANTENAS ONLINE -->
         <div class="col-md-3 mb-3">
-            <div class="card text-white shadow-sm h-100"
+            <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-antena="online" onclick="aplicarFiltroAntena('online')"
                 style="background: linear-gradient(135deg, #20c997, #28a745);">
                 <div class="card-body text-center">
                     <h2 class="fw-bold mb-1">
@@ -202,9 +337,10 @@
             </div>
         </div>
 
+
         <!-- ANTENAS OFFLINE -->
         <div class="col-md-3 mb-3">
-            <div class="card text-white shadow-sm h-100"
+            <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-antena="offline" onclick="aplicarFiltroAntena('offline')"
                 style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
                 <div class="card-body text-center">
                     <h2 class="fw-bold mb-1">
@@ -258,151 +394,205 @@
                         </div>
                     </div>
 
-                    <div id="antenasSearchEmpty" class="alert alert-info page-search-empty mb-3">
+                    <div id="antenasFilterSummary" class="antena-filter-summary">
+                        <div>
+                            <strong>Filtro ativo:</strong>
+                            <span id="antenasFilterSummaryText"></span>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroAntena('all')">
+                            Limpar filtro
+                        </button>
+                    </div>
+
+                    <div id="antenasSearchEmpty" class="alert alert-info page-search-empty mb-3" style="display:none;">
                         Nenhuma antena encontrada para a busca informada.
                     </div>
 
-                    <div class="row">
-                        {% if unifi_data and unifi_data.aps %}
-                        
-                            {% for ap in unifi_data.aps %}
-
-                            {% set status_color =
-                                'success' if ap.status == 'online'
-                                else 'danger'
-                            %}
-
-                            {% set status_icon =
-                                'wifi' if ap.status == 'online'
-                                else 'wifi-off'
-                            %}
-
-                            <div class="col-md-6 col-lg-4 mb-4 antena-search-item" data-search-text="{{ ap.nome }} {{ ap.modelo }} {{ ap.ip }} {{ ap.status }} {{ ap.clientes | default(0, true) }}">
-                                <div class="card border-{{ status_color }} h-100 shadow-sm">
-                                    
-                                    <div class="card-header bg-{{ status_color }} text-white">
-                                        <h6 class="mb-0 fw-bold text-truncate">
-                                            <i class="bi bi-{{ status_icon }} me-2"></i>
-                                            {{ ap.nome }}
-                                        </h6>
-                                    </div>
-
-                                    <div class="card-body">
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="small text-muted">Modelo:</span>
-                                                <span class="small">{{ ap.modelo }}</span>
-                                            </div>
-
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="small text-muted">IP:</span>
-                                                <code class="small">{{ ap.ip }}</code>
-                                            </div>
-
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="small text-muted">Status:</span>
-                                                <span class="badge bg-{{ status_color }}">
-                                                    {{ ap.status | upper }}
-                                                </span>
-                                            </div>
-
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="small text-muted">Clientes:</span>
-                                                <span class="badge bg-info">
-                                                    {{ ap.clientes | default(0, true) }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                        {% endfor %}
-
-                        {% elif unifi_data and unifi_data.total_aps > 0 %}
-                            {% for i in range(unifi_data.aps_online|default(0, true)) %}
-                                <div class="col-md-6 col-lg-4 mb-4">
-                                    <div class="card border-success h-100">
-                                        <div class="card-header bg-success text-white">
-                                            <h6 class="mb-0 fw-bold">
-                                                <i class="bi bi-wifi me-2"></i>
-                                                AP Online {{ i+1 }}
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="mb-3">
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span class="small text-muted">Modelo:</span>
-                                                    <span class="small">UniFi AP</span>
-                                                </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span class="small text-muted">IP:</span>
-                                                    <code class="small">N/A</code>
-                                                </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span class="small text-muted">Status:</span>
-                                                    <span class="badge bg-success">online</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                            
-                            {% for i in range(unifi_data.aps_offline|default(0, true)) %}
-                                <div class="col-md-6 col-lg-4 mb-4">
-                                    <div class="card border-danger h-100">
-                                        <div class="card-header bg-danger text-white">
-                                            <h6 class="mb-0 fw-bold">
-                                                <i class="bi bi-wifi-off me-2"></i>
-                                                AP Offline {{ i+1 }}
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="mb-3">
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span class="small text-muted">Modelo:</span>
-                                                    <span class="small">UniFi AP</span>
-                                                </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span class="small text-muted">IP:</span>
-                                                    <code class="small">N/A</code>
-                                                </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span class="small text-muted">Status:</span>
-                                                    <span class="badge bg-danger">offline</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="col-12">
-                                <div class="alert alert-info">
-                                    Nenhum AP encontrado. Clique em "Atualizar Dados" para verificar as antenas.
-                                </div>
-                            </div>
-                        {% endif %}
+                    <div id="antenasEmptyFilter" class="alert alert-info antena-empty-filter mb-3">
+                        Nenhuma regional encontrada para o filtro selecionado.
                     </div>
+
+                    <div id="antenas-container">
+                    {% if sites_agrupados %}
+                        {% for site in sites_agrupados %}
+                            <section class="antena-region-block"
+                                data-regional-block
+                                data-regional-status="{{ 'offline' if site.offline > 0 else 'online' }}"
+                                data-regional-name="{{ site.nome }}">
+                                <div class="antena-region-header">
+                                    <h4><i class="bi bi-router me-2"></i>{{ site.nome }} ({{ site.aps | length }} APs)</h4>
+                                    <div class="antena-region-counts">
+                                        <span class="ok"><i class="bi bi-check-circle me-1"></i>Online: {{ site.online }}</span>
+                                        {% if site.offline > 0 %}
+                                        <span class="alert-text"><i class="bi bi-x-circle me-1"></i>Offline: {{ site.offline }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="antena-region-body">
+                                {% for ap in site.aps %}
+                                    <div class="antena-card antena-search-item"
+                                        data-status="{{ ap.status | default('offline') | lower }}"
+                                        data-search-text="{{ site.nome }} {{ ap.nome }} {{ ap.modelo }} {{ ap.ip }} {{ ap.status }}">
+                                        <div class="antena-card-header {{ ap.status | default('offline') | lower }}">
+                                            <i class="bi bi-{{ 'wifi' if ap.status == 'online' else 'wifi-off' }}"></i>
+                                            <span class="text-truncate">{{ ap.nome }}</span>
+                                        </div>
+                                        <div class="antena-card-body">
+                                            <div class="row-item">
+                                                <span class="label">Modelo:</span>
+                                                <span>{{ ap.modelo | default('N/A') }}</span>
+                                            </div>
+                                            <div class="row-item">
+                                                <span class="label">IP:</span>
+                                                <code>{{ ap.ip | default('N/A') }}</code>
+                                            </div>
+                                            <div class="row-item">
+                                                <span class="label">Firmware:</span>
+                                                <span>{{ ap.firmware | default('N/A') }}</span>
+                                            </div>
+                                            <div class="row-item">
+                                                <span class="label">Status:</span>
+                                                <span class="badge bg-{{ 'success' if ap.status == 'online' else 'danger' }}">{{ ap.status | upper }}</span>
+                                            </div>
+                                            <div class="row-item">
+                                                <span class="label">Clientes:</span>
+                                                <span class="badge bg-info">{{ ap.clientes | default(0) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                                </div>
+                            </section>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">Nenhum dado de antenas disponível. Clique em "Atualizar Dados" para coletar.</div>
+                    {% endif %}
+                    </div>
+
                 </div>
             </div>
         </div>
     </div>
-</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    createPageSearch({
-        inputSelector: '#antenasSearchInput',
-        itemSelector: '.antena-search-item',
-        countSelector: '#antenasSearchCount',
-        emptyStateSelector: '#antenasSearchEmpty',
-        countSuffix: 'antenas',
-        emptyMessage: 'Nenhuma antena corresponde ao texto pesquisado.'
+/* ===== INTERFERÊNCIA: accordion + filtro ===== */
+function toggleSite(header) {
+    const body = header.nextElementSibling;
+    const collapsed = header.classList.toggle('collapsed');
+    $(body).slideToggle(200);
+}
+
+let filtroCanaisAtual = 'issues';
+
+function filtrarCanais(filtro) {
+    filtroCanaisAtual = filtro;
+
+    // atualiza cards ativos
+    $('.stats-card-filter[data-filter-canal]').removeClass('active-filter');
+    $(`.stats-card-filter[data-filter-canal="${filtro}"]`).addClass('active-filter');
+
+    // mostra/oculta blocos
+    $('.interf-site-block').each(function() {
+        const block = $(this);
+        const risco = block.attr('data-site-risco');
+        if (filtro === 'all') {
+            block.show();
+        } else if (filtro === 'issues') {
+            block.toggle(risco === 'CRITICO' || risco === 'ATENCAO');
+        } else {
+            // para OK: mostra só sites OK puros (sem ATENCAO/CONGESTIONADO)
+            if (filtro === 'OK') {
+                block.toggle(risco === 'OK');
+            } else {
+                block.toggle(risco === filtro);
+            }
+        }
+        // fecha todos ao filtrar
+        const header = block.find('.interf-site-header');
+        const body = block.find('.interf-site-body');
+        header.addClass('collapsed');
+        body.hide();
     });
+
+    // resumo
+    const labels = { 'all': '', 'issues': 'Sites com problema (Crítico + Atenção)', 'CRITICO': 'Somente crítico', 'ATENCAO': 'Somente atenção', 'OK': 'Somente OK' };
+    const summary = $('#interfCanaisFiltroSummary');
+    if (filtro !== 'all') {
+        $('#interfCanaisFiltroTexto').text(labels[filtro] || filtro);
+        summary.css('display', 'flex');
+    } else {
+        summary.hide();
+    }
+}
+
+/* ===== ANTENAS: filtro por status ===== */
+let antenaBuscaAtual = '';
+
+function normalizeAntenaText(text) {
+    return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function aplicarFiltroAntena(filtro) {
+    filtroAntenaAtual = filtro || 'all';
+    atualizarFiltroAntenaAtivo();
+}
+
+function atualizarFiltroAntenaAtivo() {
+    let visiveis = 0;
+
+    $('[data-regional-block]').each(function() {
+        const block = $(this);
+        const regionalNome = normalizeAntenaText(block.attr('data-regional-name') || '');
+        let blockCount = 0;
+
+        block.find('.antena-search-item').each(function() {
+            const item = $(this);
+            const status = item.attr('data-status') || 'offline';
+            const texto = normalizeAntenaText(item.attr('data-search-text') || '');
+            const correspondeBusca = !antenaBuscaAtual || texto.includes(antenaBuscaAtual) || regionalNome.includes(antenaBuscaAtual);
+            const correspondeStatus = filtroAntenaAtual === 'all' || status === filtroAntenaAtual;
+            const mostrar = correspondeBusca && correspondeStatus;
+            item.toggleClass('d-none', !mostrar);
+            if (mostrar) { blockCount++; visiveis++; }
+        });
+
+        block.toggle(blockCount > 0);
+    });
+
+    $('#antenasSearchCount').text(visiveis + ' antenas');
+
+    // Cards ativos
+    $('.stats-card-filter').removeClass('active-filter');
+    $(`.stats-card-filter[data-filter-antena="${filtroAntenaAtual}"]`).addClass('active-filter');
+
+    // Resumo filtro
+    const summary = $('#antenasFilterSummary');
+    if (filtroAntenaAtual !== 'all' || antenaBuscaAtual) {
+        const partes = [];
+        if (filtroAntenaAtual === 'online') partes.push('Somente antenas online');
+        else if (filtroAntenaAtual === 'offline') partes.push('Somente antenas offline');
+        if (antenaBuscaAtual) partes.push(`Busca: "${$('#antenasSearchInput').val()}"`);
+        $('#antenasFilterSummaryText').text(partes.join(' | '));
+        summary.css('display', 'flex');
+    } else {
+        summary.hide();
+    }
+
+    // Empty state
+    const existeBloco = $('[data-regional-block]:visible').length > 0;
+    $('#antenasSearchEmpty').toggle(!existeBloco && !!antenaBuscaAtual);
+    $('#antenasEmptyFilter').toggle(!existeBloco && !antenaBuscaAtual && filtroAntenaAtual !== 'all');
+}
+
+$(document).ready(function() {
+    $('#antenasSearchInput').on('input', function() {
+        antenaBuscaAtual = normalizeAntenaText(this.value);
+        atualizarFiltroAntenaAtivo();
+    });
+    atualizarFiltroAntenaAtivo();
 });
 </script>
 {% endblock %}

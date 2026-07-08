@@ -5,6 +5,9 @@ Conexoes.txt
 # Arquivos de saída
 output/
 *.html
+# Mas os templates do projeto são commitados
+!templates/*.html
+!templates/**/*.html
 *.png
 *.jpg
 *.jpeg
@@ -49,6 +52,7 @@ desktop.ini
 # Arquivos de configuração sensíveis
 servidores.json
 estrutura_regionais.json
+estrutura_regionais.backup_*.json
 zabbix_config.json
 *.json.backup
 *.json.bak
@@ -58,6 +62,8 @@ auth_state.json
 data/*.json
 auditoria_*.json
 relatorio_*.json
+admin_baseline.json
+license_debug.json
 
 # Backups e snapshots locais
 backup_*/
@@ -65,10 +71,24 @@ backup_limpeza_*/
 backup_organizacao_*/
 backup_projeto_*/
 automacao_gps/
+automacao_gps_history_rebuild/
 backups/
 switches_zabbix.xlsx
 switches_zabbix_backup_*.xlsx
 switches_zabbix_corrigido_*.xlsx
+
+# Scripts de debug/teste temporários
+_debug_*.py
+_check_*.py
+_test_*.py
+_fix_*.py
+_investigate_*.py
+_sync_regionals.py
+_scan_git.py
+test_*.py
+tmp_*.py
+debug_*.py
+MIGRATION_PLAN.md
 
 # Arquivos temporários de segurança
 *.tmp
