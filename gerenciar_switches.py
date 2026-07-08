@@ -16,6 +16,7 @@ import re
 import sys
 import builtins
 import unicodedata
+import time
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -119,10 +120,15 @@ class GerenciadorSwitches:
         
         # Carrega configurações
         self._carregar_config()
-        
-        # Carrega dados dos switches
-        self._carregar_switches()
-        
+
+        # Tenta carregar dados dos switches pela API (mais atualizado)
+        # Se falhar, volta para XLSX (fallback automático)
+        sucesso_api = self._carregar_switches_api()
+
+        if not sucesso_api:
+            print("\n⚠️ Carregamento pela API falhou. Usando fallback XLSX...")
+            self._carregar_switches()
+
         # Atualiza todos os IPs para o formato correto
         self.atualizar_ips()
 
@@ -664,10 +670,368 @@ class GerenciadorSwitches:
                 self.regionais[regional].append(switch)
             
             print(f"✅ Carregados {len(self.switches)} switches de {len(self.regionais)} regionais")
-            
+
         except Exception as e:
             print(f"Erro ao carregar switches: {str(e)}")
-    
+
+    def _carregar_switches_api(self):
+        """Carrega switches diretamente da API Zabbix (sem XLSX)"""
+        try:
+            print("📡 Carregando switches da API Zabbix...")
+
+            if not self.auth_token:
+                if not self.autenticar():
+                    print("❌ Falha ao autenticar. Retornando para fallback XLSX...")
+                    return False
+
+            self.switches = []
+            self.regionais = {}
+
+            hostgroup_resp = self._call_api("hostgroup.get", {
+                "output": ["groupid", "name"],
+                "sortfield": "name"
+            })
+            hostgroups = hostgroup_resp.get("result", []) or []
+            print(f"📊 Encontrados {len(hostgroups)} host groups")
+
+            hosts_por_id = {}
+            for hostgroup in hostgroups:
+                groupid = hostgroup.get("groupid")
+                if not groupid:
+                    continue
+
+                hosts_resp = self._call_api("host.get", {
+                    "groupids": [groupid],
+                    "output": [
+                        "hostid", "host", "name", "status",
+                        "maintenance_status", "maintenance_type", "maintenanceid"
+                    ],
+                    "selectInterfaces": ["ip", "type", "main", "useip", "dns"],
+                    "selectGroups": ["groupid", "name"],
+                    "selectInventory": ["type", "location", "site_notes"],
+                    "sortfield": "name",
+                    "limit": 10000,
+                })
+
+                for host in hosts_resp.get("result", []) or []:
+                    host_id = str(host.get("hostid") or "").strip()
+                    nome = str(host.get("name") or host.get("host") or "").strip()
+                    if not host_id or "SWITCH" not in nome.upper():
+                        continue
+                    if not host.get("groups"):
+                        host["groups"] = [{"groupid": groupid, "name": hostgroup.get("name", "")}]
+                    hosts_por_id[host_id] = host
+
+            hosts = sorted(hosts_por_id.values(), key=lambda item: str(item.get("name") or item.get("host") or ""))
+            if not hosts:
+                print("⚠️ Nenhum host de switch retornado pela API Zabbix.")
+                return False
+
+            hostids = [host["hostid"] for host in hosts]
+            problemas_por_host = self._carregar_problemas_ativos_por_host(hostids)
+            hostids_com_alerta_uplink = [
+                str(hostid)
+                for hostid, problemas_host in problemas_por_host.items()
+                if any(self._eh_alerta_speed_uplink(problema.get("name")) for problema in problemas_host)
+            ]
+            itens_uplink_por_host = self._carregar_itens_speed_uplink_por_host(hostids_com_alerta_uplink)
+            agora = datetime.now().isoformat()
+
+            for host in hosts:
+                host_id = str(host.get("hostid") or "").strip()
+                nome_host = str(host.get("name") or host.get("host") or host_id).strip()
+                zabbix_host = str(host.get("host") or nome_host).strip()
+                regional_name = self._selecionar_regional_zabbix(host.get("groups") or [])
+                interface = self._selecionar_interface_principal(host.get("interfaces") or [])
+                ip = interface.get("ip") or interface.get("dns") or ""
+                inventory = host.get("inventory") or {}
+                problemas = problemas_por_host.get(host_id, [])
+                problemas_filtrados, nomes_problemas = self._filtrar_problemas_por_estado_atual(
+                    problemas,
+                    itens_uplink_por_host.get(host_id, [])
+                )
+                em_manutencao = str(host.get("maintenance_status") or "0") == "1"
+
+                status = "online"
+                status_reason = None
+                status_details = None
+                if str(host.get("status") or "0") != "0":
+                    status = "inativo"
+                    status_reason = "Host encontrado no Zabbix, mas está marcado como inativo/desabilitado."
+                    status_details = f"Host Zabbix: {nome_host} | Status do host: inativo"
+                elif nomes_problemas:
+                    status = "warning"
+
+                switch = {
+                    "host": nome_host,
+                    "regional": regional_name,
+                    "ip": ip,
+                    "ip_numerico": ip,
+                    "modelo": inventory.get("type") or "Não informado",
+                    "local": inventory.get("location") or "Não informado",
+                    "status": status,
+                    "ultima_verificacao": agora,
+                    "hostid": host_id,
+                    "zabbix_host": zabbix_host,
+                    "zabbix_name": nome_host,
+                    "zabbix_status": host.get("status", "0"),
+                    "maintenance_status": host.get("maintenance_status"),
+                    "maintenance_type": host.get("maintenance_type"),
+                    "maintenanceid": host.get("maintenanceid"),
+                    "em_manutencao": em_manutencao,
+                    "status_reason": status_reason,
+                    "status_details": status_details,
+                    "warning_problemas": nomes_problemas if status == "warning" else [],
+                    "warning_resumo": nomes_problemas[0] if status == "warning" and nomes_problemas else None,
+                }
+
+                self.switches.append(switch)
+                self.regionais.setdefault(regional_name, []).append(switch)
+                self._persistir_status_switch(switch)
+
+            print(f"✅ Carregados {len(self.switches)} switches de {len(self.regionais)} regionais (via API)")
+            return True
+
+        except Exception as e:
+            print(f"❌ Erro ao carregar switches da API: {str(e)}")
+            print("⚠️  Retornando para fallback XLSX...")
+            return False
+
+    def _selecionar_regional_zabbix(self, groups):
+        """Escolhe o host group que representa a regional do switch."""
+        grupos = [str(group.get("name") or "").strip() for group in groups if group.get("name")]
+        if not grupos:
+            return "SEM_REGIONAL"
+
+        genericos = {
+            "SWITCH", "SWITCHES", "NETWORK", "NETWORKS", "INFRA",
+            "INFRAESTRUTURA", "FIREWALLS", "SERVERS", "SERVIDORES"
+        }
+        candidatos_regionais = [
+            grupo for grupo in grupos
+            if "REGIONAL" in grupo.upper() or grupo.upper().startswith(("REG_", "RG_"))
+        ]
+        if candidatos_regionais:
+            return sorted(candidatos_regionais)[0]
+
+        candidatos = [grupo for grupo in grupos if grupo.upper() not in genericos]
+        return sorted(candidatos or grupos)[0]
+
+    def _selecionar_interface_principal(self, interfaces):
+        """Seleciona a interface principal, preferindo SNMP e marcada como main."""
+        if not interfaces:
+            return {}
+
+        def score(interface):
+            interface_type = str(interface.get("type") or "")
+            main = str(interface.get("main") or "")
+            ip = str(interface.get("ip") or "").strip()
+            return (
+                1 if interface_type == "2" else 0,  # SNMP
+                1 if main == "1" else 0,
+                1 if ip else 0,
+            )
+
+        return sorted(interfaces, key=score, reverse=True)[0]
+
+    def _janela_problemas_zabbix_inicio(self):
+        """Inicio da janela operacional usada para espelhar Problems do Zabbix."""
+        try:
+            segundos = int(os.getenv("ZABBIX_PROBLEM_WINDOW_SECONDS", "86400"))
+        except ValueError:
+            segundos = 86400
+        return int(time.time()) - max(segundos, 60)
+
+    def _problema_zabbix_aberto_e_recente(self, problema, janela_inicio=None):
+        """Mantem somente problemas abertos e dentro da janela recente do Zabbix."""
+        if not problema:
+            return False
+
+        r_eventid = str(problema.get("r_eventid", "0") or "0")
+        r_clock = str(problema.get("r_clock", "0") or "0")
+        if r_eventid not in {"", "0"} or r_clock not in {"", "0"}:
+            return False
+
+        if janela_inicio is None:
+            janela_inicio = self._janela_problemas_zabbix_inicio()
+
+        clock = problema.get("clock")
+        if clock in (None, ""):
+            return True
+
+        try:
+            return int(clock) >= int(janela_inicio)
+        except (TypeError, ValueError):
+            return True
+
+    def _normalizar_texto_alerta(self, texto):
+        """Normaliza texto para comparar nomes de alertas e itens do Zabbix."""
+        texto_normalizado = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode("ascii")
+        return texto_normalizado.lower()
+
+    def _eh_alerta_speed_uplink(self, nome_alerta):
+        """Identifica alertas de negociacao de speed inferior no UPLINK."""
+        texto = self._normalizar_texto_alerta(nome_alerta)
+        if "uplink" not in texto:
+            return False
+        return any(termo in texto for termo in ("speed", "velocidade"))
+
+    def _valor_speed_em_bps(self, valor, unidade=""):
+        texto_valor = self._normalizar_texto_alerta(valor).replace(",", ".").strip()
+        texto_unidade = self._normalizar_texto_alerta(unidade)
+
+        if "1000000000" in texto_valor or "1 gbps" in texto_valor or "1gbps" in texto_valor:
+            return 1_000_000_000
+        if "1000 mbps" in texto_valor or "1000mbps" in texto_valor:
+            return 1_000_000_000
+
+        match = re.search(r"[-+]?\d+(?:\.\d+)?", texto_valor)
+        if not match:
+            return None
+
+        try:
+            numero = float(match.group(0))
+        except ValueError:
+            return None
+
+        texto_completo = f"{texto_valor} {texto_unidade}"
+        if "gbps" in texto_completo or "gbit" in texto_completo:
+            return numero * 1_000_000_000
+        if "mbps" in texto_completo or "mbit" in texto_completo:
+            return numero * 1_000_000
+        if "kbps" in texto_completo or "kbit" in texto_completo:
+            return numero * 1_000
+
+        return numero
+
+    def _uplink_speed_normalizado(self, itens):
+        """Retorna True quando algum item de speed do UPLINK mostra 1Gbps ou mais."""
+        for item in itens or []:
+            nome_item = self._normalizar_texto_alerta(item.get("name") or item.get("key_"))
+            if "uplink" not in nome_item or not any(termo in nome_item for termo in ("speed", "velocidade")):
+                continue
+
+            speed_bps = self._valor_speed_em_bps(item.get("lastvalue"), item.get("units"))
+            if speed_bps is not None and speed_bps >= 1_000_000_000:
+                return True
+
+        return False
+
+    def _filtrar_problemas_por_estado_atual(self, problemas, itens=None):
+        """Remove alertas historicos de UPLINK quando o speed atual ja voltou ao normal."""
+        janela_inicio = self._janela_problemas_zabbix_inicio()
+        problemas_ativos = [
+            problema for problema in (problemas or [])
+            if self._problema_zabbix_aberto_e_recente(problema, janela_inicio)
+        ]
+
+        uplink_normal = self._uplink_speed_normalizado(itens)
+        problemas_filtrados = []
+        nomes_problemas = []
+
+        for problema in problemas_ativos:
+            nome = problema.get("name") or ""
+            if uplink_normal and self._eh_alerta_speed_uplink(nome):
+                print(f"⚠️ Ignorando warning de UPLINK ja normalizado: {nome}")
+                continue
+
+            problemas_filtrados.append(problema)
+            if nome:
+                nomes_problemas.append(nome)
+
+        return problemas_filtrados, nomes_problemas
+
+    def _carregar_itens_speed_uplink_por_host(self, hostids):
+        """Carrega itens de speed do UPLINK para hosts com alerta relacionado."""
+        itens_por_host = {str(hostid): [] for hostid in hostids}
+        hostids = [str(hostid) for hostid in hostids if hostid]
+        if not hostids:
+            return itens_por_host
+
+        try:
+            for i in range(0, len(hostids), 100):
+                lote = hostids[i:i + 100]
+                items_resp = self._call_api("item.get", {
+                    "hostids": lote,
+                    "output": ["hostid", "name", "lastvalue", "units", "key_"],
+                    "sortfield": "name",
+                    "limit": 10000,
+                })
+
+                for item in items_resp.get("result", []) or []:
+                    host_id = str(item.get("hostid") or "").strip()
+                    nome_item = self._normalizar_texto_alerta(item.get("name") or item.get("key_"))
+                    if "uplink" in nome_item and any(termo in nome_item for termo in ("speed", "velocidade")):
+                        itens_por_host.setdefault(host_id, []).append(item)
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar itens de speed UPLINK: {e}")
+
+        return itens_por_host
+
+    def _carregar_problemas_ativos_por_host(self, hostids):
+        """Retorna problemas ativos por hostid usando problem.get + trigger.get."""
+        problemas_por_host = {str(hostid): [] for hostid in hostids}
+        if not hostids:
+            return problemas_por_host
+
+        try:
+            janela_inicio = self._janela_problemas_zabbix_inicio()
+            problems_resp = self._call_api("problem.get", {
+                "hostids": list(hostids),
+                "output": "extend",
+                "time_from": janela_inicio,
+                "sortfield": ["eventid"],
+                "sortorder": "DESC",
+                "limit": 10000,
+            })
+            problemas = [
+                problema for problema in (problems_resp.get("result", []) or [])
+                if self._problema_zabbix_aberto_e_recente(problema, janela_inicio)
+            ]
+            trigger_ids = sorted({
+                str(problema.get("objectid") or "").strip()
+                for problema in problemas
+                if str(problema.get("object") or "0") == "0" and problema.get("objectid")
+            })
+            if not trigger_ids:
+                return problemas_por_host
+
+            trigger_hosts = {}
+            for i in range(0, len(trigger_ids), 500):
+                lote = trigger_ids[i:i + 500]
+                triggers_resp = self._call_api("trigger.get", {
+                    "triggerids": lote,
+                    "output": ["triggerid", "description", "priority"],
+                    "selectHosts": ["hostid", "name"],
+                })
+
+                for trigger in triggers_resp.get("result", []) or []:
+                    trigger_id = str(trigger.get("triggerid") or "").strip()
+                    trigger_hosts[trigger_id] = [
+                        str(host.get("hostid") or "").strip()
+                        for host in trigger.get("hosts", []) or []
+                        if host.get("hostid")
+                    ]
+
+            for problema in problemas:
+                trigger_id = str(problema.get("objectid") or "").strip()
+                nome = problema.get("name") or "Alerta identificado no Zabbix"
+                problema = {
+                    "name": nome,
+                    "triggerid": trigger_id,
+                    "eventid": problema.get("eventid"),
+                    "clock": problema.get("clock"),
+                    "r_eventid": problema.get("r_eventid"),
+                    "r_clock": problema.get("r_clock"),
+                    "priority": problema.get("severity"),
+                }
+                for host_id in trigger_hosts.get(trigger_id, []):
+                    problemas_por_host.setdefault(host_id, []).append(problema)
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar warnings dos switches via problem.get: {e}")
+
+        return problemas_por_host
+
     def verificar_switch(self, host_name):
         """Verifica o status de um switch específico"""
         try:
@@ -689,11 +1053,19 @@ class GerenciadorSwitches:
                     "ultima_verificacao": datetime.now().isoformat()
                 }
             
-            # Tenta buscar o host no Zabbix pelo nome
-            host_resp = self._call_api("host.get", {
-                "filter": {"name": host_name},
-                "output": ["hostid", "name", "status"]
-            })
+            # Quando a lista vem da API, ja temos o hostid e evitamos depender de buscas por nome.
+            if switch_info.get("hostid"):
+                host_resp = self._call_api("host.get", {
+                    "hostids": [switch_info["hostid"]],
+                    "output": ["hostid", "host", "name", "status"],
+                    "selectInterfaces": ["ip", "type", "main", "useip", "dns"]
+                })
+            else:
+                # Tenta buscar o host no Zabbix pelo nome
+                host_resp = self._call_api("host.get", {
+                    "filter": {"name": host_name},
+                    "output": ["hostid", "host", "name", "status"]
+                })
 
             # Se não encontrou pelo nome exato, tenta usar um identificador técnico único do switch
             if not host_resp.get("result"):
@@ -787,28 +1159,34 @@ class GerenciadorSwitches:
             if zabbix_name != host_name:
                 print(f"ℹ️ Nome no Excel: {host_name} | Nome no Zabbix: {zabbix_name}")
             
-            # Busca problemas
+            # Busca itens PRIMEIRO (precisa verificar uplink speed antes de processar problemas)
+            print(f"🔍 Buscando itens de monitoramento para o switch: {host_name}")
+            items_resp = self._call_api("item.get", {
+                "hostids": host_id,
+                "output": ["hostid", "name", "lastvalue", "units", "key_"],
+                "sortfield": "name"
+            })
+
+            # Busca problemas (API retorna todos, filtraremos no código)
             print(f"🔍 Buscando problemas para o switch: {host_name}")
+            janela_inicio = self._janela_problemas_zabbix_inicio()
             problems_resp = self._call_api("problem.get", {
                 "hostids": [host_id],
                 "output": "extend",
+                "time_from": janela_inicio,
                 "sortfield": ["eventid"],
                 "sortorder": "DESC",
                 "limit": 5
             })
-            
+
             problemas = problems_resp.get("result", [])
             print(f"✅ Encontrados {len(problemas)} problemas para o switch: {host_name}")
-            nomes_problemas = [problema.get("name") for problema in problemas if problema.get("name")]
-            
-            # Busca itens
-            print(f"🔍 Buscando itens de monitoramento para o switch: {host_name}")
-            items_resp = self._call_api("item.get", {
-                "hostids": host_id,
-                "output": ["name", "lastvalue", "units", "key_"],
-                "sortfield": "name"
-            })
-            
+
+            problemas_filtrados, nomes_problemas = self._filtrar_problemas_por_estado_atual(
+                problemas,
+                items_resp.get("result", [])
+            )
+
             # Processa itens
             items = []
             
@@ -906,15 +1284,15 @@ class GerenciadorSwitches:
             # Determina status
             status = "online"
             if host_status == "inativo":
-                status = "offline"
-            elif problemas:
+                status = "inativo"
+            elif problemas_filtrados:
                 status = "warning"
             
             print(f"📊 Status final do switch {host_name}: {status}")
 
             switch_info["warning_problemas"] = nomes_problemas if status == "warning" else []
             switch_info["warning_resumo"] = nomes_problemas[0] if status == "warning" and nomes_problemas else None
-            if status == "offline":
+            if status == "inativo":
                 switch_info["status_reason"] = "Host encontrado no Zabbix, mas está marcado como inativo/desabilitado."
                 switch_info["status_details"] = f"Host Zabbix: {zabbix_name} | Status do host: {host_status}"
             else:
@@ -941,7 +1319,7 @@ class GerenciadorSwitches:
                 "detalhes": {
                     "host_id": host_id,
                     "host_status": host_status,
-                    "problemas": problemas,
+                    "problemas": problemas_filtrados,
                     "itens": items
                 }
             }
