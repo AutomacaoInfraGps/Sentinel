@@ -227,6 +227,31 @@ class GerenciadorFortigate:
             "results": data.get("results", {})
         }
 
+    def obter_ips_monitor_interfaces(self) -> dict:
+        """Retorna um mapa interface_name -> {ip, mask} com os IPs reais em runtime
+        (útil para PPPoE/DHCP onde o IP configurado é 0.0.0.0).
+        Requer sessão autenticada; retorna {} em caso de falha.
+        """
+        try:
+            if not self.verificar_sessao():
+                return {}
+            snapshot = self._obter_snapshot_monitor_interfaces()
+            if not snapshot.get("success"):
+                return {}
+            result = {}
+            for iface_name, iface_data in (snapshot.get("results") or {}).items():
+                ip_raw = str(iface_data.get("ip") or "").strip()
+                mask_raw = str(iface_data.get("mask") or "").strip()
+                # Descarta entradas sem IP ou com 0.0.0.0
+                if ip_raw and ip_raw not in {"0.0.0.0", "N/A", "None", ""}:
+                    result[iface_name.strip().lower()] = {
+                        "ip": ip_raw,
+                        "mask": mask_raw,
+                    }
+            return result
+        except Exception:
+            return {}
+
     @staticmethod
     def _calcular_bandwidth_por_delta(snapshot_inicial, snapshot_final, intervalo_segundos):
         if intervalo_segundos <= 0:

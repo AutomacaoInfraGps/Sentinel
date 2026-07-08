@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 # garante que importações peguem C:\Automacao primeiro
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
-from web_config import gerenciador_fortigate, coletar_hardware_vm
+from web_config import gerenciador_fortigate, coletar_hardware_vm, atualizar_cache_seguranca_dashboard
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG, UNIFI_CLIENTS_HTML, UNIFI_CLIENTS_IMG, UNIFI_CLIENTS_DASHBOARD, UNIFI_CONFIG
 
@@ -17,6 +17,7 @@ from datetime import datetime
 import sys
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import json, html
+from dashboard_security_sections import build_security_dashboard
 
 AUTO_NO_BROWSER = "--no-browser" in sys.argv or os.environ.get("AUTOMACAO_NO_BROWSER", "").strip().lower() in {"1", "true", "yes", "on"}
 from config import REPLICACAO_HTML, REPLICACAO_JSON
@@ -359,6 +360,28 @@ print()
 # Obtém a data e hora atual para exibir no dashboard
 data_execucao = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
 
+def formatar_data_amigavel(valor):
+    if not valor:
+        return "N/A"
+
+    texto = str(valor).strip()
+    if not texto:
+        return "N/A"
+
+    for formato in (
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S",
+    ):
+        try:
+            return datetime.strptime(texto[:26], formato).strftime("%d/%m/%Y %H:%M:%S")
+        except ValueError:
+            pass
+
+    return texto.replace("T", " ")[:19]
+
 # === 1. EXECUTA CHEKLISTS DAS REGIONAIS ===
 def _carregar_servidores_do_txt_legado():
     conteudo = CONEXOES_FILE.read_text(encoding="utf-8")
@@ -473,7 +496,8 @@ def _normalizar_link_texto(valor):
 
 
 def _normalizar_link_ip(valor):
-    return str(valor or "").strip().split()[0]
+    parts = str(valor or "").strip().split()
+    return parts[0] if parts else ""
 
 
 def _extrair_chave_regional(valor):
@@ -540,6 +564,31 @@ def _normalizar_texto_regional(valor):
     texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
     texto = re.sub(r"[^A-Z0-9]+", "", texto)
     return texto
+
+
+def _cidr_para_mascara(cidr_str):
+    """Converte CIDR (/24) para notação decimal (255.255.255.0)."""
+    try:
+        cidr = int(str(cidr_str).lstrip("/"))
+        m = 0xFFFFFFFF ^ (0xFFFFFFFF >> cidr)
+        return ".".join(str((m >> (8 * i)) & 0xFF) for i in [3, 2, 1, 0])
+    except Exception:
+        return str(cidr_str)
+
+
+# Mapeia chaves do FortiGate (SP, RJ) para códigos reais de regional
+_FORTIGATE_PARA_REGIONAL = {
+    "SP": "REG_GALAXIA",
+    "RJ": "REG_RIO_DE_JANEIRO",
+}
+
+
+def _nome_display_regiao(chave_fortigate):
+    """Retorna o nome de exibição de uma chave FortiGate (SP→GALAXIA, RJ→RIO DE JANEIRO)."""
+    codigo = _FORTIGATE_PARA_REGIONAL.get(str(chave_fortigate).strip().upper())
+    if codigo:
+        return re.sub(r"(?i)^REG_", "", codigo).replace("_", " ")
+    return str(chave_fortigate).strip().upper()
 
 
 def _remover_prefixo_regional(valor):
@@ -661,9 +710,7 @@ def _mapear_interface_preferida(link_cadastrado):
 
 def _carregar_links_cadastrados_fortigate(regiao):
     estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
-    regional_por_regiao = {
-        "RJ": "REG_RIO_DE_JANEIRO",
-    }
+    regional_por_regiao = _FORTIGATE_PARA_REGIONAL
 
     regional_codigo = regional_por_regiao.get((regiao or "").strip().upper())
     if not regional_codigo or not estrutura_path.exists():
@@ -742,6 +789,13 @@ def _mesclar_links_fortigate_com_cadastro(regiao, links_fortigate):
         link_mesclado["tipo"] = link_fortigate.get("tipo", "N/A")
         link_mesclado["estatisticas"] = link_fortigate.get("estatisticas") or {}
         link_mesclado["ultima_verificacao"] = link_fortigate.get("ultima_verificacao") or link_cadastrado.get("ultima_verificacao")
+        # Cadastro que o live FortiGate pode não ter, mas é importante para o dashboard e não deve ser sobrescrito por dados do FortiGate que podem estar incompletos ou desatualizados.
+        for _campo in ("mascara", "mascara_completa", "ip_local", "mascara_local",
+                       "interface_local", "sla_status", "modo_verificacao", "addressing_mode"):
+            if not link_mesclado.get(_campo):
+                val = link_cadastrado.get(_campo)
+                if val:
+                    link_mesclado[_campo] = val
         links_mesclados.append(link_mesclado)
 
     # Com cadastro definido, priorizamos o conjunto cadastrado para evitar duplicações no dashboard.
@@ -776,6 +830,32 @@ def _regional_html_indicates_error(file_content):
         "connectionreseterror",
     ]
     return any(marker in lowered for marker in error_markers)
+
+
+def _regional_html_status(file_content):
+    lowered = (file_content or "").lower()
+
+    if (
+        "regional-server-card-danger" in lowered
+        or "error-container" in lowered
+        or "[error]" in lowered
+        or "servidor virtual n" in lowered and "acess" in lowered
+    ):
+        return "offline"
+
+    if (
+        "regional-server-card-warning" in lowered
+        or "regional-server-security-warning" in lowered
+        or "[warn]" in lowered
+        or "bitdefender" in lowered and ("indispon" in lowered or "sem confirma" in lowered)
+        or "rpc server is unavailable" in lowered
+    ):
+        return "warning"
+
+    if _regional_html_indicates_error(file_content):
+        return "warning"
+
+    return "online"
 
 
 def _ensure_trusted_host_for_dashboard(ip):
@@ -965,6 +1045,11 @@ def _montar_vm_regional_card(servidor, tempo_resposta=None, details=None, error_
 
     resolved_status_class = status_class or ("success" if not error_message else "danger")
     resolved_status_label = status_label or ("ONLINE" if resolved_status_class != "danger" else "OFFLINE")
+    status_data_attr = {
+        "success": "online",
+        "danger": "offline",
+        "warning": "warning",
+    }.get(resolved_status_class, "online")
 
     sistema_operacional = info.get("operatingSystem") or servidor.get("sistema_operacional") or "N/A"
     modelo = info.get("model") or servidor.get("modelo") or "Servidor Virtual"
@@ -986,7 +1071,7 @@ def _montar_vm_regional_card(servidor, tempo_resposta=None, details=None, error_
         observacao_html = f"<div class=\"regional-server-alert\">{alert_prefix} {_dashboard_safe_text(error_message)}</div>"
 
     return f"""
-    <article class="regional-server-card regional-server-card-{resolved_status_class}">
+    <article class="regional-server-card regional-server-card-{resolved_status_class}" data-status="{status_data_attr}">
         <div class="regional-server-card-header">
             <div>
                 <div class="regional-server-card-title">{_dashboard_safe_text(nome_servidor)}</div>
@@ -1133,6 +1218,7 @@ for servidor in servidores_configurados:
         if _regional_html_indicates_error(file_content):
             has_error_for_regional = True
         current_regional_html_content = file_content
+        server_status = _regional_html_status(file_content)
     else:
         # Se o arquivo não existir, definitivamente é um erro
         current_regional_html_content = """
@@ -1143,6 +1229,7 @@ for servidor in servidores_configurados:
         </div>
         """
         has_error_for_regional = True
+        server_status = "offline"
 
     regional_key = nome.strip().upper()
     regional_data = regionais_processadas.setdefault(
@@ -1150,33 +1237,46 @@ for servidor in servidores_configurados:
         {
             "nome": nome,
             "has_error": False,
+            "has_warning": False,
             "server_entries": [],
         },
     )
     regional_data["has_error"] = regional_data["has_error"] or has_error_for_regional
+    regional_data["has_warning"] = regional_data["has_warning"] or server_status == "warning"
     regional_data["server_entries"].append(
         {
             "html": current_regional_html_content,
             "has_error": has_error_for_regional,
+            "status": server_status,
         }
     )
 
 blocos_html_regionais_with_status = []
 servidores_online_total = 0
 servidores_offline_total = 0
+servidores_warning_total = 0
 regionais_servidor_status = {}
 for regional_data in regionais_processadas.values():
-    dados_regional = regionais_servidor_status.setdefault(regional_data["nome"].strip().upper(), {"online": 0, "offline": 0})
+    dados_regional = regionais_servidor_status.setdefault(regional_data["nome"].strip().upper(), {"online": 0, "offline": 0, "warning": 0})
     for server_entry in regional_data.get("server_entries", []):
-        if server_entry.get("has_error"):
+        entry_status = server_entry.get("status") or ("offline" if server_entry.get("has_error") else "online")
+        if entry_status == "offline":
             servidores_offline_total += 1
             dados_regional["offline"] += 1
+        elif entry_status == "warning":
+            servidores_warning_total += 1
+            dados_regional["warning"] += 1
         else:
             servidores_online_total += 1
             dados_regional["online"] += 1
 
     regional_open_attr = ""
-    regional_status = "offline" if regional_data["has_error"] else "online"
+    if any(entry.get("status") == "offline" for entry in regional_data.get("server_entries", [])):
+        regional_status = "offline"
+    elif any(entry.get("status") == "warning" for entry in regional_data.get("server_entries", [])):
+        regional_status = "warning"
+    else:
+        regional_status = "online"
     regional_html_block = f"""
     <details class="regional-item" data-status="{regional_status}"{regional_open_attr}>
         <summary><strong>{regional_data['nome']}</strong></summary>
@@ -1610,6 +1710,8 @@ print("[EXEC] Verificando status dos Switches...")
 switches_data = []
 switches_online = 0
 switches_offline = 0
+switches_warning = 0
+switches_inativo = 0
 switches_html_content = ""
 try:
     from gerenciar_switches import GerenciadorSwitches
@@ -1634,21 +1736,27 @@ try:
                     break
             
             if switch_info:
-                # Conta switches online/offline
-                if status in ['online', 'warning']:
+                # Conta switches usando a mesma regra da tela /switches.
+                if status == 'online':
                     switches_online += 1
-                    final_status = 'online'
+                elif status == 'warning':
+                    switches_warning += 1
+                elif status == 'inativo':
+                    switches_inativo += 1
                 else:
                     switches_offline += 1
-                    final_status = 'offline'
-                
+
                 switches_data.append({
                     'name': nome_switch,
                     'ip': switch_info.get('ip', 'N/A'),
                     'regional': switch_info.get('regional', 'N/A'),
-                    'status': final_status,
+                    'status': status,
                     'zabbix_status': status,
-                    'last_check': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'status_reason': resultado.get('status_reason') or switch_info.get('status_reason'),
+                    'status_details': resultado.get('status_details') or switch_info.get('status_details'),
+                    'warning_problemas': resultado.get('warning_problemas') or switch_info.get('warning_problemas') or [],
+                    'warning_resumo': resultado.get('warning_resumo') or switch_info.get('warning_resumo'),
+                    'last_check': resultado.get('ultima_verificacao') or switch_info.get('ultima_verificacao') or datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     'detalhes': resultado.get('detalhes', {})
                 })
         
@@ -1662,7 +1770,9 @@ try:
                     <div><strong>Total de switches cadastrados:</strong> {total_switches}</div>
                     <div><strong>Switches verificados nesta execução:</strong> {len(switches_data)}</div>
                     <div><strong>Switches Online:</strong> {switches_online}</div>
-                    <div><strong>Switches Offline/Warning:</strong> {switches_offline}</div>
+                    <div><strong>Switches Offline:</strong> {switches_offline}</div>
+                    <div><strong>Switches Warning:</strong> {switches_warning}</div>
+                    <div><strong>Switches Inativos:</strong> {switches_inativo}</div>
                     <div><strong>Cobertura da coleta:</strong> {len(switches_data)}/{total_switches}</div>
                 </div>
             </div>
@@ -1677,38 +1787,55 @@ try:
         for switch in switches_data:
             regional = switch['regional']
             if regional not in regionais_resumo:
-                regionais_resumo[regional] = {'online': 0, 'offline': 0, 'total': 0}
+                regionais_resumo[regional] = {'online': 0, 'offline': 0, 'warning': 0, 'inativo': 0, 'total': 0}
             
             regionais_resumo[regional]['total'] += 1
-            if switch['status'] == 'online':
-                regionais_resumo[regional]['online'] += 1
+            status_switch = switch.get('status')
+            if status_switch in regionais_resumo[regional]:
+                regionais_resumo[regional][status_switch] += 1
             else:
                 regionais_resumo[regional]['offline'] += 1
         
         # Adiciona resumo por regional
         for regional, dados in regionais_resumo.items():
             taxa = (dados['online']/dados['total']*100) if dados['total'] > 0 else 0
-            status_class = "regional-badge-danger" if dados['offline'] > 0 else "regional-badge-success"
+            status_class = "regional-badge-danger" if dados['offline'] > 0 else "regional-badge-warning" if dados['warning'] > 0 else "regional-badge-neutral" if dados['inativo'] > 0 else "regional-badge-success"
             switches_html_content += f"""
                     <div class="regional-badge {status_class}">
-                        <strong>{regional}</strong><br>{dados['online']}/{dados['total']} ({taxa:.0f}%)
+                        <strong>{regional}</strong><br>
+                        {dados['online']}/{dados['total']} online ({taxa:.0f}%)<br>
+                        <span class="small">Off: {dados['offline']} | Warn: {dados['warning']} | Inat: {dados['inativo']}</span>
                     </div>
             """
 
         regionais_com_switch_offline = sorted(
             [regional for regional, dados in regionais_resumo.items() if dados['offline'] > 0]
         )
+        regionais_com_switch_warning = sorted(
+            [regional for regional, dados in regionais_resumo.items() if dados['warning'] > 0]
+        )
+        regionais_com_switch_inativo = sorted(
+            [regional for regional, dados in regionais_resumo.items() if dados['inativo'] > 0]
+        )
 
-        if regionais_com_switch_offline:
+        if regionais_com_switch_offline or regionais_com_switch_warning or regionais_com_switch_inativo:
             itens_regionais_offline = "".join(
                 [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['offline']} offline)</li>" for regional in regionais_com_switch_offline]
+            )
+            itens_regionais_warning = "".join(
+                [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['warning']} warning)</li>" for regional in regionais_com_switch_warning]
+            )
+            itens_regionais_inativo = "".join(
+                [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['inativo']} inativo)</li>" for regional in regionais_com_switch_inativo]
             )
             switches_html_content += f"""
                 </div>
                 <div id="switches-offline-regionais" class="regional-badge" style="grid-column: 1 / -1; border-left: 6px solid #dd6b20;">
-                    <strong>[WARN] Regionais com switch offline:</strong>
+                    <strong>[WARN] Regionais com atenção em switches:</strong>
                     <ul style="margin:10px 0 0 18px;">
                         {itens_regionais_offline}
+                        {itens_regionais_warning}
+                        {itens_regionais_inativo}
                     </ul>
                 </div>
                 <div class="switches-regionals">
@@ -1722,16 +1849,18 @@ try:
         for switch in switches_data:
             status = switch.get('status', 'offline')
             zabbix_status = switch.get('zabbix_status', 'unknown')
-            status_class = "success" if status == 'online' else "danger"
-            
-            # Adiciona classe warning se o status do Zabbix for warning
-            if zabbix_status == 'warning':
-                status_class = "warning"
+            status_class = {
+                "online": "success",
+                "warning": "warning",
+                "inativo": "neutral",
+            }.get(status, "danger")
             
             # Informações detalhadas dos problemas
             detalhes = switch.get('detalhes', {})
             problemas = detalhes.get('problemas', []) if isinstance(detalhes, dict) else []
             itens = detalhes.get('itens', []) if isinstance(detalhes, dict) else []
+            status_reason = switch.get('status_reason')
+            status_details = switch.get('status_details')
             
             problemas_html = ""
             if problemas:
@@ -1742,6 +1871,24 @@ try:
                         {''.join([f"<li>{problema.get('name', 'Problema desconhecido')}</li>" for problema in problemas[:3]])}
                         {f"<li><em>... e mais {len(problemas)-3} problemas</em></li>" if len(problemas) > 3 else ""}
                     </ul>
+                </div>
+                """
+            elif status == 'warning' and switch.get('warning_problemas'):
+                problemas_html = f"""
+                <div class="mt-2">
+                    <strong>[WARN] Problemas encontrados ({len(switch.get('warning_problemas', []))}):</strong>
+                    <ul class="small">
+                        {''.join([f"<li>{problema}</li>" for problema in switch.get('warning_problemas', [])[:3]])}
+                    </ul>
+                </div>
+                """
+
+            status_reason_html = ""
+            if status_reason or status_details:
+                status_reason_html = f"""
+                <div class="mt-2">
+                    <strong>Motivo:</strong> {html.escape(str(status_reason or 'N/A'))}
+                    {f"<div class='small'>{html.escape(str(status_details))}</div>" if status_details else ""}
                 </div>
                 """
             
@@ -1768,6 +1915,7 @@ try:
                         <p><strong>Status Zabbix:</strong> {zabbix_status.title()}</p>
                         <p><strong>Regional:</strong> {switch['regional']}</p>
                         <p><strong>Última verificação:</strong> {switch['last_check']}</p>
+                        {status_reason_html}
                         {problemas_html}
                         {itens_html}
                     </div>
@@ -1775,6 +1923,125 @@ try:
             </div>
             """
         switches_html_content += "</div></div>"
+
+        resumo_linhas_switches = ""
+        for regional, dados in sorted(regionais_resumo.items()):
+            taxa = (dados['online'] / dados['total'] * 100) if dados['total'] > 0 else 0
+            regional_status = "offline" if dados['offline'] else "warning" if dados['warning'] else "inativo" if dados['inativo'] else "online"
+            regional_label = "Com offline" if dados['offline'] else "Com warning" if dados['warning'] else "Com inativo" if dados['inativo'] else "Sem alerta"
+            regional_pill_class = {
+                "online": "success",
+                "warning": "warning",
+                "inativo": "neutral",
+            }.get(regional_status, "danger")
+
+            resumo_linhas_switches += f"""
+                <tr class="switch-regional-row" data-status="{regional_status}">
+                    <td class="lt-nome">{html.escape(str(regional))}</td>
+                    <td>{dados['total']}</td>
+                    <td>{dados['online']}</td>
+                    <td>{dados['offline']}</td>
+                    <td>{dados['warning']}</td>
+                    <td>{dados['inativo']}</td>
+                    <td>{taxa:.0f}%</td>
+                    <td><span class="status-pill {regional_pill_class}">{regional_label}</span></td>
+                </tr>
+            """
+
+        linhas_switches = ""
+        for switch in sorted(switches_data, key=lambda item: (str(item.get('regional', '')), str(item.get('name', '')))):
+            status = switch.get('status', 'offline')
+            status_class = {
+                "online": "success",
+                "warning": "warning",
+                "inativo": "neutral",
+            }.get(status, "danger")
+            detalhes = switch.get('detalhes', {})
+            itens = detalhes.get('itens', []) if isinstance(detalhes, dict) else []
+            problemas = detalhes.get('problemas', []) if isinstance(detalhes, dict) else []
+            host_id = detalhes.get('host_id', 'N/A') if isinstance(detalhes, dict) else 'N/A'
+            warning_lista = switch.get('warning_problemas') or []
+            observacao = (
+                switch.get('warning_resumo')
+                or (warning_lista[0] if warning_lista else "")
+                or (problemas[0].get('name', '') if problemas else "")
+                or switch.get('status_reason')
+                or "OK"
+            )
+            if switch.get('status_details') and status in {"offline", "inativo"}:
+                observacao = f"{observacao} | {switch.get('status_details')}"
+
+            linhas_switches += f"""
+                <tr class="switch-item" data-status="{html.escape(str(status))}" data-regional="{html.escape(str(switch.get('regional', 'N/A')))}">
+                    <td class="lt-nome">{html.escape(str(switch.get('name', 'N/A')))}</td>
+                    <td>{html.escape(str(switch.get('regional', 'N/A')))}</td>
+                    <td class="lt-ip"><code>{html.escape(str(switch.get('ip', 'N/A')))}</code></td>
+                    <td>{html.escape(str(host_id))}</td>
+                    <td><span class="status-pill {status_class}">{html.escape(str(status).title())}</span></td>
+                    <td>{len(itens)}</td>
+                    <td class="lt-check">{html.escape(formatar_data_amigavel(switch.get('last_check', '')))}</td>
+                    <td class="switch-observation">{html.escape(str(observacao))}</td>
+                </tr>
+            """
+
+        switches_html_content = f"""
+        <div class='switches-container'>
+            <div class="links-region-table-block">
+                <div class="links-region-table-header switches-table-header">
+                    <span class="links-region-table-title">Resumo geral dos switches</span>
+                    <span class="links-region-table-counts">
+                        <span class="counter-online">{switches_online} online</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-offline">{switches_offline} offline</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-warning">{switches_warning} warning</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-neutral">{switches_inativo} inativos</span>
+                    </span>
+                </div>
+                <div class="links-region-table-body" id="switches-offline-regionais">
+                    <table class="links-table switches-table">
+                        <thead>
+                            <tr>
+                                <th>Regional</th>
+                                <th>Total</th>
+                                <th>Online</th>
+                                <th>Offline</th>
+                                <th>Warning</th>
+                                <th>Inativos</th>
+                                <th>Disponibilidade</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>{resumo_linhas_switches}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="links-region-table-block">
+                <div class="links-region-table-header switches-table-header">
+                    <span class="links-region-table-title">Relatório completo dos switches <span class="links-region-table-count">({len(switches_data)}/{total_switches} verificados)</span></span>
+                </div>
+                <div class="links-region-table-body">
+                    <table class="links-table switches-table">
+                        <thead>
+                            <tr>
+                                <th>Switch</th>
+                                <th>Regional</th>
+                                <th>IP</th>
+                                <th>ID Zabbix</th>
+                                <th>Status</th>
+                                <th>Itens</th>
+                                <th>Última Verif.</th>
+                                <th>Observação</th>
+                            </tr>
+                        </thead>
+                        <tbody>{linhas_switches}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        """
         
         if not switches_data:
             switches_html_content = """
@@ -1792,7 +2059,89 @@ try:
             <div class="error-message">Erro na conexão com Zabbix ou falha na verificação dos switches</div>
         </div>
         """
-        
+
+        raise RuntimeError("Erro na conexao com Zabbix ou falha na verificacao dos switches")
+        if False:
+            vpn_resumo_linhas = ""
+        vpn_tuneis_linhas = ""
+        for regional in regionais_vpn_exibicao:
+            dados = vpns_por_regional[regional]
+            nome_regional = dados.get("nome_exibicao") or regional
+            total_regional = dados["online"] + dados["offline"]
+            taxa_regional = (dados["online"] / total_regional * 100) if total_regional else 0
+            regional_status = "offline" if dados["offline"] > 0 else "online"
+            regional_label = "Com offline" if dados["offline"] > 0 else "Sem offline"
+            vpn_resumo_linhas += f"""
+                <tr class="vpn-regional-row" data-status="{regional_status}">
+                    <td class="lt-nome">{html.escape(str(nome_regional))}</td>
+                    <td>{total_regional}</td>
+                    <td>{dados["online"]}</td>
+                    <td>{dados["offline"]}</td>
+                    <td>{taxa_regional:.0f}%</td>
+                    <td><span class="status-pill {'danger' if regional_status == 'offline' else 'success'}">{regional_label}</span></td>
+                </tr>
+            """
+
+            for tunel in dados["tunels"]:
+                status_class = "online" if tunel["status"] == "online" else "offline"
+                vpn_tuneis_linhas += f"""
+                <tr class="vpn-tunnel-row" data-status="{status_class}" data-regional="{html.escape(str(regional))}">
+                    <td class="lt-nome">{html.escape(str(tunel["nome"]))}</td>
+                    <td>{html.escape(str(nome_regional))}</td>
+                    <td><span class="status-pill {'success' if status_class == 'online' else 'danger'}">{status_class.upper()}</span></td>
+                </tr>
+                """
+
+        vpn_html_content = f"""
+        <div class="vpn-container">
+            <div class="links-region-table-block">
+                <div class="links-region-table-header links-table-header">
+                    <span class="links-region-table-title">Resumo geral das VPNs IPSEC</span>
+                    <span class="links-region-table-counts">
+                        <span class="counter-online">{vpns_online} online</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-offline">{vpns_offline} offline</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-neutral">{len(regionais_offline_exibicao)} regionais com offline</span>
+                    </span>
+                </div>
+                <div class="links-region-table-body" id="vpn-offline-regionais">
+                    <table class="links-table vpn-table">
+                        <thead>
+                            <tr>
+                                <th>Regional</th>
+                                <th>Total</th>
+                                <th>Online</th>
+                                <th>Offline</th>
+                                <th>Disponibilidade</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>{vpn_resumo_linhas}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="links-region-table-block">
+                <div class="links-region-table-header links-table-header">
+                    <span class="links-region-table-title">Relatório completo das VPNs IPSEC <span class="links-region-table-count">({vpns_total} túneis)</span></span>
+                </div>
+                <div class="links-region-table-body">
+                    <table class="links-table vpn-table">
+                        <thead>
+                            <tr>
+                                <th>Túnel</th>
+                                <th>Regional</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>{vpn_tuneis_linhas}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        """
+
 except Exception as e:
     print(f"[ERRO] Erro no módulo de Switches: {e}")
     switches_html_content = f"""
@@ -1808,6 +2157,8 @@ print(f"[CHECK] Debug Switches (após processamento):")
 print(f"   - Switches processados: {len(switches_data)}")
 print(f"   - Switches Online: {switches_online}")
 print(f"   - Switches Offline: {switches_offline}")
+print(f"   - Switches Warning: {switches_warning}")
+print(f"   - Switches Inativos: {switches_inativo}")
 if switches_data:
     print(f"   - Primeiros 5 switches:")
     for i, switch in enumerate(switches_data[:5]):
@@ -1819,6 +2170,7 @@ print("[EXEC] Verificando Links de Internet...")
 links_data = []
 links_online = 0
 links_offline = 0
+links_inativo = 0
 links_html_content = ""
 
 
@@ -1870,27 +2222,181 @@ try:
         links_processados = _mesclar_links_fortigate_com_cadastro(regiao, links_info.get("links", []))
 
         for link in links_processados:
-            status = link.get("status", "offline")
+            sla_status = str(link.get("sla_status") or "").strip().lower()
+            status = "inativo" if sla_status == "inactive" else str(link.get("status") or "offline").strip().lower()
             if status == "online":
                 links_online += 1
+            elif status == "inativo":
+                links_inativo += 1
             else:
+                status = "offline"
                 links_offline += 1
 
             links_data.append({
                 "regiao": regiao,
+                "nome_regional": _nome_display_regiao(regiao),
                 "nome": _formatar_nome_link_dashboard(link),
+                "interface_nome": str(link.get("nome") or "").strip(),
                 "ip": link.get("ip", "N/A"),
-                "status": status,
+                "mascara": str(link.get("mascara") or "").strip(),
+                "mascara_completa": str(link.get("mascara_completa") or "").strip(),
+                "provedor": str(link.get("alias") or link.get("provedor") or "").strip(),
                 "velocidade": link.get("velocidade", "N/A"),
+                "sla_status": str(link.get("sla_status") or "").strip(),
+                "modo_verificacao": str(link.get("modo_verificacao") or "").strip().upper(),
+                "ip_local": str(link.get("ip_local") or "").strip(),
+                "mascara_local": str(link.get("mascara_local") or "").strip(),
+                "interface_local": str(link.get("interface_local") or "LAN").strip(),
+                "status": status,
                 "tipo": link.get("tipo", "N/A"),
                 "estatisticas": link.get("estatisticas") or {},
                 "interface_monitorada": link.get("interface_monitorada"),
                 "interface_esperada": link.get("interface_esperada"),
                 "match_confiavel": bool(link.get("match_confiavel", True)),
-                "ultima_verificacao": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "ultima_verificacao": str(link.get("ultima_verificacao") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"))[:16],
             })
 
+    # ===== LINKS DAS DEMAIS REGIONAIS (cadastradas, sem FortiGate direto) =====
+    regioes_fortigate = {str(k).strip().upper() for k in (fortigates or {}).keys()}
+    # IPs já coletados via FortiGate (para evitar duplicatas)
+    ips_fortigate = {_normalizar_link_ip(l.get("ip")) for l in links_data if l.get("ip")}
+    estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
+    if estrutura_path.exists():
+        try:
+            estrutura_data = json.loads(estrutura_path.read_text(encoding="utf-8"))
+            for codigo_reg, reg_info in (estrutura_data.get("regionais") or {}).items():
+                if not isinstance(reg_info, dict):
+                    continue
+                # Deriva nome curto da regional para agrupamento no dashboard
+                nome_regional = str(reg_info.get("nome") or codigo_reg).strip()
+                # Remove prefixos comuns: "Regional Amazonas" → "AMAZONAS"
+                regiao_label = re.sub(r"(?i)^regional\s+", "", nome_regional).strip().upper()
+                # Pula regionais já cobertas pelo FortiGate (SP, RJ, etc.)
+                if regiao_label in regioes_fortigate or codigo_reg.strip().upper().replace("REG_", "") in regioes_fortigate:
+                    continue
+                links_auto = reg_info.get("links_internet_auto")
+                if not isinstance(links_auto, list) or not links_auto:
+                    continue
+                for link in links_auto:
+                    if not isinstance(link, dict):
+                        continue
+                    # Só ignora entradas que são explicitamente Rede Local (têm ip_local mas não ip externo)
+                    ip_link = str(link.get("ip") or link.get("ip_externo") or "").strip()
+                    if not ip_link or ip_link == "N/A":
+                        continue
+                    # Pula links com IP já coletado via FortiGate (evita duplicatas)
+                    if _normalizar_link_ip(ip_link) in ips_fortigate:
+                        continue
+                    nome_link = str(link.get("nome") or link.get("provedor") or "N/A").strip()
+                    provedor_link = str(link.get("provedor") or "").strip()
+                    status_link = str(link.get("status") or "offline").strip().lower()
+                    sla_status_link = str(link.get("sla_status") or "").strip().lower()
+                    if sla_status_link == "inactive":
+                        status_link = "inativo"
+                    elif status_link not in {"online", "offline", "inativo"}:
+                        status_link = "offline"
+                    ultima_verif = link.get("ultima_verificacao") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    nome_exibicao = f"{nome_link} - {provedor_link}" if provedor_link and provedor_link.upper() != nome_link.upper() else nome_link
+                    if status_link == "online":
+                        links_online += 1
+                    elif status_link == "inativo":
+                        links_inativo += 1
+                    else:
+                        links_offline += 1
+                    links_data.append({
+                        "regiao": regiao_label,
+                        "nome_regional": regiao_label,
+                        "nome": nome_exibicao,
+                        "interface_nome": nome_link,
+                        "ip": ip_link,
+                        "mascara": str(link.get("mascara") or "").strip(),
+                        "mascara_completa": str(link.get("mascara_completa") or "").strip(),
+                        "provedor": provedor_link,
+                        "velocidade": link.get("velocidade") or "N/A",
+                        "sla_status": str(link.get("sla_status") or "").strip(),
+                        "modo_verificacao": str(link.get("modo_verificacao") or "").strip().upper(),
+                        "ip_local": str(link.get("ip_local") or "").strip(),
+                        "mascara_local": str(link.get("mascara_local") or "").strip(),
+                        "interface_local": str(link.get("interface_local") or "LAN").strip(),
+                        "status": status_link,
+                        "tipo": link.get("tipo") or "N/A",
+                        "estatisticas": {},
+                        "interface_monitorada": link.get("interface_monitorada"),
+                        "fortigate_host": str(link.get("fortigate_host") or "").strip(),
+                        "interface_esperada": None,
+                        "match_confiavel": True,
+                        "ultima_verificacao": str(ultima_verif)[:16],
+                    })
+                    print(f"[LINKS] {regiao_label}: {nome_exibicao} ({ip_link}) — {status_link}")
+        except Exception as exc_reg:
+            print(f"[AVISO] Erro ao carregar links das regionais cadastradas: {exc_reg}")
 
+    # ===== ENRIQUECE COM STATS VIA FORTIMANAGER PROXY =====
+    # Para regionais sem FortiGate direto, busca download/upload via proxy do FortiManager.
+    try:
+        from fortimanager_client import FortiManagerClient
+        _fmg_cfg = ENV_CONFIG.get("fortimanager") or {}
+        _fmg_adom = _fmg_cfg.get("adom", "root")
+        _fmg_client = FortiManagerClient()
+
+        # Monta índice: interface_monitorada -> link (apenas regionais sem stats)
+        _links_sem_stats = [
+            lk for lk in links_data
+            if not (lk.get("estatisticas") or {}).get("bandwidth_in")
+            and lk.get("interface_monitorada")
+        ]
+
+        # Monta mapa: nome_dispositivo_fmg -> lista de links
+        _dev_para_links: dict = {}
+        for lk in _links_sem_stats:
+            # Tenta derivar nome do dispositivo a partir do fortigate_host
+            fgt_host = str(lk.get("fortigate_host") or "").strip()
+            if not fgt_host:
+                continue
+            # Busca na lista de dispositivos pelo IP
+            _dev_para_links.setdefault(fgt_host, []).append(lk)
+
+        if _dev_para_links:
+            # Carrega lista de dispositivos uma única vez
+            _dev_list_resp = _fmg_client._request("get", f"/dvmdb/adom/{_fmg_adom}/device")
+            _devices = _dev_list_resp.get("result", [{}])[0].get("data", []) or []
+            _ip_to_devname = {
+                str(d.get("ip") or "").strip(): str(d.get("name") or "").strip()
+                for d in _devices if isinstance(d, dict) and d.get("name") and d.get("ip")
+            }
+
+            print(f"[FMG] Buscando stats de tráfego via proxy para {len(_dev_para_links)} dispositivo(s)...")
+            for fgt_host, host_links in _dev_para_links.items():
+                dev_name = _ip_to_devname.get(fgt_host)
+                if not dev_name:
+                    continue
+                try:
+                    traffic = _fmg_client.proxy_monitor_traffic(_fmg_adom, dev_name, interval_s=2.0)
+                    if not traffic:
+                        continue
+                    for lk in host_links:
+                        iface = str(lk.get("interface_monitorada") or "").strip().lower()
+                        if iface and iface in traffic:
+                            t = traffic[iface]
+                            rx_bps = int(t.get("rx_bps", 0))
+                            tx_bps = int(t.get("tx_bps", 0))
+                            def _fmt_bw(bps):
+                                if bps >= 1_000_000:
+                                    return f"{bps/1_000_000:.2f} Mbps"
+                                return f"{bps/1_000:.2f} Kbps"
+                            lk["estatisticas"] = {
+                                "bandwidth_in": rx_bps,
+                                "bandwidth_out": tx_bps,
+                                "bandwidth_in_readable": _fmt_bw(rx_bps),
+                                "bandwidth_out_readable": _fmt_bw(tx_bps),
+                                "rx_bytes": t.get("rx_bytes", 0),
+                                "tx_bytes": t.get("tx_bytes", 0),
+                            }
+                    print(f"[FMG] {dev_name}: stats coletadas para {len(host_links)} link(s)")
+                except Exception as exc_dev:
+                    print(f"[AVISO] FMG proxy stats {dev_name}: {exc_dev}")
+    except Exception as exc_fmg:
+        print(f"[AVISO] Enriquecimento FMG stats: {exc_fmg}")
 
     # ===== HTML =====
     links_por_regiao = {}
@@ -1908,112 +2414,125 @@ try:
         links_html_content += """
         <div class="error-container">
             <div class="error-title">Sem dados de links</div>
-            <div class="error-message">Nenhum link foi retornado pelos Fortigates no momento.</div>
+            <div class="error-message">Nenhum link disponível no momento.</div>
         </div>
         """
     else:
-        links_html_content += "<div class='links-overview'>"
+        # ── Tabelas por regional ──
+        links_html_content += "<div class='links-tables-wrapper'>"
         for regiao in regioes_ordenadas:
-            links_regiao = links_por_regiao[regiao]
-            online_regiao = sum(1 for item in links_regiao if item.get("status") == "online")
-            offline_regiao = len(links_regiao) - online_regiao
-            classe_regional = "sp" if regiao == "SP" else "rj" if regiao == "RJ" else "other"
+            links_regiao   = links_por_regiao.get(regiao) or []
+            if not links_regiao:
+                continue
+            online_regiao  = sum(1 for item in links_regiao if item.get("status") == "online")
+            offline_regiao = sum(1 for item in links_regiao if item.get("status") == "offline")
+            inativo_regiao = sum(1 for item in links_regiao if item.get("status") == "inativo")
+            total_regiao   = len(links_regiao)
+            nome_regional_exib = links_regiao[0].get("nome_regional") or regiao
+
+            # Rede Local: deduzida do primeiro link que tenha ip_local
+            ip_local        = next((l.get("ip_local") for l in links_regiao if l.get("ip_local")), "")
+            iface_local     = next((l.get("interface_local") for l in links_regiao if l.get("interface_local")), "LAN")
+            mask_local_cidr = next((l.get("mascara_local") for l in links_regiao if l.get("mascara_local")), "")
+            mask_local_dot  = _cidr_para_mascara(mask_local_cidr) if mask_local_cidr else "—"
+
             links_html_content += f"""
-            <div class="regional-chip {classe_regional}">
-                <div class="regional-chip-header">Regional {regiao}</div>
-                <div class="regional-chip-stats">
-                    <span class="ok">Online: {online_regiao}</span>
-                    <span class="sep">|</span>
-                    <span class="alert">Offline: {offline_regiao}</span>
+            <div class="links-region-table-block" id="links-{regiao.lower()}">
+                <div class="links-region-table-header links-table-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+                    <span class="links-region-table-title">{nome_regional_exib} <span class="links-region-table-count">({total_regiao} links)</span></span>
+                    <span class="links-region-table-counts">
+                        <span class="counter-online">&#x2714; {online_regiao} online</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-offline">&#x2716; {offline_regiao} offline</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-neutral">{inativo_regiao} inativo</span>
+                    </span>
                 </div>
-            </div>
-            """
-        links_html_content += "</div>"
+                <div class="links-region-table-body">
+                    <table class="links-table">
+                        <thead>
+                            <tr>
+                                <th>Interface / Provedor</th>
+                                <th>IP</th>
+                                <th>Máscara</th>
+                                <th>Banda</th>
+                                <th>Provedor</th>
+                                <th>SD-WAN/SLA</th>
+                                <th>Validação</th>
+                                <th>Download</th>
+                                <th>Upload</th>
+                                <th>Status</th>
+                                <th>Última Verif.</th>
+                            </tr>
+                        </thead>
+                        <tbody>"""
 
-        links_html_content += "<div class='links-regions-grid'>"
-        for regiao in regioes_ordenadas:
-            links_regiao = links_por_regiao[regiao]
-            online_regiao = sum(1 for item in links_regiao if item.get("status") == "online")
-            offline_regiao = len(links_regiao) - online_regiao
-
-            links_html_content += f"""
-            <section class="links-region-block" id="links-{regiao.lower()}">
-                <header class="links-region-header">
-                    <h4>{regiao}</h4>
-                    <div class="links-region-counts">
-                        <span class="ok">Online: {online_regiao}</span>
-                        <span class="alert">Offline: {offline_regiao}</span>
-                    </div>
-                </header>
-                <div class="links-region-items">
-            """
+            # ── Linha Rede Local ──
+            if ip_local:
+                links_html_content += f"""
+                        <tr class="lt-row-local">
+                            <td class="lt-nome lt-local-iface"><span class="lt-local-badge">Rede Local</span> {iface_local}</td>
+                            <td class="lt-ip"><code>{ip_local}</code></td>
+                            <td class="lt-mask">{mask_local_dot}</td>
+                            <td colspan="8" class="lt-local-span">—</td>
+                        </tr>"""
 
             for link in links_regiao:
-                status_class = "success" if link["status"] == "online" else "danger"
-                estat = link["estatisticas"]
-                match_confiavel = bool(link.get("match_confiavel", True))
-                download = estat.get('bandwidth_in_readable', 'N/A')
-                upload = estat.get('bandwidth_out_readable', 'N/A')
-                download_percentual = _link_percentual_trafego(estat.get('bandwidth_in'))
-                upload_percentual = _link_percentual_trafego(estat.get('bandwidth_out'))
-                aviso_correlacao = ""
+                status_val  = link.get("status", "offline")
+                status_pill = "success" if status_val == "online" else "neutral" if status_val == "inativo" else "danger"
+                estat       = link.get("estatisticas") or {}
+                velocidade  = str(link.get("velocidade") or "N/A").strip()
+                has_traffic = bool(estat.get("bandwidth_in") or estat.get("bandwidth_out"))
 
-                if not match_confiavel:
-                    download = "N/A (sem correspondência da interface)"
-                    upload = "N/A (sem correspondência da interface)"
-                    download_percentual = 0.0
-                    upload_percentual = 0.0
-                    aviso_correlacao = "<p class='link-data-warning'>Tráfego indisponível na coleta atual para este link.</p>"
+                mascara_dot = link.get("mascara_completa") or (_cidr_para_mascara(link.get("mascara") or "") if link.get("mascara") else "—")
+                if not mascara_dot:
+                    mascara_dot = "—"
+
+                provedor_exib = str(link.get("provedor") or "").strip() or "—"
+                sla_val   = str(link.get("sla_status") or "").strip().upper()
+                sla_html  = f'<span class="lt-sla-badge {("active" if sla_val=="ACTIVE" else "inactive")}">{sla_val or "—"}</span>' if sla_val else "—"
+                valid_val = str(link.get("modo_verificacao") or "").strip() or "—"
+                vel_badge = f'<span class="lt-vel-badge">{velocidade}</span>' if velocidade and velocidade != "N/A" else '<span class="lt-vel-na">—</span>'
+                ult_verif = formatar_data_amigavel(link.get("ultima_verificacao") or "")
+
+                if has_traffic:
+                    dl_text = estat.get("bandwidth_in_readable", "N/A")
+                    ul_text = estat.get("bandwidth_out_readable", "N/A")
+                    dl_pct  = _link_percentual_trafego(estat.get("bandwidth_in"))
+                    ul_pct  = _link_percentual_trafego(estat.get("bandwidth_out"))
+                    download_html = f'<div class="lt-traffic"><span class="lt-traffic-val">{dl_text}</span><div class="link-progress"><div class="link-progress-bar download" style="width:{dl_pct:.1f}%"></div></div></div>'
+                    upload_html   = f'<div class="lt-traffic"><span class="lt-traffic-val">{ul_text}</span><div class="link-progress"><div class="link-progress-bar upload" style="width:{ul_pct:.1f}%"></div></div></div>'
+                else:
+                    anim_class = "lt-anim-bar" if status_val == "online" else "lt-anim-bar offline"
+                    download_html = f'<div class="link-progress"><div class="link-progress-bar download {anim_class}"></div></div>'
+                    upload_html   = f'<div class="link-progress"><div class="link-progress-bar upload {anim_class}"></div></div>'
+
+                ip_exib = link.get("ip") or "—"
+                if not ip_exib or ip_exib == "N/A":
+                    ip_exib = '<span class="lt-vel-na">sem IP público</span>'
+                else:
+                    ip_exib = f'<code>{ip_exib}</code>'
 
                 links_html_content += f"""
-                    <div class="link-item" data-status="{link['status']}">
-                        <div class="card">
-                            <div class="card-header bg-{status_class}">
-                                <div>
-                                    <h5 class="mb-0">{link['nome']}</h5>
-                                    <small>IP: {link['ip']}</small>
-                                </div>
-                                <span class="status-pill {status_class}">{link['status'].title()}</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="link-meta-grid">
-                                    <p><strong>IP:</strong> {link['ip']}</p>
-                                    <p><strong>Velocidade:</strong> {link['velocidade']}</p>
-                                    <p><strong>Tipo:</strong> {link['tipo']}</p>
-                                </div>
-                                <hr>
-                                <h6 class="link-traffic-title">Estatísticas de Tráfego</h6>
-                                <div class="link-traffic-stack">
-                                    <div class="link-traffic-row">
-                                        <div class="link-traffic-head">
-                                            <span>Download:</span>
-                                            <strong>{download}</strong>
-                                        </div>
-                                        <div class="link-progress">
-                                            <div class="link-progress-bar download" style="width: {download_percentual:.2f}%"></div>
-                                        </div>
-                                    </div>
-                                    <div class="link-traffic-row">
-                                        <div class="link-traffic-head">
-                                            <span>Upload:</span>
-                                            <strong>{upload}</strong>
-                                        </div>
-                                        <div class="link-progress">
-                                            <div class="link-progress-bar upload" style="width: {upload_percentual:.2f}%"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                {aviso_correlacao}
-                                <p class="link-last-check"><strong>Última verificação:</strong> {link['ultima_verificacao']}</p>
-                            </div>
-                        </div>
-                    </div>
-                """
+                        <tr class="link-item" data-status="{status_val}">
+                            <td class="lt-nome">{link.get('nome','N/A')}</td>
+                            <td class="lt-ip">{ip_exib}</td>
+                            <td class="lt-mask">{mascara_dot}</td>
+                            <td class="lt-vel">{vel_badge}</td>
+                            <td class="lt-prov">{provedor_exib}</td>
+                            <td class="lt-sla">{sla_html}</td>
+                            <td class="lt-valid">{valid_val}</td>
+                            <td class="lt-dl">{download_html}</td>
+                            <td class="lt-ul">{upload_html}</td>
+                            <td><span class="status-pill {status_pill}">{status_val.title()}</span></td>
+                            <td class="lt-check">{ult_verif}</td>
+                        </tr>"""
 
             links_html_content += """
+                        </tbody>
+                    </table>
                 </div>
-            </section>
-            """
+            </div>"""
 
         links_html_content += "</div>"
 
@@ -2097,6 +2616,8 @@ unifi_html = UNIFI_HTML.read_text(encoding="utf-8") if UNIFI_HTML.exists() else 
 </div>
 """
 
+unifi_html = unifi_html.replace("display:none", "display:block").replace("display: none", "display:block")
+
 # === 9. KPIs e dados para os gráficos ===
 # Calcula KPIs para verificações regionais baseado no status de erro armazenado
 total_regionais_cadastradas = _contar_total_regionais_cadastradas()
@@ -2105,6 +2626,12 @@ regionais_erro = sum(1 for _, has_error in blocos_html_regionais_with_status if 
 regionais_sem_erro = max(total_regionais_cadastradas - regionais_erro, 0)
 regionais_disponibilidade = (regionais_sem_erro / total_regionais_cadastradas * 100) if total_regionais_cadastradas else 0
 regionais_servidor_com_offline = sum(1 for dados in regionais_servidor_status.values() if dados["offline"] > 0)
+regionais_servidor_com_warning = sum(1 for dados in regionais_servidor_status.values() if dados.get("warning", 0) > 0)
+regionais_servidor_sem_alerta = sum(
+    1
+    for dados in regionais_servidor_status.values()
+    if dados["offline"] == 0 and dados.get("warning", 0) == 0
+)
 regionais_servidor_sem_offline = max(len(regionais_servidor_status) - regionais_servidor_com_offline, 0)
 
 
@@ -2299,6 +2826,8 @@ vms_regionais_sem_offline = max(vms_regionais_total - vms_regionais_com_offline,
 print(f"[CHECK] Debug Switches:")
 print(f"   - Switches Online: {switches_online}")
 print(f"   - Switches Offline: {switches_offline}")
+print(f"   - Switches Warning: {switches_warning}")
+print(f"   - Switches Inativos: {switches_inativo}")
 print(f"   - Total de Switches: {len(switches_data)}")
 
 switches_regionais_status = {}
@@ -2307,21 +2836,35 @@ for switch in switches_data:
     if regional_switch == "N/A":
         continue
 
-    dados_regional = switches_regionais_status.setdefault(regional_switch, {"online": 0, "offline": 0})
-    if switch.get("status") == "online":
-        dados_regional["online"] += 1
+    dados_regional = switches_regionais_status.setdefault(
+        regional_switch,
+        {"online": 0, "offline": 0, "warning": 0, "inativo": 0}
+    )
+    status_switch = switch.get("status")
+    if status_switch in dados_regional:
+        dados_regional[status_switch] += 1
     else:
         dados_regional["offline"] += 1
 
 switches_regionais_total = len(switches_regionais_status)
 switches_regionais_com_offline = sum(1 for dados in switches_regionais_status.values() if dados["offline"] > 0)
+switches_regionais_com_warning = sum(1 for dados in switches_regionais_status.values() if dados["warning"] > 0)
+switches_regionais_com_inativo = sum(1 for dados in switches_regionais_status.values() if dados["inativo"] > 0)
 switches_regionais_sem_offline = max(switches_regionais_total - switches_regionais_com_offline, 0)
+switches_regionais_sem_alerta = sum(
+    1
+    for dados in switches_regionais_status.values()
+    if dados["offline"] == 0 and dados["warning"] == 0 and dados["inativo"] == 0
+)
 print(f"   - Regionais com switch offline: {switches_regionais_com_offline}")
 print(f"   - Regionais sem switch offline: {switches_regionais_sem_offline}")
+print(f"   - Regionais com switch warning: {switches_regionais_com_warning}")
+print(f"   - Regionais com switch inativo: {switches_regionais_com_inativo}")
 
 print(f"[CHECK] Debug Links de Internet:")
 print(f"   - Links Online: {links_online}")
 print(f"   - Links Offline: {links_offline}")
+print(f"   - Links Inativos: {links_inativo}")
 print(f"   - Total de Links: {len(links_data)}")
 links_regionais_monitoradas = len({str(link.get('regiao') or '').strip().upper() for link in links_data if str(link.get('regiao') or '').strip()})
 links_total = len(links_data)
@@ -2331,15 +2874,21 @@ for link in links_data:
     regional_link = _extrair_chave_regional(link.get("regiao"))
     if regional_link == "N/A":
         continue
-    dados_regional_link = links_regionais_status.setdefault(regional_link, {"online": 0, "offline": 0})
+    dados_regional_link = links_regionais_status.setdefault(regional_link, {"online": 0, "offline": 0, "inativo": 0})
     if link.get("status") == "online":
         dados_regional_link["online"] += 1
+    elif link.get("status") == "inativo":
+        dados_regional_link["inativo"] += 1
     else:
         dados_regional_link["offline"] += 1
 
 links_regionais_total = len(links_regionais_status)
 links_regionais_com_offline = sum(1 for dados in links_regionais_status.values() if dados["offline"] > 0)
-links_regionais_sem_offline = max(links_regionais_total - links_regionais_com_offline, 0)
+links_regionais_com_inativo = sum(1 for dados in links_regionais_status.values() if dados["inativo"] > 0)
+links_regionais_sem_alerta = sum(
+    1 for dados in links_regionais_status.values()
+    if dados["offline"] == 0 and dados["inativo"] == 0
+)
 
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 ensure_gps_placeholder()
@@ -2390,13 +2939,17 @@ try:
     # 1. Busca os dados usando seu gerenciador existente
     dados_vpn = gerenciador_fortigate.obter_vpn_ipsec()
     lista_vpns = dados_vpn.get("vpns", []) if dados_vpn and dados_vpn.get("success") else []
+    lista_vpns = [
+        vpn for vpn in lista_vpns
+        if not str(vpn.get('tunel', '')).upper().startswith("VPN_IPSECCLI")
+    ]
     indice_regionais = _carregar_indice_regionais()
 
     # 2. Calcula os contadores para os KPIs e Gráficos
     vpns_total = len(lista_vpns)
     # Considera 'up' como online, qualquer outra coisa como offline
     vpns_online = sum(1 for v in lista_vpns if v.get('status') == 'up')
-    vpns_offline = vpns_total - vpns_online
+    vpns_offline = vpns_total - vpns_online  
 
     # 3. Estrutura por regional usando o nome do túnel (ex.: T010_MOTUS_01)
     vpns_por_regional = {}
@@ -2410,27 +2963,29 @@ try:
         if regional_mapeada:
             regional = regional_mapeada["chave"]
             nome_exibicao = regional_mapeada["nome_exibicao"]
+            mapeada = True
         else:
             regional = regional_vpn
             nome_exibicao = nome_exibicao_vpn
+            mapeada = False
 
         dados_regional = vpns_por_regional.setdefault(
             regional,
-            {"online": 0, "offline": 0, "tunels": [], "nome_exibicao": nome_exibicao}
+            {"online": 0, "offline": 0, "tunels": [], "nome_exibicao": nome_exibicao, "mapeada": mapeada}
         )
         dados_regional[status] += 1
         if not dados_regional.get("nome_exibicao"):
             dados_regional["nome_exibicao"] = nome_exibicao
+        dados_regional["mapeada"] = dados_regional.get("mapeada") or mapeada
         dados_regional["tunels"].append({"nome": tunel, "status": status})
 
     regionais_vpn_ordenadas = sorted(vpns_por_regional.keys())
     regionais_vpn_com_offline = [reg for reg in regionais_vpn_ordenadas if vpns_por_regional[reg]["offline"] > 0]
     regionais_cadastradas_set = {item.get("chave") for item in indice_regionais}
     regionais_vpn_mapeadas = [reg for reg in regionais_vpn_ordenadas if reg in regionais_cadastradas_set]
-    regionais_vpn_mapeadas_com_offline = [reg for reg in regionais_vpn_mapeadas if vpns_por_regional[reg]["offline"] > 0]
 
-    vpn_regionais_total = len(regionais_vpn_mapeadas)
-    vpn_regionais_com_offline = len(regionais_vpn_mapeadas_com_offline)
+    vpn_regionais_total = len(regionais_vpn_ordenadas)
+    vpn_regionais_com_offline = len(regionais_vpn_com_offline)
     vpn_regionais_sem_offline = max(vpn_regionais_total - vpn_regionais_com_offline, 0)
 
     if not lista_vpns:
@@ -2442,14 +2997,16 @@ try:
         </div>
         """
     else:
-        regionais_vpn_exibicao = regionais_vpn_mapeadas if regionais_vpn_mapeadas else regionais_vpn_ordenadas
+        regionais_vpn_exibicao = regionais_vpn_ordenadas
         resumo_regionais_html = ""
         for regional in regionais_vpn_exibicao:
             dados = vpns_por_regional[regional]
             nome_regional = dados.get("nome_exibicao") or regional
+            origem_badge = "" if dados.get("mapeada") else "<small>Detectada no FortiGate</small><br>"
             resumo_regionais_html += f"""
                 <div class="vpn-regional-badge {'vpn-regional-alert' if dados['offline'] > 0 else ''}">
                     <strong>{nome_regional}</strong><br>
+                    {origem_badge}
                     <span class="ok">Online: {dados['online']}</span> |
                     <span class="alert">Offline: {dados['offline']}</span>
                 </div>
@@ -2505,6 +3062,86 @@ try:
         </div>
         """
 
+        vpn_resumo_linhas = ""
+        vpn_tuneis_linhas = ""
+        for regional in regionais_vpn_exibicao:
+            dados = vpns_por_regional[regional]
+            nome_regional = dados.get("nome_exibicao") or regional
+            total_regional = dados["online"] + dados["offline"]
+            taxa_regional = (dados["online"] / total_regional * 100) if total_regional else 0
+            regional_status = "offline" if dados["offline"] > 0 else "online"
+            regional_label = "Com offline" if dados["offline"] > 0 else "Sem offline"
+            vpn_resumo_linhas += f"""
+                <tr class="vpn-regional-row" data-status="{regional_status}">
+                    <td class="lt-nome">{html.escape(str(nome_regional))}</td>
+                    <td>{total_regional}</td>
+                    <td>{dados["online"]}</td>
+                    <td>{dados["offline"]}</td>
+                    <td>{taxa_regional:.0f}%</td>
+                    <td><span class="status-pill {'danger' if regional_status == 'offline' else 'success'}">{regional_label}</span></td>
+                </tr>
+            """
+
+            for tunel in dados["tunels"]:
+                status_class = "online" if tunel["status"] == "online" else "offline"
+                vpn_tuneis_linhas += f"""
+                <tr class="vpn-tunnel-row" data-status="{status_class}" data-regional="{html.escape(str(regional))}">
+                    <td class="lt-nome">{html.escape(str(tunel["nome"]))}</td>
+                    <td>{html.escape(str(nome_regional))}</td>
+                    <td><span class="status-pill {'success' if status_class == 'online' else 'danger'}">{status_class.upper()}</span></td>
+                </tr>
+                """
+
+        vpn_html_content = f"""
+        <div class="vpn-container">
+            <div class="links-region-table-block">
+                <div class="links-region-table-header links-table-header">
+                    <span class="links-region-table-title">Resumo geral das VPNs IPSEC</span>
+                    <span class="links-region-table-counts">
+                        <span class="counter-online">{vpns_online} online</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-offline">{vpns_offline} offline</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-neutral">{len(regionais_offline_exibicao)} regionais com offline</span>
+                    </span>
+                </div>
+                <div class="links-region-table-body" id="vpn-offline-regionais">
+                    <table class="links-table vpn-table">
+                        <thead>
+                            <tr>
+                                <th>Regional</th>
+                                <th>Total</th>
+                                <th>Online</th>
+                                <th>Offline</th>
+                                <th>Disponibilidade</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>{vpn_resumo_linhas}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="links-region-table-block">
+                <div class="links-region-table-header links-table-header">
+                    <span class="links-region-table-title">Relatório completo das VPNs IPSEC <span class="links-region-table-count">({vpns_total} túneis)</span></span>
+                </div>
+                <div class="links-region-table-body">
+                    <table class="links-table vpn-table">
+                        <thead>
+                            <tr>
+                                <th>Túnel</th>
+                                <th>Regional</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>{vpn_tuneis_linhas}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        """
+
 except Exception as e:
     # Caso falhe a conexão com o Fortigate ao gerar o dash
     vpns_online = 0
@@ -2518,6 +3155,12 @@ except Exception as e:
 # === 10. MONTA DASHBOARD FINAL ===
 # Construct the final HTML dashboard using f-strings for dynamic content insertion.
 sentinel_logo_uri = _carregar_logo_sentinel_src()
+try:
+    print("[INFO] Atualizando Firewalls/licencas e Monitor de Admins...")
+    atualizar_cache_seguranca_dashboard()
+except Exception as exc:
+    print(f"[AVISO] Nao foi possivel atualizar o cache de seguranca: {exc}")
+security_dashboard = build_security_dashboard(PROJECT_ROOT)
 dashboard_html = f"""
 <!DOCTYPE html>
 <html>
@@ -2613,6 +3256,54 @@ dashboard_html = f"""
             max-width: 460px;
             height: auto;
             filter: drop-shadow(0 14px 28px rgba(1, 46, 64, 0.22));
+        }}
+
+        .dashboard-view-tabs {{
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+            padding: 6px;
+            margin: 0 auto 24px;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.22);
+            box-shadow: 0 12px 28px rgba(1, 46, 64, 0.18);
+        }}
+
+        .dashboard-view-tabs-wrap {{
+            display: flex;
+            justify-content: center;
+        }}
+
+        .dashboard-view-tab {{
+            border: 0;
+            border-radius: 999px;
+            padding: 9px 18px;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.78);
+            font-weight: 800;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }}
+
+        .dashboard-view-tab:hover {{
+            color: #ffffff;
+            transform: translateY(-1px);
+        }}
+
+        .dashboard-view-tab.active {{
+            background: rgba(255, 255, 255, 0.95);
+            color: #0A4A63;
+            box-shadow: 0 8px 18px rgba(1, 46, 64, 0.16);
+        }}
+
+        .dashboard-view {{
+            display: none;
+        }}
+
+        .dashboard-view.active {{
+            display: block;
         }}
         
         .kpi-container {{
@@ -2740,8 +3431,18 @@ dashboard_html = f"""
             border-color: #feb2b2;
         }}
 
+        .kpi-combo-item.status-warning {{
+            background: #fffbeb;
+            border-color: #fbd38d;
+        }}
+
         .kpi-combo-item.status-neutral {{
             background: #f8fafc;
+            border-color: #cbd5e0;
+        }}
+
+        .kpi-combo-item.status-inactive {{
+            background: #edf2f7;
             border-color: #cbd5e0;
         }}
 
@@ -2791,6 +3492,89 @@ dashboard_html = f"""
             font-size: 1.15rem;
             line-height: 1.1;
             color: #1f2937;
+        }}
+
+        #regional-view .kpi-container {{
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px;
+            margin-bottom: 22px;
+            align-items: stretch;
+        }}
+
+        #regional-view .kpi {{
+            min-height: 214px;
+            height: 100%;
+            box-sizing: border-box;
+            border-radius: 10px;
+            padding: 14px 16px;
+            gap: 8px;
+            border: 1px solid rgba(203, 213, 225, 0.78);
+            border-top: 3px solid #38a169;
+            box-shadow: 0 10px 22px rgba(1, 46, 64, 0.14);
+        }}
+
+        #regional-view .kpi::before {{
+            display: none;
+        }}
+
+        #regional-view .kpi:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 14px 26px rgba(1, 46, 64, 0.18);
+        }}
+
+        #regional-view .kpi-header {{
+            min-height: 32px;
+            margin-bottom: 8px;
+            gap: 8px;
+        }}
+
+        #regional-view .kpi-icon {{
+            display: none;
+        }}
+
+        #regional-view .kpi-header h3 {{
+            font-size: 0.74rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: #475569;
+        }}
+
+        #regional-view .kpi-groups {{
+            gap: 0;
+        }}
+
+        #regional-view .kpi-group {{
+            border: 0;
+            padding: 0;
+            background: transparent;
+        }}
+
+        #regional-view .kpi-group-title {{
+            display: none;
+        }}
+
+        #regional-view .kpi-group-grid,
+        #regional-view .kpi-combo-grid {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 7px;
+        }}
+
+        #regional-view .kpi-combo-item {{
+            min-height: 58px;
+            border-radius: 7px;
+            padding: 8px 9px;
+            align-content: center;
+        }}
+
+        #regional-view .kpi-combo-item span {{
+            font-size: 0.64rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }}
+
+        #regional-view .kpi-combo-item strong {{
+            font-size: 1.28rem;
+            line-height: 1;
         }}
 
         .regionais-parent {{
@@ -3092,20 +3876,29 @@ dashboard_html = f"""
             color: #2d3748;
             line-height: 1.45;
         }}
-        .vpn-regional-badge strong {{ color: #374151; }}
+        .regional-badge strong {{ color: #374151; }}
 
         .regional-badge-success {{
-        .vpn-regional-badge.vpn-regional-alert {{
-            background: #fff5f5;
-            border-color: #feb2b2;
-            border-left-color: #c53030;
-        }}
             background: #f0fff4;
+            border-color: #9ae6b4;
+            border-left-color: #2f855a;
         }}
 
         .regional-badge-danger {{
             border-left: 6px solid #c53030;
             background: #fff5f5;
+        }}
+
+        .regional-badge-warning {{
+            border-left: 6px solid #d69e2e;
+            background: #fffbeb;
+            border-color: #fbd38d;
+        }}
+
+        .regional-badge-neutral {{
+            border-left: 6px solid #718096;
+            background: #f7fafc;
+            border-color: #cbd5e0;
         }}
 
         .switches-items {{
@@ -3158,6 +3951,7 @@ dashboard_html = f"""
         .status-badge.success {{ background: #38a169; }}
         .status-badge.danger {{ background: #e53e3e; }}
         .status-badge.warning {{ background: #dd6b20; }}
+        .status-badge.neutral {{ background: #718096; }}
 
         .regional-item {{
             background: rgba(255, 255, 255, 0.8);
@@ -3201,6 +3995,10 @@ dashboard_html = f"""
 
         .regional-server-card-danger {{
             border-top: 4px solid #e53e3e;
+        }}
+
+        .regional-server-card-warning {{
+            border-top: 4px solid #d69e2e;
         }}
 
         .regional-server-card-header {{
@@ -3437,80 +4235,225 @@ dashboard_html = f"""
             color: #718096;
         }}
 
-        .links-regions-grid {{
+        /* ── Links: tabelas por regional ── */
+        .links-tables-wrapper {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 16px;
+            gap: 14px;
         }}
 
-        .links-region-block {{
-            background: rgba(255, 255, 255, 0.82);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 16px;
+        .links-region-table-block {{
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid #dfe6ef;
+            border-radius: 14px;
             overflow: hidden;
-            box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
         }}
 
-        .links-region-header {{
+        .links-region-table-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            padding: 14px 18px;
-            background: linear-gradient(90deg, rgba(247, 250, 252, 0.95), rgba(237, 242, 247, 0.92));
+            padding: 13px 18px;
+            background: linear-gradient(90deg, rgba(247, 250, 252, 0.97), rgba(237, 242, 247, 0.93));
             border-bottom: 1px solid #dfe6ef;
+            cursor: pointer;
+            user-select: none;
             color: #1a202c;
         }}
 
-        .links-region-header h4 {{
-            margin: 0;
-            font-size: 1.1rem;
+        .links-region-table-header:hover {{
+            background: linear-gradient(90deg, rgba(235, 244, 255, 0.97), rgba(225, 235, 245, 0.93));
+        }}
+
+        .switches-table-header,
+        .links-table-header {{
+            background: linear-gradient(135deg, #012E40 0%, #0A4A63 55%, #0F6C8C 100%);
+            color: #ffffff;
+        }}
+
+        .switches-table-header:hover,
+        .links-table-header:hover {{
+            background: linear-gradient(135deg, #012E40 0%, #0A4A63 55%, #0F6C8C 100%);
+        }}
+
+        .switches-table-header .links-region-table-title,
+        .switches-table-header .links-region-table-count,
+        .switches-table-header .links-region-table-counts,
+        .links-table-header .links-region-table-title,
+        .links-table-header .links-region-table-count,
+        .links-table-header .links-region-table-counts {{
+            color: #ffffff;
+        }}
+
+        .links-region-table-title {{
+            font-size: 1.05rem;
             font-weight: 800;
             letter-spacing: 0.03em;
         }}
 
-        .links-region-counts {{
+        .links-region-table-count {{
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #4a5568;
+        }}
+
+        .links-region-table-counts {{
             display: flex;
-            gap: 10px;
+            align-items: center;
             font-size: 0.88rem;
             font-weight: 700;
         }}
 
-        .links-region-items {{
-            display: grid;
-            gap: 12px;
-            padding: 14px;
+        .links-region-table-counts .warn {{
+            color: #b7791f;
         }}
 
-        .link-item .card {{
-            border: 1px solid #d9e2ec;
-            border-radius: 14px;
-            overflow: hidden;
-            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-        }}
-
-        .link-item .card-header {{
-            display: flex;
-            justify-content: space-between;
+        .links-region-table-counts .counter-online,
+        .links-region-table-counts .counter-offline,
+        .links-region-table-counts .counter-warning,
+        .links-region-table-counts .counter-neutral {{
+            display: inline-flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            line-height: 1;
+            background: rgba(255, 255, 255, 0.92);
         }}
 
-        .link-item .card-header h5 {{
-            color: #000 !important;
-            font-size: 1rem;
+        .links-region-table-counts .counter-online {{
+            color: #2f855a;
         }}
 
-        .link-item .card-header small {{
-            color: #1a202c !important;
-            opacity: 0.85;
+        .links-region-table-counts .counter-offline {{
+            color: #c53030;
+        }}
+
+        .links-region-table-counts .counter-warning {{
+            color: #b7791f;
+        }}
+
+        .links-region-table-counts .counter-neutral {{
+            color: #4a5568;
+        }}
+
+        .links-region-table-body {{
+            overflow-x: auto;
+        }}
+
+        .links-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            color: #1a202c;
+        }}
+
+        .links-table thead th {{
+            background: #f7fafc;
+            padding: 10px 13px;
+            font-weight: 700;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
+            white-space: nowrap;
+        }}
+
+        .links-table tbody tr {{
+            border-bottom: 1px solid #edf2f7;
+            transition: background 0.15s;
+        }}
+
+        .links-table tbody tr:last-child {{ border-bottom: none; }}
+        .links-table tbody tr:hover {{ background: #f0f4ff; }}
+        .links-table tbody tr[data-status="offline"] {{ opacity: 0.75; }}
+
+        .links-table td {{
+            padding: 9px 13px;
+            vertical-align: middle;
+        }}
+
+        .switch-observation {{
+            min-width: 260px;
+            max-width: 520px;
+            color: #4a5568;
+        }}
+
+        .lt-nome {{ font-weight: 600; white-space: nowrap; }}
+        .lt-ip code {{ font-size: 0.82rem; color: #2b6cb0; background: #ebf8ff; padding: 2px 6px; border-radius: 4px; }}
+        .lt-check {{ font-size: 0.8rem; color: #718096; white-space: nowrap; }}
+
+        .lt-vel-badge {{
+            display: inline-block;
+            background: #e9f0ff;
+            color: #2b4acb;
+            border: 1px solid #c3d2ff;
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }}
+
+        .lt-vel-na {{ color: #a0aec0; }}
+
+        .lt-sla-badge {{
+            display: inline-block;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 0.73rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }}
+        .lt-sla-badge.active   {{ background: #c6f6d5; color: #276749; border: 1px solid #9ae6b4; }}
+        .lt-sla-badge.inactive {{ background: #fed7d7; color: #9b2c2c; border: 1px solid #fc8181; }}
+
+        .lt-row-local {{
+            background: #f0f4f8 !important;
+            font-style: italic;
+        }}
+        .lt-row-local:hover {{ background: #e2eaf3 !important; }}
+
+        .lt-local-badge {{
+            display: inline-block;
+            background: #e2e8f0;
+            color: #4a5568;
+            border-radius: 4px;
+            padding: 1px 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-right: 4px;
+        }}
+
+        .lt-local-span {{ color: #a0aec0; text-align: center; }}
+        .lt-mask {{ font-size: 0.82rem; color: #4a5568; white-space: nowrap; }}
+        .lt-prov {{ font-size: 0.82rem; white-space: nowrap; }}
+        .lt-sla  {{ white-space: nowrap; }}
+        .lt-valid {{ font-size: 0.78rem; color: #718096; white-space: nowrap; }}
+
+        .lt-traffic {{
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 100px;
+        }}
+
+        .lt-traffic-val {{
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #2d3748;
         }}
 
         .status-pill {{
             border-radius: 999px;
-            padding: 6px 12px;
-            font-size: 0.75rem;
+            padding: 4px 10px;
+            font-size: 0.73rem;
             font-weight: 700;
             text-transform: uppercase;
             color: #ffffff;
@@ -3518,53 +4461,13 @@ dashboard_html = f"""
         }}
 
         .status-pill.success {{ background: #2f855a; }}
-        .status-pill.danger {{ background: #c53030; }}
-
-        .link-item .card-body {{
-            padding: 14px 16px;
-        }}
-
-        .link-item .card-body,
-        .link-item .card-body p,
-        .link-item .card-body strong {{
-            color: #000 !important;
-        }}
-
-        .link-meta-grid,
-        .link-bandwidth-grid {{
-            display: grid;
-            grid-template-columns: repeat(2, minmax(120px, 1fr));
-            gap: 8px 14px;
-        }}
-
-        .link-traffic-title {{
-            margin: 0 0 12px;
-            font-size: 0.98rem;
-            font-weight: 700;
-            color: #1f2937;
-        }}
-
-        .link-traffic-stack {{
-            display: grid;
-            gap: 14px;
-        }}
-
-        .link-traffic-row {{
-            display: grid;
-            gap: 6px;
-        }}
-
-        .link-traffic-head {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            font-size: 0.95rem;
-        }}
+        .status-pill.danger  {{ background: #c53030; }}
+        .status-pill.warning {{ background: #d69e2e; color: #1a202c; }}
+        .status-pill.neutral {{ background: #718096; }}
 
         .link-progress {{
             width: 100%;
-            height: 9px;
+            height: 8px;
             border-radius: 999px;
             background: #e2e8f0;
             overflow: hidden;
@@ -3576,28 +4479,24 @@ dashboard_html = f"""
             min-width: 0;
         }}
 
-        .link-progress-bar.download {{
-            background: #0f4c5c;
+        .link-progress-bar.download {{ background: #0f4c5c; }}
+        .link-progress-bar.upload   {{ background: #1d7186; }}
+
+        /* Barra animada para links sem dados de tráfego em tempo real */
+        @keyframes lt-sweep {{
+            0%   {{ transform: translateX(-100%); }}
+            100% {{ transform: translateX(400%); }}
         }}
 
-        .link-progress-bar.upload {{
-            background: #1d7186;
+        .link-progress-bar.lt-anim-bar {{
+            width: 25% !important;
+            animation: lt-sweep 1.8s ease-in-out infinite;
         }}
 
-        .link-data-warning {{
-            margin-top: 12px;
-            padding: 9px 11px;
-            border-radius: 10px;
-            background: #fff7ed;
-            border: 1px solid #fbd38d;
-            color: #9a3412 !important;
-            font-size: 0.86rem;
-        }}
-
-        .link-last-check {{
-            margin-top: 10px;
-            font-size: 0.9rem;
-            color: #1a202c !important;
+        .link-progress-bar.lt-anim-bar.offline {{
+            background: #a0aec0 !important;
+            animation-play-state: paused;
+            width: 8% !important;
         }}
 
         .vpn-container {{
@@ -3707,6 +4606,20 @@ dashboard_html = f"""
         .vpn-status-pill.online {{ background: #2f855a; }}
         .vpn-status-pill.offline {{ background: #c53030; }}
 
+        .security-table-block {{ overflow: hidden; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; }}
+        .security-table-title {{ display:flex; justify-content:space-between; gap:16px; padding:14px 16px; background:#084a61; color:#fff; }}
+        .security-table-title span {{ font-size:.78rem; font-weight:500; opacity:.85; }}
+        .security-table-scroll {{ overflow-x:auto; }}
+        .security-table {{ width:100%; border-collapse:collapse; font-size:.84rem; }}
+        .security-table th {{ padding:10px 12px; text-align:left; color:#475569; background:#f1f5f9; text-transform:uppercase; font-size:.72rem; }}
+        .security-table td {{ padding:10px 12px; border-top:1px solid #dbe2ea; color:#334155; }}
+        .security-badge {{ display:inline-block; border-radius:999px; padding:4px 9px; font-size:.7rem; font-weight:800; text-transform:uppercase; }}
+        .security-ok {{ color:#166534; background:#dcfce7; }}
+        .security-warning {{ color:#854d0e; background:#fef3c7; }}
+        .security-danger {{ color:#991b1b; background:#fee2e2; }}
+        .security-inactive {{ color:#334155; background:#e2e8f0; }}
+        .security-empty, .security-filter-empty {{ padding:28px; text-align:center; color:#64748b; }}
+
         @media (max-width: 640px) {{
             .link-meta-grid,
             .link-bandwidth-grid {{
@@ -3727,6 +4640,19 @@ dashboard_html = f"""
             </div>
         </div>
 
+        <div class="dashboard-view-tabs-wrap">
+            <div class="dashboard-view-tabs" role="tablist" aria-label="Modo de visualização do dashboard">
+                <button type="button" class="dashboard-view-tab active" data-dashboard-view-target="device-view" role="tab" aria-selected="true">
+                    <i class="fas fa-server"></i> Por dispositivo
+                </button>
+                <button type="button" class="dashboard-view-tab" data-dashboard-view-target="regional-view" role="tab" aria-selected="false">
+                    <i class="fas fa-map-marker-alt"></i> Por regional
+                </button>
+            </div>
+        </div>
+
+        <section id="regional-view" class="dashboard-view" data-dashboard-view="regional">
+        
         <div class="regionais-parent nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
             <div class="regionais-parent-top">
                 <div class="regionais-parent-title">
@@ -3743,21 +4669,156 @@ dashboard_html = f"""
                     <div class="kpi-icon error">
                         <i class="fas fa-times-circle"></i>
                     </div>
-                    <h3>Regionais com Problema no Servidor</h3>
+                    <h3>Servidores por Regional</h3>
+                </div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0"><span>Total</span><strong>{len(regionais_servidor_status)}</strong></div>
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{regionais_servidor_sem_alerta}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Com offline</span><strong>{regionais_servidor_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="regionais-warning" role="button" tabindex="0"><span>Com warning</span><strong>{regionais_servidor_com_warning}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi nav-detail-trigger" data-detail-target="unifi" role="button" tabindex="0">
+                <div class="kpi-header">
+                    <div class="kpi-icon info">
+                        <i class="fas fa-wifi"></i>
+                    </div>
+                    <h3>APs por Regional</h3>
+                </div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="unifi" role="button" tabindex="0"><span>Total</span><strong>{aps_regionais_sem_offline + aps_regionais_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="unifi-online" role="button" tabindex="0"><span>Sem AP Offline</span><strong>{aps_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="unifi-offline" role="button" tabindex="0"><span>Com AP Offline</span><strong>{aps_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0">
+                <div class="kpi-header">
+                    <div class="kpi-icon info">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <h3>Replicação AD por Regional</h3>
+                </div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Total</span><strong>{rep_total}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Com falha</span><strong>{rep_fail}</strong></div>
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Sem falha</span><strong>{rep_ok}</strong></div>
+                        </div>
+                    </div>
+                </div>
+                {"<ul>" + ''.join(f"<li>{srv}</li>" for srv in replication_errors_list) + "</ul>" if replication_errors_list else ""}
+            </div>
+
+            <div class="kpi nav-detail-trigger" data-detail-target="switches" role="button" tabindex="0">
+                <div class="kpi-header">
+                    <div class="kpi-icon success">
+                        <i class="fas fa-network-wired"></i>
+                    </div>
+                    <h3>Switches por Regional</h3>
+                </div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{switches_regionais_sem_alerta}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Com offline</span><strong>{switches_regionais_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Com warning</span><strong>{switches_regionais_com_warning}</strong></div>
+                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Com inativo</span><strong>{switches_regionais_com_inativo}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi nav-detail-trigger" data-detail-target="links" role="button" tabindex="0">
+                <div class="kpi-header">
+                    <div class="kpi-icon info">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h3>Links por Regional</h3>
+                </div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Cobertura Regional</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="links" role="button" tabindex="0"><span>Total</span><strong>{links_regionais_total}</strong></div>
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-regional-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{links_regionais_sem_alerta}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-regional-offline" role="button" tabindex="0"><span>Com offline</span><strong>{links_regionais_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="links-regional-inativo" role="button" tabindex="0"><span>Com inativo</span><strong>{links_regionais_com_inativo}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi nav-detail-trigger" data-detail-target="vpn-details" role="button" tabindex="0">
+                <div class="kpi-header">
+                    <div class="kpi-icon info">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>VPNs por Regional</h3>
+                </div>
+                <div class="kpi-groups">
+                    <div class="kpi-group">
+                        <div class="kpi-group-title">Regionais</div>
+                        <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="vpn-details" role="button" tabindex="0"><span>Total</span><strong>{vpn_regionais_sem_offline + vpn_regionais_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vpn-details-online" role="button" tabindex="0"><span>Sem offline</span><strong>{vpn_regionais_sem_offline}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vpn-details-offline" role="button" tabindex="0"><span>Com offline</span><strong>{vpn_regionais_com_offline}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {security_dashboard['firewall_regional_kpi']}
+            {security_dashboard['admin_regional_kpi']}
+        </div>
+
+        <div class="charts-section charts-section-regional">
+            <h2 class="section-title" style="background:none!important;color:#ffffff!important;padding:0!important;border-radius:0!important;cursor:default!important">Visão Geral em Gráficos</h2>
+            <div class="charts-grid">
+                <div class="chart-wrapper"><canvas id="chartRegionalServers"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalUnifi"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalReplicacao"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalSwitches"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalLinks"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalVpn"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalFirewalls"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartRegionalAdmins"></canvas></div>
+            </div>
+        </div>
+
+        </section>
+
+        <section id="device-view" class="dashboard-view active" data-dashboard-view="device">
+
+        <div class="kpi-container">
+            <div class="kpi nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
+                <div class="kpi-header">
+                    <div class="kpi-icon error">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <h3>Servidores</h3>
                 </div>
                 <div class="kpi-groups">
                     <div class="kpi-group">
                         <div class="kpi-group-title">Servidores</div>
                         <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0"><span>Total</span><strong>{servidores_online_total + servidores_offline_total + servidores_warning_total}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Online</span><strong>{servidores_online_total}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Offline</span><strong>{servidores_offline_total}</strong></div>
-                        </div>
-                    </div>
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Regionais</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Sem offline</span><strong>{regionais_servidor_sem_offline}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Com offline</span><strong>{regionais_servidor_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="regionais-warning" role="button" tabindex="0"><span>Warning</span><strong>{servidores_warning_total}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -3767,21 +4828,15 @@ dashboard_html = f"""
                     <div class="kpi-icon info">
                         <i class="fas fa-wifi"></i>
                     </div>
-                    <h3>APs (Regionais)</h3>
+                    <h3>APs</h3>
                 </div>
                 <div class="kpi-groups">
                     <div class="kpi-group">
                         <div class="kpi-group-title">Dispositivos</div>
                         <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="unifi" role="button" tabindex="0"><span>Total</span><strong>{aps_online + aps_offline}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="unifi-online" role="button" tabindex="0"><span>APs Online</span><strong>{aps_online}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="unifi-offline" role="button" tabindex="0"><span>APs Offline</span><strong>{aps_offline}</strong></div>
-                        </div>
-                    </div>
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Regionais</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="unifi-online" role="button" tabindex="0"><span>Sem AP Offline</span><strong>{aps_regionais_sem_offline}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="unifi-offline" role="button" tabindex="0"><span>Com AP Offline</span><strong>{aps_regionais_com_offline}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -3811,10 +4866,9 @@ dashboard_html = f"""
                     <div class="kpi-group">
                         <div class="kpi-group-title">Dispositivos</div>
                         <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Total</span><strong>{rep_total}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Servidores OK</span><strong>{rep_ok}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Com falha</span><strong>{rep_fail}</strong></div>
-                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Total</span><strong>{rep_total}</strong></div>
-                            <div class="kpi-combo-item {'status-online' if rep_fail == 0 else 'status-offline'} nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0"><span>Sem falha</span><strong>{rep_ok}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -3825,7 +4879,7 @@ dashboard_html = f"""
                     <div class="kpi-icon success">
                         <i class="fas fa-network-wired"></i>
                     </div>
-                    <h3>Switches (Regionais)</h3>
+                    <h3>Switches</h3>
                 </div>
                 <div class="kpi-groups">
                     <div class="kpi-group">
@@ -3833,13 +4887,8 @@ dashboard_html = f"""
                         <div class="kpi-group-grid">
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Switches Online</span><strong>{switches_online}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Switches Offline</span><strong>{switches_offline}</strong></div>
-                        </div>
-                    </div>
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Regionais</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Sem Switch Offline</span><strong>{switches_regionais_sem_offline}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Com Switch Offline</span><strong>{switches_regionais_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Switches Warning</span><strong>{switches_warning}</strong></div>
+                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Switches Inativos</span><strong>{switches_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -3849,21 +4898,16 @@ dashboard_html = f"""
                     <div class="kpi-icon info">
                         <i class="fas fa-globe"></i>
                     </div>
-                    <h3>Links (Regionais)</h3>
+                    <h3>Links</h3>
                 </div>
                 <div class="kpi-groups">
                     <div class="kpi-group">
                         <div class="kpi-group-title">Links</div>
                         <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="links" role="button" tabindex="0"><span>Total</span><strong>{links_online + links_offline + links_inativo}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-online" role="button" tabindex="0"><span>Online</span><strong>{links_online}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-offline" role="button" tabindex="0"><span>Offline</span><strong>{links_offline}</strong></div>
-                        </div>
-                    </div>
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Cobertura Regional</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-online" role="button" tabindex="0"><span>Sem offline</span><strong>{links_regionais_sem_offline}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-offline" role="button" tabindex="0"><span>Com offline</span><strong>{links_regionais_com_offline}</strong></div>
+                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="links-inativo" role="button" tabindex="0"><span>Inativos</span><strong>{links_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -3879,51 +4923,51 @@ dashboard_html = f"""
                     <div class="kpi-group">
                         <div class="kpi-group-title">Dispositivos</div>
                         <div class="kpi-group-grid">
+                            <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="vpn-details" role="button" tabindex="0"><span>Total</span><strong>{vpns_online + vpns_offline}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vpn-details-online" role="button" tabindex="0"><span>Túneis online</span><strong>{vpns_online}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vpn-details-offline" role="button" tabindex="0"><span>Túneis offline</span><strong>{vpns_offline}</strong></div>
                         </div>
                     </div>
-                    <div class="kpi-group">
-                        <div class="kpi-group-title">Regionais</div>
-                        <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="vpn-details-online" role="button" tabindex="0"><span>Sem offline</span><strong>{vpn_regionais_sem_offline}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="vpn-details-offline" role="button" tabindex="0"><span>Com offline</span><strong>{vpn_regionais_com_offline}</strong></div>
-                        </div>
-                    </div>
                 </div>
             </div>
+            {security_dashboard['firewall_device_kpi']}
+            {security_dashboard['admin_device_kpi']}
             
         </div>
 
         <!-- GRÁFICOS -->
         <div class="charts-section">
-            <h2 class="section-title" style="background:none!important;color:#ffffff!important;padding:0!important;border-radius:0!important;cursor:default!important">[DATA] Visão Geral em Gráficos</h2>
+            <h2 class="section-title" style="background:none!important;color:#ffffff!important;padding:0!important;border-radius:0!important;cursor:default!important">Visão Geral em Gráficos</h2>
             <div class="charts-grid">
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
-                    <canvas id="chartRegionais"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="chartDeviceServers"></canvas>
                 </div>
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="unifi" role="button" tabindex="0">
-                    <canvas id="chartUnifi"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="chartDeviceUnifi"></canvas>
                 </div>
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="replicacao" role="button" tabindex="0">
-                    <canvas id="chartReplicacao"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="chartDeviceReplicacao"></canvas>
                 </div>
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="switches" role="button" tabindex="0">
-                    <canvas id="chartSwitches"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="chartDeviceSwitches"></canvas>
                 </div>
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="links" role="button" tabindex="0">
-                    <canvas id="chartLinks"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="chartDeviceLinks"></canvas>
                 </div>
-                <div class="chart-wrapper nav-detail-trigger" data-detail-target="vpn-details" role="button" tabindex="0">
-                    <canvas id="chartVpn"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="chartDeviceVpn"></canvas>
                 </div>
+                <div class="chart-wrapper"><canvas id="chartDeviceFirewalls"></canvas></div>
+                <div class="chart-wrapper"><canvas id="chartDeviceAdmins"></canvas></div>
             </div>
         </div>
+
+        </section>
 
         <hr class="divider">
 
         <details id="regionais" class="details-section">
-            <summary>[SERVER] Status das Regionais (Servidores Virtuais)</summary>
+            <summary>[SERVER] Status dos Servidores</summary>
             <div class="details-content">
                 {regionais_html}
             </div>
@@ -3979,7 +5023,7 @@ dashboard_html = f"""
         </details>
 
         <details id="links" class="details-section">
-            <summary>[WEB] Status dos Links de Internet</summary>
+            <summary>Status dos Links de Internet</summary>
             <div class="details-content">
                 {links_html_content}
             </div>
@@ -3990,12 +5034,39 @@ dashboard_html = f"""
                 {vpn_html_content}
             </div>
         </details>
+        <details id="firewalls" class="details-section">
+            <summary>Firewalls e Licenças</summary>
+            <div class="details-content">{security_dashboard['firewall_detail']}</div>
+        </details>
+        <details id="admin-monitor" class="details-section">
+            <summary>Monitor de Admins</summary>
+            <div class="details-content">{security_dashboard['admin_detail']}</div>
+        </details>
     </div>
 
 <script>
 // Global configuration to make charts responsive
 Chart.defaults.responsive = true;
 Chart.defaults.maintainAspectRatio = false; // Important to allow the container to control the aspect ratio
+
+function setDashboardView(viewId) {{
+    const targetId = viewId || 'device-view';
+    document.querySelectorAll('.dashboard-view').forEach((view) => {{
+        view.classList.toggle('active', view.id === targetId);
+    }});
+    document.querySelectorAll('.dashboard-view-tab').forEach((tab) => {{
+        const active = tab.dataset.dashboardViewTarget === targetId;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    }});
+    setTimeout(() => {{
+        Object.values(Chart.instances || {{}}).forEach((chart) => chart.resize());
+    }}, 0);
+}}
+
+function dashboardViewForDetail(detailId) {{
+    return detailId === 'regionais' ? 'regional-view' : 'device-view';
+}}
 
 function resetUnifiSections(detail) {{
     const content = detail.querySelector('.details-content');
@@ -4006,7 +5077,7 @@ function resetUnifiSections(detail) {{
         const next = header.nextElementSibling;
         header.style.display = '';
         if (next) {{
-            next.style.display = 'none';
+            next.style.display = 'block';
             next.querySelectorAll('tr').forEach((tr) => {{ tr.style.display = ''; }});
         }}
     }});
@@ -4028,18 +5099,20 @@ function filtrarUnifiSections(detail, action) {{
         if (action === 'offline') {{
             showSection = hasOffline;
         }} else if (action === 'online') {{
-            // "Online" = regional sem AP offline (somente APs online)
-            showSection = hasOnline && !hasOffline;
+            showSection = hasOnline;
         }}
 
         header.style.display = showSection ? '' : 'none';
         next.style.display = showSection ? 'block' : 'none';
 
-        if (showSection && action === 'offline') {{
+        if (showSection && (action === 'offline' || action === 'online')) {{
             // Dentro da seção, ocultar linhas que NÃO têm AP offline
             next.querySelectorAll('tr').forEach((tr) => {{
-                const isOfflineRow = !!tr.querySelector('.ap-offline');
-                tr.style.display = isOfflineRow ? '' : 'none';
+                const isHeaderRow = !!tr.querySelector('th');
+                const isMatchingRow = action === 'offline'
+                    ? !!tr.querySelector('.ap-offline')
+                    : !!tr.querySelector('.ap-online');
+                tr.style.display = (isHeaderRow || isMatchingRow) ? '' : 'none';
             }});
         }} else if (showSection) {{
             next.querySelectorAll('tr').forEach((tr) => {{ tr.style.display = ''; }});
@@ -4051,11 +5124,20 @@ function resetSwitchesSection(detail) {{
     detail.querySelectorAll('.switch-item').forEach((item) => {{
         item.style.display = '';
     }});
+    detail.querySelectorAll('.switch-regional-row').forEach((item) => {{
+        item.style.display = '';
+    }});
+    detail.querySelectorAll('.links-region-table-block').forEach((block) => {{
+        block.style.display = '';
+    }});
 }}
 
 function resetRegionaisSection(detail) {{
     detail.querySelectorAll('.regional-item').forEach((item) => {{
         item.style.display = '';
+        item.querySelectorAll('.regional-server-card').forEach((card) => {{
+            card.style.display = '';
+        }});
     }});
 }}
 
@@ -4063,12 +5145,65 @@ function resetLinksSection(detail) {{
     detail.querySelectorAll('.link-item').forEach((item) => {{
         item.style.display = '';
     }});
+    detail.querySelectorAll('.links-region-table-block').forEach((block) => {{
+        block.style.display = '';
+    }});
 }}
 
 function resetVpnSection(detail) {{
     detail.querySelectorAll('.vpn-tunnel-card').forEach((card) => {{
         card.style.display = '';
     }});
+    detail.querySelectorAll('.vpn-tunnel-row').forEach((row) => {{
+        row.style.display = '';
+    }});
+    detail.querySelectorAll('.vpn-regional-row').forEach((row) => {{
+        row.style.display = '';
+    }});
+}}
+
+function resetSecuritySection(detail) {{
+    detail.querySelectorAll('.security-row').forEach((row) => {{ row.style.display = ''; }});
+    const empty = detail.querySelector('.security-filter-empty');
+    if (empty) empty.hidden = true;
+}}
+
+function filterSecuritySection(detail, action) {{
+    const rows = Array.from(detail.querySelectorAll('.security-row'));
+    if (!action || action === 'total' || action === 'regional-total') {{
+        resetSecuritySection(detail);
+        return;
+    }}
+
+    let visible = 0;
+    if (action.startsWith('regional-')) {{
+        const expected = action.replace('regional-', '');
+        const grouped = {{}};
+        rows.forEach((row) => {{
+            const regional = row.dataset.regional || 'CENTRAL';
+            (grouped[regional] ||= []).push(row);
+        }});
+        Object.values(grouped).forEach((regionalRows) => {{
+            const statuses = regionalRows.map((row) => row.dataset.status);
+            const regionalStatus = statuses.includes('expirado') ? 'expirado'
+                : statuses.includes('warning') ? 'warning'
+                : statuses.includes('alerta') ? 'alerta'
+                : statuses.includes('offline') ? 'offline'
+                : statuses.includes('sem-permissao') ? 'sem-permissao' : 'ok';
+            const show = regionalStatus === expected;
+            regionalRows.forEach((row) => {{ row.style.display = show ? '' : 'none'; }});
+            if (show) visible += regionalRows.length;
+        }});
+    }} else {{
+        rows.forEach((row) => {{
+            const show = row.dataset.status === action;
+            row.style.display = show ? '' : 'none';
+            if (show) visible += 1;
+        }});
+    }}
+
+    const empty = detail.querySelector('.security-filter-empty');
+    if (empty) empty.hidden = visible > 0;
 }}
 
 function resetSectionFilters(detail) {{
@@ -4078,6 +5213,7 @@ function resetSectionFilters(detail) {{
     if (detail.id === 'switches') resetSwitchesSection(detail);
     if (detail.id === 'links') resetLinksSection(detail);
     if (detail.id === 'vpn-details') resetVpnSection(detail);
+    if (detail.id === 'firewalls' || detail.id === 'admin-monitor') resetSecuritySection(detail);
 }}
 
 function abrirEIrParaDetalhe(detailTarget) {{
@@ -4104,9 +5240,27 @@ function abrirEIrParaDetalhe(detailTarget) {{
 
     if (detailId === 'regionais') {{
         const regionalItems = detail.querySelectorAll('.regional-item');
-        if (action === 'offline' || action === 'online') {{
+        if (action === 'offline' || action === 'online' || action === 'warning') {{
             regionalItems.forEach((item) => {{
-                const match = item.dataset.status === action;
+                const serverCards = item.querySelectorAll('.regional-server-card');
+                let hasMatchingServer = false;
+
+                if (serverCards.length) {{
+                    serverCards.forEach((card) => {{
+                        const cardStatus = card.dataset.status || (
+                            card.classList.contains('regional-server-card-danger') ? 'offline' :
+                            card.classList.contains('regional-server-card-warning') ? 'warning' :
+                            'online'
+                        );
+                        const matchCard = cardStatus === action;
+                        card.style.display = matchCard ? '' : 'none';
+                        hasMatchingServer = hasMatchingServer || matchCard;
+                    }});
+                }} else {{
+                    hasMatchingServer = item.dataset.status === action;
+                }}
+
+                const match = hasMatchingServer || item.dataset.status === action;
                 item.style.display = match ? '' : 'none';
                 item.open = match;
             }});
@@ -4125,8 +5279,12 @@ function abrirEIrParaDetalhe(detailTarget) {{
 
     if (detailId === 'switches') {{
         const switchItems = detail.querySelectorAll('.switch-item');
-        if (action === 'offline' || action === 'online') {{
+        const switchRegionalRows = detail.querySelectorAll('.switch-regional-row');
+        if (['offline', 'online', 'warning', 'inativo'].includes(action)) {{
             switchItems.forEach((item) => {{
+                item.style.display = item.dataset.status === action ? '' : 'none';
+            }});
+            switchRegionalRows.forEach((item) => {{
                 item.style.display = item.dataset.status === action ? '' : 'none';
             }});
         }} else {{
@@ -4143,9 +5301,27 @@ function abrirEIrParaDetalhe(detailTarget) {{
 
     if (detailId === 'links') {{
         const linkItems = detail.querySelectorAll('.link-item');
-        if (action === 'offline' || action === 'online') {{
+        if (action.startsWith('regional-')) {{
+            const regionalStatus = action.replace('regional-', '');
+            detail.querySelectorAll('.links-region-table-block').forEach((block) => {{
+                const rows = Array.from(block.querySelectorAll('.link-item'));
+                const hasOffline = rows.some((item) => item.dataset.status === 'offline');
+                const hasInactive = rows.some((item) => item.dataset.status === 'inativo');
+                const match = regionalStatus === 'offline'
+                    ? hasOffline
+                    : regionalStatus === 'inativo'
+                        ? hasInactive
+                        : !hasOffline && !hasInactive;
+                block.style.display = match ? '' : 'none';
+                rows.forEach((item) => {{ item.style.display = ''; }});
+            }});
+        }} else if (action === 'offline' || action === 'online' || action === 'inativo') {{
             linkItems.forEach((item) => {{
                 item.style.display = item.dataset.status === action ? '' : 'none';
+            }});
+            detail.querySelectorAll('.links-region-table-block').forEach((block) => {{
+                const hasMatch = Array.from(block.querySelectorAll('.link-item')).some((item) => item.dataset.status === action);
+                block.style.display = hasMatch ? '' : 'none';
             }});
         }} else {{
             resetLinksSection(detail);
@@ -4154,9 +5330,17 @@ function abrirEIrParaDetalhe(detailTarget) {{
 
     if (detailId === 'vpn-details') {{
         const tunnelCards = detail.querySelectorAll('.vpn-tunnel-card');
+        const tunnelRows = detail.querySelectorAll('.vpn-tunnel-row');
+        const regionalRows = detail.querySelectorAll('.vpn-regional-row');
         if (action === 'offline' || action === 'online') {{
             tunnelCards.forEach((card) => {{
                 card.style.display = card.dataset.status === action ? '' : 'none';
+            }});
+            tunnelRows.forEach((row) => {{
+                row.style.display = row.dataset.status === action ? '' : 'none';
+            }});
+            regionalRows.forEach((row) => {{
+                row.style.display = row.dataset.status === action ? '' : 'none';
             }});
         }} else {{
             resetVpnSection(detail);
@@ -4170,6 +5354,10 @@ function abrirEIrParaDetalhe(detailTarget) {{
         }}
     }}
 
+    if (detailId === 'firewalls' || detailId === 'admin-monitor') {{
+        filterSecuritySection(detail, action);
+    }}
+
     setTimeout(function() {{
         detail.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
     }}, 80);
@@ -4177,12 +5365,22 @@ function abrirEIrParaDetalhe(detailTarget) {{
 
 function navegarPeloGrafico(chartId, datasetIndex) {{
     const rotas = {{
-        chartRegionais: ['regionais-online', 'regionais-offline'],
-        chartUnifi: ['unifi-online', 'unifi-offline'],
-        chartReplicacao: ['replicacao', 'replicacao'],
-        chartSwitches: ['switches-online', 'switches-offline'],
-        chartLinks: ['links-online', 'links-offline'],
-        chartVpn: ['vpn-details-online', 'vpn-details-offline'],
+        chartDeviceServers: ['regionais-online', 'regionais-offline', 'regionais-warning'],
+        chartDeviceUnifi: ['unifi-online', 'unifi-offline'],
+        chartDeviceReplicacao: ['replicacao', 'replicacao'],
+        chartDeviceSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
+        chartDeviceLinks: ['links-online', 'links-offline', 'links-inativo'],
+        chartDeviceVpn: ['vpn-details-online', 'vpn-details-offline'],
+        chartDeviceFirewalls: ['firewalls-ok', 'firewalls-warning', 'firewalls-expirado'],
+        chartDeviceAdmins: ['admin-monitor-ok', 'admin-monitor-alerta', 'admin-monitor-offline', 'admin-monitor-sem-permissao'],
+        chartRegionalServers: ['regionais-online', 'regionais-offline', 'regionais-warning'],
+        chartRegionalUnifi: ['unifi-online', 'unifi-offline'],
+        chartRegionalReplicacao: ['replicacao', 'replicacao'],
+        chartRegionalSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
+        chartRegionalLinks: ['links-regional-online', 'links-regional-offline', 'links-regional-inativo'],
+        chartRegionalVpn: ['vpn-details-online', 'vpn-details-offline'],
+        chartRegionalFirewalls: ['firewalls-regional-ok', 'firewalls-regional-warning', 'firewalls-regional-expirado'],
+        chartRegionalAdmins: ['admin-monitor-regional-ok', 'admin-monitor-regional-alerta', 'admin-monitor-regional-offline', 'admin-monitor-regional-sem-permissao'],
     }};
 
     const rota = (rotas[chartId] && rotas[chartId][datasetIndex]) || null;
@@ -4202,6 +5400,12 @@ document.querySelectorAll('[data-detail-target]').forEach((elemento) => {{
             event.preventDefault();
             navegar(event);
         }}
+    }});
+}});
+
+document.querySelectorAll('.dashboard-view-tab').forEach((tab) => {{
+    tab.addEventListener('click', () => {{
+        setDashboardView(tab.dataset.dashboardViewTarget);
     }});
 }});
 
@@ -4231,13 +5435,13 @@ document.querySelectorAll('details.details-section').forEach((detail) => {{
     summary.appendChild(closeBtn);
 }});
 
-new Chart(document.getElementById('chartRegionais'), {{
+new Chart(document.getElementById('chartDeviceServers'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Sem Erro em Servidores', 'Com Erro em Servidores'],
+        labels: ['Online', 'Offline', 'Warning'],
         datasets: [{{
-            data: [{regionais_sem_erro}, {regionais_erro}],
-            backgroundColor: ['#4CAF50', '#F44336'],
+            data: [{servidores_online_total}, {servidores_offline_total}, {servidores_warning_total}],
+            backgroundColor: ['#2f855a', '#e53e3e', '#d69e2e'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -4245,7 +5449,7 @@ new Chart(document.getElementById('chartRegionais'), {{
     options: {{
         onClick: function(_event, elements) {{
             if (elements && elements.length > 0) {{
-                navegarPeloGrafico('chartRegionais', elements[0].index);
+                navegarPeloGrafico('chartDeviceServers', elements[0].index);
             }} else {{
                 abrirEIrParaDetalhe('regionais');
             }}
@@ -4253,7 +5457,7 @@ new Chart(document.getElementById('chartRegionais'), {{
         plugins: {{
             title: {{
                 display: true,
-                text: 'Status das Regionais por Servidores',
+                text: 'Servidores',
                 font: {{
                     size: 16
                 }},
@@ -4272,13 +5476,13 @@ new Chart(document.getElementById('chartRegionais'), {{
     }}
 }});
 
-new Chart(document.getElementById('chartUnifi'), {{
+new Chart(document.getElementById('chartDeviceUnifi'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Regionais sem AP offline', 'Regionais com AP offline'],
+        labels: ['Online', 'Offline'],
         datasets: [{{
-            data: [{aps_regionais_sem_offline}, {aps_regionais_com_offline}],
-            backgroundColor: ['#0A4A63', '#cbd5e0'],
+            data: [{aps_online}, {aps_offline}],
+            backgroundColor: ['#2f855a', '#e53e3e'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -4286,7 +5490,7 @@ new Chart(document.getElementById('chartUnifi'), {{
     options: {{
         onClick: function(_event, elements) {{
             if (elements && elements.length > 0) {{
-                navegarPeloGrafico('chartUnifi', elements[0].index);
+                navegarPeloGrafico('chartDeviceUnifi', elements[0].index);
             }} else {{
                 abrirEIrParaDetalhe('unifi');
             }}
@@ -4294,7 +5498,7 @@ new Chart(document.getElementById('chartUnifi'), {{
         plugins: {{
             title: {{
                 display: true,
-                text: 'APs por Regional',
+                text: 'APs',
                 font: {{
                     size: 16
                 }},
@@ -4313,7 +5517,7 @@ new Chart(document.getElementById('chartUnifi'), {{
     }}
 }});
 
-new Chart(document.getElementById('chartReplicacao'), {{
+new Chart(document.getElementById('chartDeviceReplicacao'), {{
     type: 'doughnut',
     data: {{
         labels: ['OK', 'Com Falha'],
@@ -4350,13 +5554,13 @@ new Chart(document.getElementById('chartReplicacao'), {{
     }}
 }});
 
-new Chart(document.getElementById('chartSwitches'), {{
+new Chart(document.getElementById('chartDeviceSwitches'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Regionais sem switch offline', 'Regionais com switch offline'],
+        labels: ['Online', 'Offline', 'Warning', 'Inativos'],
         datasets: [{{
-            data: [{switches_regionais_sem_offline}, {switches_regionais_com_offline}],
-            backgroundColor: ['#0F6C8C', '#dd6b20'],
+            data: [{switches_online}, {switches_offline}, {switches_warning}, {switches_inativo}],
+            backgroundColor: ['#2f855a', '#e53e3e', '#d69e2e', '#718096'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -4364,7 +5568,7 @@ new Chart(document.getElementById('chartSwitches'), {{
     options: {{
         onClick: function(_event, elements) {{
             if (elements && elements.length > 0) {{
-                navegarPeloGrafico('chartSwitches', elements[0].index);
+                navegarPeloGrafico('chartDeviceSwitches', elements[0].index);
             }} else {{
                 abrirEIrParaDetalhe('switches');
             }}
@@ -4372,7 +5576,7 @@ new Chart(document.getElementById('chartSwitches'), {{
         plugins: {{
             title: {{
                 display: true,
-                text: 'Switches por Regional',
+                text: 'Switches',
                 font: {{
                     size: 16
                 }},
@@ -4391,13 +5595,13 @@ new Chart(document.getElementById('chartSwitches'), {{
     }}
 }});
 
-new Chart(document.getElementById('chartLinks'), {{
+new Chart(document.getElementById('chartDeviceLinks'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline'],
+        labels: ['Online', 'Offline', 'Inativos'],
         datasets: [{{
-            data: [{links_online}, {links_offline}],
-            backgroundColor: ['#9C27B0', '#E91E63'],
+            data: [{links_online}, {links_offline}, {links_inativo}],
+            backgroundColor: ['#2f855a', '#e53e3e', '#718096'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -4405,7 +5609,7 @@ new Chart(document.getElementById('chartLinks'), {{
     options: {{
         onClick: function(_event, elements) {{
             if (elements && elements.length > 0) {{
-                navegarPeloGrafico('chartLinks', elements[0].index);
+                navegarPeloGrafico('chartDeviceLinks', elements[0].index);
             }} else {{
                 abrirEIrParaDetalhe('links');
             }}
@@ -4432,7 +5636,7 @@ new Chart(document.getElementById('chartLinks'), {{
     }}
 }});
 
-new Chart(document.getElementById('chartVpn'), {{
+new Chart(document.getElementById('chartDeviceVpn'), {{
     type: 'doughnut',
     data: {{
         labels: ['Online', 'Offline'],
@@ -4446,7 +5650,7 @@ new Chart(document.getElementById('chartVpn'), {{
     options: {{
         onClick: function(_event, elements) {{
             if (elements && elements.length > 0) {{
-                navegarPeloGrafico('chartVpn', elements[0].index);
+                navegarPeloGrafico('chartDeviceVpn', elements[0].index);
             }} else {{
                 abrirEIrParaDetalhe('vpn-details');
             }}
@@ -4466,7 +5670,42 @@ new Chart(document.getElementById('chartVpn'), {{
     }}
 }});
 
+criarGraficoRegional('chartDeviceFirewalls', 'Firewalls e Licenças', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
+criarGraficoRegional('chartDeviceAdmins', 'Monitor de Admins', ['OK', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_counts']['ok']}, {security_dashboard['admin_counts']['alerta']}, {security_dashboard['admin_counts']['offline']}, {security_dashboard['admin_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
+
 // Botão flutuante: fechar tudo e voltar ao topo
+function criarGraficoRegional(canvasId, titulo, labels, data, cores, detalhePadrao) {{
+    return new Chart(document.getElementById(canvasId), {{
+        type: 'doughnut',
+        data: {{
+            labels: labels,
+            datasets: [{{ data: data, backgroundColor: cores, borderColor: '#ffffff', borderWidth: 2 }}]
+        }},
+        options: {{
+            onClick: function(_event, elements) {{
+                if (elements && elements.length > 0) {{
+                    navegarPeloGrafico(canvasId, elements[0].index);
+                }} else {{
+                    abrirEIrParaDetalhe(detalhePadrao);
+                }}
+            }},
+            plugins: {{
+                title: {{ display: true, text: titulo, font: {{ size: 16 }}, color: '#333' }},
+                legend: {{ position: 'bottom', labels: {{ font: {{ size: 14 }}, color: '#555' }} }}
+            }}
+        }}
+    }});
+}}
+
+criarGraficoRegional('chartRegionalServers', 'Servidores por Regional', ['Sem alerta', 'Com offline', 'Com warning'], [{regionais_servidor_sem_alerta}, {regionais_servidor_com_offline}, {regionais_servidor_com_warning}], ['#2f855a', '#e53e3e', '#d69e2e'], 'regionais');
+criarGraficoRegional('chartRegionalUnifi', 'APs por Regional', ['Sem AP offline', 'Com AP offline'], [{aps_regionais_sem_offline}, {aps_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'unifi');
+criarGraficoRegional('chartRegionalReplicacao', 'Replicação AD por Regional', ['Sem falha', 'Com falha'], [{rep_ok}, {rep_fail}], ['#2f855a', '#e53e3e'], 'replicacao');
+criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com warning', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
+criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline', 'Com inativo'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}, {links_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#718096'], 'links');
+criarGraficoRegional('chartRegionalVpn', 'VPNs por Regional', ['Sem offline', 'Com offline'], [{vpn_regionais_sem_offline}, {vpn_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'vpn-details');
+criarGraficoRegional('chartRegionalFirewalls', 'Firewalls por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
+criarGraficoRegional('chartRegionalAdmins', 'Admins por Regional', ['Sem alerta', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_regional_counts']['ok']}, {security_dashboard['admin_regional_counts']['alerta']}, {security_dashboard['admin_regional_counts']['offline']}, {security_dashboard['admin_regional_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
+
 const backToTopBtn = document.getElementById('backToTopBtn');
 window.addEventListener('scroll', () => {{
     if (backToTopBtn) backToTopBtn.classList.toggle('visible', window.scrollY > 300);

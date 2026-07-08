@@ -1,0 +1,37 @@
+<div class="sofia-widget" id="sofiaWidget" data-endpoint="{{ url_for('sofia.chat') }}">
+    <section class="sofia-panel" id="sofiaPanel" role="dialog" aria-modal="false" aria-labelledby="sofiaTitle" hidden>
+        <header class="sofia-header">
+            <div class="sofia-identity">
+                <img src="{{ url_for('static', filename='branding/sentinel_favicon.png') }}" alt="" class="sofia-avatar">
+                <div>
+                    <strong id="sofiaTitle">SofIA</strong>
+                    <span>Assistente do Sentinel</span>
+                </div>
+            </div>
+            <button type="button" class="sofia-icon-button" id="sofiaClose" aria-label="Fechar SofIA" title="Fechar">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+        </header>
+
+        <div class="sofia-messages" id="sofiaMessages" role="log" aria-live="polite" aria-relevant="additions">
+            <div class="sofia-message sofia-message-assistant">
+                <span class="sofia-message-author">SofIA</span>
+                <p>Olá, eu sou a SofIA, assistente virtual do Sentinel. Como posso te ajudar?</p>
+            </div>
+        </div>
+
+        <form class="sofia-composer" id="sofiaForm">
+            <label for="sofiaInput" class="visually-hidden">Mensagem para SofIA</label>
+            <textarea id="sofiaInput" name="message" rows="1" maxlength="1000" placeholder="Pergunte à SofIA..." autocomplete="off" required></textarea>
+            <button type="submit" class="sofia-send" id="sofiaSend" aria-label="Enviar mensagem" title="Enviar">
+                <i class="bi bi-send-fill" aria-hidden="true"></i>
+            </button>
+        </form>
+        <div class="sofia-status" id="sofiaStatus" role="status"></div>
+    </section>
+
+    <button type="button" class="sofia-launcher" id="sofiaLauncher" aria-controls="sofiaPanel" aria-expanded="false" aria-label="Abrir SofIA" title="Abrir SofIA">
+        <img src="{{ url_for('static', filename='branding/sentinel_favicon.png') }}" alt="" aria-hidden="true">
+        <span class="sofia-unread" id="sofiaUnread" hidden></span>
+    </button>
+</div>

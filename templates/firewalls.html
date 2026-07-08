@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block title %}Firewalls - Sistema de Automação{% endblock %}
+
+{% block content %}
+<style>
+    .firewall-card-regional {
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        border: none;
+        box-shadow: 0 4px 8px rgba(1, 46, 64, 0.25);
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .firewall-card-regional:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(1, 46, 64, 0.35);
+    }
+
+    .page-search-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background: white;
+    }
+
+    .page-search-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .page-search-input-wrap i {
+        position: absolute;
+        left: 12px;
+        color: #6c757d;
+        pointer-events: none;
+    }
+
+    .page-search-input {
+        padding-left: 38px !important;
+    }
+
+    .page-search-input::placeholder {
+        color: #adb5bd;
+    }
+
+    .firewall-card-wrapper {
+        display: none;
+    }
+
+    .firewall-card-wrapper.visible {
+        display: block;
+    }
+
+    .license-critical {
+        background-color: #ffe5e5 !important;
+        border-left: 4px solid #dc3545 !important;
+    }
+
+    .license-warning {
+        background-color: #fff3cd !important;
+        border-left: 4px solid #ffc107 !important;
+    }
+
+    .license-ok {
+        background-color: #d4edda !important;
+        border-left: 4px solid #28a745 !important;
+    }
+
+    .alert-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        border-radius: 0.5rem;
+        padding: 1.25rem 1rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+        color: white;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    }
+
+    .stat-card.active {
+        outline: 3px solid rgba(255,255,255,0.8);
+        outline-offset: 2px;
+    }
+
+    .stat-card .number {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .stat-card .label {
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.85);
+        margin-top: 0.4rem;
+    }
+
+    .fw-card-header {
+        background: linear-gradient(135deg, #012E40 0%, #0A4A63 60%, #0F6C8C 100%);
+        color: white;
+        padding: 0.75rem 1rem;
+        border-radius: calc(0.375rem - 1px) calc(0.375rem - 1px) 0 0;
+    }
+
+    .fw-regional-label {
+        font-size: 0.72rem;
+        opacity: 0.82;
+        margin-bottom: 3px;
+        letter-spacing: 0.03em;
+    }
+
+    .fw-device-name {
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    .fw-device-ip {
+        font-size: 0.78rem;
+        opacity: 0.8;
+        margin-left: 0.4rem;
+        font-family: monospace;
+    }
+
+    .license-expired {
+        background-color: #f8d7da;
+        border-left: 3px solid #721c24;
+    }
+</style>
+
+<div class="container-fluid mt-4">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h1 class="mb-2">
+                        <i class="bi bi-shield-check" style="color: #FF6B6B;"></i>
+                        Firewalls &amp; Licenças
+                    </h1>
+                    <p class="text-muted mb-0">Monitoramento centralizado de FortiGates e status de licenças por regional</p>
+                </div>
+                <button class="btn btn-danger" onclick="recarregarFirewalls()" title="Sincronizar dados">
+                    <i class="bi bi-arrow-clockwise me-2"></i>
+                    Recarregar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de Busca -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card page-search-card">
+                <div class="card-body">
+                    <label for="firewallSearchInput" class="form-label fw-semibold mb-2">Buscar firewall ou regional</label>
+                    <div class="page-search-input-wrap">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control page-search-input" id="firewallSearchInput" placeholder="Digite regional, nome firewall, modelo ou IP">
+                    </div>
+                    <div class="page-search-meta text-lg-end mt-2">
+                        <strong id="firewallSearchCount">{{ total_firewalls }} firewall(s)</strong>
+                        <div class="small text-muted">A busca é em tempo real</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="stat-card active" id="card-all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('all')">
+            <div class="number">{{ total_firewalls }}</div>
+            <div class="label"><i class="bi bi-shield-fill me-1"></i>Firewalls Total</div>
+        </div>
+        <div class="stat-card" id="card-vencer" style="background: linear-gradient(135deg, #e67e22, #d35400);" onclick="aplicarFiltroFirewall('vencer')">
+            <div class="number">{{ total_alertas }}</div>
+            <div class="label"><i class="bi bi-exclamation-triangle-fill me-1"></i>Licenças a Vencer</div>
+        </div>
+        <div class="stat-card" id="card-expirado" style="background: linear-gradient(135deg, #721c24, #c0392b);" onclick="aplicarFiltroFirewall('expirado')">
+            <div class="number">{{ total_expirados|default(0) }}</div>
+            <div class="label"><i class="bi bi-x-circle-fill me-1"></i>Licenças Expiradas</div>
+        </div>
+        <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
+            <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) }}</div>
+            <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Licenças OK</div>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    {% if total_alertas > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <h4 class="alert-heading mb-1">Atenção: Licenças em Vencimento!</h4>
+                        <p class="mb-0">{{ total_alertas }} licença(s) vencendo em menos de 30 dias. Clique acima para filtrar.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Firewalls por Regional -->
+    {% if firewalls_por_regional %}
+    <div class="row" id="firewallsContainer">
+        {% for regional_code, firewalls in firewalls_por_regional.items() %}
+        <div class="col-lg-6 mb-4 firewall-card-wrapper visible" data-regional="{{ regional_code }}" data-search-text="{{ regional_code }} {% for fw in firewalls %}{{ fw.nome }} {{ fw.hostname }} {{ fw.ip }} {{ fw.model }} {% endfor %}">
+
+            {% for firewall in firewalls %}
+            <div class="card mb-2 border-0 shadow-sm">
+                <!-- Header unificado: regional + device name + IP + status -->
+                <div class="fw-card-header d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="fw-regional-label">
+                            <i class="bi bi-geo-alt-fill me-1"></i>{{ regional_code }}
+                            {%- if firewalls|length > 1 %} <span class="opacity-75">({{ loop.index }}/{{ firewalls|length }})</span>{%- endif %}
+                        </div>
+                        <div class="fw-device-name">
+                            <i class="bi bi-shield-shaded me-1"></i>{{ firewall.nome }}
+                            {%- if firewall.ip %}<span class="fw-device-ip">&#183; {{ firewall.ip }}</span>{%- endif %}
+                        </div>
+                    </div>
+                    {%- if firewall.status == 'ready' %}
+                    <span class="badge bg-success mt-1">Online</span>
+                    {%- elif firewall.status == 'offline' or firewall.status == 'down' %}
+                    <span class="badge bg-danger mt-1">Offline</span>
+                    {%- endif %}
+                </div>
+
+                <div class="card-body py-2">
+                    <!-- Modelo e Serial -->
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <small class="text-muted">Modelo:</small>
+                            <p class="mb-0 fw-semibold" style="font-size:0.88rem;">{{ firewall.model or 'N/A' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted">Serial:</small>
+                            <p class="mb-0 fw-semibold" style="font-family: monospace; font-size: 0.82rem;">{{ firewall.serial or 'N/A' }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Licenças -->
+                    {% set forticare_licenses = firewall.licencas|selectattr('nome', 'equalto', 'forticare')|list %}
+                    {% if forticare_licenses %}
+                    <div class="mb-0">
+                        <div class="list-group list-group-sm">
+                            {% for licenca in forticare_licenses %}
+                            <div class="list-group-item {% if licenca.notificacao_expirada %}license-expired{% elif licenca.notificacao_critica %}license-critical{% elif licenca.dias_restantes <= 60 %}license-warning{% else %}license-ok{% endif %} py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="fw-semibold">FortiCare</small>
+                                        <small class="text-muted ms-2">Status: <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
+                            {%- if licenca.status == 'offline' %}Sem Sinal
+                            {%- elif licenca.status in ('valid', 'licensed') %}Válida
+                            {%- elif licenca.status == 'registered' %}Registrada
+                            {%- elif licenca.status == 'expired' %}Expirada
+                            {%- elif licenca.status == 'no_license' %}Sem Licença
+                            {%- elif licenca.status == 'pending' %}Pendente
+                            {%- else %}{{ licenca.status|title }}{%- endif %}
+                        </span></small>
+                                    </div>
+                                    <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
+                                        {%- if licenca.status == 'offline' %}Sem Sinal
+                                        {%- elif licenca.notificacao_expirada %}Expirada
+                                        {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
+                                    </span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info py-1 mb-0" role="alert">
+                        <small><i class="bi bi-info-circle me-1"></i>Sem dados de licença</small>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="card-footer bg-light border-0 py-1">
+                    <small class="text-muted"><i class="bi bi-clock me-1"></i>{{ firewall.ultima_verificacao }}</small>
+                </div>
+            </div>
+            {% endfor %}
+
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Sem dados:</strong> Nenhum firewall encontrado. Configure names de firewalls com códigos de regionais.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+let filtroBuscaAtual = '';
+let filtroBuscaAtivo = false;
+let filtroAtivo = 'all';
+
+function recarregarFirewalls() {
+    showToast('Recarregando dados de firewalls...', 'info');
+    setTimeout(() => { location.reload(); }, 500);
+}
+
+function aplicarFiltroFirewall(filtro) {
+    filtroAtivo = filtro;
+    ['all', 'vencer', 'expirado', 'ok'].forEach(f => {
+        const card = document.getElementById('card-' + f);
+        if (card) card.classList.toggle('active', f === filtro);
+    });
+    _reaplicarFiltros();
+}
+
+function aplicarFiltroSearch(textoBusca) {
+    filtroBuscaAtual = textoBusca.toLowerCase();
+    filtroBuscaAtivo = textoBusca.length > 0;
+    _reaplicarFiltros();
+}
+
+function _reaplicarFiltros() {
+    const cards = document.querySelectorAll('.firewall-card-wrapper');
+    let totalVisivel = 0;
+
+    cards.forEach(card => {
+        let mostrar = true;
+
+        if (filtroAtivo === 'vencer') {
+            mostrar = card.querySelectorAll('.license-critical').length > 0;
+        } else if (filtroAtivo === 'expirado') {
+            mostrar = card.querySelectorAll('.license-expired').length > 0;
+        } else if (filtroAtivo === 'ok') {
+            mostrar = card.querySelectorAll('.license-critical').length === 0 &&
+                      card.querySelectorAll('.license-expired').length === 0;
+        }
+
+        if (mostrar && filtroBuscaAtivo) {
+            const searchText = (card.getAttribute('data-search-text') || '').toLowerCase();
+            mostrar = searchText.includes(filtroBuscaAtual);
+        }
+
+        card.classList.toggle('visible', mostrar);
+        if (mostrar) totalVisivel++;
+    });
+
+    const countElement = document.getElementById('firewallSearchCount');
+    if (countElement) {
+        const labels = {
+            'vencer': `${totalVisivel} regional(is) com licenças a vencer`,
+            'expirado': `${totalVisivel} regional(is) com licenças expiradas`,
+            'ok': `${totalVisivel} regional(is) com licenças OK`,
+            'all': `${totalVisivel} firewall(s)`
+        };
+        countElement.textContent = labels[filtroAtivo] || `${totalVisivel} firewall(s)`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('firewallSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            aplicarFiltroSearch(e.target.value);
+        });
+    }
+});
+</script>
+{% endblock %}

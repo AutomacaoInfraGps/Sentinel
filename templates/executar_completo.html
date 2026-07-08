@@ -2,6 +2,91 @@
 
 {% block title %}Execução Completa - Sistema de Automação{% endblock %}
 
+{% block extra_css %}
+<style>
+    .execution-command-bar {
+        background: #fff;
+        border: 1px solid #d9e2ec;
+        border-left: 4px solid #0f6c8c;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(1, 46, 64, 0.09);
+        padding: 1rem;
+    }
+
+    .execution-command-bar .btn {
+        min-height: 46px;
+    }
+
+    .regional-selector {
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .regional-selector summary {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-height: 52px;
+        padding: 0.8rem 1rem;
+        cursor: pointer;
+        background: #f5f8fa;
+        color: #243b53;
+        font-weight: 600;
+        list-style: none;
+    }
+
+    .regional-selector summary::-webkit-details-marker { display: none; }
+    .regional-selector summary::after {
+        content: "\F282";
+        margin-left: auto;
+        font-family: "bootstrap-icons";
+        transition: transform 0.2s ease;
+    }
+    .regional-selector[open] summary::after { transform: rotate(180deg); }
+
+    .regional-selector-body {
+        border-top: 1px solid #d9e2ec;
+        padding: 0.9rem;
+    }
+
+    .regional-list-scroll {
+        max-height: 320px;
+        overflow-y: auto;
+        padding: 0.25rem 0.35rem 0.25rem 0.1rem;
+        scrollbar-gutter: stable;
+    }
+
+    .regional-option {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.6rem 0.7rem;
+        border-bottom: 1px solid #edf2f7;
+    }
+    .regional-option:last-child { border-bottom: 0; }
+    .regional-option:hover { background: #f5f9fb; }
+    .regional-option .form-check-input { margin: 0; }
+    .regional-option-name { overflow-wrap: anywhere; }
+    .regional-option-count { color: #627d98; font-size: 0.78rem; white-space: nowrap; }
+
+    .execution-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.5rem;
+        padding: 0.8rem 0;
+    }
+
+    @media (max-width: 767.98px) {
+        .execution-command-bar .btn { width: 100%; }
+        .regional-option { grid-template-columns: auto minmax(0, 1fr); }
+        .regional-option-count { grid-column: 2; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -50,6 +135,33 @@
     </div>
 </div>
 
+<!-- Ações principais -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="execution-command-bar d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <div class="fw-semibold text-dark">Comandos de execução</div>
+                <small class="text-muted">Revise as opções abaixo ou inicie a rotina com a seleção atual.</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-success" id="btnExecutar" onclick="executarCompleto()">
+                    <i class="bi bi-play-fill me-2"></i>
+                    <span class="btn-text">Executar Sistema Completo</span>
+                    <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+                </button>
+                <button class="btn btn-outline-info" onclick="verificarApenas()">
+                    <i class="bi bi-search me-2"></i>
+                    Apenas Verificar Status
+                </button>
+                <a href="{{ url_for('dashboard_hierarquico_web') }}" class="btn btn-outline-primary" target="_blank">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Ver Dashboard Atual
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Opções de Execução -->
 <div class="row mb-4">
     <div class="col-md-6 mb-3">
@@ -62,20 +174,7 @@
             </div>
             <div class="card-body">
                 <form id="configExecucao">
-                    <div class="mb-3">
-                        <label class="form-label">
-                            <i class="bi bi-building me-1"></i>
-                            Regionais a Verificar
-                        </label>
-                        <div id="regionaisCheckbox">
-                            <div class="text-center py-2">
-                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                <span class="ms-2">Carregando regionais...</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
+                    <div class="execution-options">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="gerarDashboards" checked>
                             <label class="form-check-label" for="gerarDashboards">
@@ -83,11 +182,6 @@
                                 Gerar dashboards hierárquicos
                             </label>
                         </div>
-                    </div>
-                    
-
-                    
-                    <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="abrirDashboard" checked>
                             <label class="form-check-label" for="abrirDashboard">
@@ -96,6 +190,34 @@
                             </label>
                         </div>
                     </div>
+
+                    <details class="regional-selector" id="regionaisPanel">
+                        <summary>
+                            <i class="bi bi-geo-alt-fill text-primary"></i>
+                            <span>Regionais a verificar</span>
+                            <span class="badge text-bg-primary" id="regionaisSelecionadasBadge">Carregando...</span>
+                        </summary>
+                        <div class="regional-selector-body">
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="search" class="form-control" id="buscarRegionalExecucao" placeholder="Buscar regional..." aria-label="Buscar regional">
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleTodasRegionais(true)">
+                                    <i class="bi bi-check2-square me-1"></i>Selecionar todas
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleTodasRegionais(false)">
+                                    <i class="bi bi-square me-1"></i>Desmarcar todas
+                                </button>
+                            </div>
+                            <div id="regionaisCheckbox" class="regional-list-scroll">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                    <span class="ms-2">Carregando regionais...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
                 </form>
             </div>
         </div>
@@ -144,31 +266,6 @@
     </div>
 </div>
 
-<!-- Botões de Ação -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center">
-                <button class="btn btn-success btn-lg me-3" id="btnExecutar" onclick="executarCompleto()">
-                    <i class="bi bi-play-fill me-2"></i>
-                    <span class="btn-text">Executar Sistema Completo</span>
-                    <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
-                </button>
-                
-                <button class="btn btn-outline-info btn-lg me-3" onclick="verificarApenas()">
-                    <i class="bi bi-search me-2"></i>
-                    Apenas Verificar Status
-                </button>
-                
-                <a href="{{ url_for('dashboard_hierarquico_web') }}" class="btn btn-outline-primary btn-lg" target="_blank">
-                    <i class="bi bi-graph-up me-2"></i>
-                    Ver Dashboard Atual
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Resultados -->
 <div class="row" id="resultadosSection" style="display: none;">
     <div class="col-12">
@@ -195,7 +292,34 @@ let execucaoAtiva = false;
 
 $(document).ready(function() {
     carregarRegionais();
+
+    $('#buscarRegionalExecucao').on('input', function() {
+        const termo = normalizarBuscaRegional($(this).val());
+        $('.regional-option').each(function() {
+            const texto = normalizarBuscaRegional($(this).data('search') || '');
+            $(this).toggle(texto.includes(termo));
+        });
+    });
+
+    $('#regionaisCheckbox').on('change', '.regional-checkbox', atualizarResumoRegionais);
 });
+
+function normalizarBuscaRegional(valor) {
+    return String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+function atualizarResumoRegionais() {
+    const total = $('.regional-checkbox').length;
+    const selecionadas = $('.regional-checkbox:checked').length;
+    const badge = $('#regionaisSelecionadasBadge');
+    badge.text(`${selecionadas} de ${total} selecionadas`);
+    badge.toggleClass('text-bg-primary', selecionadas > 0);
+    badge.toggleClass('text-bg-secondary', selecionadas === 0);
+}
 
 function carregarRegionais() {
     $.get('/api/dashboard/hierarquico')
@@ -227,38 +351,25 @@ function renderizarRegionais(regionais) {
     Object.keys(regionais).forEach(function(codigo) {
         const regional = regionais[codigo];
         html += `
-            <div class="form-check">
+            <label class="regional-option" for="regional_${codigo}" data-search="${codigo} ${regional.nome}">
                 <input class="form-check-input regional-checkbox" 
                        type="checkbox" 
                        value="${codigo}" 
                        id="regional_${codigo}" 
                        checked>
-                <label class="form-check-label" for="regional_${codigo}">
-                    <strong>${regional.nome}</strong>
-                    <small class="text-muted d-block">${regional.servidores.length} servidor(es)</small>
-                </label>
-            </div>
+                <span class="regional-option-name"><strong>${regional.nome}</strong></span>
+                <span class="regional-option-count">${regional.servidores.length} servidor(es)</span>
+            </label>
         `;
     });
-    
-    if (html) {
-        html = `
-            <div class="mb-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleTodasRegionais(true)">
-                    Selecionar Todas
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleTodasRegionais(false)">
-                    Desmarcar Todas
-                </button>
-            </div>
-        ` + html;
-    }
-    
+
     $('#regionaisCheckbox').html(html);
+    atualizarResumoRegionais();
 }
 
 function toggleTodasRegionais(selecionar) {
     $('.regional-checkbox').prop('checked', selecionar);
+    atualizarResumoRegionais();
 }
 
 function executarCompleto() {

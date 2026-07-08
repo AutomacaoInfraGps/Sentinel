@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='branding/sentinel_favicon.png') }}">
+    {% if sofia_enabled %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css') }}">
+    {% endif %}
     <title>{% block title %}Sistema de Automação{% endblock %}</title>
     
     <!-- Bootstrap CSS -->
@@ -554,13 +558,6 @@
         
         <ul class="sidebar-menu">
             <li class="sidebar-item">
-                <a href="{{ url_for('index') }}" class="sidebar-link">
-                    <i class="bi bi-house-fill me-2"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            
-            <li class="sidebar-item">
                 <a href="#" class="sidebar-link sidebar-toggle" data-target="regionais-menu">
                     <img class="sidebar-link-icon-image" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
                     <span>Regionais</span>
@@ -596,6 +593,12 @@
                 </a>
                 <ul class="sidebar-submenu" id="infra-menu">
                     <li>
+                        <a href="{{ url_for('servidores') }}" class="sidebar-sublink">
+                            <i class="bi bi-server me-2"></i>
+                            <span>Servidores</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="{{ url_for('replicacao_ad') }}" class="sidebar-sublink">
                             <i class="bi bi-arrow-repeat me-2"></i>
                             <span>Replicação AD</span>
@@ -629,6 +632,18 @@
                         <a href="{{ url_for('listar_switches') }}" class="sidebar-sublink">
                             <i class="bi bi-hdd-network me-2"></i>
                             <span>Switches</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('listar_firewalls') }}" class="sidebar-sublink">
+                            <i class="bi bi-shield-check me-2" style="color: #FF6B6B;"></i>
+                            <span>Firewalls</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('listar_admin_logins') }}" class="sidebar-sublink">
+                            <i class="bi bi-person-badge me-2" style="color: #0F6C8C;"></i>
+                            <span>Monitor de Admins</span>
                         </a>
                     </li>
                     <li>
@@ -791,6 +806,10 @@
         </div>
     </div>
 
+    {% if sofia_enabled and current_user.is_authenticated %}
+        {% include 'components/sofia_chat.html' %}
+    {% endif %}
+
     <!-- Footer -->
     <div class="footer" id="footer">
         <p><i class="bi bi-gear-fill me-2"></i>Sistema de Automação v2.0 - Interface Web Moderna</p>
@@ -800,6 +819,9 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% if sofia_enabled and current_user.is_authenticated %}
+        <script src="{{ url_for('static', filename='sofia/sofia.js') }}"></script>
+    {% endif %}
     
     <!-- Custom JS -->
     <script>
