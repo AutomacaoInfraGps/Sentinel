@@ -388,7 +388,7 @@
         }
         
         .sidebar-submenu.show {
-            max-height: 500px;
+            max-height: 800px;
         }
         
         .sidebar-sublink {
@@ -647,6 +647,12 @@
                         </a>
                     </li>
                     <li>
+                        <a href="{{ url_for('validade_certificados') }}" class="sidebar-sublink">
+                            <i class="bi bi-shield-check me-2"></i>
+                            <span>Validade de Certificados</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="{{ url_for('cadastro_emails_contatos') }}" class="sidebar-sublink">
                             <i class="bi bi-envelope-at me-2"></i>
                             <span>Cadastro de E-mails</span>
@@ -656,13 +662,6 @@
                         <a href="{{ url_for('relatorios_infra') }}" class="sidebar-sublink">
                             <i class="bi bi-file-earmark-text me-2"></i>
                             <span>Relatórios</span>
-                        </a>
-                    </li>
-
-                     <li>
-                        <a href="{{ url_for('validade_certificados') }}" class="sidebar-sublink">
-                            <i class="bi bi-shield-check me-2"></i>
-                            <span>Validade de Certificados</span>
                         </a>
                     </li>
                 </ul>

@@ -50,6 +50,8 @@ desktop.ini
 *.lnk
 
 # Arquivos de configuração sensíveis
+/certificate_disk_report_acrab.json
+/nul
 servidores.json
 estrutura_regionais.json
 estrutura_regionais.backup_*.json
