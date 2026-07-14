@@ -1,0 +1,20 @@
+[
+  {
+    "thumbprint": "EF4EC7DC150608AFAC7F5E9D3ED6D9325D36DA4D",
+    "subject": "CN=*.galaxia.app.br",
+    "issuer": "CN=Sectigo Public Server Authentication CA DV R36, O=Sectigo Limited, C=GB",
+    "notAfter": "2027-01-21T23:59:59Z"
+  },
+  {
+    "thumbprint": "3C9F521C0F4A0C9A77125205E5C48613B7F51163",
+    "subject": "CN=*.galaxia.app.br",
+    "issuer": "CN=Sectigo RSA Domain Validation Secure Server CA, O=Sectigo Limited, L=Salford, S=Greater Manchester, C=GB",
+    "notAfter": "2025-07-10T23:59:59Z"
+  },
+  {
+    "thumbprint": "1587E9EFDBFB8FFC87ADBD590A037DF02F4E6CEC",
+    "subject": "CN=*.galaxia.app.br",
+    "issuer": "CN=Sectigo Public Server Authentication CA DV R36, O=Sectigo Limited, C=GB",
+    "notAfter": "2026-07-13T23:59:59Z"
+  }
+]
