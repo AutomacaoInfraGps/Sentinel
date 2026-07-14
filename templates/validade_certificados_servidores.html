@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+ 
+{% block title %}Validade de Certificados - Sistema de Automação{% endblock %}
+ 
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5 mb-4">
+            <i class="bi bi-shield-check me-3"></i>
+            Validade de Certificados
+        </h1>
+        <p class="lead text-muted">
+            Esta página exibe as datas de validade dos certificados.
+        </p>
+    </div>
+</div>
+ 
+<div class="row mb-4">
+    <div class="col-12 d-flex align-items-center gap-3">
+        <button id="btn-refresh" class="btn btn-primary">
+            <i class="bi bi-arrow-clockwise me-2"></i>Recarregar Dados
+        </button>
+        <div id="loading-container" class="d-none align-items-center">
+            <div class="spinner-border text-primary me-2" role="status" aria-hidden="true"></div>
+            <span>Atualizando...</span>
+        </div>
+    </div>
+</div>
+ 
+{% if no_data_message %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-warning" role="alert">
+            {{ no_data_message }}
+        </div>
+    </div>
+</div>
+{% endif %}
+ 
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="certificates-table" class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th scope="col">Certificado</th>
+                                <th scope="col">Emissor</th>
+                                <th scope="col">Data Expiração</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cert in certificates %}
+                            <tr class="{{ cert.status_class }}">
+                                <td><code>{{ cert.thumbprint }}</code><br><small>{{ cert.subject }}</small></td>
+                                <td>{{ cert.issuer }}</td>
+                                <td>{{ cert.notAfter }}</td>
+                                <td>{{ cert.status_text }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+ 
+<script>
+function toggleLoading(show) {
+    const loading = document.getElementById('loading-container');
+    const button = document.getElementById('btn-refresh');
+    if (show) {
+        loading.classList.remove('d-none');
+        button.disabled = true;
+    } else {
+        loading.classList.add('d-none');
+        button.disabled = false;
+    }
+}
+ 
+function buildTableRow(cert) {
+    const tr = document.createElement('tr');
+    tr.className = cert.status_class || '';
+ 
+    const thumbTd = document.createElement('td');
+    thumbTd.innerHTML = `<code>${cert.thumbprint || ''}</code><br><small>${cert.subject || ''}</small>`;
+ 
+    const issuerTd = document.createElement('td');
+    issuerTd.textContent = cert.issuer || '';
+    const expirationTd = document.createElement('td');
+    expirationTd.textContent = cert.notAfter || '';
+ 
+    const statusTd = document.createElement('td');
+    statusTd.textContent = cert.status_text || '';
+ 
+    tr.appendChild(thumbTd);
+    tr.appendChild(issuerTd);
+    tr.appendChild(expirationTd);
+    tr.appendChild(statusTd);
+    return tr;
+}
+ 
+async function refreshCertificates() {
+    toggleLoading(true);
+    try {
+        const response = await fetch('{{ url_for("api_certificados_refresh") }}');
+        const payload = await response.json();
+ 
+        if (!response.ok || payload.status !== 'success') {
+            throw new Error(payload.message || 'Erro ao atualizar dados');
+        }
+ 
+        const tbody = document.querySelector('#certificates-table tbody');
+        tbody.innerHTML = '';
+ 
+        if (!Array.isArray(payload.data) || payload.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Nenhum dado disponível</td></tr>';
+        } else {
+            payload.data.forEach(cert => tbody.appendChild(buildTableRow(cert)));
+        }
+    } catch (error) {
+        alert('Erro ao atualizar dados: ' + (error.message || error));
+    } finally {
+        toggleLoading(false);
+    }
+}
+ 
+document.getElementById('btn-refresh').addEventListener('click', refreshCertificates);
+</script>
+{% endblock %}

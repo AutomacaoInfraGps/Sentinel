@@ -17,7 +17,7 @@ import platform
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Lock, Thread
 from uuid import uuid4
 from gerenciar_fortigate import GerenciadorFortigate
@@ -2334,6 +2334,128 @@ def servidores():
             'estrutura_hierarquica': True
         }
         return render_template('index.html', stats=stats, regionais=[])
+        
+
+# === ROTAS DE CERTIFICADOS ===
+ 
+CERTIFICATES_DATA_FILE = base_dir / 'certificate_disk_report_acrab.json'
+CERTIFICATES_LOG_FILE = base_dir / 'logs' / 'certificados.log'
+ 
+ 
+def _log_certificados(message: str):
+    try:
+        CERTIFICATES_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        with open(CERTIFICATES_LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(f'{timestamp} - {message}\n')
+    except Exception:
+        pass
+ 
+ 
+def _parse_certificate_expiration(value):
+    if not value:
+        return None
+ 
+    expiration_text = str(value).strip()
+    if expiration_text.endswith('Z'):
+        expiration_text = expiration_text[:-1] + '+00:00'
+ 
+    try:
+        return datetime.fromisoformat(expiration_text)
+    except ValueError:
+        try:
+            return datetime.strptime(expiration_text, '%Y-%m-%dT%H:%M:%S')
+        except ValueError:
+            return None
+ 
+ 
+def _get_certificate_status(expiration_dt):
+    if expiration_dt is None:
+        return 'Status desconhecido', 'table-secondary'
+ 
+    if expiration_dt.tzinfo is not None:
+        expiration_dt = expiration_dt.astimezone(timezone.utc).replace(tzinfo=None)
+ 
+    now = datetime.utcnow()
+    delta = expiration_dt - now
+ 
+    if delta.total_seconds() < 0:
+        return 'Expirado', 'table-danger'
+ 
+    days = int(delta.total_seconds() // 86400)
+    if days < 30:
+        return f'Expirando em {days} dias', 'table-warning'
+ 
+    return 'Válido', 'table-success'
+ 
+ 
+def _load_certificates_data():
+    if not CERTIFICATES_DATA_FILE.exists():
+        return []
+ 
+    try:
+        raw = json.loads(CERTIFICATES_DATA_FILE.read_text(encoding='utf-8'))
+    except Exception as e:
+        _log_certificados(f'Falha ao ler JSON de certificados: {e}')
+        return []
+ 
+    if isinstance(raw, dict):
+        raw = [raw]
+ 
+    certificates = []
+    for item in raw if isinstance(raw, list) else []:
+        thumbprint = item.get('thumbprint') or item.get('Thumbprint')
+        subject = item.get('subject') or item.get('Subject')
+        issuer = item.get('issuer') or item.get('Issuer')
+        not_after = item.get('notAfter') or item.get('NotAfter')
+ 
+        expiration_dt = _parse_certificate_expiration(not_after)
+        status_text, status_class = _get_certificate_status(expiration_dt)
+        expiration_display = expiration_dt.strftime('%d/%m/%Y %H:%M:%S') if expiration_dt else str(not_after or '')
+ 
+        certificates.append({
+            'thumbprint': thumbprint,
+            'subject': subject,
+            'issuer': issuer,
+            'notAfter': expiration_display,
+            'status_text': status_text,
+            'status_class': status_class
+        })
+ 
+    return certificates
+ 
+ 
+@app.route('/validade-certificados')
+@login_required
+def validade_certificados():
+    certificates = _load_certificates_data()
+    no_data_message = None
+    if not certificates:
+        no_data_message = 'Nenhum dado disponível'
+ 
+    _log_certificados('Página de validade de certificados acessada')
+    return render_template('validade_certificados_servidores.html', certificates=certificates, no_data_message=no_data_message)
+ 
+ 
+@app.route('/api/certificados/refresh')
+@login_required
+def api_certificados_refresh():
+    try:
+        if not (base_dir / 'coleta_dados_acraby.py').exists():
+            raise FileNotFoundError('Script coleta_dados_acraby.py não encontrado')
+ 
+        command = [sys.executable, str(base_dir / 'coleta_dados_acraby.py')]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(f'Erro ao executar script: {result.stderr.strip() or result.stdout.strip()}')
+ 
+        certificates = _load_certificates_data()
+        _log_certificados('Refresh de certificados realizado com sucesso')
+        return jsonify({'status': 'success', 'data': certificates})
+ 
+    except Exception as e:
+        _log_certificados(f'Falha ao atualizar certificados: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # === ROTAS DE REGIONAIS ===
 
