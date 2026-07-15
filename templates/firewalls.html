@@ -160,11 +160,16 @@
                         <i class="bi bi-shield-check" style="color: #FF6B6B;"></i>
                         Firewalls &amp; Licenças
                     </h1>
-                    <p class="text-muted mb-0">Monitoramento centralizado de FortiGates e status de licenças por regional</p>
+                    <p class="text-muted mb-0">
+                        Monitoramento centralizado de FortiGates e status de licenças por regional
+                        {% if cache_atualizado_em %}
+                            <span class="ms-2 small">Última consulta Forti: {{ cache_atualizado_em[:19].replace('T', ' ') }}</span>
+                        {% endif %}
+                    </p>
                 </div>
-                <button class="btn btn-danger" onclick="recarregarFirewalls()" title="Sincronizar dados">
+                <button class="btn btn-danger" onclick="recarregarFirewalls()" title="Consultar FortiManager agora">
                     <i class="bi bi-arrow-clockwise me-2"></i>
-                    Recarregar
+                    Atualizar Forti
                 </button>
             </div>
         </div>
@@ -327,8 +332,8 @@ let filtroBuscaAtivo = false;
 let filtroAtivo = 'all';
 
 function recarregarFirewalls() {
-    showToast('Recarregando dados de firewalls...', 'info');
-    setTimeout(() => { location.reload(); }, 500);
+    showToast('Consultando FortiManager...', 'info');
+    setTimeout(() => { window.location.href = "{{ url_for('listar_firewalls') }}?refresh=1"; }, 500);
 }
 
 function aplicarFiltroFirewall(filtro) {
