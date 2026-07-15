@@ -1,4 +1,4 @@
-========================================
+﻿========================================
   SISTEMA DE AUTOMAÇÃO DE INFRAESTRUTURA
 ========================================
 
@@ -78,7 +78,7 @@ Estrutura por data:
 
 Para verificar se tudo está funcionando:
 1. Abra o Prompt de Comando na pasta do sistema
-2. Execute: python verificar_dependencias.py
+2. Execute: python tools/manual/verificar_dependencias.py
 3. Verifique se todas as dependências estão OK
 
 📊 LOGS E DEPURAÇÃO:
@@ -111,7 +111,7 @@ Para executar automaticamente:
 
 Em caso de problemas persistentes:
 1. Verifique os logs na pasta logs/
-2. Execute o diagnóstico: python verificar_dependencias.py
+2. Execute o diagnóstico: python tools/manual/verificar_dependencias.py
 3. Documente o erro exato para suporte
 
 🎯 DICAS DE USO:

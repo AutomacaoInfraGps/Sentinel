@@ -1,10 +1,16 @@
+﻿from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 """
 Script para tentar diferentes métodos de instalação do PyInstaller
 """
 import subprocess
 import sys
 import os
-from pathlib import Path
 
 def tentar_instalacao_normal():
     """Tenta instalação normal do PyInstaller"""

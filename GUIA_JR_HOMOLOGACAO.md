@@ -27,25 +27,25 @@ powershell -ExecutionPolicy Bypass -File .\status_ambientes.ps1
 ### Ver status da producao sem mexer nela
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\operar_producao.ps1 -Action status
+powershell -ExecutionPolicy Bypass -File .\scripts\ambientes\operar_producao.ps1 -Action status
 ```
 
 ### Ver status da homologacao
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\operar_homologacao.ps1 -Action status
+powershell -ExecutionPolicy Bypass -File .\scripts\ambientes\operar_homologacao.ps1 -Action status
 ```
 
 ### Reiniciar homologacao
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\operar_homologacao.ps1 -Action restart
+powershell -ExecutionPolicy Bypass -File .\scripts\ambientes\operar_homologacao.ps1 -Action restart
 ```
 
 ### Abrir homologacao no navegador
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\operar_homologacao.ps1 -Action open
+powershell -ExecutionPolicy Bypass -File .\scripts\ambientes\operar_homologacao.ps1 -Action open
 ```
 
 ## Fluxo recomendado para o JR

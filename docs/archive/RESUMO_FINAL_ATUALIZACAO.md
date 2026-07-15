@@ -1,4 +1,4 @@
-# 🎯 RESUMO FINAL - Atualização Completa dos Dashboards
+﻿# 🎯 RESUMO FINAL - Atualização Completa dos Dashboards
 
 ## ✅ MISSÃO CUMPRIDA!
 
@@ -40,13 +40,13 @@ dashboard_hierarquico.py          # Dashboard principal hierárquico
 executar_tudo_v2.py              # Executor completo integrado
 gerenciar_regionais.py           # Gerenciador da estrutura
 verificar_servidores_v2.py       # Verificador hierárquico
-atualizar_dashboards.py          # Script de migração
+tools/manual/atualizar_dashboards.py # Script de migração
 ```
 
 ### 📋 Estrutura e Dados
 ```
 estrutura_regionais.json         # Dados hierárquicos
-limpar_estrutura.py             # Limpeza de duplicações
+tools/manual/limpar_estrutura.py # Limpeza de duplicações
 README_ESTRUTURA_V2.md          # Documentação técnica
 ATUALIZACAO_DASHBOARDS.md       # Guia de atualização
 ```
@@ -116,7 +116,7 @@ python gerenciar_regionais.py
 
 ### 4. Atualização/Migração
 ```bash
-python atualizar_dashboards.py
+python tools/manual/atualizar_dashboards.py
 # Para migrar sistemas antigos
 ```
 

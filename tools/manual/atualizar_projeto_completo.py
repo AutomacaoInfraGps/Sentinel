@@ -1,3 +1,10 @@
+﻿from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 """
 Script de Atualização Completa do Projeto
 Integra toda a interface web com a nova estrutura hierárquica
@@ -5,7 +12,6 @@ Integra toda a interface web com a nova estrutura hierárquica
 
 import os
 import shutil
-from pathlib import Path
 from datetime import datetime
 import json
 

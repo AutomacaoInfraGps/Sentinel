@@ -1,3 +1,10 @@
+﻿from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 """
 Demonstração do Sistema Final
 Sistema 100% hierárquico com autenticação AD original
@@ -5,7 +12,6 @@ Sistema 100% hierárquico com autenticação AD original
 
 import webbrowser
 import time
-from pathlib import Path
 import json
 
 def mostrar_sistema_final():
