@@ -1,3 +1,10 @@
+﻿from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 #!/usr/bin/env python3
 """
 Script para diagnosticar problemas com switches em estado desconhecido
@@ -145,7 +152,7 @@ def main():
         print("   4. Problemas de conectividade com o Zabbix")
         
         print("\n💡 Recomendações:")
-        print("   1. Execute o script corrigir_ips_excel.py para atualizar os IPs")
+        print("   1. Execute o script tools/manual/corrigir_ips_excel.py para atualizar os IPs")
         print("   2. Verifique se os nomes dos switches no Excel correspondem aos nomes no Zabbix")
         print("   3. Verifique se todos os switches estão cadastrados no Zabbix")
     else:

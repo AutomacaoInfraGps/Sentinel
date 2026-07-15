@@ -1,4 +1,4 @@
-# 🔄 Atualização dos Dashboards - Estrutura Hierárquica
+﻿# 🔄 Atualização dos Dashboards - Estrutura Hierárquica
 
 ## 🎯 Resumo da Atualização
 
@@ -20,7 +20,7 @@ Os dashboards foram completamente reestruturados para refletir a hierarquia corr
 ### Principais
 - `dashboard_hierarquico.py` - Dashboard principal com estrutura hierárquica
 - `executar_tudo_v2.py` - Executor completo integrado
-- `atualizar_dashboards.py` - Script de migração e atualização
+- `tools/manual/atualizar_dashboards.py` - Script de migração e atualização
 
 ### Estrutura
 - `estrutura_regionais.json` - Dados hierárquicos das regionais
@@ -59,7 +59,7 @@ python executar_tudo_v2.py
 
 ### 3. Atualização/Migração
 ```bash
-python atualizar_dashboards.py
+python tools/manual/atualizar_dashboards.py
 ```
 
 **Funcionalidades:**
@@ -266,7 +266,7 @@ python atualizar_dashboards.py
 
 Para dúvidas ou problemas:
 1. Verifique os logs em `output/`
-2. Execute `python atualizar_dashboards.py` para diagnóstico
+2. Execute `python tools/manual/atualizar_dashboards.py` para diagnóstico
 3. Consulte `README_ESTRUTURA_V2.md` para detalhes técnicos
 4. Use `python dashboard_hierarquico.py` para teste direto
 

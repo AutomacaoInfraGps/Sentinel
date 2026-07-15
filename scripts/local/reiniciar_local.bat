@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 echo [Sentinel Local] Parando servidor atual na porta 5000...
 
 :: Mata qualquer processo Python rodando run_web_service.py

@@ -1,4 +1,4 @@
-# 🚀 OPÇÕES DE DISTRIBUIÇÃO DO SISTEMA
+﻿# 🚀 OPÇÕES DE DISTRIBUIÇÃO DO SISTEMA
 
 ## 📋 **SITUAÇÃO ATUAL**
 
@@ -126,7 +126,7 @@ Vou criar um arquivo de instruções para distribuir junto:
 
 ## SUPORTE:
 - Verifique os logs na pasta: logs/
-- Execute: python verificar_dependencias.py (para diagnóstico)
+- Execute: python tools/manual/verificar_dependencias.py (para diagnóstico)
 ```
 
 ---
@@ -149,8 +149,8 @@ Vou criar um arquivo de instruções para distribuir junto:
 
 - ✅ `SistemaAutomacao.bat` - Executável batch pronto
 - ✅ `compile_to_exe.py` - Script de compilação automática
-- ✅ `verificar_dependencias.py` - Diagnóstico do sistema
-- ✅ `instalar_pyinstaller.py` - Tentativas de instalação
+- ✅ `tools/manual/verificar_dependencias.py` - Diagnóstico do sistema
+- ✅ `tools/manual/instalar_pyinstaller.py` - Tentativas de instalação
 - ✅ `GUIA_COMPILACAO_EXE.md` - Guia completo
 - ✅ `COMPILACAO_MANUAL.md` - Instruções manuais
 

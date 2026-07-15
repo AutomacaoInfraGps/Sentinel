@@ -1,4 +1,4 @@
-# Sistema de Monitoramento - Estrutura Hierárquica V2.0
+﻿# Sistema de Monitoramento - Estrutura Hierárquica V2.0
 
 ## 🏗️ Nova Estrutura
 
@@ -22,7 +22,7 @@ Regional (RG_GLOBAL SEGURANÇA)
 - `verificar_servidores_v2.py` - Verificador com nova estrutura
 
 ### Utilitários
-- `limpar_estrutura.py` - Remove duplicações e organiza
+- `tools/manual/limpar_estrutura.py` - Remove duplicações e organiza
 - `README_ESTRUTURA_V2.md` - Esta documentação
 
 ## 🏢 Regionais Configuradas

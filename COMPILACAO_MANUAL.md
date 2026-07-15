@@ -1,4 +1,4 @@
-# 🔧 GUIA DE COMPILAÇÃO MANUAL PARA .EXE
+﻿# 🔧 GUIA DE COMPILAÇÃO MANUAL PARA .EXE
 
 ## 🚨 **PROBLEMA IDENTIFICADO**
 Há restrições de rede que impedem a instalação automática do PyInstaller. Vou te dar alternativas para resolver isso.
@@ -90,7 +90,7 @@ pyinstaller ^
 Antes de compilar, verifique:
 
 - [ ] ✅ PyInstaller instalado
-- [ ] ✅ Todas as dependências OK (execute: `python verificar_dependencias.py`)
+- [ ] ✅ Todas as dependências OK (execute: `python tools/manual/verificar_dependencias.py`)
 - [ ] ✅ Arquivo `executar_tudo.py` existe
 - [ ] ✅ Pasta `templates` existe
 - [ ] ✅ Scripts `.ps1` existem
@@ -198,7 +198,7 @@ Se ainda tiver problemas:
 
 1. **Verifique dependências:**
    ```bash
-   python verificar_dependencias.py
+   python tools/manual/verificar_dependencias.py
    ```
 
 2. **Teste compilação simples:**

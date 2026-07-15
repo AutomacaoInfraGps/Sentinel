@@ -50,6 +50,7 @@ desktop.ini
 *.lnk
 
 # Arquivos de configuração sensíveis
+/COPILOT_CONTEXT.md
 /certificate_disk_report_acrab.json
 /nul
 servidores.json
@@ -66,6 +67,9 @@ auditoria_*.json
 relatorio_*.json
 admin_baseline.json
 license_debug.json
+!reports/
+!reports/archive/
+!reports/archive/relatorio_*.json
 
 # Backups e snapshots locais
 backup_*/
@@ -91,6 +95,9 @@ test_*.py
 tmp_*.py
 debug_*.py
 MIGRATION_PLAN.md
+!tests/
+!tests/manual/
+!tests/manual/*.py
 
 # Arquivos temporários de segurança
 *.tmp
