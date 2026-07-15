@@ -3391,6 +3391,15 @@ def _carregar_cache_dashboard(nome, ttl_seconds=None):
         return None
 
 
+def _invalidar_cache_dashboard(nome):
+    """Remove snapshot salvo para forcar nova consulta na proxima abertura."""
+    try:
+        cache_path = PROJECT_ROOT / "output" / f"dashboard_{nome}_cache.json"
+        if cache_path.exists():
+            cache_path.unlink()
+    except Exception as exc:
+        current_app.logger.warning("Falha ao invalidar cache %s do dashboard: %s", nome, exc)
+
 @app.route('/firewalls')
 @login_required
 def listar_firewalls(return_data=False):
@@ -3922,8 +3931,9 @@ def admin_aprovar_usuario(device_key, usuario):
         entry.append(usuario)
         entry.sort()
     _save_admin_baseline(baseline)
+    _invalidar_cache_dashboard('admins')
     flash(f'Usuário "{usuario}" aprovado na baseline de {device_key}.', 'success')
-    return redirect(url_for('listar_admin_logins'))
+    return redirect(url_for('listar_admin_logins', refresh=1))
 
 
 @app.route('/admin-logins/remover-baseline/<path:device_key>/<path:usuario>', methods=['POST'])
@@ -3935,8 +3945,9 @@ def admin_remover_baseline(device_key, usuario):
     if usuario in entry:
         entry.remove(usuario)
     _save_admin_baseline(baseline)
+    _invalidar_cache_dashboard('admins')
     flash(f'Usuário "{usuario}" removido da baseline de {device_key}.', 'success')
-    return redirect(url_for('listar_admin_logins'))
+    return redirect(url_for('listar_admin_logins', refresh=1))
 
 
 @app.route('/admin-logins/definir-baseline', methods=['POST'])
@@ -3947,14 +3958,15 @@ def admin_definir_baseline():
     admins_str = request.form.get("admins", "")
     if not device_key:
         flash('Dispositivo inválido.', 'error')
-        return redirect(url_for('listar_admin_logins'))
+        return redirect(url_for('listar_admin_logins', refresh=1))
 
     admins = [a.strip() for a in admins_str.split(",") if a.strip()]
     baseline = _load_admin_baseline()
     baseline[device_key] = sorted(set(admins))
     _save_admin_baseline(baseline)
+    _invalidar_cache_dashboard('admins')
     flash(f'Baseline de "{device_key}" definida com {len(admins)} usuário(s).', 'success')
-    return redirect(url_for('listar_admin_logins'))
+    return redirect(url_for('listar_admin_logins', refresh=1))
 
 
 @app.route('/admin-logins/debug')
