@@ -83,19 +83,23 @@
         {% set ns = namespace(critico=0, atencao=0, ok=0, sites_com_issue=0) %}
 
         {% for site_nome, canais in (unifi_data.interferencia_5ghz_por_site or {}).items() %}
-            {% set site_tem_issue = namespace(val=false) %}
+            {% set site_ns = namespace(pior='OK') %}
             {% for canal in canais %}
                 {% if canal.risco == 'CRITICO' %}
-                    {% set ns.critico = ns.critico + 1 %}
-                    {% set site_tem_issue.val = true %}
-                {% elif canal.risco == 'ATENCAO' %}
-                    {% set ns.atencao = ns.atencao + 1 %}
-                    {% set site_tem_issue.val = true %}
-                {% else %}
-                    {% set ns.ok = ns.ok + 1 %}
+                    {% set site_ns.pior = 'CRITICO' %}
+                {% elif canal.risco == 'ATENCAO' and site_ns.pior != 'CRITICO' %}
+                    {% set site_ns.pior = 'ATENCAO' %}
                 {% endif %}
             {% endfor %}
-            {% if site_tem_issue.val %}{% set ns.sites_com_issue = ns.sites_com_issue + 1 %}{% endif %}
+            {% if site_ns.pior == 'CRITICO' %}
+                {% set ns.critico = ns.critico + 1 %}
+                {% set ns.sites_com_issue = ns.sites_com_issue + 1 %}
+            {% elif site_ns.pior == 'ATENCAO' %}
+                {% set ns.atencao = ns.atencao + 1 %}
+                {% set ns.sites_com_issue = ns.sites_com_issue + 1 %}
+            {% else %}
+                {% set ns.ok = ns.ok + 1 %}
+            {% endif %}
         {% endfor %}
 
     <div class="container py-4">
@@ -129,7 +133,7 @@
                     <div class="card-body text-center">
                         <h2 class="fw-bold mb-1">{{ ns.critico }}</h2>
                         <div>Crítico</div>
-                        <small class="opacity-75">CU &gt; 90% no canal</small>
+                        <small class="opacity-75">Regionais com pior status crítico</small>
                     </div>
                 </div>
             </div>
@@ -140,7 +144,7 @@
                     <div class="card-body text-center">
                         <h2 class="fw-bold mb-1">{{ ns.atencao }}</h2>
                         <div>Atenção</div>
-                        <small class="opacity-75">CU 80–90% no canal</small>
+                        <small class="opacity-75">Regionais com pior status atenção</small>
                     </div>
                 </div>
             </div>
@@ -151,7 +155,7 @@
                     <div class="card-body text-center">
                         <h2 class="fw-bold mb-1">{{ ns.ok }}</h2>
                         <div>OK</div>
-                        <small class="opacity-75">CU &lt; 80% no canal</small>
+                        <small class="opacity-75">Regionais sem crítico/atenção</small>
                     </div>
                 </div>
             </div>
@@ -518,7 +522,7 @@ function filtrarCanais(filtro) {
     });
 
     // resumo
-    const labels = { 'all': '', 'issues': 'Sites com problema (Crítico + Atenção)', 'CRITICO': 'Somente crítico', 'ATENCAO': 'Somente atenção', 'OK': 'Somente OK' };
+    const labels = { 'all': '', 'issues': 'Regionais com problema (Crítico + Atenção)', 'CRITICO': 'Somente crítico', 'ATENCAO': 'Somente atenção', 'OK': 'Somente OK' };
     const summary = $('#interfCanaisFiltroSummary');
     if (filtro !== 'all') {
         $('#interfCanaisFiltroTexto').text(labels[filtro] || filtro);
