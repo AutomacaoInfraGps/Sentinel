@@ -153,11 +153,16 @@
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div>
                 <h4><i class="fas fa-user-shield me-2"></i>Monitor de Admins — FortiGates, FortiManager e FortiAnalyzer</h4>
-                <p>Comparação em tempo real dos usuários admin com a baseline de acessos aprovados. Qualquer diferença gera alerta.</p>
+                <p>
+                    Comparação dos usuários admin com a baseline de acessos aprovados. Qualquer diferença gera alerta.
+                    {% if cache_atualizado_em %}
+                        <span class="ms-2">Última consulta Forti: {{ cache_atualizado_em[:19].replace('T', ' ') }}</span>
+                    {% endif %}
+                </p>
             </div>
             <div>
-                <a href="{{ url_for('listar_admin_logins') }}" class="btn btn-sm btn-light">
-                    <i class="fas fa-sync-alt me-1"></i>Atualizar
+                <a href="{{ url_for('listar_admin_logins') }}?refresh=1" class="btn btn-sm btn-light">
+                    <i class="fas fa-sync-alt me-1"></i>Atualizar Forti
                 </a>
             </div>
         </div>

@@ -6,6 +6,7 @@ import base64
 import webbrowser
 from pathlib import Path
 import asyncio
+import argparse
 from playwright.async_api import async_playwright
 
 # --- Ambiente / Pastas públicas ---
@@ -79,4 +80,7 @@ async def main(open_after: bool = False) -> None:
         webbrowser.open(GPS_HTML.resolve().as_uri())
 
 if __name__ == "__main__":
-    asyncio.run(main(open_after=True))
+    parser = argparse.ArgumentParser(description="Captura print do GPS Amigo.")
+    parser.add_argument("--open", action="store_true", help="Abre o HTML gerado no navegador apos a captura.")
+    args = parser.parse_args()
+    asyncio.run(main(open_after=args.open))

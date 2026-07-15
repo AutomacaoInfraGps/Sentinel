@@ -3370,11 +3370,48 @@ def _salvar_cache_dashboard(nome, dados):
         current_app.logger.warning("Falha ao salvar cache %s do dashboard: %s", nome, exc)
 
 
+def _carregar_cache_dashboard(nome, ttl_seconds=None):
+    """Carrega snapshot salvo e, opcionalmente, valida a idade maxima."""
+    try:
+        cache_path = PROJECT_ROOT / "output" / f"dashboard_{nome}_cache.json"
+        if not cache_path.exists():
+            return None
+
+        dados = json.loads(cache_path.read_text(encoding="utf-8"))
+        atualizado_em = dados.get("atualizado_em")
+        if ttl_seconds is not None and atualizado_em:
+            atualizado_dt = datetime.fromisoformat(str(atualizado_em))
+            if atualizado_dt.tzinfo is not None:
+                atualizado_dt = atualizado_dt.astimezone().replace(tzinfo=None)
+            if (datetime.now() - atualizado_dt).total_seconds() > ttl_seconds:
+                return None
+        return dados
+    except Exception as exc:
+        current_app.logger.warning("Falha ao carregar cache %s do dashboard: %s", nome, exc)
+        return None
+
+
 @app.route('/firewalls')
 @login_required
 def listar_firewalls(return_data=False):
     """Página de listagem de firewalls (FortiGates) com status de licenças"""
     try:
+        force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
+        if not force_refresh:
+            cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
+            if cached:
+                if return_data:
+                    return cached
+                return render_template(
+                    'firewalls.html',
+                    firewalls_por_regional=cached.get("firewalls_por_regional", {}),
+                    total_firewalls=cached.get("total_firewalls", 0),
+                    total_alertas=cached.get("total_alertas", 0),
+                    total_expirados=cached.get("total_expirados", 0),
+                    cache_atualizado_em=cached.get("atualizado_em"),
+                    usando_cache=True,
+                )
+
         print("🔴 DEBUG listar_firewalls(): INICIANDO")
         current_app.logger.info("🔴 DEBUG listar_firewalls(): INICIANDO")
         firewalls_por_regional = {}
@@ -3616,7 +3653,9 @@ def listar_firewalls(return_data=False):
             firewalls_por_regional=firewalls_por_regional,
             total_firewalls=total_firewalls,
             total_alertas=total_alertas,
-            total_expirados=total_expirados
+            total_expirados=total_expirados,
+            cache_atualizado_em=firewall_snapshot.get("atualizado_em"),
+            usando_cache=False,
         )
 
     except Exception as e:
@@ -3626,7 +3665,9 @@ def listar_firewalls(return_data=False):
             firewalls_por_regional={},
             total_firewalls=0,
             total_alertas=0,
-            total_expirados=0
+            total_expirados=0,
+            cache_atualizado_em=None,
+            usando_cache=False,
         )
 
 
@@ -3692,6 +3733,25 @@ def listar_admin_logins(return_data=False):
 
     adom = _get_fortimanager_adom()
     baseline = _load_admin_baseline()
+    force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
+    if not force_refresh:
+        cached = _carregar_cache_dashboard("admins", ttl_seconds=1800)
+        if cached:
+            if return_data:
+                return cached
+            return render_template(
+                'admin_logins.html',
+                dispositivos=cached.get("dispositivos", {}),
+                baseline=baseline,
+                total_disp=cached.get("total_disp", 0),
+                total_alertas=cached.get("total_alertas", 0),
+                total_offline=cached.get("total_offline", 0),
+                total_sem_perm=cached.get("total_sem_perm", 0),
+                total_ok=cached.get("total_ok", 0),
+                admin_eventos=[],
+                cache_atualizado_em=cached.get("atualizado_em"),
+                usando_cache=True,
+            )
 
     try:
         fmg = FortiManagerClient()
@@ -3838,6 +3898,8 @@ def listar_admin_logins(return_data=False):
         total_sem_perm=total_sem_perm,
         total_ok=total_ok,
         admin_eventos=admin_eventos,
+        cache_atualizado_em=admin_snapshot.get("atualizado_em"),
+        usando_cache=False,
     )
 
 
