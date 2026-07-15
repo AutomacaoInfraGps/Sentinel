@@ -198,29 +198,6 @@ python executar_tudo.py --no-browser
 
 O dashboard consolidado gera arquivos em `output/` e também em pastas públicas configuradas em `config.py`.
 
-## 🚢 Fluxo de Publicação
-
-Na máquina local:
-
-```bash
-git status
-git add .
-git commit -m "feat: descricao da alteracao"
-git pushall
-```
-
-No servidor:
-
-```powershell
-git pull
-.\restart_web_service.ps1
-```
-
-O alias `git pushall` envia para os remotes configurados:
-
-- `origin`
-- `empresa`
-
 ## 🧯 Cache e Consumo de API Forti
 
 Para reduzir consumo no FortiManager/FortiAnalyzer:

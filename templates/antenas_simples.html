@@ -117,8 +117,8 @@
                     style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
                     <div class="card-body text-center">
                         <h2 class="fw-bold mb-1">{{ ns.sites_com_issue }}</h2>
-                        <div>Sites Afetados</div>
-                        <small class="opacity-75">Sites com co-canal 5GHz</small>
+                        <div>Regionais Afetadas</div>
+                        <small class="opacity-75">Regionais com co-canal 5GHz</small>
                     </div>
                 </div>
             </div>
@@ -223,7 +223,7 @@
                                                 <th style="width:160px;">Channel (CU)</th>
                                                 <th style="width:130px;">Interferência</th>
                                                 <th style="width:160px;">Retransmissão</th>
-                                                <th style="width:70px;">Clientes</th>
+                                                <th style="width:70px;">Usuários</th>
                                                 <th style="width:110px;">Status</th>
                                             </tr>
                                         </thead>
@@ -351,7 +351,7 @@
             </div>
         </div>
 
-        <!-- CLIENTES CONECTADOS -->
+        <!-- USUARIOS CONECTADOS -->
         <div class="col-md-3 mb-3">
             <div class="card text-white shadow-sm h-100"
                 style="background: linear-gradient(135deg, #0A4A63, #0F6C8C);">
@@ -359,7 +359,7 @@
                     <h2 class="fw-bold mb-1">
                         {{ unifi_data.clientes_conectados | default('-', true) }}
                     </h2>
-                    <div>Clientes Conectados</div>
+                    <div>Usuários Conectados</div>
                 </div>
             </div>
         </div>
@@ -455,7 +455,7 @@
                                                 <span class="badge bg-{{ 'success' if ap.status == 'online' else 'danger' }}">{{ ap.status | upper }}</span>
                                             </div>
                                             <div class="row-item">
-                                                <span class="label">Clientes:</span>
+                                                <span class="label">Usuários:</span>
                                                 <span class="badge bg-info">{{ ap.clientes | default(0) }}</span>
                                             </div>
                                         </div>

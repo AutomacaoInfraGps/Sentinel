@@ -143,7 +143,7 @@ for site in sites:
         total_clientes += site_clientes
 
         html += f"<h2 onclick='toggle(this)'>{site_desc} ({len(aps)} APs)</h2><div style='display:none'><table>"
-        html += "<tr><th>Nome</th><th>IP</th><th>MAC</th><th>Modelo</th><th>Firmware</th><th>Status</th><th>Clientes</th><th>Uptime (s)</th></tr>"
+        html += "<tr><th>Nome</th><th>IP</th><th>MAC</th><th>Modelo</th><th>Firmware</th><th>Status</th><th>Usuários</th><th>Uptime (s)</th></tr>"
 
         # ========= COLETA 5GHz =========
         for ap in aps:
