@@ -191,7 +191,7 @@
     }
 
     .regionais-stats-grid.regionais-stats-grid-links {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .regionais-stats-card .stats-card {
@@ -350,16 +350,6 @@
         </div>
 
         <div class="regionais-stats-card">
-            <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
-                <div class="stats-number">{{ regionais|sum(attribute='total_servidores') }}</div>
-                <div class="stats-label">
-                    <i class="bi bi-server me-1"></i>
-                    Total de Servidores
-                </div>
-            </div>
-        </div>
-
-        <div class="regionais-stats-card">
             <div class="stats-card stats-card-filter" data-filter-regional="with-servers" onclick="aplicarFiltroRegional('with-servers')" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
                 <div class="stats-number">{{ (regionais|selectattr('total_servidores', '>', 0)|list)|length }}</div>
                 <div class="stats-label">
@@ -378,18 +368,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="regionais-stats-grid regionais-stats-grid-links">
-        <div class="regionais-stats-card">
-            <div class="stats-card" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
-                <div class="stats-number">{{ regionais|sum(attribute='total_links') }}</div>
-                <div class="stats-label">
-                    <i class="bi bi-router me-1"></i>
-                    Total de Links
-                </div>
-            </div>
-        </div>
 
         <div class="regionais-stats-card">
             <div class="stats-card stats-card-filter" data-filter-regional="with-links" onclick="aplicarFiltroRegional('with-links')" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
@@ -400,13 +378,45 @@
                 </div>
             </div>
         </div>
+    </div>
 
+    <div class="regionais-stats-grid regionais-stats-grid-links">
         <div class="regionais-stats-card">
             <div class="stats-card stats-card-filter" data-filter-regional="without-links" onclick="aplicarFiltroRegional('without-links')" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
                 <div class="stats-number">{{ (regionais|selectattr('total_links', 'equalto', 0)|list)|length }}</div>
                 <div class="stats-label">
                     <i class="bi bi-router-fill me-1"></i>
                     Regionais sem Links
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="with-switches" onclick="aplicarFiltroRegional('with-switches')" style="background: linear-gradient(135deg, #495057, #0A4A63);">
+                <div class="stats-number">{{ (regionais|selectattr('total_switches', '>', 0)|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-diagram-3 me-1"></i>
+                    Regionais com Switches
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="without-switches" onclick="aplicarFiltroRegional('without-switches')" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                <div class="stats-number">{{ (regionais|selectattr('total_switches', 'equalto', 0)|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-diagram-3 me-1"></i>
+                    Regionais sem Switches
+                </div>
+            </div>
+        </div>
+
+        <div class="regionais-stats-card">
+            <div class="stats-card stats-card-filter" data-filter-regional="firewall-expiring" onclick="aplicarFiltroRegional('firewall-expiring')" style="background: linear-gradient(135deg, #e67e22, #d35400);">
+                <div class="stats-number">{{ (regionais|selectattr('tem_firewall_a_vencer')|list)|length }}</div>
+                <div class="stats-label">
+                    <i class="bi bi-shield-exclamation me-1"></i>
+                    Regionais com Firewall a Vencer
                 </div>
             </div>
         </div>
@@ -474,7 +484,9 @@
                     <div class="col-md-6 col-lg-4 mb-4 regional-search-item"
                         data-total-servidores="{{ regional.total_servidores }}"
                         data-total-links="{{ regional.total_links }}"
-                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %}">
+                        data-total-switches="{{ regional.total_switches }}"
+                        data-firewall-expiring="{{ 'true' if regional.tem_firewall_a_vencer else 'false' }}"
+                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %} {% for switch in regional.switches %} {{ switch.host }} {{ switch.ip }} {{ switch.modelo or '' }} {{ switch.local or '' }} {% endfor %}">
                         <div class="card border-0 shadow-sm h-100 transition-all regional-card"
                             id="card-regional-{{ regional.codigo }}">
                             <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -537,6 +549,10 @@
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="small text-muted">Links:</span>
                                         <span class="badge bg-info">{{ regional.total_links }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small text-muted">Switches:</span>
+                                        <span class="badge bg-secondary">{{ regional.total_switches }}</span>
                                     </div>
                                 </div>
                                 
@@ -860,6 +876,12 @@ function obterTextoFiltroRegional(filtro) {
             return 'Regionais com servidores';
         case 'with-links':
             return 'Regionais com links';
+        case 'with-switches':
+            return 'Regionais com switches';
+        case 'without-switches':
+            return 'Regionais sem switches';
+        case 'firewall-expiring':
+            return 'Regionais com firewall a vencer';
         case 'without-links':
             return 'Regionais sem links';
         case 'without-servers':
@@ -872,12 +894,20 @@ function obterTextoFiltroRegional(filtro) {
 function correspondeFiltroRegional(item) {
     const totalServidores = Number(item.dataset.totalServidores || '0');
     const totalLinks = Number(item.dataset.totalLinks || '0');
+    const totalSwitches = Number(item.dataset.totalSwitches || '0');
+    const firewallExpiring = item.dataset.firewallExpiring === 'true';
 
     switch (filtroRegionalAtual) {
         case 'with-servers':
             return totalServidores > 0;
         case 'with-links':
             return totalLinks > 0;
+        case 'with-switches':
+            return totalSwitches > 0;
+        case 'without-switches':
+            return totalSwitches === 0;
+        case 'firewall-expiring':
+            return firewallExpiring;
         case 'without-links':
             return totalLinks === 0;
         case 'without-servers':

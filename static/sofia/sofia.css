@@ -105,6 +105,12 @@
 .sofia-identity strong { font-size: 1rem; }
 .sofia-identity span { color: #cfe8f2; font-size: 0.76rem; }
 
+.sofia-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .sofia-icon-button,
 .sofia-send {
     width: 38px;

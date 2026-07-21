@@ -1,0 +1,98 @@
+{
+  "chat:basic": {
+    "enabled": true,
+    "risk": "baixo",
+    "description": "Permite conversar com a SofIA.",
+    "requires_confirmation": false,
+    "requires_approval": false,
+    "scope": "usuario_autenticado"
+  },
+  "sentinel:read": {
+    "enabled": true,
+    "risk": "baixo",
+    "description": "Permite consultar dados ja carregados no Sentinel.",
+    "requires_confirmation": false,
+    "requires_approval": false,
+    "scope": "usuario_autenticado"
+  },
+  "knowledge:read": {
+    "enabled": true,
+    "risk": "baixo",
+    "description": "Permite consultar a base explicativa em sofia/knowledge.",
+    "requires_confirmation": false,
+    "requires_approval": false,
+    "scope": "usuario_autenticado"
+  },
+  "ad:user:read": {
+    "enabled": false,
+    "risk": "baixo",
+    "description": "Consulta read-only de usuario no Active Directory.",
+    "requires_confirmation": false,
+    "requires_approval": false,
+    "scope": "grupo_e_ou"
+  },
+  "ad:group:read": {
+    "enabled": false,
+    "risk": "baixo",
+    "description": "Consulta grupos de usuario no Active Directory.",
+    "requires_confirmation": false,
+    "requires_approval": false,
+    "scope": "grupo_e_ou"
+  },
+  "ad:password:reset": {
+    "enabled": false,
+    "risk": "medio",
+    "description": "Reset de senha com troca obrigatoria no proximo logon.",
+    "requires_confirmation": true,
+    "requires_approval": false,
+    "scope": "grupo_e_ou"
+  },
+  "ad:user:unlock": {
+    "enabled": false,
+    "risk": "medio",
+    "description": "Desbloqueio de conta no Active Directory.",
+    "requires_confirmation": true,
+    "requires_approval": false,
+    "scope": "grupo_e_ou"
+  },
+  "ad:user:force_password_change": {
+    "enabled": false,
+    "risk": "medio",
+    "description": "Forca troca de senha no proximo logon.",
+    "requires_confirmation": true,
+    "requires_approval": false,
+    "scope": "grupo_e_ou"
+  },
+  "ad:group:add_member": {
+    "enabled": false,
+    "risk": "alto",
+    "description": "Adicionar usuario a grupo do Active Directory.",
+    "requires_confirmation": true,
+    "requires_approval": true,
+    "scope": "grupo_e_ou"
+  },
+  "ticket:create": {
+    "enabled": false,
+    "risk": "baixo",
+    "description": "Criacao futura de chamado.",
+    "requires_confirmation": true,
+    "requires_approval": false,
+    "scope": "usuario_autenticado"
+  },
+  "notify:email": {
+    "enabled": false,
+    "risk": "baixo",
+    "description": "Envio futuro de notificacao por e-mail.",
+    "requires_confirmation": true,
+    "requires_approval": false,
+    "scope": "usuario_autenticado"
+  },
+  "command:execute": {
+    "enabled": false,
+    "risk": "critico",
+    "description": "Execucao arbitraria de comandos. Bloqueada para a SofIA.",
+    "requires_confirmation": true,
+    "requires_approval": true,
+    "scope": "bloqueado"
+  }
+}

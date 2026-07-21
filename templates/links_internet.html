@@ -47,6 +47,16 @@
         color: white;
         text-align: center;
         box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .stats-card:hover,
+    .stats-card.active-filter {
+        transform: translateY(-2px);
+        border-color: rgba(255,255,255,.85);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.16);
     }
     
     .stats-number {
@@ -114,86 +124,15 @@
         margin-top: 20px;
     }
     
-    .sd-wan-info {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 20px;
-        margin-top: 20px;
-    }
-    
-    .sd-wan-title {
-        font-weight: 600;
-        margin-bottom: 15px;
-        color: #343a40;
-    }
-    
-    .sd-wan-item {
-        margin-bottom: 10px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .sd-wan-item:last-child {
-        border-bottom: none;
-    }
-
-    .links-overview {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 14px;
-        margin-bottom: 20px;
-    }
-
-    .regional-chip {
-        background: #fff;
-        border: 1px solid #d8e2ec;
-        border-left: 4px solid #0F6C8C;
-        border-radius: 14px;
-        padding: 12px 16px;
-        box-shadow: 0 8px 18px rgba(0,0,0,0.06);
-    }
-
-    .regional-chip.rj {
-        border-left-color: #fd7e14;
-    }
-
-    .regional-chip-header {
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: #495057;
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-    }
-
-    .regional-chip-stats {
-        font-size: 1rem;
-        font-weight: 600;
-    }
-
-    .regional-chip-stats .ok {
-        color: #198754;
-    }
-
-    .regional-chip-stats .alert {
-        color: #dc3545;
-    }
-
-    .regional-chip-stats .sep {
-        color: #6c757d;
-        margin: 0 6px;
-    }
-
     .links-regions-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 16px;
+        gap: 22px;
     }
 
     .links-region-block {
         background: rgba(255,255,255,0.9);
         border: 1px solid #d8e2ec;
-        border-radius: 16px;
+        border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 10px 24px rgba(0,0,0,0.06);
     }
@@ -204,7 +143,8 @@
         align-items: center;
         gap: 12px;
         padding: 14px 18px;
-        background: linear-gradient(90deg, rgba(247,250,252,0.96), rgba(237,242,247,0.92));
+        color: #fff;
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
         border-bottom: 1px solid #d8e2ec;
     }
 
@@ -216,23 +156,44 @@
 
     .links-region-counts {
         display: flex;
+        align-items: center;
+        justify-content: flex-end;
         gap: 10px;
         font-weight: 700;
         font-size: 0.9rem;
+        white-space: nowrap;
     }
 
     .links-region-counts .ok {
-        color: #198754;
+        color: #6ee7b7;
     }
 
-    .links-region-counts .alert {
-        color: #dc3545;
+    .links-region-counts .offline {
+        color: #fecaca;
+    }
+
+    .links-region-counts .muted {
+        color: #d8e2ec;
     }
 
     .links-region-items {
         display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 14px;
         padding: 14px;
+    }
+
+    .links-filter-summary {
+        display: none;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #e8f3f8;
+        border: 1px solid #bee5eb;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 16px;
+        font-size: .92rem;
     }
 
     .link-meta-grid {
@@ -318,12 +279,24 @@
     </div>
 </div>
 
-<!-- Estatísticas -->
-<div class="row mb-4">
-    <div class="col-md-4 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+<!-- Estatisticas -->
+<div class="row row-cols-1 row-cols-md-5 g-3 mb-4">
+    <div class="col">
+        <div class="stats-card links-status-filter active-filter" data-link-filter="all" onclick="filtrarLinksStatus('all', this)" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
+            <div class="stats-number" id="stats-total-regionais">
+                {{ resumo_links.total_regionais | default(links_por_regional|length, true) }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-diagram-3 me-1"></i>
+                Regionais
+            </div>
+        </div>
+    </div>
+
+    <div class="col">
+        <div class="stats-card links-status-filter" data-link-filter="all" onclick="filtrarLinksStatus('all', this)" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
             <div class="stats-number" id="stats-total-links">
-                {{ links|length }}
+                {{ resumo_links.total_links | default(links|length, true) }}
             </div>
             <div class="stats-label">
                 <i class="bi bi-globe me-1"></i>
@@ -331,11 +304,11 @@
             </div>
         </div>
     </div>
-    
-    <div class="col-md-4 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #20c997, #28a745);">
+
+    <div class="col">
+        <div class="stats-card links-status-filter" data-link-filter="online" onclick="filtrarLinksStatus('online', this)" style="background: linear-gradient(135deg, #20c997, #28a745);">
             <div class="stats-number" id="stats-online">
-                {{ links|selectattr('status', 'equalto', 'online')|list|length }}
+                {{ resumo_links.links_online | default(links|selectattr('status', 'equalto', 'online')|list|length, true) }}
             </div>
             <div class="stats-label">
                 <i class="bi bi-check-circle me-1"></i>
@@ -343,11 +316,11 @@
             </div>
         </div>
     </div>
-    
-    <div class="col-md-4 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+
+    <div class="col">
+        <div class="stats-card links-status-filter" data-link-filter="offline" onclick="filtrarLinksStatus('offline', this)" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
             <div class="stats-number" id="stats-offline">
-                {{ links|selectattr('status', 'equalto', 'offline')|list|length }}
+                {{ resumo_links.links_offline | default(links|selectattr('status', 'equalto', 'offline')|list|length, true) }}
             </div>
             <div class="stats-label">
                 <i class="bi bi-x-circle me-1"></i>
@@ -355,8 +328,19 @@
             </div>
         </div>
     </div>
-</div>
 
+    <div class="col">
+        <div class="stats-card links-status-filter" data-link-filter="other" onclick="filtrarLinksStatus('other', this)" style="background: linear-gradient(135deg, #6c757d, #495057);">
+            <div class="stats-number" id="stats-inativos">
+                {{ resumo_links.links_inativos | default(0, true) }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-pause-circle me-1"></i>
+                Inativos/Indefinidos
+            </div>
+        </div>
+    </div>
+</div>
 <!-- Botão para atualizar -->
 <div class="row mb-4">
     <div class="col-12 text-center">
@@ -387,24 +371,12 @@
     </div>
 </div>
 
-<!-- Lista de Links -->
-<div id="links-overview">
-    {% if links_por_regional %}
-    <div class="links-overview">
-        {% for regional, links_regional in links_por_regional.items() %}
-        <div class="regional-chip {{ regional|lower }}" data-regional="{{ regional }}">
-            <div class="regional-chip-header">Regional {{ regional }}</div>
-            <div class="regional-chip-stats">
-                <span class="ok">Online: {{ links_regional|selectattr('status', 'equalto', 'online')|list|length }}</span>
-                <span class="sep">|</span>
-                <span class="alert">Offline: {{ links_regional|selectattr('status', 'equalto', 'offline')|list|length }}</span>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+<div id="linksFilterSummary" class="links-filter-summary">
+    <span><strong>Filtro:</strong> <span id="linksFilterSummaryText"></span></span>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filtrarLinksStatus('all')">Mostrar todos</button>
 </div>
 
+<!-- Lista de Links -->
 <div id="links-container">
     {% if links_por_regional %}
     <div class="links-regions-grid">
@@ -414,12 +386,13 @@
                 <h4>{{ regional }}</h4>
                 <div class="links-region-counts">
                     <span class="ok">Online: {{ links_regional|selectattr('status', 'equalto', 'online')|list|length }}</span>
-                    <span class="alert">Offline: {{ links_regional|selectattr('status', 'equalto', 'offline')|list|length }}</span>
+                    <span class="offline">Offline: {{ links_regional|selectattr('status', 'equalto', 'offline')|list|length }}</span>
+                    <span class="muted">Total: {{ links_regional|length }}</span>
                 </div>
             </header>
             <div class="links-region-items">
                 {% for link in links_regional %}
-                <div class="card link-card h-100" id="link-{{ link.nome|replace('.', '-')|replace(' ', '-') }}" data-link="{{ link.nome }}">
+                <div class="card link-card h-100" id="link-{{ link.nome|replace('.', '-')|replace(' ', '-') }}" data-link="{{ link.nome }}" data-link-status="{{ link.status }}">
                     <div class="card-header link-header {{ 'link-online' if link.status == 'online' else 'link-offline' }}">
                         <div class="d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">{{ link.nome }}</h5>
@@ -478,61 +451,6 @@
     Nenhuma regional encontrada para a busca informada.
 </div>
 
-<!-- Informações do SD-WAN (se disponível) -->
-
-{% if sd_wan_por_regional %}
-<div class="row mt-4">
-    <div class="col-12">
-        <h3 class="mb-3">
-            <i class="bi bi-diagram-3 me-2"></i>
-            SD-WAN
-        </h3>
-    </div>
-
-    <div class="col-12" id="sd-wan-container">
-        {% for regional, sd_wan in sd_wan_por_regional.items() %}
-        {% if sd_wan and sd_wan.members %}
-        <div class="regional-sdwan-group">
-            <h4>{{ regional }}</h4>
-            <div class="row">
-                {% for member in sd_wan.members %}
-                <div class="col-md-6 mb-4">
-                    <div class="card link-card h-100">
-                        <div class="card-header link-header {{ 'link-online' if member.status == 'online' else 'link-offline' }}">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0 fw-bold">{{ member.interface }}</h5>
-                                <span class="badge bg-light text-dark">
-                                    {{ member.status|capitalize }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="card-body link-body">
-                            <p class="mb-2"><strong>Gateway:</strong> {{ member.gateway or 'N/A' }}</p>
-                            <p class="mb-2"><strong>Volume:</strong> {{ member.volume or 'N/A' }}</p>
-                            {% if member.bandwidth %}
-                            <p class="mb-2"><strong>Bandwidth:</strong> {{ member.bandwidth }}</p>
-                            {% endif %}
-                            {% if member.weight %}
-                            <p class="mb-2"><strong>Peso:</strong> {{ member.weight }}</p>
-                            {% endif %}
-                            {% if member.priority %}
-                            <p class="mb-2"><strong>Prioridade:</strong> {{ member.priority }}</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-
-
 {% endblock %}
 
 {% block extra_js %}
@@ -541,6 +459,8 @@
 
 <script>
 let linksPageSearch = null;
+let linksStatusFilter = 'all';
+let linksActiveFilterElement = null;
 
 $(document).ready(function() {
     $('#loadingOverlay').hide();
@@ -560,9 +480,7 @@ $(document).ready(function() {
                 }
             });
 
-            document.querySelectorAll('.regional-chip[data-regional]').forEach((chip) => {
-                chip.classList.toggle('d-none', !visibleRegionais.has(chip.dataset.regional || ''));
-            });
+            aplicarFiltroLinksStatus();
         }
     });
 });
@@ -614,35 +532,6 @@ function ordenarRegionais(obj) {
     ];
 }
 
-function renderizarOverviewLinks(linksPorRegional) {
-    const regionais = ordenarRegionais(linksPorRegional);
-    if (!regionais.length) {
-        $('#links-overview').empty();
-        return;
-    }
-
-    let html = '<div class="links-overview">';
-    regionais.forEach(function(regional) {
-        const links = linksPorRegional[regional] || [];
-        const online = links.filter(link => link.status === 'online').length;
-        const offline = links.filter(link => link.status === 'offline').length;
-
-        html += `
-            <div class="regional-chip ${regional.toLowerCase()}" data-regional="${regional}">
-                <div class="regional-chip-header">Regional ${regional}</div>
-                <div class="regional-chip-stats">
-                    <span class="ok">Online: ${online}</span>
-                    <span class="sep">|</span>
-                    <span class="alert">Offline: ${offline}</span>
-                </div>
-            </div>
-        `;
-    });
-    html += '</div>';
-
-    $('#links-overview').html(html);
-}
-
 function renderizarLinksPorRegional(linksPorRegional) {
     const regionais = ordenarRegionais(linksPorRegional);
     if (!regionais.length) {
@@ -663,7 +552,8 @@ function renderizarLinksPorRegional(linksPorRegional) {
                     <h4>${regional}</h4>
                     <div class="links-region-counts">
                         <span class="ok">Online: ${online}</span>
-                        <span class="alert">Offline: ${offline}</span>
+                        <span class="offline">Offline: ${offline}</span>
+                        <span class="muted">Total: ${links.length}</span>
                     </div>
                 </header>
                 <div class="links-region-items">
@@ -679,7 +569,7 @@ function renderizarLinksPorRegional(linksPorRegional) {
             const badge = link.status === 'online' ? 'link-online' : 'link-offline';
 
             html += `
-                <div class="card link-card h-100" id="link-${nome.replace(/[\.\s]+/g, '-')}" data-link="${nome}">
+                <div class="card link-card h-100" id="link-${nome.replace(/[\.\s]+/g, '-')}" data-link="${nome}" data-link-status="${link.status || 'unknown'}">
                     <div class="card-header link-header ${badge}">
                         <div class="d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">${nome}</h5>
@@ -730,53 +620,61 @@ function renderizarLinksPorRegional(linksPorRegional) {
     }
 }
 
-function renderizarSdWanPorRegional(sdWanPorRegional) {
-    const container = $('#sd-wan-container');
-    if (!container.length) {
-        return;
+function linkCorrespondeFiltro(status) {
+    if (linksStatusFilter === 'all') return true;
+    if (linksStatusFilter === 'other') return status !== 'online' && status !== 'offline';
+    return status === linksStatusFilter;
+}
+
+function atualizarResumoFiltroLinks() {
+    const labels = {
+        all: '',
+        online: 'Somente links online',
+        offline: 'Somente links offline',
+        other: 'Somente links inativos/indefinidos'
+    };
+
+    $('.links-status-filter').removeClass('active-filter');
+    if (linksActiveFilterElement && document.body.contains(linksActiveFilterElement)) {
+        $(linksActiveFilterElement).addClass('active-filter');
+    } else {
+        $(`.links-status-filter[data-link-filter="${linksStatusFilter}"]`).first().addClass('active-filter');
     }
 
-    const regionais = ordenarRegionais(sdWanPorRegional).filter(function(regional) {
-        const sdWan = sdWanPorRegional[regional] || {};
-        return Array.isArray(sdWan.members) && sdWan.members.length > 0;
-    });
-
-    if (!regionais.length) {
-        container.closest('.row').hide();
-        return;
+    if (linksStatusFilter === 'all') {
+        $('#linksFilterSummary').hide();
+    } else {
+        $('#linksFilterSummaryText').text(labels[linksStatusFilter] || linksStatusFilter);
+        $('#linksFilterSummary').css('display', 'flex');
     }
+}
 
-    let html = '';
-    regionais.forEach(function(regional) {
-        const membros = (sdWanPorRegional[regional] || {}).members || [];
-        html += `<div class="regional-sdwan-group"><h4>${regional}</h4><div class="row">`;
-        membros.forEach(function(member) {
-            const badge = member.status === 'online' ? 'link-online' : 'link-offline';
-            html += `
-                <div class="col-md-6 mb-4">
-                    <div class="card link-card h-100">
-                        <div class="card-header link-header ${badge}">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0 fw-bold">${member.interface || 'N/A'}</h5>
-                                <span class="badge bg-light text-dark">${String(member.status || 'offline').replace(/^./, m => m.toUpperCase())}</span>
-                            </div>
-                        </div>
-                        <div class="card-body link-body">
-                            <p class="mb-2"><strong>Gateway:</strong> ${member.gateway || 'N/A'}</p>
-                            <p class="mb-2"><strong>Volume:</strong> ${member.volume || 'N/A'}</p>
-                            ${member.bandwidth ? `<p class="mb-2"><strong>Bandwidth:</strong> ${member.bandwidth}</p>` : ''}
-                            ${member.weight ? `<p class="mb-2"><strong>Peso:</strong> ${member.weight}</p>` : ''}
-                            ${member.priority ? `<p class="mb-2"><strong>Prioridade:</strong> ${member.priority}</p>` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
+function aplicarFiltroLinksStatus() {
+    atualizarResumoFiltroLinks();
+
+    $('.links-region-block').each(function() {
+        const block = $(this);
+        let linksVisiveis = 0;
+
+        block.find('.link-card').each(function() {
+            const card = $(this);
+            const status = String(card.attr('data-link-status') || 'unknown').toLowerCase();
+            const mostrar = linkCorrespondeFiltro(status);
+            card.toggleClass('d-none', !mostrar);
+            if (mostrar) linksVisiveis++;
         });
-        html += '</div></div>';
-    });
 
-    container.html(html);
-    container.closest('.row').show();
+        const ocultoPelaBusca = block.hasClass('d-none') && linksStatusFilter === 'all';
+        if (!ocultoPelaBusca) {
+            block.toggle(linksVisiveis > 0);
+        }
+    });
+}
+
+function filtrarLinksStatus(filtro, elemento = null) {
+    linksStatusFilter = filtro || 'all';
+    linksActiveFilterElement = elemento;
+    aplicarFiltroLinksStatus();
 }
 
 function verificarLinks(btn = null) {
@@ -798,28 +696,30 @@ function verificarLinks(btn = null) {
             }
 
             const linksPorRegional = response.links_por_regional || {};
-            const sdWanPorRegional = response.sd_wan_por_regional || {};
+
 
             // 🔢 contadores
             let totalLinks = 0;
             let onlineLinks = 0;
             let offlineLinks = 0;
+            let inativosLinks = 0;
 
             Object.keys(linksPorRegional).forEach(function (regional) {
                 const links = linksPorRegional[regional] || [];
                 totalLinks += links.length;
                 onlineLinks += links.filter(link => link.status === 'online').length;
                 offlineLinks += links.filter(link => link.status === 'offline').length;
+                inativosLinks += links.filter(link => link.status !== 'online' && link.status !== 'offline').length;
             });
 
-            // 📊 atualiza estatísticas
+            $('#stats-total-regionais').text(Object.keys(linksPorRegional).length);
             $('#stats-total-links').text(totalLinks);
             $('#stats-online').text(onlineLinks);
             $('#stats-offline').text(offlineLinks);
-
-            renderizarOverviewLinks(linksPorRegional);
+            $('#stats-inativos').text(inativosLinks);
             renderizarLinksPorRegional(linksPorRegional);
-            renderizarSdWanPorRegional(sdWanPorRegional);
+            aplicarFiltroLinksStatus();
+
             if (linksPageSearch) {
                 linksPageSearch.apply();
             }

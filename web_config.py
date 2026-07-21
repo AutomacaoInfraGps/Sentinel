@@ -5,6 +5,7 @@ Sistema organizado por Regionais → Servidores
 
 import os
 import json
+import html as html_lib
 import time
 import sys
 import subprocess
@@ -1004,69 +1005,52 @@ def _ordenar_regionais_links(chaves_regionais):
 
 
 def _coletar_links_multiregional():
-    fortigates = ENV_CONFIG.get("fortigate")
-    if not isinstance(fortigates, dict):
-        return {
-            "success": False,
-            "message": "Configuração de Fortigate inválida (esperado SP, RJ, etc)"
-        }
-
     links_por_regional = {}
-    sd_wan_por_regional = {}
     links = []
 
-    for regional, cfg in fortigates.items():
-        regional_nome = str(regional or "N/A").strip().upper()
-        gerenciador = GerenciadorFortigate(
-            host=cfg.get("host"),
-            port=cfg.get("port"),
-            username=cfg.get("username"),
-            password=cfg.get("password"),
-        )
-
-        if not gerenciador.autenticar():
-            links_por_regional[regional_nome] = []
-            sd_wan_por_regional[regional_nome] = {"error": "Falha na autenticação"}
+    gerenciador_regionais.recarregar_regionais()
+    for codigo_regional in gerenciador_regionais.listar_regionais():
+        regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+        if not regional_info:
             continue
 
-        resultado = gerenciador.obter_informacoes_completas()
-        if not resultado.get("success"):
-            links_por_regional[regional_nome] = []
-            sd_wan_por_regional[regional_nome] = {
-                "error": resultado.get("message", "Erro desconhecido")
-            }
-            continue
+        nome_regional = str(regional_info.get("nome") or codigo_regional).strip().upper()
+        links_regional = []
 
-        links_processados = _mesclar_links_fortigate_com_cadastro(regional_nome, resultado.get("links", []))
-        links_normalizados = []
-
-        for link in links_processados:
-            link_normalizado = dict(link)
-            link_normalizado["regional"] = regional_nome
+        for link in _obter_links_internet_exibicao(regional_info):
+            link_normalizado = _preparar_link_para_template(link)
+            link_normalizado["regional"] = nome_regional
+            link_normalizado["codigo_regional"] = codigo_regional
             link_normalizado["nome"] = _formatar_nome_link_dashboard(link_normalizado)
-            link_normalizado["ultima_verificacao"] = (
-                link_normalizado.get("ultima_verificacao")
-                or resultado.get("timestamp")
-                or datetime.now().isoformat()
-            )
-            links_normalizados.append(link_normalizado)
+            link_normalizado["status"] = str(link_normalizado.get("status") or "unknown").strip().lower()
+            links_regional.append(link_normalizado)
             links.append(link_normalizado)
 
-        links_por_regional[regional_nome] = links_normalizados
-        sd_wan_por_regional[regional_nome] = resultado.get("sd_wan") or {}
+        if links_regional:
+            links_por_regional[nome_regional] = _ordenar_links_internet(links_regional)
 
     regionais_ordenadas = _ordenar_regionais_links(links_por_regional.keys())
     links_por_regional = {regional: links_por_regional.get(regional, []) for regional in regionais_ordenadas}
-    sd_wan_por_regional = {regional: sd_wan_por_regional.get(regional, {}) for regional in regionais_ordenadas}
+
+    total_links = len(links)
+    links_online = sum(1 for link in links if str(link.get("status") or "").lower() == "online")
+    links_offline = sum(1 for link in links if str(link.get("status") or "").lower() == "offline")
+    links_inativos = sum(1 for link in links if str(link.get("status") or "").lower() not in {"online", "offline"})
 
     return {
         "success": True,
         "links": links,
         "links_por_regional": links_por_regional,
-        "sd_wan_por_regional": sd_wan_por_regional,
+        "sd_wan_por_regional": {},
+        "resumo": {
+            "total_regionais": len(links_por_regional),
+            "total_links": total_links,
+            "links_online": links_online,
+            "links_offline": links_offline,
+            "links_inativos": links_inativos,
+        },
         "timestamp": datetime.now().isoformat()
     }
-
 # === UTILITÁRIOS FORTIMANAGER/FORTIGATE (REGIONAIS) ===
 
 _REGIONAL_ALIAS = {
@@ -1085,6 +1069,7 @@ _REGIONAL_DEVICE_OVERRIDE = {
     "REG_SAO_LEOPOLDO": ["FGT_REGSAOLEOPOLDO"],
     "REG_SULZER": ["FTG_REGSULZERTRIUNFO"],
     "REG_SJC": ["FGT_REGSAOJOSEDOSCAMPOS"],
+    "REG_LC": ["FGT_GRSA_MACAE"],
 }
 
 _REGIONAL_LINK_INTERFACE_INCLUDE_OVERRIDE = {
@@ -1232,6 +1217,44 @@ def _ping_indica_online(process_result) -> bool:
     return False
 
 
+def _normalizar_estado_operacional(valor):
+    if valor is None:
+        return None
+    if isinstance(valor, bool):
+        return valor
+    if isinstance(valor, (int, float)):
+        return valor != 0
+
+    texto = str(valor).strip().lower()
+    if texto in {"1", "up", "online", "active", "alive", "ok", "enable", "enabled", "connected", "reachable"}:
+        return True
+    if texto in {"0", "down", "offline", "inactive", "dead", "fail", "failed", "disable", "disabled", "disconnected", "unreachable"}:
+        return False
+    return None
+
+
+def _interface_esta_online(interface: dict) -> bool:
+    if not isinstance(interface, dict):
+        return False
+
+    for campo in (
+        "link",
+        "link_status",
+        "link-status",
+        "oper_status",
+        "oper-status",
+        "operstate",
+        "state",
+        "health",
+        "status",
+    ):
+        estado = _normalizar_estado_operacional(interface.get(campo))
+        if estado is not None:
+            return estado
+
+    return False
+
+
 def _is_meaningful_provider_text(value) -> bool:
     provider = _extract_provider_name({"alias": value})
     normalized = _normalizar_link_texto(provider)
@@ -1313,7 +1336,7 @@ def _is_wan_interface(interface: dict) -> bool:
     interface_type = str(interface_type_raw or "").strip().lower()
     interface_ip = _extract_interface_ip(interface.get("ip"))
     has_public_ip = _is_public_ip(interface_ip)
-    is_up = str(interface.get("status") or "").strip().lower() in {"1", "up", "online", "active"} or interface.get("status") == 1
+    is_up = _interface_esta_online(interface)
     meaningful_provider = _is_meaningful_provider_text(interface.get("alias") or interface.get("description") or "")
 
     if not name:
@@ -1536,16 +1559,9 @@ def _format_link_ip_exibicao(link: dict) -> str:
 def _normalize_synced_link(interface: dict, fortigate_host=None, fortigate_porta=None, source="fortigate") -> dict:
     interface_name = str(interface.get("name") or interface.get("interface") or "").strip()
     provider_name = _extract_provider_name(interface)
-    status_text = str(interface.get("status") or "").strip().lower()
-    link_flag = interface.get("link")
-    status_raw = interface.get("status")
     addressing_mode = _extract_interface_addressing_mode(interface)
     interface_ip = _extract_interface_ip(interface.get("ip")) or ""
-
-    if link_flag is None:
-        status = "online" if status_text in {"1", "up", "online", "active"} or status_raw == 1 else "offline"
-    else:
-        status = "online" if bool(link_flag) else "offline"
+    status = "online" if _interface_esta_online(interface) else "offline"
 
     return {
         "nome": interface_name.upper() if interface_name.lower().startswith("wan") else interface_name,
@@ -1826,8 +1842,11 @@ def _load_regional_interfaces(
 
     interfaces = []
     source = "fortigate"
+    proxy_attempted = False
+    proxy_error = None
 
     if use_proxy and device_info and device_info.get("name"):
+        proxy_attempted = True
         try:
             with FortiManagerClient() as fm:
                 interfaces_result = fm.list_device_interfaces(adom, device_info.get("name"))
@@ -1842,13 +1861,45 @@ def _load_regional_interfaces(
                     adom,
                 )
         except Exception as exc:
+            proxy_error = str(exc)
             current_app.logger.warning(
                 "Erro ao obter interfaces via FortiManager para %s: %s. Usando fallback direto no FortiGate",
                 codigo_regional,
                 exc,
             )
 
+        if not interfaces:
+            try:
+                with FortiManagerClient() as fm:
+                    monitor_interfaces = fm.proxy_monitor_interfaces(adom, device_info.get("name"))
+                if monitor_interfaces:
+                    interfaces = list(monitor_interfaces.values())
+                    source = "fortimanager_proxy_monitor"
+                    proxy_error = None
+                elif proxy_error:
+                    proxy_error = f"{proxy_error}; proxy monitor nao retornou interfaces"
+                else:
+                    proxy_error = "proxy monitor nao retornou interfaces"
+            except Exception as exc:
+                proxy_error = f"{proxy_error}; proxy monitor: {exc}" if proxy_error else f"proxy monitor: {exc}"
+                current_app.logger.warning(
+                    "Erro ao obter interfaces via proxy monitor FortiManager para %s: %s",
+                    codigo_regional,
+                    exc,
+                )
+
     if not interfaces:
+        if proxy_attempted:
+            detalhe = f": {proxy_error}" if proxy_error else ""
+            return {
+                "success": False,
+                "message": f"FortiManager nÃ£o retornou interfaces para {device_info.get('name')} em {adom}{detalhe}",
+                "status": "fortimanager_proxy_error",
+                "resolved": resolved,
+                "interfaces": [],
+                "source": "fortimanager"
+            }
+
         if not gerenciador_regional.autenticar():
             fallback_manager = None
             fallback_port = 443
@@ -1993,7 +2044,13 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
         password = fortigate_info.get("password", password)
 
         if not target_ip:
-            for link in regional_info.get("links", []):
+            links_com_fortigate = []
+            for field_name in ("links", "links_internet_auto"):
+                links = regional_info.get(field_name)
+                if isinstance(links, list):
+                    links_com_fortigate.extend(links)
+
+            for link in links_com_fortigate:
                 link_host = str(link.get("fortigate_host") or "").strip()
                 if link_host:
                     target_ip = link_host
@@ -2008,6 +2065,7 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
     device_match = {}
 
     if override_device_names:
+        target_name = target_name or override_device_names[0]
         device_match = _match_fortimanager_device(codigo_regional, regional_info or {}, devices)
         if device_match:
             target_name = device_match.get("name") or target_name
@@ -2459,12 +2517,36 @@ def api_certificados_refresh():
 
 # === ROTAS DE REGIONAIS ===
 
+def _obter_regionais_com_firewall_a_vencer():
+    """Usa o cache do dashboard de firewalls para sinalizar regionais com licenca critica."""
+    cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600) or {}
+    firewalls_por_regional = cached.get("firewalls_por_regional") or {}
+    regionais_alerta = {}
+
+    for codigo_regional, firewalls in firewalls_por_regional.items():
+        total_alertas = 0
+        for firewall in firewalls or []:
+            if int(firewall.get("licencas_criticas") or 0) > 0:
+                total_alertas += int(firewall.get("licencas_criticas") or 0)
+                continue
+
+            for licenca in firewall.get("licencas") or []:
+                if licenca.get("notificacao_critica"):
+                    total_alertas += 1
+
+        if total_alertas > 0:
+            regionais_alerta[str(codigo_regional).strip().upper()] = total_alertas
+
+    return regionais_alerta
+
+
 @app.route('/regionais')
 @login_required
 def listar_regionais():
     """Página de listagem de regionais"""
     try:
         regionais = gerenciador_regionais.listar_regionais()
+        firewalls_a_vencer = _obter_regionais_com_firewall_a_vencer()
         regionais_dados = []
         
         for codigo_regional in regionais:
@@ -2475,14 +2557,19 @@ def listar_regionais():
                     _preparar_link_para_template(link)
                     for link in _obter_links_internet_exibicao(regional_info)
                 ]
+                _, switches = _obter_switches_detalhe_regional(codigo_regional, regional_info)
                 regionais_dados.append({
                     'codigo': codigo_regional,
                     'nome': regional_info.get('nome', codigo_regional),
                     'descricao': regional_info.get('descricao', ''),
                     'total_servidores': len(servidores),
                     'total_links': len(links),
+                    'total_switches': len(switches),
+                    'total_firewalls_a_vencer': firewalls_a_vencer.get(str(codigo_regional).strip().upper(), 0),
+                    'tem_firewall_a_vencer': str(codigo_regional).strip().upper() in firewalls_a_vencer,
                     'servidores': servidores,
-                    'links': links
+                    'links': links,
+                    'switches': switches
                 })
         
         return render_template('regionais.html', regionais=regionais_dados)
@@ -2517,6 +2604,91 @@ def api_verificar_regional(codigo_regional):
 
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'})
+
+
+def _normalizar_chave_regional_switch(valor):
+    texto = _normalize_text(str(valor or ""))
+    tokens = [
+        token
+        for token in texto.split()
+        if token not in {"REG", "REGIONAL", "REGIAO"}
+    ]
+    return "".join(tokens)
+
+
+_SWITCHES_REGIONAL_OVERRIDE = {
+    "REG_SJC": "REGIONAL SAO JOSE DOS CAMPOS",
+    "REG_GLOBAL_SEGURANCA": "GLOBAL SEGURANCA",
+    "REG_CONTROL_MCO": "CONTROL MACEIO",
+    "REG_ORMEC_PARA": "ORMEC",
+    "REG_RIO_GRANDE_DO_NORTE": "RIO GRANDE DO NORTE",
+    "REG_RUDDER": "RUDDER",
+    "REG_SULZER": "SULZER",
+    "REG_GALAXIA": "GALAXIA",
+}
+
+
+def _resolver_regional_switches(codigo_regional, regional_info):
+    override = _SWITCHES_REGIONAL_OVERRIDE.get(str(codigo_regional or "").strip().upper())
+    if override in gerenciador_switches.regionais:
+        return override
+
+    alvo_tokens = {
+        _normalizar_chave_regional_switch(codigo_regional),
+        _normalizar_chave_regional_switch(str(codigo_regional or "").replace("REG_", "")),
+        _normalizar_chave_regional_switch((regional_info or {}).get("nome")),
+        _normalizar_chave_regional_switch((regional_info or {}).get("descricao")),
+    }
+    alvo_tokens.discard("")
+
+    melhor_regional = None
+    melhor_score = 0
+    for regional_switch in gerenciador_switches.listar_regionais():
+        chave_switch = _normalizar_chave_regional_switch(regional_switch)
+        if not chave_switch:
+            continue
+        if chave_switch in alvo_tokens:
+            return regional_switch
+
+        for alvo in alvo_tokens:
+            if not alvo:
+                continue
+            if chave_switch in alvo or alvo in chave_switch:
+                score = min(len(chave_switch), len(alvo))
+                if score > melhor_score:
+                    melhor_regional = regional_switch
+                    melhor_score = score
+
+    return melhor_regional
+
+
+def _formatar_ultima_verificacao_switch(valor):
+    if not valor:
+        return None
+    try:
+        texto = str(valor).strip()
+        if texto.endswith("Z"):
+            texto = texto[:-1]
+        data = datetime.fromisoformat(texto)
+        return data.strftime("%d/%m/%Y às %H:%M:%S")
+    except Exception:
+        return str(valor)
+
+
+def _obter_switches_detalhe_regional(codigo_regional, regional_info):
+    regional_switch = _resolver_regional_switches(codigo_regional, regional_info)
+    if not regional_switch:
+        return "", []
+
+    switches = [dict(switch) for switch in gerenciador_switches.obter_switches_regional(regional_switch)]
+    for switch in switches:
+        if switch.get("ip") and "." not in str(switch.get("ip")):
+            switch["ip"] = gerenciador_switches._converter_ip_numerico(switch["ip"])
+        switch["ultima_verificacao_formatada"] = _formatar_ultima_verificacao_switch(
+            switch.get("ultima_verificacao")
+        )
+    return regional_switch, switches
+
 
 @app.route('/regional/<codigo_regional>')
 @login_required
@@ -2721,13 +2893,25 @@ def detalhar_regional(codigo_regional):
         except Exception as e:
             current_app.logger.warning(f"Erro ao buscar firewalls da regional: {str(e)})")
 
+        switches_regional_nome, switches_completos = _obter_switches_detalhe_regional(
+            codigo_regional,
+            regional_info,
+        )
+
+        for firewall in firewalls_completos:
+            firewall["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
+                firewall.get("ultima_verificacao")
+            )
+
         regional_completa = {
             'codigo': codigo_regional,
             'nome': regional_info.get('nome', codigo_regional),
             'descricao': regional_info.get('descricao', ''),
             'servidores': servidores_completos,
             'links': links_completos,
-            'firewalls': firewalls_completos
+            'firewalls': firewalls_completos,
+            'switches': switches_completos,
+            'switches_regional_nome': switches_regional_nome
         }
 
         return render_template('regional_detalhes.html', regional=regional_completa)
@@ -2735,6 +2919,499 @@ def detalhar_regional(codigo_regional):
     except Exception as e:
         flash(f'Erro ao carregar regional: {str(e)}', 'error')
         return redirect(url_for('listar_regionais'))
+
+
+def _preventiva_escape(value):
+    return html_lib.escape(str(value if value not in (None, "") else "N/A"))
+
+
+def _preventiva_status_class(status):
+    status_norm = str(status or "").strip().lower()
+    if status_norm in {"online", "ready", "ok", "active", "valid", "licensed"}:
+        return "ok"
+    if status_norm in {"warning", "atenção", "atencao", "pending"}:
+        return "warning"
+    if status_norm in {"inativo", "inactive"}:
+        return "inactive"
+    return "danger"
+
+
+def _preventiva_badge(label, status=None):
+    css = _preventiva_status_class(status or label)
+    return f'<span class="badge badge-{css}">{_preventiva_escape(label)}</span>'
+
+
+def _formatar_preventiva_data(valor):
+    texto = str(valor or "").strip()
+    if not texto:
+        return "N/A"
+    try:
+        return datetime.fromisoformat(texto).strftime("%d/%m/%Y %H:%M:%S")
+    except ValueError:
+        return texto
+
+
+def _obter_firewalls_regionais_cache(codigo_regional):
+    cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600) or {}
+    firewalls_por_regional = cached.get("firewalls_por_regional") or {}
+    codigo_norm = str(codigo_regional or "").strip().upper()
+    return [dict(item) for item in firewalls_por_regional.get(codigo_norm, [])]
+
+
+def _device_pertence_regional_firewall(device_name, codigo_regional):
+    device_overrides = {
+        'FTG_GLX_100F_MATRIZ': 'REG_GALAXIA',
+        'FGT_REGSAOJOSEDOSCAMPOS': 'REG_SJC',
+    }
+    if device_name in device_overrides:
+        return device_overrides[device_name] == codigo_regional
+
+    def _norm(value):
+        return re.sub(r'[^A-Z0-9]', '', str(value or '').upper())
+
+    device_key = str(device_name or '').upper()
+    for prefix in ('FGT_REG', 'FTG_REG', 'FGT_', 'FTG_'):
+        if device_key.startswith(prefix):
+            device_key = device_key[len(prefix):]
+            break
+
+    dev_norm = _norm(device_key)
+    reg_key = str(codigo_regional or '').upper()
+    reg_key = reg_key[4:] if reg_key.startswith('REG_') else reg_key
+    reg_norm = _norm(reg_key)
+    if not dev_norm or not reg_norm:
+        return False
+
+    return (
+        dev_norm == reg_norm
+        or (len(reg_norm) >= 3 and dev_norm.startswith(reg_norm))
+        or (len(dev_norm) >= 3 and reg_norm.startswith(dev_norm))
+        or (len(reg_norm) >= 4 and reg_norm in dev_norm)
+        or (len(dev_norm) >= 4 and dev_norm in reg_norm)
+    )
+
+
+def _normalizar_licenca_firewall(license_key, license_info):
+    dias_rest = 0
+    expires_timestamp = license_info.get('expires', 0)
+    if not expires_timestamp:
+        support = license_info.get('support', {})
+        if isinstance(support, dict):
+            for sub in ('hardware', 'enhanced'):
+                sub_data = support.get(sub, {})
+                if isinstance(sub_data, dict):
+                    expires_timestamp = sub_data.get('expires', 0)
+                    if expires_timestamp:
+                        break
+
+    if expires_timestamp and isinstance(expires_timestamp, (int, float)) and expires_timestamp > 0:
+        try:
+            exp_date = datetime.fromtimestamp(expires_timestamp)
+            dias_rest = max(0, (exp_date.date() - datetime.now().date()).days)
+        except Exception:
+            dias_rest = 0
+
+    lic_status = license_info.get('status', 'unknown')
+    return {
+        'nome': license_key,
+        'tipo': license_key,
+        'status': lic_status,
+        'dias_restantes': dias_rest,
+        'expiracao': expires_timestamp if expires_timestamp else 'N/A',
+        'tipo_licenca': license_info.get('type', 'unknown'),
+        'notificacao_critica': dias_rest <= 30 and dias_rest > 0 and lic_status not in ('expired', 'no_license'),
+        'notificacao_expirada': lic_status in ('expired', 'no_license'),
+    }
+
+
+def _obter_firewalls_regionais_live(codigo_regional):
+    firewalls = []
+    adom = _get_fortimanager_adom()
+    fm_client = FortiManagerClient()
+    fm_client.login()
+    try:
+        fm_devices = fm_client.list_devices(adom)
+        fm_devices_list = fm_devices.get('result', [{}])[0] if isinstance(fm_devices.get('result', []), list) and fm_devices.get('result') else {}
+        devices_data = fm_devices_list.get('data', []) if isinstance(fm_devices_list, dict) else []
+
+        for device_data in devices_data:
+            if not isinstance(device_data, dict):
+                continue
+            device_name = str(device_data.get('name') or '').strip()
+            if not device_name or not _device_pertence_regional_firewall(device_name, codigo_regional):
+                continue
+
+            firewall_info = {
+                'codigo_regional': codigo_regional,
+                'nome': device_name,
+                'hostname': device_data.get('hostname', ''),
+                'ip': device_data.get('ip', ''),
+                'status': device_data.get('status', 'unknown'),
+                'model': device_data.get('platform_str') or device_data.get('model') or 'N/A',
+                'serial': device_data.get('sn') or device_data.get('serialnumber') or 'N/A',
+                'licencas': [],
+                'licencas_criticas': 0,
+                'licencas_expiradas': 0,
+                'ultima_verificacao': datetime.now().isoformat(),
+            }
+
+            try:
+                licenses_data = fm_client.proxy_monitor_license(adom, device_name)
+                if isinstance(licenses_data, dict) and licenses_data.get('_erro') == 'offline':
+                    lic_obj = {
+                        'nome': 'forticare',
+                        'tipo': 'forticare',
+                        'status': 'offline',
+                        'dias_restantes': 0,
+                        'expiracao': 'N/A',
+                        'notificacao_critica': False,
+                        'notificacao_expirada': True,
+                    }
+                    firewall_info['licencas'].append(lic_obj)
+                    firewall_info['licencas_expiradas'] += 1
+                elif isinstance(licenses_data, dict):
+                    license_items = [('forticare', licenses_data.get('forticare'))] if 'forticare' in licenses_data else licenses_data.items()
+                    for license_key, license_info in license_items:
+                        if not isinstance(license_info, dict):
+                            continue
+                        lic_obj = _normalizar_licenca_firewall(license_key, license_info)
+                        firewall_info['licencas'].append(lic_obj)
+                        if lic_obj.get('notificacao_expirada'):
+                            firewall_info['licencas_expiradas'] += 1
+                        elif lic_obj.get('notificacao_critica'):
+                            firewall_info['licencas_criticas'] += 1
+            except Exception as exc:
+                firewall_info['erro'] = str(exc)
+
+            firewalls.append(firewall_info)
+    finally:
+        try:
+            fm_client.logout()
+        except Exception:
+            pass
+
+    return firewalls
+
+
+def _obter_firewalls_preventiva_regional(codigo_regional):
+    firewalls = _obter_firewalls_regionais_cache(codigo_regional)
+    if firewalls:
+        return firewalls
+    try:
+        return _obter_firewalls_regionais_live(codigo_regional)
+    except Exception as exc:
+        current_app.logger.warning("Falha ao buscar firewalls ao vivo da regional %s: %s", codigo_regional, exc)
+        return []
+
+
+def _normalizar_hardware_vm_manager(details):
+    cpu_model = details.get("processorName") or "N/A"
+    processors = details.get("processors")
+    return {
+        "sistema_operacional": details.get("operatingSystem") or "N/A",
+        "modelo": details.get("model") or "Servidor Virtual",
+        "cpu": {"model": cpu_model, "count": processors},
+        "memoria_gib": details.get("memory"),
+        "uptime": details.get("uptime") or "N/A",
+        "discos": details.get("disks") or [],
+        "bitdefender": details.get("bitdefender") or {"installed": False, "runningServices": 0, "services": [], "products": []},
+    }
+
+
+def _coletar_hardware_preventiva_servidor(servidor):
+    try:
+        hardware = coletar_hardware_vm(servidor)
+    except Exception as exc:
+        hardware = {"success": False, "message": str(exc)}
+
+    message = str(hardware.get("message") or "")
+    if hardware.get("success") or "timed out" not in message.lower():
+        return hardware
+
+    ip = (servidor.get("ip") or "").strip()
+    username = (servidor.get("usuario") or servidor.get("username") or "").strip()
+    password = servidor.get("senha") or servidor.get("password") or ""
+    try:
+        fallback = obter_detalhes_vm(ip, username, password)
+        if fallback.get("success"):
+            return {
+                "success": True,
+                "hardware": _normalizar_hardware_vm_manager(fallback.get("details") or {}),
+                "message": "Inventario obtido pelo coletor do checklist consolidado.",
+            }
+    except Exception as exc:
+        current_app.logger.warning("Fallback do coletor de VM falhou para %s: %s", ip, exc)
+
+    hardware["message"] = "Dados de hardware indisponiveis nesta coleta. O servidor respondeu, mas a coleta remota excedeu o tempo limite."
+    hardware["preventiva_timeout"] = True
+    return hardware
+
+
+def _coletar_dados_preventiva_regional(codigo_regional, tipo):
+    regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+    if not regional_info:
+        raise ValueError("Regional nao encontrada")
+
+    tipo = (tipo or "completo").strip().lower()
+    incluir_servidores = tipo in {"completo", "servidores"}
+    incluir_links = tipo == "completo"
+    incluir_switches = tipo in {"completo", "switches"}
+    incluir_firewalls = tipo in {"completo", "firewalls"}
+
+    servidores = []
+    if incluir_servidores:
+        for servidor in regional_info.get("servidores", []) or []:
+            item = dict(servidor)
+            item.setdefault("status", "unknown")
+            item.setdefault("tempo_resposta", None)
+            item.setdefault("erro", None)
+            hardware = _coletar_hardware_preventiva_servidor(item)
+            item["hardware_relatorio"] = hardware
+            servidores.append(item)
+
+    links = []
+    if incluir_links:
+        links = [
+            _preparar_link_para_template(link)
+            for link in _obter_links_internet_exibicao(regional_info)
+        ]
+
+    switches_regional_nome = None
+    switches = []
+    if incluir_switches:
+        switches_regional_nome, switches = _obter_switches_detalhe_regional(codigo_regional, regional_info)
+
+    firewalls = _obter_firewalls_preventiva_regional(codigo_regional) if incluir_firewalls else []
+
+    return {
+        "codigo": codigo_regional,
+        "nome": regional_info.get("nome", codigo_regional),
+        "descricao": regional_info.get("descricao", ""),
+        "tipo": tipo,
+        "servidores": servidores,
+        "links": links,
+        "switches": switches,
+        "switches_regional_nome": switches_regional_nome,
+        "firewalls": firewalls,
+        "gerado_em": datetime.now(),
+    }
+
+
+def _render_preventiva_servidores(servidores):
+    if not servidores:
+        return "<div class='empty'>Nenhum servidor cadastrado para esta regional.</div>"
+
+    cards = []
+    for servidor in servidores:
+        hardware = servidor.get("hardware_relatorio") or {}
+        details = hardware.get("hardware") or hardware.get("details") or {}
+        success = bool(hardware.get("success"))
+        status = "online" if success else servidor.get("status", "unknown")
+        disks = details.get("discos") or details.get("disks") or []
+        disk_lines = []
+        if isinstance(disks, list):
+            for disk in disks[:4]:
+                if isinstance(disk, dict):
+                    name = disk.get("name") or disk.get("drive") or disk.get("Drive") or disk.get("device") or "Disco"
+                    free = disk.get("free") or disk.get("freeGB") or disk.get("free_gb") or disk.get("FreeSpace") or disk.get("livre") or "N/A"
+                    total = disk.get("total") or disk.get("totalGB") or disk.get("total_gb") or disk.get("TotalSpace") or "N/A"
+                    disk_lines.append(f"<div><strong>{_preventiva_escape(name)}:</strong> {_preventiva_escape(free)} livres de {_preventiva_escape(total)}</div>")
+
+        bitdefender = details.get("bitdefender") or {}
+        bitdefender_instalado = bitdefender.get("installed")
+        services = bitdefender.get("services") or []
+        if not isinstance(services, list):
+            services = []
+
+        cards.append(f"""
+        <article class="server-card card-status-{_preventiva_status_class(status)}">
+            <div class="server-card-header">
+                <div>
+                    <h3>{_preventiva_escape(servidor.get("nome"))}</h3>
+                    <p>{_preventiva_escape(servidor.get("funcao") or servidor.get("tipo") or "Servidor")} - {_preventiva_escape(servidor.get("ip"))}</p>
+                </div>
+                {_preventiva_badge(str(status).upper(), status)}
+            </div>
+            <div class="server-metrics">
+                <div class="metric"><span>TEMPO DE RESPOSTA</span><strong>{_preventiva_escape(servidor.get("tempo_resposta") or "N/A")}</strong></div>
+                <div class="metric"><span>SISTEMA OPERACIONAL</span><strong>{_preventiva_escape(details.get("operatingSystem") or details.get("sistema_operacional") or details.get("os"))}</strong></div>
+                <div class="metric"><span>MODELO</span><strong>{_preventiva_escape(details.get("modelo") or details.get("model") or servidor.get("modelo"))}</strong></div>
+                <div class="metric"><span>CPU</span><strong>{_preventiva_escape((details.get("cpu") or {}).get("model") if isinstance(details.get("cpu"), dict) else details.get("processorName") or details.get("cpu"))}</strong></div>
+                <div class="metric"><span>MEMORIA</span><strong>{_preventiva_escape(details.get("memoria_gib") or details.get("memory"))}</strong></div>
+                <div class="metric"><span>UPTIME</span><strong>{_preventiva_escape(details.get("uptime"))}</strong></div>
+            </div>
+            <div class="wide-box"><span>DISCOS</span>{''.join(disk_lines) or '<div>N/A</div>'}</div>
+            <div class="wide-box security-box">
+                <span>BITDEFENDER</span>
+                <strong>{'INSTALADO' if bitdefender_instalado else 'NAO IDENTIFICADO'}</strong>
+                <div>Servicos em execucao: {_preventiva_escape(bitdefender.get("runningServices") or len(services))}</div>
+                {''.join(f'<div>{_preventiva_escape(s.get("name") if isinstance(s, dict) else s)} - {_preventiva_escape(s.get("status") if isinstance(s, dict) else "Running")}</div>' for s in services[:6])}
+            </div>
+            {f"<div class='alert-box'>{_preventiva_escape(hardware.get('message') or servidor.get('erro'))}</div>" if (not success and not hardware.get('preventiva_timeout')) else ""}
+        </article>
+        """)
+
+    return f"<div class='servers-grid'>{''.join(cards)}</div>"
+
+
+def _render_preventiva_switches(switches):
+    total = len(switches)
+    online = sum(1 for item in switches if str(item.get("status") or "").lower() == "online")
+    offline = sum(1 for item in switches if str(item.get("status") or "").lower() == "offline")
+    warning = sum(1 for item in switches if str(item.get("status") or "").lower() == "warning")
+    inativos = sum(1 for item in switches if str(item.get("status") or "").lower() == "inativo")
+    resumo_status = "COM WARNING" if warning else "COM OFFLINE" if offline else "OK"
+
+    resumo = f"""
+    <div class="table-block">
+        <div class="table-title"><strong>Resumo geral dos switches</strong><span>{online} online | {offline} offline | {warning} warning | {inativos} inativos</span></div>
+        <table><thead><tr><th>Regional</th><th>Total</th><th>Online</th><th>Offline</th><th>Warning</th><th>Inativos</th><th>Disponibilidade</th><th>Status</th></tr></thead>
+        <tbody><tr><td>Regional</td><td>{total}</td><td>{online}</td><td>{offline}</td><td>{warning}</td><td>{inativos}</td><td>{round((online / total) * 100) if total else 0}%</td><td>{_preventiva_badge(resumo_status, 'warning' if warning else 'offline' if offline else 'online')}</td></tr></tbody></table>
+    </div>
+    """
+    rows = []
+    for item in sorted(switches, key=lambda row: str(row.get("host") or "")):
+        rows.append(f"""
+        <tr>
+            <td><strong>{_preventiva_escape(item.get("host"))}</strong></td>
+            <td>{_preventiva_escape(item.get("regional"))}</td>
+            <td><code>{_preventiva_escape(item.get("ip"))}</code></td>
+            <td>{_preventiva_escape(item.get("id_zabbix") or item.get("hostid"))}</td>
+            <td>{_preventiva_badge(str(item.get("status") or "desconhecido").upper(), item.get("status"))}</td>
+            <td>{_preventiva_escape(item.get("itens_problematicos") or item.get("items") or 0)}</td>
+            <td>{_preventiva_escape(item.get("ultima_verificacao_formatada") or _formatar_preventiva_data(item.get("ultima_verificacao")))}</td>
+            <td>{_preventiva_escape(item.get("warning_resumo") or item.get("status_reason") or item.get("observacao"))}</td>
+        </tr>
+        """)
+    tabela = f"""
+    <div class="table-block">
+        <div class="table-title"><strong>Relatorio completo dos switches</strong><span>({len(switches)}/{total} verificados)</span></div>
+        <table><thead><tr><th>Switch</th><th>Regional</th><th>IP</th><th>ID Zabbix</th><th>Status</th><th>Itens</th><th>Ultima Verif.</th><th>Observacao</th></tr></thead>
+        <tbody>{''.join(rows) if rows else '<tr><td colspan="8">Nenhum switch encontrado.</td></tr>'}</tbody></table>
+    </div>
+    """
+    return resumo + tabela
+
+
+def _render_preventiva_firewalls(firewalls):
+    rows = []
+    for fw in firewalls:
+        licenses = fw.get("licencas") or [{}]
+        for licenca in licenses:
+            status = "expirada" if licenca.get("notificacao_expirada") else "warning" if licenca.get("notificacao_critica") else "ok"
+            rows.append(f"""
+            <tr>
+                <td>{_preventiva_escape(fw.get("codigo_regional") or fw.get("regional"))}</td>
+                <td><strong>{_preventiva_escape(fw.get("nome"))}</strong></td>
+                <td><code>{_preventiva_escape(fw.get("ip"))}</code></td>
+                <td>{_preventiva_escape(fw.get("model"))}</td>
+                <td>{_preventiva_escape(fw.get("serial"))}</td>
+                <td>{_preventiva_escape(licenca.get("nome") or licenca.get("tipo") or "forticare")}</td>
+                <td>{_preventiva_escape(licenca.get("dias_restantes"))}</td>
+                <td>{_preventiva_badge('EXPIRADA' if status == 'expirada' else 'A VENCER' if status == 'warning' else 'OK', status)}</td>
+            </tr>
+            """)
+    return f"""
+    <div class="table-block">
+        <div class="table-title"><strong>Firewalls e Licencas</strong><span>{len(firewalls)} dispositivo(s)</span></div>
+        <table><thead><tr><th>Regional</th><th>Firewall</th><th>IP</th><th>Modelo</th><th>Serial</th><th>Licenca</th><th>Dias restantes</th><th>Status</th></tr></thead>
+        <tbody>{''.join(rows) if rows else '<tr><td colspan="8">Nenhum firewall encontrado no cache. Atualize a tela de Firewalls e Licencas.</td></tr>'}</tbody></table>
+    </div>
+    """
+
+
+def _render_preventiva_links(links):
+    rows = []
+    for link in links:
+        rows.append(f"""
+        <tr><td><strong>{_preventiva_escape(link.get("nome"))}</strong></td><td><code>{_preventiva_escape(link.get("ip_exibicao") or link.get("ip"))}</code></td><td>{_preventiva_escape(link.get("interface_monitorada"))}</td><td>{_preventiva_escape(link.get("provedor"))}</td><td>{_preventiva_badge(str(link.get("status") or "unknown").upper(), link.get("status"))}</td><td>{_formatar_preventiva_data(link.get("ultima_verificacao"))}</td></tr>
+        """)
+    return f"""
+    <div class="table-block">
+        <div class="table-title"><strong>Links de Internet</strong><span>{len(links)} link(s)</span></div>
+        <table><thead><tr><th>Link</th><th>IP</th><th>Interface</th><th>Provedor</th><th>Status</th><th>Ultima Verif.</th></tr></thead>
+        <tbody>{''.join(rows) if rows else '<tr><td colspan="6">Nenhum link cadastrado.</td></tr>'}</tbody></table>
+    </div>
+    """
+
+
+def _render_preventiva_regional_html(dados):
+    tipo_labels = {
+        "completo": "Relatorio Consolidado da Regional",
+        "servidores": "Preventiva Servidores",
+        "switches": "Preventiva Switches",
+        "firewalls": "Preventiva Firewalls",
+    }
+    tipo = dados["tipo"]
+    sections = []
+    if tipo in {"completo", "servidores"}:
+        sections.append(("<span>Servidores da Regional</span>", _render_preventiva_servidores(dados["servidores"])))
+    if tipo == "completo":
+        sections.append(("<span>Links de Internet</span>", _render_preventiva_links(dados["links"])))
+    if tipo in {"completo", "switches"}:
+        sections.append(("<span>Status dos Switches</span>", _render_preventiva_switches(dados["switches"])))
+    if tipo in {"completo", "firewalls"}:
+        sections.append(("<span>Firewalls e Licencas</span>", _render_preventiva_firewalls(dados["firewalls"])))
+
+    section_html = "".join(f"<details class='details-section' open><summary>{title}</summary>{body}</details>" for title, body in sections)
+    return f"""<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_preventiva_escape(tipo_labels.get(tipo, 'Relatorio'))} - {_preventiva_escape(dados['codigo'])}</title>
+<style>
+body{{margin:0;background:linear-gradient(135deg,#012E40 0%,#0A4A63 48%,#0F6C8C 100%);color:#1f2937;font-family:Segoe UI,Arial,sans-serif;min-height:100vh}}
+.page{{max-width:1440px;margin:0 auto;padding:28px}}
+.hero{{background:rgba(255,255,255,.96);border-radius:18px;padding:28px;margin-bottom:22px;box-shadow:0 18px 45px rgba(0,0,0,.20);border:1px solid rgba(255,255,255,.55)}}
+.hero h1{{margin:0;font-size:34px;font-weight:750;color:#012E40}} .hero p{{margin:8px 0 0;color:#40546a}}
+.details-section{{background:rgba(248,251,253,.96);border:1px solid rgba(207,224,236,.9);border-radius:16px;margin:22px 0;padding:22px;box-shadow:0 16px 36px rgba(0,0,0,.18)}}
+.details-section summary{{font-size:22px;font-weight:800;margin-bottom:20px;cursor:pointer}}
+.servers-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}}
+.server-card{{background:#fff;border:1px solid #d5e1ea;border-top:4px solid #2f855a;border-radius:14px;padding:16px;box-shadow:0 10px 24px rgba(1,46,64,.12)}}
+.card-status-danger{{border-top-color:#e53e3e}}.card-status-warning{{border-top-color:#d69e2e}}.card-status-inactive{{border-top-color:#718096}}
+.server-card-header{{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}}.server-card h3{{margin:0;font-size:18px}}.server-card p{{margin:6px 0 14px;color:#536273;font-weight:600}}
+.server-metrics{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}.metric,.wide-box{{border:1px solid #cfdae5;border-radius:12px;padding:12px;background:#f8fafc}}
+.metric span,.wide-box span{{display:block;color:#64748b;font-size:12px;font-weight:800;letter-spacing:.04em;margin-bottom:8px}}.metric strong,.wide-box strong{{font-size:15px}}
+.security-box{{background:#ecfdf3;border-color:#b7e4c7}}.alert-box{{margin-top:12px;background:#fee2e2;border:1px solid #fecaca;border-radius:10px;padding:10px;color:#991b1b}}
+.table-block{{background:#fff;border:1px solid #d5e1ea;border-radius:12px;overflow:hidden;margin-bottom:20px;box-shadow:0 10px 24px rgba(1,46,64,.12)}}.table-title{{background:linear-gradient(135deg,#012E40,#0A4A63,#0F6C8C);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;gap:12px;align-items:center}}
+table{{width:100%;border-collapse:collapse}}th{{background:#f1f5f9;text-align:left;color:#475569;font-size:12px;letter-spacing:.06em;text-transform:uppercase}}th,td{{padding:12px;border:1px solid #d8dee6;vertical-align:top}}code{{background:#eaf6ff;color:#0875c9;padding:2px 6px;border-radius:5px}}
+.badge{{display:inline-block;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800}}.badge-ok{{background:#d1fae5;color:#047857}}.badge-warning{{background:#fef3c7;color:#92400e}}.badge-danger{{background:#fee2e2;color:#991b1b}}.badge-inactive{{background:#e5e7eb;color:#374151}}
+.empty{{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:28px;text-align:center;color:#64748b}}
+</style>
+</head>
+<body><main class="page">
+<section class="hero"><h1>{_preventiva_escape(tipo_labels.get(tipo, 'Relatorio'))}</h1><p><strong>{_preventiva_escape(dados['codigo'])}</strong> - {_preventiva_escape(dados['nome'])}</p><p>Gerado em: {dados['gerado_em']:%d/%m/%Y %H:%M:%S}</p></section>
+{section_html}
+</main></body></html>"""
+
+
+@app.route('/regional/<codigo_regional>/relatorio-preventiva/<tipo>', methods=['POST'])
+@login_required
+def gerar_relatorio_preventiva_regional(codigo_regional, tipo):
+    tipo = (tipo or "completo").strip().lower()
+    if tipo not in {"completo", "servidores", "switches", "firewalls"}:
+        return jsonify({"success": False, "message": "Tipo de relatorio invalido"}), 400
+
+    try:
+        dados = _coletar_dados_preventiva_regional(codigo_regional, tipo)
+        html_content = _render_preventiva_regional_html(dados)
+        output_dir = PROJECT_ROOT / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"preventiva_{dados['codigo']}_{tipo}_{timestamp}.html"
+        output_path = output_dir / filename
+        output_path.write_text(html_content, encoding="utf-8")
+        return jsonify({
+            "success": True,
+            "message": "Relatorio gerado com sucesso",
+            "url": f"/output/{filename}",
+            "filename": filename,
+        })
+    except Exception as exc:
+        current_app.logger.exception("Erro ao gerar preventiva regional")
+        return jsonify({"success": False, "message": str(exc)}), 500
+
 
 @app.route('/regional/nova')
 @login_required
@@ -3338,14 +4015,16 @@ def listar_links():
                 'links_internet.html',
                 links=[],
                 links_por_regional={},
-                sd_wan_por_regional={}
+                sd_wan_por_regional={},
+                resumo_links={}
             )
 
         return render_template(
             'links_internet.html',
             links=resultado.get('links', []),
             links_por_regional=resultado.get('links_por_regional', {}),
-            sd_wan_por_regional=resultado.get('sd_wan_por_regional', {})
+            sd_wan_por_regional=resultado.get('sd_wan_por_regional', {}),
+            resumo_links=resultado.get('resumo', {})
         )
 
     except Exception as e:
@@ -3354,7 +4033,8 @@ def listar_links():
             'links_internet.html',
             links=[],
             links_por_regional={},
-            sd_wan_por_regional={}
+            sd_wan_por_regional={},
+            resumo_links={}
         )
 
 def _salvar_cache_dashboard(nome, dados):
@@ -3399,6 +4079,7 @@ def _invalidar_cache_dashboard(nome):
             cache_path.unlink()
     except Exception as exc:
         current_app.logger.warning("Falha ao invalidar cache %s do dashboard: %s", nome, exc)
+
 
 @app.route('/firewalls')
 @login_required
@@ -5372,12 +6053,42 @@ def executar_replicacao_direto():
         flash(f"Erro ao atualizar dados de replicação: {str(e)}", "danger")
         return redirect(url_for('replicacao_ad'))
 
+def _deve_ocultar_ap_unifi(ap):
+    nome = str(ap.get("nome") or ap.get("name") or "").strip().lower()
+    ip = str(ap.get("ip") or "").strip()
+    site = str(ap.get("site") or "").strip().upper()
+    return site == "API_TESTE" or (nome == "nano hd" and ip == "10.134.0.104")
+
+
+def _filtrar_antenas_unifi_ocultas(unifi_data):
+    dados = dict(unifi_data or {})
+    aps_visiveis = [
+        ap for ap in (dados.get("aps") or [])
+        if not _deve_ocultar_ap_unifi(ap)
+    ]
+    dados["aps"] = aps_visiveis
+    dados["total_aps"] = len(aps_visiveis)
+    dados["aps_online"] = sum(1 for ap in aps_visiveis if (ap.get("status") or "").lower() == "online")
+    dados["aps_offline"] = dados["total_aps"] - dados["aps_online"]
+    dados["clientes_conectados"] = sum(int(ap.get("clientes") or 0) for ap in aps_visiveis)
+    dados["sites"] = [
+        site for site in (dados.get("sites") or [])
+        if str(site.get("nome") or "").strip().upper() != "API_TESTE"
+    ]
+    dados["interferencia_5ghz_por_site"] = {
+        site: canais
+        for site, canais in (dados.get("interferencia_5ghz_por_site") or {}).items()
+        if str(site or "").strip().upper() != "API_TESTE"
+    }
+    return dados
+
+
 @app.route('/antenas')
 @login_required
 def antenas_unifi():
     """Página de antenas UniFi"""
     # Carrega os dados do UniFi
-    unifi_data = load_data("unifi") or {}
+    unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
 
     # Agrupa APs por site para o template
     from collections import defaultdict
@@ -6250,9 +6961,12 @@ def api_salvar_servidor_regional(codigo_regional):
         funcao_servidor = (data.get('funcao') or '').strip()
         sistema_operacional = (data.get('sistema_operacional') or '').strip()
         servidor_id = (data.get('id') or '').strip()
+        servidor_existente = gerenciador_regionais.obter_servidor(codigo_regional, servidor_id) if servidor_id else None
         
         # Validação básica
-        campos_obrigatorios = ['nome', 'ip', 'usuario', 'senha', 'funcao']
+        campos_obrigatorios = ['nome', 'ip', 'usuario', 'funcao']
+        if not servidor_existente:
+            campos_obrigatorios.append('senha')
         for campo in campos_obrigatorios:
             valor = funcao_servidor if campo == 'funcao' else data.get(campo)
             if not valor:
@@ -6273,7 +6987,7 @@ def api_salvar_servidor_regional(codigo_regional):
             'tipo_monitoramento': 'vm',
             'ip': data['ip'],
             'usuario': data['usuario'],
-            'senha': data['senha'],
+            'senha': data.get('senha') or (servidor_existente or {}).get('senha'),
             'porta': int(data.get('porta', 443)),
             'timeout': int(data.get('timeout', 10)),
             'ativo': data.get('ativo', True),
@@ -6281,8 +6995,6 @@ def api_salvar_servidor_regional(codigo_regional):
             'funcao': funcao_servidor,
             'sistema_operacional': sistema_operacional,
         }
-
-        servidor_existente = gerenciador_regionais.obter_servidor(codigo_regional, servidor['id']) if servidor_id else None
 
         if servidor_existente:
             gerenciador_regionais.atualizar_servidor(codigo_regional, servidor['id'], servidor)
@@ -7274,15 +7986,7 @@ def api_testar_link_regional(codigo_regional, id_link):
                 interface_obj = interface
                 break
 
-        if interface_obj:
-            link_value = interface_obj.get("link", None)
-            status_value = str(interface_obj.get("status", "")).lower()
-            if link_value is not None:
-                link_up = bool(link_value)
-            else:
-                link_up = status_value in {"1", "up", "online", "active"}
-        else:
-            link_up = False
+        link_up = _interface_esta_online(interface_obj)
 
         # ✅ Validação do IP: deve bater com o IP da interface
         interface_ip_full = interface_obj.get("ip", "") if interface_obj else ""
