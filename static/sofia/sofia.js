@@ -5,9 +5,14 @@
     if (!widget) return;
 
     const endpoint = widget.dataset.endpoint;
+    const userKey = (widget.dataset.user || "anon").replace(/[^a-zA-Z0-9_.-]/g, "_");
+    const storageKey = `sentinel.sofia.chat.${userKey}.v1`;
+    const panelStorageKey = `sentinel.sofia.panel.${userKey}.v1`;
+    const maxStoredMessages = 50;
     const panel = document.getElementById("sofiaPanel");
     const launcher = document.getElementById("sofiaLauncher");
     const closeButton = document.getElementById("sofiaClose");
+    const clearButton = document.getElementById("sofiaClear");
     const form = document.getElementById("sofiaForm");
     const input = document.getElementById("sofiaInput");
     const sendButton = document.getElementById("sofiaSend");
@@ -18,6 +23,7 @@
         panel.hidden = !open;
         launcher.setAttribute("aria-expanded", open ? "true" : "false");
         launcher.setAttribute("aria-label", open ? "Fechar SofIA" : "Abrir SofIA");
+        savePanelState(open);
         if (open) {
             input.focus();
             messages.scrollTop = messages.scrollHeight;
@@ -26,9 +32,79 @@
         }
     }
 
-    function appendMessage(author, text, type) {
+    function getStoredMessages() {
+        try {
+            const raw = window.sessionStorage.getItem(storageKey);
+            const parsed = raw ? JSON.parse(raw) : null;
+            return Array.isArray(parsed) ? parsed : null;
+        } catch (error) {
+            try {
+                window.sessionStorage.removeItem(storageKey);
+            } catch (removeError) {
+                // Storage bloqueado: apenas segue sem restaurar historico.
+            }
+            return null;
+        }
+    }
+
+    function saveMessages(history) {
+        try {
+            window.sessionStorage.setItem(storageKey, JSON.stringify(history.slice(-maxStoredMessages)));
+        } catch (error) {
+            // Sem espaco ou sessionStorage indisponivel: o chat continua funcionando sem persistencia.
+        }
+    }
+
+    function savePanelState(open) {
+        try {
+            window.sessionStorage.setItem(panelStorageKey, open ? "open" : "closed");
+        } catch (error) {
+            // Mantem a navegacao normal mesmo se o navegador bloquear storage.
+        }
+    }
+
+    function shouldRestorePanelOpen() {
+        try {
+            return window.sessionStorage.getItem(panelStorageKey) === "open";
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function normalizeMessageType(type) {
+        return type === "user" ? "user" : "assistant";
+    }
+
+    function messageFromElement(item) {
+        const type = item.classList.contains("sofia-message-user") ? "user" : "assistant";
+        const author = item.querySelector(".sofia-message-author")?.textContent || (type === "user" ? "Você" : "SofIA");
+        const text = item.querySelector("p")?.textContent || "";
+        return { author, text, type };
+    }
+
+    function getCurrentMessages() {
+        return Array.from(messages.querySelectorAll(".sofia-message")).map(messageFromElement).filter(function (message) {
+            return message.text.trim();
+        });
+    }
+
+    function restoreMessages() {
+        const history = getStoredMessages();
+        if (!history || !history.length) {
+            saveMessages(getCurrentMessages());
+            return;
+        }
+
+        messages.textContent = "";
+        history.forEach(function (message) {
+            appendMessage(message.author, message.text, message.type, false);
+        });
+    }
+
+    function appendMessage(author, text, type, persist = true) {
+        const safeType = normalizeMessageType(type);
         const item = document.createElement("div");
-        item.className = `sofia-message sofia-message-${type}`;
+        item.className = `sofia-message sofia-message-${safeType}`;
 
         const authorNode = document.createElement("span");
         authorNode.className = "sofia-message-author";
@@ -40,6 +116,8 @@
         item.append(authorNode, textNode);
         messages.appendChild(item);
         messages.scrollTop = messages.scrollHeight;
+
+        if (persist) saveMessages(getCurrentMessages());
     }
 
     function setBusy(busy) {
@@ -58,6 +136,18 @@
         setOpen(panel.hidden);
     });
     closeButton.addEventListener("click", function () { setOpen(false); });
+    clearButton.addEventListener("click", function () {
+        try {
+            window.sessionStorage.removeItem(storageKey);
+        } catch (error) {
+            // Nada a fazer: o historico visual ainda sera limpo abaixo.
+        }
+        messages.textContent = "";
+        appendMessage("SofIA", "Olá, eu sou a SofIA, assistente virtual do Sentinel. Como posso te ajudar?", "assistant");
+        status.classList.remove("is-error");
+        status.textContent = "";
+        input.focus();
+    });
 
     document.addEventListener("keydown", function (event) {
         if (event.key === "Escape" && !panel.hidden) setOpen(false);
@@ -109,5 +199,8 @@
             input.focus();
         }
     });
+
+    restoreMessages();
+    if (shouldRestorePanelOpen()) setOpen(true);
 })();
 

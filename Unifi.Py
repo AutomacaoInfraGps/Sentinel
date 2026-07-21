@@ -83,6 +83,12 @@ total_clientes = 0
 sites_data = []
 all_aps = []
 
+def deve_ocultar_ap_teste(ap, site_desc):
+    nome = str(ap.get("name") or "").strip().lower()
+    ip = str(ap.get("ip") or "").strip()
+    site = str(site_desc or "").strip().upper()
+    return site == "API_TESTE" or (nome == "nano hd" and ip == "10.134.0.104")
+
 # === CONSTRUÇÃO DO HTML ===
 html = """
 <!DOCTYPE html>
@@ -123,7 +129,10 @@ for site in sites:
     try:
         resp = session.get(devices_url)
         devices = resp.json().get("data", [])
-        aps = [d for d in devices if d.get("type") == "uap"]
+        aps = [
+            d for d in devices
+            if d.get("type") == "uap" and not deve_ocultar_ap_teste(d, site_desc)
+        ]
         if not aps:
             continue
 

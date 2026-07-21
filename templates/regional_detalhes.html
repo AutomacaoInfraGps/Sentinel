@@ -45,6 +45,114 @@
         color: #0d6efd;
         font-weight: 600;
     }
+
+    .stats-card-jump {
+        border: 0;
+        width: 100%;
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stats-card-jump:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .regional-section-anchor {
+        scroll-margin-top: 90px;
+    }
+
+    .regional-report-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2050;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(1, 46, 64, 0.28);
+        backdrop-filter: blur(2px);
+    }
+
+    .regional-report-overlay.show {
+        display: flex;
+    }
+
+    .regional-report-overlay.success {
+        background: rgba(15, 108, 140, 0.22);
+    }
+
+    .regional-report-overlay.error {
+        background: rgba(220, 53, 69, 0.22);
+    }
+
+    .regional-report-dialog {
+        width: min(460px, 100%);
+        padding: 24px;
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: 0 22px 55px rgba(0, 0, 0, 0.22);
+        border-top: 5px solid #0F6C8C;
+        text-align: center;
+    }
+
+    .regional-report-dialog .spinner-border {
+        width: 2.5rem;
+        height: 2.5rem;
+        color: #0F6C8C;
+    }
+
+    .regional-report-overlay.success .spinner-border,
+    .regional-report-overlay.error .spinner-border {
+        display: none;
+    }
+
+    .regional-report-status-icon {
+        display: none;
+        width: 52px;
+        height: 52px;
+        margin: 0 auto;
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.7rem;
+        color: #ffffff;
+    }
+
+    .regional-report-overlay.success .regional-report-status-icon {
+        display: flex;
+        background: #198754;
+    }
+
+    .regional-report-overlay.error .regional-report-status-icon {
+        display: flex;
+        background: #dc3545;
+    }
+
+    .regional-report-dialog h5 {
+        margin: 16px 0 8px;
+        font-weight: 800;
+        color: #012E40;
+    }
+
+    .regional-report-dialog p {
+        margin: 0;
+        color: #6c757d;
+    }
+
+    .regional-report-actions {
+        display: none;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 18px;
+        flex-wrap: wrap;
+    }
+
+    .regional-report-overlay.success .regional-report-actions,
+    .regional-report-overlay.error .regional-report-actions {
+        display: flex;
+    }
 </style>
 <div class="row mb-4">
     <div class="col-12">
@@ -70,56 +178,66 @@
      data-novo-link-url="{{ url_for('novo_link_regional', codigo_regional=regional.codigo) }}"
      style="display:none"></div>
 
+<div id="regionalReportOverlay" class="regional-report-overlay" aria-hidden="true">
+    <div class="regional-report-dialog" role="status" aria-live="polite">
+        <div class="spinner-border" aria-hidden="true"></div>
+        <div id="regionalReportStatusIcon" class="regional-report-status-icon">
+            <i class="bi bi-check-lg"></i>
+        </div>
+        <h5 id="regionalReportOverlayTitle">Gerando relatÃ³rio</h5>
+        <p id="regionalReportOverlayText">Aguarde enquanto o Sentinel monta a preventiva.</p>
+        <div class="regional-report-actions">
+            <a id="regionalReportOpenLink" href="#" target="_blank" rel="noopener" class="btn btn-primary">
+                <i class="bi bi-box-arrow-up-right me-1"></i>
+                Abrir relat&oacute;rio
+            </a>
+            <button type="button" class="btn btn-outline-secondary" onclick="esconderOverlayRelatorioRegional()">
+                Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Estatísticas da Regional -->
 <div class="row mb-4">
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-servidores-section')">
             <div class="stats-number" id="regional-servidores-total">{{ regional.servidores|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-server me-1"></i>
-                Total de Servidores
+                Servidores
             </div>
-        </div>
+        </button>
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
-            <div class="stats-number" id="regional-servidores-online">{{ regional.servidores|selectattr('status', 'equalto', 'online')|list|length }}</div>
-            <div class="stats-label">
-                <i class="bi bi-wifi me-1"></i>
-                Servidores Online
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
-            <div class="stats-number" id="regional-servidores-offline">{{ regional.servidores|selectattr('status', 'equalto', 'offline')|list|length }}</div>
-            <div class="stats-label">
-                <i class="bi bi-wifi-off me-1"></i>
-                Servidores Offline
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
-            <div class="stats-number" id="regional-servidores-warning">{{ regional.servidores|selectattr('status', 'equalto', 'warning')|list|length }}</div>
-            <div class="stats-label">
-                <i class="bi bi-exclamation-triangle me-1"></i>
-                Com Problemas
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-links-section')" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
             <div class="stats-number" id="regional-links-total">{{ regional.links|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-router me-1"></i>
                 Links de Internet
             </div>
-        </div>
+        </button>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-switches-section')" style="background: linear-gradient(135deg, #012E40, #0A4A63);">
+            <div class="stats-number" id="regional-switches-total">{{ regional.switches|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-hdd-network me-1"></i>
+                Switches
+            </div>
+        </button>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-firewalls-section')" style="background: linear-gradient(135deg, #495057, #0A4A63);">
+            <div class="stats-number">{{ regional.firewalls|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-shield-check me-1"></i>
+                Firewalls
+            </div>
+        </button>
     </div>
 </div>
 
@@ -147,11 +265,10 @@
                     
                     <div class="col-md-3 mb-3">
                         <div class="d-grid">
-                            <a href="{{ url_for('novo_link_regional', codigo_regional=regional.codigo) }}" 
-                               class="btn btn-success">
-                                <i class="bi bi-router me-2"></i>
-                                Adicionar Link
-                            </a>
+                            <button class="btn btn-success" onclick="sincronizarLinksRegional(this)">
+                                <i class="bi bi-arrow-clockwise me-2"></i>
+                                Atualizar Links
+                            </button>
                         </div>
                     </div>
                     
@@ -159,7 +276,7 @@
                         <div class="d-grid">
                             <button class="btn btn-info" onclick="verificarRegional('{{ regional.codigo }}')">
                                 <i class="bi bi-arrow-clockwise me-2"></i>
-                                <span class="btn-text">Verificar Status</span>
+                                <span class="btn-text">Atualizar Servidores</span>
                                 <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
                             </button>
                         </div>
@@ -177,9 +294,35 @@
                     
                     <div class="col-md-3 mb-3">
                         <div class="d-grid">
-                            <button class="btn btn-outline-success" onclick="gerarRelatorioRegional()">
+                            <button class="btn btn-outline-success" onclick="gerarRelatorioRegional('completo', this)">
                                 <i class="bi bi-file-earmark-text me-2"></i>
                                 Gerar Relatório
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-primary" onclick="gerarRelatorioRegional('servidores', this)">
+                                <i class="bi bi-server me-2"></i>
+                                Preventiva Servidores
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-info" onclick="gerarRelatorioRegional('switches', this)">
+                                <i class="bi bi-hdd-network me-2"></i>
+                                Preventiva Switches
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-danger" onclick="gerarRelatorioRegional('firewalls', this)">
+                                <i class="bi bi-shield-check me-2"></i>
+                                Preventiva Firewalls
                             </button>
                         </div>
                     </div>
@@ -190,7 +333,7 @@
 </div>
 
 <!-- Lista de Servidores -->
-<div class="row">
+<div class="row regional-section-anchor" id="regional-servidores-section">
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -339,7 +482,7 @@
 </div>
 
 <!-- Lista de Links -->
-<div class="row">
+<div class="row regional-section-anchor" id="regional-links-section">
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -348,7 +491,7 @@
                     Links de Internet da Regional
                 </h5>
                 <div>
-                    <button class="btn btn-outline-info btn-sm" onclick="verificarTodosLinks()">
+                    <button class="btn btn-outline-info btn-sm" onclick="sincronizarLinksRegional(this)">
                         <i class="bi bi-arrow-clockwise me-1"></i>
                         Atualizar Links
                     </button>
@@ -526,7 +669,135 @@
 </div>
 
 <!-- Seção de Firewalls (Licenças) -->
-<div class="row mb-4">
+<div class="row mb-4 regional-section-anchor" id="regional-switches-section">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-hdd-network me-2"></i>
+                    Switches da Regional
+                </h5>
+                <div>
+                    {% if regional.switches_regional_nome %}
+                    <button class="btn btn-outline-info btn-sm" onclick='verificarSwitchesRegional({{ regional.switches_regional_nome|tojson }})'>
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        Verificar Switches
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                {% if regional.switches %}
+                <div class="row">
+                    {% for switch in regional.switches %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card border-{{ 'success' if switch.status == 'online' else 'warning' if switch.status == 'warning' else 'secondary' if switch.status == 'inativo' else 'danger' }} h-100">
+                            <div class="card-header bg-{{ 'success' if switch.status == 'online' else 'warning' if switch.status == 'warning' else 'secondary' if switch.status == 'inativo' else 'danger' }} text-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-bold">
+                                    <i class="bi bi-hdd-network me-2"></i>
+                                    {{ switch.host }}
+                                </h6>
+                                <span class="badge bg-light text-dark">{{ switch.status|default('desconhecido', true)|title }}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">IP:</span>
+                                    <code class="small">{{ switch.ip or 'N/A' }}</code>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">Modelo:</span>
+                                    <span class="small">{{ switch.modelo or 'N/A' }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">Local:</span>
+                                    <span class="small">{{ switch.local or 'N/A' }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">Status:</span>
+                                    {% if switch.status == 'online' %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-wifi me-1"></i>
+                                        Online
+                                    </span>
+                                    {% elif switch.status == 'warning' %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        Warning
+                                    </span>
+                                    {% elif switch.status == 'inativo' %}
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-pause-circle me-1"></i>
+                                        Inativo
+                                    </span>
+                                    {% elif switch.status in ['offline', 'nÃ£o encontrado', 'nao encontrado', 'erro'] %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-wifi-off me-1"></i>
+                                        {{ 'Offline' if switch.status == 'offline' else switch.status|title }}
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-question-circle me-1"></i>
+                                        Desconhecido
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% if switch.warning_resumo and switch.status == 'warning' %}
+                                <div class="alert alert-warning py-2 mt-2 mb-0">
+                                    <small><strong>Warning:</strong> {{ switch.warning_resumo }}</small>
+                                </div>
+                                {% endif %}
+                                {% if switch.status_reason and switch.status != 'online' %}
+                                <div class="alert alert-light border py-2 mt-2 mb-0">
+                                    <small>{{ switch.status_reason }}</small>
+                                </div>
+                                {% endif %}
+                                {% if switch.ultima_verificacao_formatada %}
+                                <div class="verification-meta mt-2">
+                                    <i class="bi bi-clock-history"></i>
+                                    <strong>Ultima verificacao</strong>
+                                    {% set switch_verificacao_partes = switch.ultima_verificacao_formatada.split(' às ') %}
+                                    <span>{{ switch_verificacao_partes[0] }}</span>
+                                    {% if switch_verificacao_partes|length > 1 %}
+                                    <span class="verification-time">
+                                        <i class="bi bi-dot"></i>
+                                        {{ switch_verificacao_partes[1] }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-outline-info btn-sm flex-fill" onclick='verificarSwitchRegional({{ switch.host|tojson }})'>
+                                        <i class="bi bi-arrow-clockwise me-1"></i>
+                                        Verificar
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='/switches/editar/{{ switch.host|urlencode }}'">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-hdd-network text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">Nenhum switch encontrado</h4>
+                    <p class="text-muted">Os switches desta regional ainda nao foram localizados no cadastro/Zabbix.</p>
+                    <a href="{{ url_for('listar_switches') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-hdd-network me-2"></i>
+                        Abrir Infra de Switches
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4 regional-section-anchor" id="regional-firewalls-section">
     <div class="col-12">
         <div class="card shadow-sm border-0">
             <div class="card-header" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C); border-bottom: 3px solid rgba(1,46,64,0.3);">
@@ -625,11 +896,17 @@
                                 </div>
                                 {% endif %}
 
-                                {% if firewall.ultima_verificacao %}
+                                {% if firewall.ultima_verificacao_formatada %}
                                 <div class="verification-meta mt-2">
                                     <i class="bi bi-clock-history"></i>
                                     <strong>Verificado</strong>
-                                    <span style="font-size: 0.75rem;">{{ firewall.ultima_verificacao }}</span>
+                                    <span>{{ firewall.ultima_verificacao_formatada.data }}</span>
+                                    {% if firewall.ultima_verificacao_formatada.hora %}
+                                    <span class="verification-time">
+                                        <i class="bi bi-dot"></i>
+                                        {{ firewall.ultima_verificacao_formatada.hora }}
+                                    </span>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                             </div>
@@ -654,6 +931,101 @@
 
 {% block extra_js %}
 <script>
+function irParaSecaoRegional(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+        return;
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function mostrarOverlayRelatorioRegional(titulo, texto) {
+    const overlay = document.getElementById('regionalReportOverlay');
+    const titleNode = document.getElementById('regionalReportOverlayTitle');
+    const textNode = document.getElementById('regionalReportOverlayText');
+    const openLink = document.getElementById('regionalReportOpenLink');
+    const statusIcon = document.getElementById('regionalReportStatusIcon');
+    if (!overlay) {
+        return;
+    }
+    if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
+    }
+    overlay.classList.remove('success', 'error');
+    if (titleNode) {
+        titleNode.textContent = titulo;
+    }
+    if (textNode) {
+        textNode.textContent = texto;
+    }
+    if (openLink) {
+        openLink.href = '#';
+    }
+    if (statusIcon) {
+        statusIcon.innerHTML = '<i class="bi bi-check-lg"></i>';
+    }
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+}
+
+function concluirOverlayRelatorioRegional(titulo, texto, url) {
+    const overlay = document.getElementById('regionalReportOverlay');
+    const titleNode = document.getElementById('regionalReportOverlayTitle');
+    const textNode = document.getElementById('regionalReportOverlayText');
+    const openLink = document.getElementById('regionalReportOpenLink');
+    const statusIcon = document.getElementById('regionalReportStatusIcon');
+    if (!overlay) {
+        return;
+    }
+    overlay.classList.remove('error');
+    overlay.classList.add('show', 'success');
+    overlay.setAttribute('aria-hidden', 'false');
+    if (titleNode) {
+        titleNode.textContent = titulo;
+    }
+    if (textNode) {
+        textNode.textContent = texto;
+    }
+    if (openLink) {
+        openLink.href = url || '#';
+    }
+    if (statusIcon) {
+        statusIcon.innerHTML = '<i class="bi bi-check-lg"></i>';
+    }
+}
+
+function erroOverlayRelatorioRegional(titulo, texto) {
+    const overlay = document.getElementById('regionalReportOverlay');
+    const titleNode = document.getElementById('regionalReportOverlayTitle');
+    const textNode = document.getElementById('regionalReportOverlayText');
+    const statusIcon = document.getElementById('regionalReportStatusIcon');
+    if (!overlay) {
+        return;
+    }
+    overlay.classList.remove('success');
+    overlay.classList.add('show', 'error');
+    overlay.setAttribute('aria-hidden', 'false');
+    if (titleNode) {
+        titleNode.textContent = titulo;
+    }
+    if (textNode) {
+        textNode.textContent = texto;
+    }
+    if (statusIcon) {
+        statusIcon.innerHTML = '<i class="bi bi-x-lg"></i>';
+    }
+}
+
+function esconderOverlayRelatorioRegional() {
+    const overlay = document.getElementById('regionalReportOverlay');
+    if (!overlay) {
+        return;
+    }
+    overlay.classList.remove('show');
+    overlay.classList.remove('success', 'error');
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
 function verificarRegional(codigo) {
     const btn = $('.btn-info');
     showLoading(btn);
@@ -746,6 +1118,56 @@ function testarServidor(codigoRegional, idServidor, nomeServidor) {
         })
         .fail(function () {
             showToast(`Erro de conexão ao testar ${nomeServidor}`, 'danger');
+        });
+}
+
+function verificarSwitchesRegional(regionalSwitches) {
+    if (!regionalSwitches) {
+        showToast("Regional de switches nao identificada", "warning");
+        return;
+    }
+
+    showToast(`Verificando switches da regional ${regionalSwitches}...`, "info", { delay: 9000 });
+
+    fetch(`/api/switches/regional/${encodeURIComponent(regionalSwitches)}`, {
+        method: "POST"
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success && !data.job_id) {
+                showToast(data.message || "Erro ao verificar switches da regional", "danger", { delay: 9000 });
+                return;
+            }
+            showToast("Verificacao de switches iniciada. A pagina sera atualizada em instantes.", "success", { delay: 9000 });
+            setTimeout(() => location.reload(), 2500);
+        })
+        .catch(() => {
+            showToast("Erro de conexao ao verificar switches da regional", "danger", { delay: 9000 });
+        });
+}
+
+function verificarSwitchRegional(host) {
+    if (!host) {
+        showToast("Switch nao identificado", "warning");
+        return;
+    }
+
+    showToast(`Verificando switch ${host}...`, "info", { delay: 9000 });
+
+    fetch(`/api/switches/verificar/${encodeURIComponent(host)}`, {
+        method: "POST"
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success && !data.job_id) {
+                showToast(data.message || "Erro ao verificar switch", "danger", { delay: 9000 });
+                return;
+            }
+            showToast("Verificacao do switch concluida/iniciada. A pagina sera atualizada em instantes.", "success", { delay: 9000 });
+            setTimeout(() => location.reload(), 1800);
+        })
+        .catch(() => {
+            showToast("Erro de conexao ao verificar switch", "danger", { delay: 9000 });
         });
 }
 
@@ -879,6 +1301,80 @@ function gerarRelatorioRegional() {
 }
 
 // Funções para Links
+function gerarRelatorioRegional(tipo = 'completo', button = null) {
+    const labels = {
+        completo: 'relatÃ³rio consolidado',
+        servidores: 'preventiva de servidores',
+        switches: 'preventiva de switches',
+        firewalls: 'preventiva de firewalls'
+    };
+    const btn = button ? $(button) : $(`.btn[onclick*="gerarRelatorioRegional('${tipo}'"]`);
+    showLoading(btn);
+    mostrarOverlayRelatorioRegional(
+        `Gerando ${labels[tipo] || 'relatÃ³rio'}`,
+        'Aguarde. O Sentinel estÃ¡ coletando e montando o arquivo da regional.'
+    );
+    showToast(`Gerando ${labels[tipo] || 'relatÃ³rio'} da regional...`, 'info', { delay: 8000 });
+
+    fetch(`/regional/${encodeURIComponent(codigoRegionalAtual)}/relatorio-preventiva/${encodeURIComponent(tipo)}`, {
+        method: 'POST'
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'NÃ£o foi possÃ­vel gerar o relatÃ³rio');
+            }
+            showToast('RelatÃ³rio gerado com sucesso!', 'success');
+            window.open(data.url, '_blank', 'noopener');
+        })
+        .catch(error => {
+            showToast(error.message || 'Erro ao gerar relatÃ³rio', 'danger', { delay: 9000 });
+        })
+        .finally(() => {
+            hideLoading(btn);
+            esconderOverlayRelatorioRegional();
+        });
+}
+
+function gerarRelatorioRegional(tipo = 'completo', button = null) {
+    const labels = {
+        completo: 'relat\u00f3rio consolidado',
+        servidores: 'preventiva de servidores',
+        switches: 'preventiva de switches',
+        firewalls: 'preventiva de firewalls'
+    };
+    const btn = button ? $(button) : $(`.btn[onclick*="gerarRelatorioRegional('${tipo}'"]`);
+    showLoading(btn);
+    mostrarOverlayRelatorioRegional(
+        `Gerando ${labels[tipo] || 'relat\u00f3rio'}`,
+        'Aguarde. O Sentinel est\u00e1 coletando e montando o arquivo da regional.'
+    );
+
+    fetch(`/regional/${encodeURIComponent(codigoRegionalAtual)}/relatorio-preventiva/${encodeURIComponent(tipo)}`, {
+        method: 'POST'
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'N\u00e3o foi poss\u00edvel gerar o relat\u00f3rio');
+            }
+            concluirOverlayRelatorioRegional(
+                'Relat\u00f3rio gerado com sucesso',
+                'O arquivo foi criado. Clique em Abrir relat\u00f3rio para visualizar a preventiva.',
+                data.url
+            );
+        })
+        .catch(error => {
+            erroOverlayRelatorioRegional(
+                'Erro ao gerar relat\u00f3rio',
+                error.message || 'N\u00e3o foi poss\u00edvel gerar o relat\u00f3rio da regional.'
+            );
+        })
+        .finally(() => {
+            hideLoading(btn);
+        });
+}
+
 function verificarTodosLinks() {
     const btn = $(`.btn[onclick="verificarTodosLinks()"]`);
     showLoading(btn);
@@ -932,6 +1428,40 @@ function verificarTodosLinks() {
     }
     
     testarProximoLink(0);
+}
+
+function sincronizarLinksRegional(button = null) {
+    const btn = button ? $(button) : $(`.btn[onclick*="sincronizarLinksRegional"]`);
+    showLoading(btn);
+
+    showToast("Atualizando links da regional...", "info");
+
+    const codigoRegional = codigoRegionalAtual;
+
+    fetch(`/api/regional/${encodeURIComponent(codigoRegional)}/links/sincronizar`, {
+        method: 'POST'
+    })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            hideLoading(btn);
+
+            if (!ok || !data.success) {
+                showToast(data.message || "Erro ao atualizar links da regional", "danger", { delay: 9000 });
+                return;
+            }
+
+            const links = data.links || [];
+            atualizarLinksRegionalTempoReal(links);
+            const total = Number(data.total_links || links.length || 0);
+            const online = links.filter((link) => String(link.status || '').toLowerCase() === 'online').length;
+            const offline = links.filter((link) => String(link.status || '').toLowerCase() === 'offline').length;
+            const message = `Atualizacao concluida: ${total} link(s), ${online} online, ${offline} offline`;
+            showToast(message, offline ? 'info' : 'success', { delay: 9000 });
+        })
+        .catch(() => {
+            hideLoading(btn);
+            showToast("Erro de conexao ao atualizar links da regional", "danger", { delay: 9000 });
+        });
 }
 
 function testarLink(codigoRegional, linkId, nomeLink) {

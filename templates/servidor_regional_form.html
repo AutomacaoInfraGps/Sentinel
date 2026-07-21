@@ -3,6 +3,11 @@
 {% block title %}{{ acao }} Servidor - {{ regional_nome }}{% endblock %}
 
 {% block content %}
+<style>
+    button[onclick="toggleSenha()"] {
+        display: none;
+    }
+</style>
 <div class="row mb-4">
     <div class="col-12">
         <div class="d-flex align-items-center">
@@ -202,10 +207,10 @@
                         </div>
                         
                         <div class="col-md-6 mb-3">
-                            <label for="senha" class="form-label">Senha *</label>
-                            <div class="input-group">
+                            <label for="senha" class="form-label">Senha{% if not servidor %} *{% endif %}</label>
+                            <div>
                                 <input type="password" class="form-control" id="senha" 
-                                       value="{{ servidor.senha if servidor else '' }}" 
+                                       value="" 
                                        placeholder="Senha do usuário" required>
                                 <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha()">
                                     <i class="bi bi-eye" id="iconeSenha"></i>
@@ -270,6 +275,13 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
+    if ($('#servidor_id').val()) {
+        $('#senha')
+            .prop('required', false)
+            .attr('placeholder', 'Deixe em branco para manter a senha atual');
+        $('#senha').closest('.col-md-6').find('.form-text').text('Senha cadastrada. Preencha somente se precisar alterar.');
+    }
+
     $('#formServidor').on('submit', function(e) {
         e.preventDefault();
         salvarServidor();
@@ -290,7 +302,10 @@ function salvarServidor() {
     showLoading(btn);
     
     // Validação básica
-    const campos = ['nome', 'funcao', 'ip', 'usuario', 'senha'];
+    const campos = ['nome', 'funcao', 'ip', 'usuario'];
+    if (!$('#servidor_id').val()) {
+        campos.push('senha');
+    }
     for (let campo of campos) {
         if (!$('#' + campo).val().trim()) {
             showToast(`Campo ${campo} é obrigatório`, 'warning');

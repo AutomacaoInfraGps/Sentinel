@@ -1,4 +1,4 @@
-<div class="sofia-widget" id="sofiaWidget" data-endpoint="{{ url_for('sofia.chat') }}">
+<div class="sofia-widget" id="sofiaWidget" data-endpoint="{{ url_for('sofia.chat') }}" data-user="{{ current_user.get_id() }}">
     <section class="sofia-panel" id="sofiaPanel" role="dialog" aria-modal="false" aria-labelledby="sofiaTitle" hidden>
         <header class="sofia-header">
             <div class="sofia-identity">
@@ -8,9 +8,14 @@
                     <span>Assistente do Sentinel</span>
                 </div>
             </div>
-            <button type="button" class="sofia-icon-button" id="sofiaClose" aria-label="Fechar SofIA" title="Fechar">
-                <i class="bi bi-x-lg" aria-hidden="true"></i>
-            </button>
+            <div class="sofia-header-actions">
+                <button type="button" class="sofia-icon-button" id="sofiaClear" aria-label="Limpar conversa da SofIA" title="Limpar conversa">
+                    <i class="bi bi-trash3" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="sofia-icon-button" id="sofiaClose" aria-label="Fechar SofIA" title="Fechar">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
         </header>
 
         <div class="sofia-messages" id="sofiaMessages" role="log" aria-live="polite" aria-relevant="additions">

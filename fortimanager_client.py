@@ -129,43 +129,69 @@ class FortiManagerClient:
 
     def proxy_monitor_interfaces(self, adom: str, device_name: str) -> dict:
         """Consulta /api/v2/monitor/system/interface no dispositivo via proxy do FortiManager.
-        Retorna mapa interface_name -> {ip, mask} com IPs runtime (PPPoE/DHCP).
+        Retorna mapa interface_name -> dados runtime da interface.
         """
-        payload = {
-            "id": 1,
-            "method": "exec",
-            "params": [
-                {
-                    "url": "/sys/proxy/json",
-                    "data": {
-                        "target": [f"adom/{adom}/device/{device_name}"],
-                        "action": "get",
-                        "resource": "/api/v2/monitor/system/interface",
-                    },
-                }
-            ],
-            "session": self.sessionid,
-        }
-        response = self.session.post(self.base_url, json=payload, timeout=20)
-        response.raise_for_status()
-        data = response.json()
-        result_list = data.get("result", [])
-        if not result_list:
-            return {}
-        # O proxy encapsula a resposta em data[0].data[0].response
-        outer = result_list[0] if isinstance(result_list[0], dict) else {}
-        proxy_data_list = outer.get("data", [])
-        if not proxy_data_list:
-            return {}
-        proxy_entry = proxy_data_list[0] if isinstance(proxy_data_list[0], dict) else {}
-        response_body = proxy_entry.get("response", proxy_entry)
-        ifaces_raw = response_body.get("results", {}) if isinstance(response_body, dict) else {}
+        ifaces_raw = {}
+        last_error = None
+
+        for resource in (
+            "/api/v2/monitor/system/interface",
+            "/api/v2/monitor/system/interface/select",
+        ):
+            payload = {
+                "id": 1,
+                "method": "exec",
+                "params": [
+                    {
+                        "url": "/sys/proxy/json",
+                        "data": {
+                            "target": [f"adom/{adom}/device/{device_name}"],
+                            "action": "get",
+                            "resource": resource,
+                        },
+                    }
+                ],
+                "session": self.sessionid,
+            }
+            response = self.session.post(self.base_url, json=payload, timeout=20)
+            response.raise_for_status()
+            data = response.json()
+            result_list = data.get("result", [])
+            if result_list:
+                status = result_list[0].get("status", {}) if isinstance(result_list[0], dict) else {}
+                if status.get("code") not in (0, None):
+                    last_error = f"{resource}: {status.get('message', 'erro')} (code={status.get('code')})"
+                    continue
+
+            # O proxy encapsula a resposta em data[0].data[0].response
+            outer = result_list[0] if result_list and isinstance(result_list[0], dict) else {}
+            proxy_data_list = outer.get("data", [])
+            proxy_entry = proxy_data_list[0] if proxy_data_list and isinstance(proxy_data_list[0], dict) else {}
+            response_body = proxy_entry.get("response", proxy_entry)
+            ifaces_raw = response_body.get("results", {}) if isinstance(response_body, dict) else {}
+            if ifaces_raw:
+                break
+
+        if not ifaces_raw and last_error:
+            raise FortiManagerClientError(last_error)
+
         result = {}
         for iface_name, iface_data in (ifaces_raw or {}).items():
+            if not isinstance(iface_data, dict):
+                continue
             ip_raw = str(iface_data.get("ip") or "").strip()
             mask_raw = str(iface_data.get("mask") or "").strip()
+            status_raw = iface_data.get("status") or iface_data.get("link") or iface_data.get("state")
+            item = dict(iface_data)
+            item.setdefault("name", iface_name)
+            item.setdefault("interface", iface_name)
+            if mask_raw and ip_raw and "/" not in ip_raw and " " not in ip_raw:
+                item["ip"] = f"{ip_raw} {mask_raw}"
             if ip_raw and ip_raw not in {"0.0.0.0", "N/A", "None", ""}:
-                result[iface_name.strip().lower()] = {"ip": ip_raw, "mask": mask_raw}
+                item["ip_publico_status"] = ""
+            if status_raw is not None:
+                item["status"] = status_raw
+            result[iface_name.strip().lower()] = item
         return result
 
     def get_device_sdwan(self, device_name):
