@@ -967,6 +967,7 @@ function mostrarOverlayRelatorioRegional(titulo, texto) {
     }
     if (openLink) {
         openLink.href = '#';
+        openLink.style.display = 'none';
     }
     if (statusIcon) {
         statusIcon.innerHTML = '<i class="bi bi-check-lg"></i>';
@@ -995,6 +996,7 @@ function concluirOverlayRelatorioRegional(titulo, texto, url) {
     }
     if (openLink) {
         openLink.href = url || '#';
+        openLink.style.display = url ? '' : 'none';
     }
     if (statusIcon) {
         statusIcon.innerHTML = '<i class="bi bi-check-lg"></i>';
@@ -1038,7 +1040,7 @@ function mostrarOverlayAcaoRegional(titulo, texto) {
 }
 
 function finalizarOverlayAcaoRegional(titulo, texto) {
-    sucessoOverlayRelatorioRegional(titulo, texto, null);
+    concluirOverlayRelatorioRegional(titulo, texto, null);
 }
 
 function falharOverlayAcaoRegional(titulo, texto) {
@@ -1483,12 +1485,16 @@ function sincronizarLinksRegional(button = null) {
     showToast("Atualizando links da regional...", "info");
 
     const codigoRegional = codigoRegionalAtual;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     fetch(`/api/regional/${encodeURIComponent(codigoRegional)}/links/sincronizar`, {
-        method: 'POST'
+        method: 'POST',
+        signal: controller.signal
     })
         .then(res => res.json().then(data => ({ ok: res.ok, data })))
         .then(({ ok, data }) => {
+            clearTimeout(timeoutId);
             hideLoading(btn);
 
             if (!ok || !data.success) {
@@ -1498,7 +1504,14 @@ function sincronizarLinksRegional(button = null) {
             }
 
             const links = data.links || [];
-            atualizarLinksRegionalTempoReal(links);
+            try {
+                atualizarLinksRegionalTempoReal(links);
+            } catch (error) {
+                console.error('Erro ao redesenhar links da regional:', error);
+                falharOverlayAcaoRegional('Links atualizados', 'Os links foram atualizados, mas houve falha ao redesenhar a tela. Recarregue a pagina.');
+                showToast('Links atualizados, mas houve falha ao redesenhar a tela. Recarregue a pagina.', 'warning', { delay: 9000 });
+                return;
+            }
             const total = Number(data.total_links || links.length || 0);
             const online = links.filter((link) => String(link.status || '').toLowerCase() === 'online').length;
             const offline = links.filter((link) => String(link.status || '').toLowerCase() === 'offline').length;
@@ -1506,10 +1519,14 @@ function sincronizarLinksRegional(button = null) {
             finalizarOverlayAcaoRegional('Links atualizados', `${total} link(s), ${online} online e ${offline} offline.`);
             showToast(message, offline ? 'info' : 'success', { delay: 9000 });
         })
-        .catch(() => {
+        .catch((error) => {
+            clearTimeout(timeoutId);
             hideLoading(btn);
-            falharOverlayAcaoRegional('Falha ao atualizar links', 'Erro de conexao ao atualizar links da regional.');
-            showToast("Erro de conexao ao atualizar links da regional", "danger", { delay: 9000 });
+            const mensagem = error && error.name === 'AbortError'
+                ? 'Tempo limite ao atualizar links. O Sentinel parou a tentativa para nao deixar a tela presa.'
+                : `Erro ao atualizar links: ${error?.message || 'falha desconhecida'}`;
+            falharOverlayAcaoRegional('Falha ao atualizar links', mensagem);
+            showToast(mensagem, "danger", { delay: 9000 });
         });
 }
 
@@ -1520,7 +1537,11 @@ function testarLink(codigoRegional, linkId, nomeLink) {
     
     showToast(`Testando link ${nomeLink}...`, 'info');
     
-    $.get(`/api/regional/${codigoRegional}/link/${linkId}/testar`)
+    $.ajax({
+        url: `/api/regional/${codigoRegional}/link/${linkId}/testar`,
+        method: 'GET',
+        timeout: 45000
+    })
         .done(function(response) {
             hideLoading(btn);
             
@@ -1544,7 +1565,9 @@ function testarLink(codigoRegional, linkId, nomeLink) {
         })
         .fail(function(xhr) {
             hideLoading(btn);
-            const errorMsg = xhr.responseJSON?.message || 'Erro desconhecido ao testar link';
+            const errorMsg = xhr.statusText === 'timeout'
+                ? 'Tempo limite ao testar link. O Sentinel parou a tentativa para nao deixar a tela presa.'
+                : (xhr.responseJSON?.message || 'Erro desconhecido ao testar link');
             falharOverlayAcaoRegional('Falha ao testar link', errorMsg);
             showToast(errorMsg, 'danger');
         });
