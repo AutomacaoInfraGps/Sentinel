@@ -49,22 +49,23 @@
 
     .links-sync-overlay {
         position: fixed;
-        top: 24px;
-        left: 50%;
-        transform: translateX(-50%) translateY(-10px);
+        inset: 0;
         display: flex;
         justify-content: center;
-        z-index: 1080;
+        align-items: center;
+        z-index: 20000;
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
         pointer-events: none;
+        background: rgba(1, 46, 64, 0.38);
+        backdrop-filter: blur(3px);
     }
 
     .links-sync-overlay.show {
         opacity: 1;
         visibility: visible;
-        transform: translateX(-50%) translateY(0);
+        transform: none;
     }
 
     .links-sync-overlay-card {
@@ -301,7 +302,7 @@
         <div class="links-sync-overlay-header">
             <div class="spinner-border links-sync-overlay-spinner" aria-hidden="true"></div>
             <div>
-                <div class="links-sync-overlay-title">Atualizando links das regionais</div>
+                <div id="links-sync-overlay-title" class="links-sync-overlay-title">Atualizando links das regionais</div>
                 <p id="links-sync-overlay-text" class="links-sync-overlay-text">Iniciando consulta no FortiManager e nas regionais.</p>
             </div>
         </div>
@@ -463,14 +464,19 @@
                     Regionais Cadastradas
                 </h5>
                 <div>
-                    <button class="btn btn-outline-info btn-sm" onclick="verificarTodasRegionais()">
+                    <button class="btn btn-outline-info btn-sm" onclick="verificarTodasRegionais(this)">
                         <i class="bi bi-arrow-clockwise me-1"></i>
                         Verificar Servidores
                     </button>
                     <button class="btn btn-outline-warning btn-sm ms-2"
-                            onclick="verificarLinksTodasRegionais()">
+                            onclick="verificarLinksTodasRegionais(this)">
                         <i class="bi bi-wifi me-1"></i>
                         Atualizar Links
+                    </button>
+                    <button class="btn btn-outline-light btn-sm ms-2"
+                            onclick="gerarPreventivasDispositivos(this)">
+                        <i class="bi bi-file-earmark-zip me-1"></i>
+                        Preventiva
                     </button>
                 </div>
             </div>
@@ -519,7 +525,7 @@
                                         </li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <button class="dropdown-item text-info" onclick="verificarRegional('{{ regional.codigo }}')">
+                                            <button class="dropdown-item text-info" onclick="verificarRegional('{{ regional.codigo }}', this)">
                                                 <i class="bi bi-arrow-clockwise me-2"></i>Verificar Status
                                             </button>
                                         </li>
@@ -621,7 +627,7 @@
                                     
                                     {% if regional.total_servidores > 0 %}
                                     <button class="btn btn-outline-info btn-sm" 
-                                            onclick="verificarRegional('{{ regional.codigo }}')">
+                                            onclick="verificarRegional('{{ regional.codigo }}', this)">
                                         <i class="bi bi-arrow-clockwise me-1"></i>
                                         Verificar
                                     </button>
@@ -693,6 +699,43 @@ function updateLinksSyncOverlayProgress() {
 
     const elapsed = Date.now() - linksSyncStartedAt;
     timer.textContent = formatLinksSyncElapsed(elapsed);
+}
+
+function showRegionaisActionOverlay({ title, text, scope, percent = 0 } = {}) {
+    const overlay = document.getElementById('links-sync-overlay');
+    const titleNode = document.getElementById('links-sync-overlay-title');
+    const textNode = document.getElementById('links-sync-overlay-text');
+    const scopeNode = document.getElementById('links-sync-overlay-scope');
+
+    if (!overlay) {
+        return;
+    }
+
+    if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
+    }
+
+    if (titleNode) {
+        titleNode.textContent = title || 'Processando regionais';
+    }
+    if (textNode) {
+        textNode.textContent = text || 'Aguarde enquanto o Sentinel processa a solicitação.';
+    }
+    if (scopeNode) {
+        scopeNode.textContent = scope || 'Processando todas as regionais cadastradas';
+    }
+
+    pararPollingLinksSync();
+    setLinksSyncProgress(percent);
+    linksSyncStartedAt = Date.now();
+    updateLinksSyncOverlayProgress();
+    if (linksSyncTimerHandle) {
+        clearInterval(linksSyncTimerHandle);
+    }
+    linksSyncTimerHandle = setInterval(updateLinksSyncOverlayProgress, 1000);
+
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
 }
 
 function pararPollingLinksSync() {
@@ -792,36 +835,17 @@ function acompanharLinksSyncJob(jobId, btn) {
 }
 
 function showLinksSyncOverlay() {
-    const overlay = document.getElementById('links-sync-overlay');
-    const scope = document.getElementById('links-sync-overlay-scope');
-    const text = document.getElementById('links-sync-overlay-text');
     const regionaisData = document.getElementById('regionais-data');
-    if (!overlay) {
-        return;
-    }
-
     const totalRegionais = regionaisData ? JSON.parse(regionaisData.dataset.regionais || '[]').length : 0;
-    if (scope) {
-        scope.textContent = totalRegionais > 0
+
+    showRegionaisActionOverlay({
+        title: 'Atualizando links das regionais',
+        text: 'Iniciando consulta no FortiManager e nas regionais.',
+        scope: totalRegionais > 0
             ? `Consultando ${totalRegionais} regionais cadastradas`
-            : 'Consultando todas as regionais cadastradas';
-    }
-
-    if (text) {
-        text.textContent = 'Iniciando consulta no FortiManager e nas regionais.';
-    }
-
-    pararPollingLinksSync();
-    setLinksSyncProgress(0);
-    linksSyncStartedAt = Date.now();
-    updateLinksSyncOverlayProgress();
-    if (linksSyncTimerHandle) {
-        clearInterval(linksSyncTimerHandle);
-    }
-    linksSyncTimerHandle = setInterval(updateLinksSyncOverlayProgress, 1000);
-
-    overlay.classList.add('show');
-    overlay.setAttribute('aria-hidden', 'false');
+            : 'Consultando todas as regionais cadastradas',
+        percent: 0
+    });
 }
 
 function hideLinksSyncOverlay() {
@@ -973,17 +997,24 @@ function excluirRegional(codigo) {
 }
 
 
-function verificarRegional(codigo) {
-    const btn = $(event.currentTarget);
+function verificarRegional(codigo, button) {
+    const btn = $(button);
     showLoading(btn);
+    showRegionaisActionOverlay({
+        title: 'Verificando regional',
+        text: `Aguarde enquanto o Sentinel testa os servidores da regional ${codigo}.`,
+        scope: `Regional ${codigo}`,
+        percent: 35
+    });
 
     showToast(`Verificando servidores da regional ${codigo}...`, 'info', { delay: 8000 });
 
     const card = $(`#card-regional-${codigo}`);
 
-    fetch(`/api/regional/${encodeURIComponent(codigo)}/servidores/testar-todos`, {
+    new Promise(resolve => setTimeout(resolve, 80))
+    .then(() => fetch(`/api/regional/${encodeURIComponent(codigo)}/servidores/testar-todos`, {
         method: 'POST'
-    })
+    }))
         .then(res => res.json())
         .then(function(response) {
             if (response.success) {
@@ -1012,11 +1043,13 @@ function verificarRegional(codigo) {
         })
         .finally(function() {
             hideLoading(btn);
+            setLinksSyncProgress(100);
+            setTimeout(hideLinksSyncOverlay, 700);
         });
 }
 
-function verificarTodasRegionais() {
-    const btn = $(event.currentTarget);
+function verificarTodasRegionais(button) {
+    const btn = $(button);
     showLoading(btn);
 
     showToast('Verificando servidores de todas as regionais...', 'info', { delay: 8000 });
@@ -1025,6 +1058,12 @@ function verificarTodasRegionais() {
     const regionais = JSON.parse(
         document.getElementById("regionais-data").dataset.regionais
     );
+    showRegionaisActionOverlay({
+        title: 'Verificando servidores',
+        text: 'Aguarde enquanto o Sentinel testa os servidores das regionais.',
+        scope: regionais.length > 0 ? `Processando ${regionais.length} regionais cadastradas` : 'Nenhuma regional cadastrada',
+        percent: 0
+    });
 
     let verificacoesConcluidas = 0;
     let totalOnline = 0;
@@ -1042,6 +1081,8 @@ function verificarTodasRegionais() {
 
     function finalizarVerificacao() {
         hideLoading(btn);
+        setLinksSyncProgress(100);
+        setTimeout(hideLinksSyncOverlay, 700);
 
         if (totalServidores > 0) {
             const percentOnline = Math.round((totalOnline / totalServidores) * 100);
@@ -1072,9 +1113,10 @@ function verificarTodasRegionais() {
 
         const codigo = regionais[indice];
 
-        fetch(`/api/regional/${encodeURIComponent(codigo)}/servidores/testar-todos`, {
+        new Promise(resolve => setTimeout(resolve, 80))
+        .then(() => fetch(`/api/regional/${encodeURIComponent(codigo)}/servidores/testar-todos`, {
             method: 'POST'
-        })
+        }))
             .then(res => res.json())
             .then(function(response) {
                 const card = $(`#card-regional-${codigo}`);
@@ -1109,6 +1151,8 @@ function verificarTodasRegionais() {
             })
             .finally(function() {
                 verificacoesConcluidas++;
+                const percent = regionais.length ? (verificacoesConcluidas / regionais.length) * 100 : 100;
+                setLinksSyncProgress(percent);
                 processarRegional(indice + 1);
             });
     }
@@ -1116,20 +1160,150 @@ function verificarTodasRegionais() {
     processarRegional(0);
 }
 
-function verificarLinksTodasRegionais() {
-    const btn = $(event.currentTarget);
+function gerarPreventivasDispositivos(button) {
+    const btn = $(button);
+    showLoading(btn);
+    const regionais = JSON.parse(
+        document.getElementById("regionais-data").dataset.regionais || '[]'
+    );
+    showRegionaisActionOverlay({
+        title: 'Gerando preventivas',
+        text: 'Aguarde enquanto o Sentinel gera os relatórios individuais e compacta o pacote ZIP.',
+        scope: regionais.length > 0 ? `Gerando arquivos para ${regionais.length} regionais cadastradas` : 'Preparando pacote de preventivas',
+        percent: 15
+    });
+    showToast('Gerando pacote ZIP com preventivas por dispositivo...', 'info', { delay: 10000 });
+
+    function atualizarOverlayPreventivaJob(job) {
+        const titleNode = document.getElementById('links-sync-overlay-title');
+        const textNode = document.getElementById('links-sync-overlay-text');
+        const scopeNode = document.getElementById('links-sync-overlay-scope');
+
+        if (titleNode) {
+            titleNode.textContent = job.message || 'Gerando preventivas';
+        }
+        if (textNode) {
+            textNode.textContent = job.detail || 'Processando arquivos individuais.';
+        }
+        if (scopeNode) {
+            scopeNode.textContent = job.current_item
+                ? `Processando: ${job.current_item}`
+                : `Concluídas ${job.completed || 0} de ${job.total || 0} regionais`;
+        }
+        setLinksSyncProgress(job.percent || 0);
+        updateLinksSyncOverlayProgress();
+    }
+
+    function baixarArquivoPreventiva(url, filename) {
+        return fetch(url, { credentials: 'same-origin' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Pacote gerado, mas nao foi possivel iniciar o download.');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = filename || 'preventivas_dispositivos.zip';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+            });
+    }
+
+    function acompanharPreventivasJob(jobId) {
+        return fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`, { cache: 'no-store' })
+            .then(res => res.json())
+            .then(response => {
+                if (!response.success || !response.job) {
+                    throw new Error(response.message || 'Job de preventivas nao encontrado.');
+                }
+
+                const job = response.job;
+                atualizarOverlayPreventivaJob(job);
+
+                if (job.status === 'completed') {
+                    return job.result || {};
+                }
+                if (job.status === 'failed') {
+                    throw new Error(job.detail || job.error || job.message || 'Falha ao gerar preventivas.');
+                }
+
+                return new Promise(resolve => setTimeout(resolve, 1200))
+                    .then(() => acompanharPreventivasJob(jobId));
+            });
+    }
+
+    new Promise(resolve => setTimeout(resolve, 80))
+    .then(() => fetch('/regionais/relatorio-preventiva-dispositivos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        }))
+    .then(res => res.json().then(payload => {
+        if (!res.ok) {
+            throw new Error(payload.message || 'Erro ao gerar pacote de preventivas.');
+        }
+        return payload;
+    }))
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.message || 'Nao foi possivel gerar o pacote de preventivas.');
+        }
+        if (!data.job_id) {
+            throw new Error('Job de preventivas nao foi iniciado.');
+        }
+        return acompanharPreventivasJob(data.job_id);
+    })
+    .then(data => {
+        if (!data) {
+            return;
+        }
+
+        showToast(data.message || 'Pacote de preventivas gerado com sucesso.', 'success', { delay: 10000 });
+        setLinksSyncProgress(100);
+        if (data.url) {
+            return baixarArquivoPreventiva(data.url, data.filename).then(() => data);
+        }
+        return data;
+    })
+    .then(data => {
+        if (!data) {
+            return;
+        }
+        if (Array.isArray(data.erros) && data.erros.length > 0) {
+            showToast(`Pacote gerado com ${data.erros.length} regional(is) com aviso.`, 'warning', { delay: 10000 });
+        }
+    })
+    .catch(error => {
+        showToast(error.message || 'Erro ao gerar preventivas por dispositivo.', 'danger', { delay: 10000 });
+    })
+    .finally(() => {
+        hideLoading(btn);
+        setTimeout(hideLinksSyncOverlay, 900);
+    });
+}
+
+function verificarLinksTodasRegionais(button) {
+    const btn = $(button);
     showLoading(btn);
     showLinksSyncOverlay();
 
     showToast('Atualizando links de todas as regionais...', 'info');
 
-    fetch('/api/regionais/verificar-links', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ async: true })
-    })
+    new Promise(resolve => setTimeout(resolve, 80))
+    .then(() => fetch('/api/regionais/verificar-links', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ async: true })
+        }))
     .then(res => res.json())
     .then(data => {
         if (!data.success || !data.job_id) {

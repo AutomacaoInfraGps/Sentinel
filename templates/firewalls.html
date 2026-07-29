@@ -66,6 +66,11 @@
         border-left: 4px solid #28a745 !important;
     }
 
+    .license-unknown {
+        background-color: #eef1f4 !important;
+        border-left: 4px solid #6c757d !important;
+    }
+
     .alert-badge {
         display: inline-block;
         padding: 0.5rem 1rem;
@@ -195,7 +200,7 @@
     </div>
 
     <!-- Estatísticas -->
-    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
         <div class="stat-card active" id="card-all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('all')">
             <div class="number">{{ total_firewalls }}</div>
             <div class="label"><i class="bi bi-shield-fill me-1"></i>Firewalls Total</div>
@@ -208,8 +213,12 @@
             <div class="number">{{ total_expirados|default(0) }}</div>
             <div class="label"><i class="bi bi-x-circle-fill me-1"></i>Licenças Expiradas</div>
         </div>
+        <div class="stat-card" id="card-semsinal" style="background: linear-gradient(135deg, #5c6770, #343a40);" onclick="aplicarFiltroFirewall('semsinal')">
+            <div class="number">{{ total_sem_sinal|default(0) }}</div>
+            <div class="label"><i class="bi bi-slash-circle-fill me-1"></i>Sem Sinal</div>
+        </div>
         <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
-            <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) }}</div>
+            <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) - (total_sem_sinal|default(0)) }}</div>
             <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Licenças OK</div>
         </div>
     </div>
@@ -271,18 +280,24 @@
                             <p class="mb-0 fw-semibold" style="font-family: monospace; font-size: 0.82rem;">{{ firewall.serial or 'N/A' }}</p>
                         </div>
                     </div>
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <small class="text-muted">Versão da Firmware:</small>
+                            <p class="mb-0 fw-semibold" style="font-size:0.88rem;">{{ firewall.firmware or 'N/A' }}</p>
+                        </div>
+                    </div>
 
                     <!-- Licenças -->
-                    {% set forticare_licenses = firewall.licencas|selectattr('nome', 'equalto', 'forticare')|list %}
+                    {% set forticare_licenses = (firewall.licencas|selectattr('nome', 'equalto', 'forticare')|list) + (firewall.licencas|selectattr('nome', 'equalto', 'fortiguard')|list) %}
                     {% if forticare_licenses %}
                     <div class="mb-0">
                         <div class="list-group list-group-sm">
                             {% for licenca in forticare_licenses %}
-                            <div class="list-group-item {% if licenca.notificacao_expirada %}license-expired{% elif licenca.notificacao_critica %}license-critical{% elif licenca.dias_restantes <= 60 %}license-warning{% else %}license-ok{% endif %} py-2">
+                            <div class="list-group-item {% if licenca.status == 'offline' %}license-unknown{% elif licenca.notificacao_expirada %}license-expired{% elif licenca.notificacao_critica %}license-critical{% elif licenca.dias_restantes <= 60 %}license-warning{% else %}license-ok{% endif %} py-2">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <small class="fw-semibold">FortiCare</small>
-                                        <small class="text-muted ms-2">Status: <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
+                                        <small class="fw-semibold">{{ 'FortiGuard' if licenca.nome == 'fortiguard' else 'FortiCare' }}</small>
+                                        <small class="text-muted ms-2">Status: <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
                             {%- if licenca.status == 'offline' %}Sem Sinal
                             {%- elif licenca.status in ('valid', 'licensed') %}Válida
                             {%- elif licenca.status == 'registered' %}Registrada
@@ -292,7 +307,7 @@
                             {%- else %}{{ licenca.status|title }}{%- endif %}
                         </span></small>
                                     </div>
-                                    <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
+                                    <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
                                         {%- if licenca.status == 'offline' %}Sem Sinal
                                         {%- elif licenca.notificacao_expirada %}Expirada
                                         {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
@@ -338,7 +353,7 @@ function recarregarFirewalls() {
 
 function aplicarFiltroFirewall(filtro) {
     filtroAtivo = filtro;
-    ['all', 'vencer', 'expirado', 'ok'].forEach(f => {
+    ['all', 'vencer', 'expirado', 'semsinal', 'ok'].forEach(f => {
         const card = document.getElementById('card-' + f);
         if (card) card.classList.toggle('active', f === filtro);
     });
@@ -362,9 +377,12 @@ function _reaplicarFiltros() {
             mostrar = card.querySelectorAll('.license-critical').length > 0;
         } else if (filtroAtivo === 'expirado') {
             mostrar = card.querySelectorAll('.license-expired').length > 0;
+        } else if (filtroAtivo === 'semsinal') {
+            mostrar = card.querySelectorAll('.license-unknown').length > 0;
         } else if (filtroAtivo === 'ok') {
             mostrar = card.querySelectorAll('.license-critical').length === 0 &&
-                      card.querySelectorAll('.license-expired').length === 0;
+                      card.querySelectorAll('.license-expired').length === 0 &&
+                      card.querySelectorAll('.license-unknown').length === 0;
         }
 
         if (mostrar && filtroBuscaAtivo) {

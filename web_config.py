@@ -16,6 +16,7 @@ import ipaddress
 import socket
 import platform
 import unicodedata
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -53,7 +54,7 @@ except ImportError:
     pd = None
 
 # Configuração do projeto
-from config import PROJECT_ROOT, REPLICACAO_JSON
+from config import PROJECT_ROOT, REPLICACAO_JSON, GPS_HTML
 from data_store import load_data, is_data_fresh
 
 # Módulos hierárquicos
@@ -2812,6 +2813,7 @@ def detalhar_regional(codigo_regional):
                     device_model    = device_data.get('platform_str', 'N/A')
                     device_serial   = device_data.get('sn', 'N/A')
                     device_status   = device_data.get('status', 'unknown')
+                    device_firmware = _formatar_firmware_firewall(device_data)
 
                     try:
                         licenses_data = fm_client.proxy_monitor_license(adom, device_name)
@@ -2823,6 +2825,7 @@ def detalhar_regional(codigo_regional):
                             'status': device_status,
                             'model': device_model,
                             'serial': device_serial,
+                            'firmware': device_firmware,
                             'licencas': [],
                             'licencas_criticas': 0,
                             'licencas_expiradas': 0,
@@ -2835,9 +2838,8 @@ def detalhar_regional(codigo_regional):
                                 'nome': 'forticare', 'tipo': 'forticare',
                                 'status': 'offline', 'dias_restantes': 0,
                                 'expiracao': 'N/A', 'notificacao_critica': False,
-                                'notificacao_expirada': True,
+                                'notificacao_expirada': False,
                             })
-                            firewall_info['licencas_expiradas'] += 1
 
                         # Processar apenas forticare
                         elif isinstance(licenses_data, dict) and 'forticare' in licenses_data:
@@ -2876,6 +2878,7 @@ def detalhar_regional(codigo_regional):
                                     firewall_info['licencas_criticas'] += 1
                                 firewall_info['licencas'].append(lic_obj)
 
+                        _aplicar_fallback_forticare_device_data(firewall_info, device_data)
                         firewalls_completos.append(firewall_info)
 
                     except Exception as e:
@@ -2883,6 +2886,8 @@ def detalhar_regional(codigo_regional):
                         firewalls_completos.append({
                             'nome': device_name, 'hostname': device_hostname,
                             'ip': device_ip, 'status': 'erro',
+                            'model': device_model, 'serial': device_serial,
+                            'firmware': device_firmware,
                             'licencas': [], 'licencas_criticas': 0, 'licencas_expiradas': 0,
                             'erro': str(e), 'ultima_verificacao': datetime.now().isoformat()
                         })
@@ -2934,6 +2939,56 @@ def _preventiva_status_class(status):
     if status_norm in {"inativo", "inactive"}:
         return "inactive"
     return "danger"
+
+
+def _formatar_firmware_firewall(device_data):
+    """Normaliza a versao de firmware retornada pelo FortiManager."""
+    if not isinstance(device_data, dict):
+        return ""
+
+    explicit_version = ""
+    for key in ("firmware", "firmware_version", "os_version", "os_ver", "version"):
+        value = device_data.get(key)
+        if value not in (None, ""):
+            text = str(value).strip()
+            if text and text.lower() not in {"n/a", "none", "unknown"}:
+                explicit_version = text
+                break
+
+    major = device_data.get("mr") or device_data.get("major")
+    minor = device_data.get("minor")
+    patch = device_data.get("patch") or device_data.get("patch_level")
+    build = device_data.get("build") or device_data.get("buildno")
+    maturity = (
+        device_data.get("maturity")
+        or device_data.get("branch")
+        or device_data.get("release_type")
+        or device_data.get("release")
+    )
+
+    parts = [part.strip() for part in explicit_version.split(".") if part.strip()] if explicit_version else []
+    for part in (major, minor, patch):
+        if part in (None, ""):
+            continue
+        part_text = str(part).strip()
+        if part_text and part_text not in parts:
+            parts.append(part_text)
+
+    if parts:
+        version = ".".join(parts)
+        if build not in (None, ""):
+            build_text = str(build).strip()
+            if build_text and not build_text.lower().startswith("build"):
+                build_text = f"build{build_text}"
+            version = f"{version}, {build_text}"
+        if maturity not in (None, ""):
+            version = f"{version} ({str(maturity).strip()})"
+        return version
+
+    if explicit_version:
+        return explicit_version
+
+    return ""
 
 
 def _preventiva_badge(label, status=None):
@@ -3024,6 +3079,311 @@ def _normalizar_licenca_firewall(license_key, license_info):
     }
 
 
+def _texto_firewall_device(device_data, *keys):
+    for key in keys:
+        value = device_data.get(key) if isinstance(device_data, dict) else None
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _coletar_textos_firewall_device(device_data, termos_chave):
+    """Busca textos em campos diretos/aninhados do device_data por nome aproximado."""
+    encontrados = []
+    termos = tuple(str(termo).lower() for termo in termos_chave)
+
+    def visitar(valor, caminho=""):
+        if isinstance(valor, dict):
+            for chave, subvalor in valor.items():
+                chave_texto = str(chave).lower()
+                novo_caminho = f"{caminho}.{chave_texto}" if caminho else chave_texto
+                if any(termo in chave_texto for termo in termos) and subvalor not in (None, ""):
+                    encontrados.append(str(subvalor))
+                visitar(subvalor, novo_caminho)
+        elif isinstance(valor, list):
+            for item in valor:
+                visitar(item, caminho)
+
+    visitar(device_data)
+    return " ".join(texto.strip() for texto in encontrados if texto and texto.strip())
+
+
+def _licenca_forticare_por_device_data(device_data):
+    """Monta fallback de FortiCare usando campos da listagem do FortiManager."""
+    support = _texto_firewall_device(
+        device_data,
+        "support_contract",
+        "supportContract",
+        "support-contract",
+        "support",
+        "contract",
+    )
+    if not support:
+        support = _coletar_textos_firewall_device(device_data, ("support", "contract"))
+
+    fortiguard = _texto_firewall_device(
+        device_data,
+        "fortiguard_subscription",
+        "fortiguard-subscription",
+        "fortiguard",
+        "fortiguard_status",
+    )
+    if not fortiguard:
+        fortiguard = _coletar_textos_firewall_device(device_data, ("fortiguard", "subscription"))
+
+    service = _texto_firewall_device(
+        device_data,
+        "service_status",
+        "service-status",
+        "service",
+    )
+    if not service:
+        service = _coletar_textos_firewall_device(device_data, ("service", "update"))
+
+    combined = " ".join([support, fortiguard, service]).strip()
+    normalized = combined.lower()
+    if not combined:
+        return None
+
+    expired_terms = ("expired", "expirad", "no license", "unlicensed")
+    warning_terms = ("warning", "expiring", "expires soon", "vence", "vencer", "update available")
+    valid_terms = ("24x7", "valid", "up to date", "registered", "registrad", "active")
+
+    if any(term in normalized for term in expired_terms):
+        status = "expired"
+        dias_restantes = 0
+        expirada = True
+        critica = False
+    elif any(term in normalized for term in warning_terms):
+        status = "warning"
+        dias_restantes = 30
+        expirada = False
+        critica = True
+    elif any(term in normalized for term in valid_terms):
+        status = "registered"
+        dias_restantes = 365
+        expirada = False
+        critica = False
+    else:
+        return None
+
+    return {
+        "nome": "fortiguard",
+        "tipo": "fortiguard",
+        "status": status,
+        "dias_restantes": dias_restantes,
+        "expiracao": "N/A",
+        "tipo_licenca": support or fortiguard or service or "forticare",
+        "notificacao_critica": critica,
+        "notificacao_expirada": expirada,
+        "origem": "device_data",
+        "descricao": combined,
+    }
+
+
+def _aplicar_fallback_forticare_device_data(firewall_info, device_data):
+    lic_obj = _licenca_forticare_por_device_data(device_data)
+    if not lic_obj:
+        return
+
+    licencas = firewall_info.setdefault("licencas", [])
+    tem_forticare_util = any(
+        str(lic.get("nome") or lic.get("tipo") or "").lower() in {"forticare", "fortiguard"}
+        and str(lic.get("status") or "").lower() not in {"offline", "unknown", "sem sinal"}
+        for lic in licencas
+        if isinstance(lic, dict)
+    )
+    if tem_forticare_util:
+        return
+
+    firewall_info["licencas"] = [
+        lic for lic in licencas
+        if not (
+            isinstance(lic, dict)
+            and str(lic.get("nome") or lic.get("tipo") or "").lower() in {"forticare", "fortiguard"}
+            and str(lic.get("status") or "").lower() in {"offline", "unknown", "sem sinal"}
+        )
+    ]
+    firewall_info["licencas"].append(lic_obj)
+    firewall_info["licencas_expiradas"] = sum(1 for lic in firewall_info["licencas"] if lic.get("notificacao_expirada"))
+    firewall_info["licencas_criticas"] = sum(1 for lic in firewall_info["licencas"] if lic.get("notificacao_critica"))
+
+
+def _debug_resumir_payload_fortimanager(payload):
+    termos = (
+        "all valid",
+        "expires",
+        "expire",
+        "expired",
+        "fortiguard",
+        "subscription",
+        "update available",
+        "up to date",
+        "24x7",
+        "support",
+        "contract",
+    )
+    achados = []
+    chaves = set()
+
+    def visitar(valor, caminho=""):
+        if isinstance(valor, dict):
+            for chave, subvalor in valor.items():
+                chave_texto = str(chave)
+                chave_lower = chave_texto.lower()
+                if chave_lower in {"adm_pass", "private_key", "psk"}:
+                    continue
+                novo_caminho = f"{caminho}.{chave_texto}" if caminho else chave_texto
+                chaves.add(novo_caminho)
+                if any(termo in chave_lower for termo in termos):
+                    achados.append({"path": novo_caminho, "value": str(subvalor)[:220]})
+                visitar(subvalor, novo_caminho)
+        elif isinstance(valor, list):
+            for indice, item in enumerate(valor[:25]):
+                visitar(item, f"{caminho}[{indice}]")
+        else:
+            texto = str(valor)
+            texto_lower = texto.lower()
+            if any(termo in texto_lower for termo in termos):
+                achados.append({"path": caminho, "value": texto[:220]})
+
+    visitar(payload)
+    return {
+        "has_matches": bool(achados),
+        "matches": achados[:80],
+        "sample_keys": sorted(chaves)[:120],
+    }
+
+
+@app.route('/api/debug/fortimanager/firewall-licenca/<path:device_name>', methods=['GET'])
+@login_required
+def debug_fortimanager_firewall_licenca(device_name):
+    """Diagnostico pontual do retorno de device/licenca para um FortiGate."""
+    try:
+        adom = request.args.get("adom") or _get_fortimanager_adom()
+        alvo = str(device_name or "").strip()
+        if not alvo:
+            return jsonify({"success": False, "message": "Device nao informado"}), 400
+
+        fm_client = FortiManagerClient()
+        fm_client.login()
+        try:
+            devices_resp = fm_client.list_devices(adom)
+            devices_payload = devices_resp.get("result", [{}])[0] if isinstance(devices_resp.get("result", []), list) and devices_resp.get("result") else {}
+            devices_data = devices_payload.get("data", []) if isinstance(devices_payload, dict) else []
+            device_data = next(
+                (
+                    item for item in devices_data
+                    if isinstance(item, dict)
+                    and str(item.get("name") or "").strip().lower() == alvo.lower()
+                ),
+                None,
+            )
+
+            licenses_data = fm_client.proxy_monitor_license(adom, alvo)
+            candidate_urls = [
+                f"/dvmdb/adom/{adom}/device/{alvo}",
+                f"/dvmdb/adom/{adom}/device/{alvo}/license",
+                f"/dvmdb/adom/{adom}/device/{alvo}/dashboard/license",
+                f"/pm/config/adom/{adom}/obj/fmg/variable",
+                f"/um/device/{alvo}/license",
+                f"/um/adom/{adom}/device/{alvo}/license",
+                f"/um/adom/{adom}/license/device/{alvo}",
+                f"/um/license/device/{alvo}",
+            ]
+            endpoint_tests = {}
+            endpoint_summary = {}
+            for url in candidate_urls:
+                try:
+                    payload = fm_client.request_raw("get", url)
+                    endpoint_tests[url] = payload
+                    endpoint_summary[url] = _debug_resumir_payload_fortimanager(payload)
+                except Exception as endpoint_exc:
+                    endpoint_tests[url] = {"_erro": str(endpoint_exc)}
+                    endpoint_summary[url] = {"has_matches": False, "error": str(endpoint_exc)}
+
+            fallback = _licenca_forticare_por_device_data(device_data or {})
+            normalized = []
+            if isinstance(licenses_data, dict):
+                license_items = [('forticare', licenses_data.get('forticare'))] if 'forticare' in licenses_data else licenses_data.items()
+                for license_key, license_info in license_items:
+                    if isinstance(license_info, dict):
+                        normalized.append(_normalizar_licenca_firewall(license_key, license_info))
+
+            return jsonify({
+                "success": True,
+                "adom": adom,
+                "device_name": alvo,
+                "device_found": bool(device_data),
+                "device_summary": {
+                    "name": (device_data or {}).get("name"),
+                    "hostname": (device_data or {}).get("hostname"),
+                    "ip": (device_data or {}).get("ip"),
+                    "status": (device_data or {}).get("status"),
+                    "model": (device_data or {}).get("platform_str") or (device_data or {}).get("model"),
+                    "serial": (device_data or {}).get("sn") or (device_data or {}).get("serialnumber"),
+                    "firmware": _formatar_firmware_firewall(device_data or {}),
+                },
+                "device_keys": sorted((device_data or {}).keys()),
+                "device_raw": device_data if request.args.get("raw") == "1" else "oculto; use ?raw=1 somente em diagnostico controlado",
+                "license_raw": licenses_data,
+                "license_normalized": normalized,
+                "fallback_from_device_data": fallback,
+                "endpoint_summary": endpoint_summary,
+                "endpoint_tests": endpoint_tests if request.args.get("raw") == "1" else "oculto; use ?raw=1 se precisar do bruto",
+            })
+        finally:
+            try:
+                fm_client.logout()
+            except Exception:
+                pass
+    except Exception as exc:
+        current_app.logger.exception("Erro no debug de licenca do FortiManager")
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+def _recalcular_totais_firewalls(firewalls_por_regional):
+    total_firewalls = 0
+    total_alertas = 0
+    total_expirados = 0
+    total_sem_sinal = 0
+
+    for firewalls in (firewalls_por_regional or {}).values():
+        for firewall in firewalls or []:
+            total_firewalls += 1
+            licencas = firewall.get("licencas") or []
+            tem_sem_sinal = any(
+                str(lic.get("status") or "").lower() == "offline"
+                for lic in licencas
+                if isinstance(lic, dict)
+            )
+            tem_expirada = any(
+                bool(lic.get("notificacao_expirada"))
+                and str(lic.get("status") or "").lower() != "offline"
+                for lic in licencas
+                if isinstance(lic, dict)
+            )
+            criticas = sum(
+                1 for lic in licencas
+                if isinstance(lic, dict)
+                and bool(lic.get("notificacao_critica"))
+                and not bool(lic.get("notificacao_expirada"))
+                and str(lic.get("status") or "").lower() != "offline"
+            )
+
+            firewall["licencas_expiradas"] = 1 if tem_expirada else 0
+            firewall["licencas_criticas"] = criticas
+
+            if tem_expirada:
+                total_expirados += 1
+            elif tem_sem_sinal:
+                total_sem_sinal += 1
+            elif criticas:
+                total_alertas += criticas
+
+    return total_firewalls, total_alertas, total_expirados, total_sem_sinal
+
+
 def _obter_firewalls_regionais_live(codigo_regional):
     firewalls = []
     adom = _get_fortimanager_adom()
@@ -3049,6 +3409,7 @@ def _obter_firewalls_regionais_live(codigo_regional):
                 'status': device_data.get('status', 'unknown'),
                 'model': device_data.get('platform_str') or device_data.get('model') or 'N/A',
                 'serial': device_data.get('sn') or device_data.get('serialnumber') or 'N/A',
+                'firmware': _formatar_firmware_firewall(device_data),
                 'licencas': [],
                 'licencas_criticas': 0,
                 'licencas_expiradas': 0,
@@ -3065,10 +3426,9 @@ def _obter_firewalls_regionais_live(codigo_regional):
                         'dias_restantes': 0,
                         'expiracao': 'N/A',
                         'notificacao_critica': False,
-                        'notificacao_expirada': True,
+                        'notificacao_expirada': False,
                     }
                     firewall_info['licencas'].append(lic_obj)
-                    firewall_info['licencas_expiradas'] += 1
                 elif isinstance(licenses_data, dict):
                     license_items = [('forticare', licenses_data.get('forticare'))] if 'forticare' in licenses_data else licenses_data.items()
                     for license_key, license_info in license_items:
@@ -3083,6 +3443,7 @@ def _obter_firewalls_regionais_live(codigo_regional):
             except Exception as exc:
                 firewall_info['erro'] = str(exc)
 
+            _aplicar_fallback_forticare_device_data(firewall_info, device_data)
             firewalls.append(firewall_info)
     finally:
         try:
@@ -3305,6 +3666,7 @@ def _render_preventiva_firewalls(firewalls):
                 <td><strong>{_preventiva_escape(fw.get("nome"))}</strong></td>
                 <td><code>{_preventiva_escape(fw.get("ip"))}</code></td>
                 <td>{_preventiva_escape(fw.get("model"))}</td>
+                <td>{_preventiva_escape(fw.get("firmware"))}</td>
                 <td>{_preventiva_escape(fw.get("serial"))}</td>
                 <td>{_preventiva_escape(licenca.get("nome") or licenca.get("tipo") or "forticare")}</td>
                 <td>{_preventiva_escape(licenca.get("dias_restantes"))}</td>
@@ -3314,8 +3676,8 @@ def _render_preventiva_firewalls(firewalls):
     return f"""
     <div class="table-block">
         <div class="table-title"><strong>Firewalls e Licencas</strong><span>{len(firewalls)} dispositivo(s)</span></div>
-        <table><thead><tr><th>Regional</th><th>Firewall</th><th>IP</th><th>Modelo</th><th>Serial</th><th>Licenca</th><th>Dias restantes</th><th>Status</th></tr></thead>
-        <tbody>{''.join(rows) if rows else '<tr><td colspan="8">Nenhum firewall encontrado no cache. Atualize a tela de Firewalls e Licencas.</td></tr>'}</tbody></table>
+        <table><thead><tr><th>Regional</th><th>Firewall</th><th>IP</th><th>Modelo</th><th>Versao da Firmware</th><th>Serial</th><th>Licenca</th><th>Dias restantes</th><th>Status</th></tr></thead>
+        <tbody>{''.join(rows) if rows else '<tr><td colspan="9">Nenhum firewall encontrado no cache. Atualize a tela de Firewalls e Licencas.</td></tr>'}</tbody></table>
     </div>
     """
 
@@ -3411,6 +3773,211 @@ def gerar_relatorio_preventiva_regional(codigo_regional, tipo):
     except Exception as exc:
         current_app.logger.exception("Erro ao gerar preventiva regional")
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+def _nome_arquivo_preventiva_dispositivo(regional_nome, dispositivo_nome, usados):
+    base = f"{regional_nome} - {dispositivo_nome}"
+    base = unicodedata.normalize("NFKD", str(base))
+    base = "".join(ch for ch in base if not unicodedata.combining(ch))
+    base = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", base)
+    base = re.sub(r"\s+", " ", base).strip(" ._")
+    if not base:
+        base = "preventiva-dispositivo"
+    base = base[:150]
+
+    filename = f"{base}.html"
+    contador = 2
+    while filename.lower() in usados:
+        filename = f"{base} ({contador}).html"
+        contador += 1
+    usados.add(filename.lower())
+    return filename
+
+
+def _render_preventiva_dispositivo_html(dados_regionais, tipo, dispositivo):
+    codigo = dados_regionais["codigo"]
+    nome = dados_regionais["nome"]
+    dispositivo_nome = (
+        dispositivo.get("nome")
+        or dispositivo.get("host")
+        or dispositivo.get("hostname")
+        or dispositivo.get("ip")
+        or "Dispositivo"
+    )
+
+    dados = {
+        "codigo": codigo,
+        "nome": nome,
+        "descricao": dados_regionais.get("descricao", ""),
+        "tipo": tipo,
+        "servidores": [dispositivo] if tipo == "servidores" else [],
+        "links": [],
+        "switches": [dispositivo] if tipo == "switches" else [],
+        "switches_regional_nome": dados_regionais.get("switches_regional_nome"),
+        "firewalls": [dispositivo] if tipo == "firewalls" else [],
+        "gerado_em": dados_regionais.get("gerado_em") or datetime.now(),
+    }
+    html_content = _render_preventiva_regional_html(dados)
+    subtitulo = f"{_preventiva_escape(codigo)} - {_preventiva_escape(nome)} | {_preventiva_escape(dispositivo_nome)}"
+    return html_content.replace(
+        f"<p><strong>{_preventiva_escape(codigo)}</strong> - {_preventiva_escape(nome)}</p>",
+        f"<p><strong>{subtitulo}</strong></p>",
+        1,
+    )
+
+
+def _gerar_pacote_preventiva_dispositivos(job_id=None):
+    """Gera um ZIP com preventivas individuais por servidor, switch e firewall."""
+    agora = datetime.now()
+    output_root = (
+        PROJECT_ROOT
+        / "output"
+        / "preventivas_dispositivos"
+        / f"{agora:%Y}"
+        / f"{agora:%m}"
+        / f"{agora:%d}"
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
+    timestamp = agora.strftime("%Y%m%d_%H%M%S")
+    pacote_dir = output_root / f"htmls_preventivas_dispositivos_{timestamp}"
+    pacote_dir.mkdir(parents=True, exist_ok=True)
+
+    zip_filename = f"preventivas_dispositivos_{timestamp}.zip"
+    zip_path = output_root / zip_filename
+    arquivos_gerados = []
+    erros = []
+
+    gerenciador_regionais.recarregar_regionais()
+    regionais = gerenciador_regionais.listar_regionais()
+    total_regionais = len(regionais)
+
+    if job_id:
+        _update_background_job(
+            job_id,
+            total=total_regionais,
+            completed=0,
+            percent=2,
+            message="Preparando preventivas por dispositivo...",
+            detail=f"{total_regionais} regional(is) na fila.",
+        )
+
+    for indice, codigo_regional in enumerate(regionais, start=1):
+        if job_id:
+            base_percent = 2 + round(((indice - 1) / max(total_regionais, 1)) * 88)
+            _update_background_job(
+                job_id,
+                completed=indice - 1,
+                percent=base_percent,
+                current_item=codigo_regional,
+                message=f"Coletando dados da regional {codigo_regional}...",
+                detail="Buscando servidores, switches, firewalls e licencas.",
+            )
+
+        try:
+            dados = _coletar_dados_preventiva_regional(codigo_regional, "completo")
+            regional_nome = dados.get("nome") or codigo_regional
+            regional_dir_name = _nome_arquivo_preventiva_dispositivo(regional_nome, "regional", set()).removesuffix(".html")
+            regional_dir = pacote_dir / regional_dir_name
+            regional_dir.mkdir(parents=True, exist_ok=True)
+            usados = set()
+
+            grupos = (
+                ("servidores", dados.get("servidores") or [], "nome"),
+                ("switches", dados.get("switches") or [], "host"),
+                ("firewalls", dados.get("firewalls") or [], "nome"),
+            )
+
+            for tipo, dispositivos, chave_nome in grupos:
+                tipo_dir = regional_dir / tipo
+                tipo_dir.mkdir(parents=True, exist_ok=True)
+                if job_id:
+                    _update_background_job(
+                        job_id,
+                        current_item=f"{codigo_regional}/{tipo}",
+                        message=f"Gerando preventivas de {tipo}...",
+                        detail=f"Regional {codigo_regional}: {len(dispositivos)} dispositivo(s).",
+                    )
+                for dispositivo in dispositivos:
+                    nome_dispositivo = (
+                        dispositivo.get(chave_nome)
+                        or dispositivo.get("nome")
+                        or dispositivo.get("host")
+                        or dispositivo.get("hostname")
+                        or dispositivo.get("ip")
+                        or "Dispositivo"
+                    )
+                    html_content = _render_preventiva_dispositivo_html(dados, tipo, dispositivo)
+                    filename = _nome_arquivo_preventiva_dispositivo(regional_nome, nome_dispositivo, usados)
+                    file_path = tipo_dir / filename
+                    file_path.write_text(html_content, encoding="utf-8")
+                    arquivos_gerados.append(file_path)
+        except Exception as exc:
+            erros.append(f"{codigo_regional}: {exc}")
+            current_app.logger.exception("Erro ao gerar preventivas por dispositivo da regional %s", codigo_regional)
+        finally:
+            if job_id:
+                _update_background_job(
+                    job_id,
+                    completed=indice,
+                    percent=2 + round((indice / max(total_regionais, 1)) * 88),
+                    message=f"Regional {codigo_regional} processada.",
+                    detail=f"{len(arquivos_gerados)} arquivo(s) gerado(s) ate agora.",
+                )
+
+    if not arquivos_gerados:
+        raise RuntimeError("Nenhum relatorio de dispositivo foi gerado.")
+
+    if job_id:
+        _update_background_job(
+            job_id,
+            percent=93,
+            message="Compactando arquivos em ZIP...",
+            detail=f"{len(arquivos_gerados)} arquivo(s) HTML serao incluidos no pacote.",
+        )
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in arquivos_gerados:
+            zip_file.write(file_path, file_path.relative_to(pacote_dir))
+
+    return {
+        "success": True,
+        "message": f"Pacote de preventivas gerado com {len(arquivos_gerados)} arquivo(s).",
+        "url": f"/output/preventivas_dispositivos/{agora:%Y}/{agora:%m}/{agora:%d}/{zip_filename}",
+        "filename": zip_filename,
+        "path": str(zip_path),
+        "total_arquivos": len(arquivos_gerados),
+        "erros": erros,
+    }
+
+
+def _run_preventivas_dispositivos_job(job_id):
+    try:
+        resultado = _gerar_pacote_preventiva_dispositivos(job_id=job_id)
+        _complete_background_job(
+            job_id,
+            result=resultado,
+            message="Pacote de preventivas gerado com sucesso.",
+            detail=f"{resultado.get('total_arquivos', 0)} arquivo(s) no ZIP.",
+        )
+    except Exception as exc:
+        current_app.logger.exception("Erro no job de preventivas por dispositivo %s", job_id)
+        _fail_background_job(job_id, exc, message="Erro ao gerar preventivas por dispositivo")
+
+
+@app.route('/regionais/relatorio-preventiva-dispositivos', methods=['POST'])
+@login_required
+def gerar_pacote_preventiva_dispositivos():
+    job_id = _create_background_job(
+        kind="preventivas_dispositivos",
+        total=0,
+        message="Preparando preventivas por dispositivo...",
+        detail="Criando job para gerar relatórios individuais e pacote ZIP.",
+    )
+    _start_background_job(
+        lambda: _run_preventivas_dispositivos_job(job_id),
+        name=f"preventivas-dispositivos-{job_id}",
+    )
+    return jsonify({"success": True, "job_id": job_id})
 
 
 @app.route('/regional/nova')
@@ -4090,14 +4657,22 @@ def listar_firewalls(return_data=False):
         if not force_refresh:
             cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
             if cached:
+                cached_firewalls = cached.get("firewalls_por_regional", {})
+                total_firewalls_cache, total_alertas_cache, total_expirados_cache, total_sem_sinal_cache = _recalcular_totais_firewalls(cached_firewalls)
                 if return_data:
+                    cached["firewalls_por_regional"] = cached_firewalls
+                    cached["total_firewalls"] = total_firewalls_cache
+                    cached["total_alertas"] = total_alertas_cache
+                    cached["total_expirados"] = total_expirados_cache
+                    cached["total_sem_sinal"] = total_sem_sinal_cache
                     return cached
                 return render_template(
                     'firewalls.html',
-                    firewalls_por_regional=cached.get("firewalls_por_regional", {}),
-                    total_firewalls=cached.get("total_firewalls", 0),
-                    total_alertas=cached.get("total_alertas", 0),
-                    total_expirados=cached.get("total_expirados", 0),
+                    firewalls_por_regional=cached_firewalls,
+                    total_firewalls=total_firewalls_cache,
+                    total_alertas=total_alertas_cache,
+                    total_expirados=total_expirados_cache,
+                    total_sem_sinal=total_sem_sinal_cache,
                     cache_atualizado_em=cached.get("atualizado_em"),
                     usando_cache=True,
                 )
@@ -4194,6 +4769,7 @@ def listar_firewalls(return_data=False):
                 device_model = device_data.get('platform_str', 'N/A')
                 device_serial = device_data.get('sn', 'N/A')
                 device_status = device_data.get('status', 'unknown')
+                device_firmware = _formatar_firmware_firewall(device_data)
                 
                 if not device_name:
                     continue
@@ -4219,6 +4795,7 @@ def listar_firewalls(return_data=False):
                             'status': device_status,
                             'model': device_model,
                             'serial': device_serial,
+                            'firmware': device_firmware,
                             'licencas': [],
                             'licencas_criticas': 0,
                             'licencas_expiradas': 0,
@@ -4235,10 +4812,9 @@ def listar_firewalls(return_data=False):
                                 'expiracao': 'N/A',
                                 'tipo_licenca': 'forticare',
                                 'notificacao_critica': False,
-                                'notificacao_expirada': True,
+                                'notificacao_expirada': False,
                             }
                             firewall_info['licencas'].append(lic_obj)
-                            firewall_info['licencas_expiradas'] += 1
                         
                         # Processar apenas a licença 'forticare'
                         elif isinstance(licenses_data, dict) and 'forticare' in licenses_data:
@@ -4300,6 +4876,8 @@ def listar_firewalls(return_data=False):
                                     firewall_info['licencas_criticas'] += 1
                                 
                                 firewall_info['licencas'].append(lic_obj)
+
+                        _aplicar_fallback_forticare_device_data(firewall_info, device_data)
                         
                         # Adicionar ao resultado
                         if regional_encontrada not in firewalls_por_regional:
@@ -4326,12 +4904,15 @@ def listar_firewalls(return_data=False):
             print(f"⚠️ Erro ao conectar FortiManager: {str(e)}")
             current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
         
+        total_firewalls, total_alertas, total_expirados, total_sem_sinal = _recalcular_totais_firewalls(firewalls_por_regional)
+
         firewall_snapshot = {
                 "atualizado_em": datetime.now().isoformat(),
                 "firewalls_por_regional": firewalls_por_regional,
                 "total_firewalls": total_firewalls,
                 "total_alertas": total_alertas,
                 "total_expirados": total_expirados,
+                "total_sem_sinal": total_sem_sinal,
         }
         if total_firewalls:
             _salvar_cache_dashboard("firewalls", firewall_snapshot)
@@ -4344,6 +4925,7 @@ def listar_firewalls(return_data=False):
             total_firewalls=total_firewalls,
             total_alertas=total_alertas,
             total_expirados=total_expirados,
+            total_sem_sinal=total_sem_sinal,
             cache_atualizado_em=firewall_snapshot.get("atualizado_em"),
             usando_cache=False,
         )
@@ -4356,6 +4938,7 @@ def listar_firewalls(return_data=False):
             total_firewalls=0,
             total_alertas=0,
             total_expirados=0,
+            total_sem_sinal=0,
             cache_atualizado_em=None,
             usando_cache=False,
         )
@@ -6722,7 +7305,7 @@ def api_public_status_atualizacao():
         replicacao_html = PROJECT_ROOT / "output" / "replsummary.html"
         unifi_html = PROJECT_ROOT / "output" / "dados_aps_unifi.html"
         dashboard_file = PROJECT_ROOT / "output" / "dashboard_hierarquico.html"
-        gps_html = PROJECT_ROOT / "output" / "print_temp.html"
+        gps_html = GPS_HTML
         
         # Status do serviço
         service_status = {
@@ -7154,7 +7737,7 @@ def api_excluir_servidor_regional(codigo_regional, id_servidor):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>/testar', methods=['GET'])
+@app.route('/api/regional/<codigo_regional>/servidor/<id_servidor>/testar', methods=['GET', 'POST'])
 @login_required
 def api_testar_servidor_regional(codigo_regional, id_servidor):
     try:
@@ -7166,20 +7749,19 @@ def api_testar_servidor_regional(codigo_regional, id_servidor):
         if not ip:
             return jsonify({"success": False, "message": "Servidor sem IP cadastrado"}), 400
 
-        import subprocess
         from datetime import datetime
 
-        # Windows ping
-        cmd = ["ping", "-n", "1", "-w", "5000", ip]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        online = _ping_indica_online(result)
+        inicio = datetime.now()
+        online = verificar_vm_online(ip)
+        tempo_resposta = round((datetime.now() - inicio).total_seconds(), 2)
         novo_status = "online" if online else "offline"
 
         # ✅ Atualiza os dados do servidor dentro da regional
         servidor["status"] = novo_status
+        servidor["tempo_resposta"] = tempo_resposta
         servidor["erro"] = None if online else "Timeout"
-        servidor["ultima_verificacao"] = datetime.now().isoformat()
+        timestamp = datetime.now().isoformat()
+        servidor["ultima_verificacao"] = timestamp
 
         # ✅ Salva no JSON (isso é o mais importante)
         gerenciador_regionais.atualizar_servidor(codigo_regional, id_servidor, servidor)
@@ -7187,6 +7769,10 @@ def api_testar_servidor_regional(codigo_regional, id_servidor):
         return jsonify({
             "success": True,
             "status": novo_status,
+            "tempo_resposta": tempo_resposta,
+            "erro": servidor["erro"],
+            "timestamp": timestamp,
+            "ultima_verificacao": timestamp,
             "message": "Servidor ONLINE" if online else "Servidor OFFLINE"
         })
 
@@ -8228,6 +8814,7 @@ def api_obter_firewalls_licencas(codigo_regional):
                                     'status': device_data.get('status', 'unknown'),
                                     'model': device_data.get('model', ''),
                                     'serial': device_data.get('serialnumber', ''),
+                                    'firmware': _formatar_firmware_firewall(device_data),
                                     'licenças': [],
                                     'ultima_verificacao': datetime.now().isoformat()
                                 }
@@ -8265,6 +8852,7 @@ def api_obter_firewalls_licencas(codigo_regional):
                                             
                                             firewall_info['licencas'].append(lic_obj)
                                 
+                                _aplicar_fallback_forticare_device_data(firewall_info, device_data)
                                 firewalls_dados.append(firewall_info)
                             except Exception as e:
                                 current_app.logger.warning(f"Erro ao buscar licenças de {device_name}: {str(e)}")
@@ -8428,6 +9016,7 @@ def api_fortigate_wan_status():
 
 
 @app.route('/api/regional/<codigo_regional>/servidores/testar-todos', methods=['POST'])
+@login_required
 def api_testar_todos_servidores(codigo_regional):
     """API para verificar status de todos os servidores de uma regional (mesma lógica do TESTAR = ping)"""
     try:
@@ -8442,7 +9031,6 @@ def api_testar_todos_servidores(codigo_regional):
         offline_count = 0
         warning_count = 0  # mantido por compatibilidade
 
-        import subprocess
         from datetime import datetime
 
         for servidor in servidores:
@@ -8467,15 +9055,9 @@ def api_testar_todos_servidores(codigo_regional):
                 resultados.append(resultado)
                 continue
 
-            # timeout do ping em ms (usa o timeout cadastrado * 1000, fallback 5000ms)
-            timeout_segundos = int(servidor.get("timeout", 5))
-            timeout_ms = timeout_segundos * 1000
-
-            # Windows ping
-            cmd = ["ping", "-n", "1", "-w", str(timeout_ms), ip]
-            ping_result = subprocess.run(cmd, capture_output=True, text=True)
-
-            online = _ping_indica_online(ping_result)
+            inicio = datetime.now()
+            online = verificar_vm_online(ip)
+            resultado["tempo_resposta"] = round((datetime.now() - inicio).total_seconds(), 2)
 
             if online:
                 resultado["status"] = "online"
@@ -8487,6 +9069,7 @@ def api_testar_todos_servidores(codigo_regional):
 
             # ✅ Atualiza o servidor no JSON (igual o TESTAR)
             servidor["status"] = resultado["status"]
+            servidor["tempo_resposta"] = resultado["tempo_resposta"]
             servidor["erro"] = resultado["erro"]
             servidor["ultima_verificacao"] = resultado["timestamp"]
 
@@ -8590,40 +9173,58 @@ def api_executar_completo():
         })
 
 @app.route('/api/configuracoes', methods=['POST'])
+@login_required
 def api_salvar_configuracoes():
     """API para salvar configurações gerais"""
     try:
         data = request.get_json()
+        env_file = PROJECT_ROOT / "environment.json"
+        config_atual = {}
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    config_atual = json.load(f)
+            except Exception:
+                config_atual = {}
+
+        def senha_ou_atual(campo, secao, chave="password"):
+            nova_senha = data.get(campo)
+            if nova_senha:
+                return nova_senha
+            secao_atual = config_atual.get(secao, {})
+            if isinstance(secao_atual, dict):
+                return secao_atual.get(chave, "")
+            return ""
         
         # Estrutura da configuração
         config = {
             "naos_server": {
                 "ip": data.get('naos_ip', ''),
                 "usuario": data.get('naos_usuario', ''),
-                "senha": data.get('naos_senha', '')
+                "senha": senha_ou_atual('naos_senha', 'naos_server', 'senha')
             },
             "unifi_controller": {
                 "host": data.get('unifi_host', ''),
                 "port": int(data.get('unifi_port', 8443)),
                 "username": data.get('unifi_usuario', ''),
-                "password": data.get('unifi_senha', '')
+                "password": senha_ou_atual('unifi_senha', 'unifi_controller')
             },
             "fortigate": {
                 "host": data.get('fortigate_host', 'fortigate.example.local'),
                 "port": int(data.get('fortigate_porta', 20443)),
                 "username": data.get('fortigate_usuario', 'admin'),
-                "password": data.get('fortigate_senha', '')
+                "password": senha_ou_atual('fortigate_senha', 'fortigate')
             },
             "zabbix": {
                 "url": data.get('zabbix_url', 'https://zabbix.example.local/zabbix/api_jsonrpc.php'),
                 "username": data.get('zabbix_usuario', 'admin'),
-                "password": data.get('zabbix_senha', ''),
+                "password": senha_ou_atual('zabbix_senha', 'zabbix'),
                 "excel_file": data.get('zabbix_arquivo_excel', 'switches_zabbix.xlsx')
             },
             "server_manager": {
                 "host": data.get('server_manager_host', '203.0.113.20'),
                 "username": data.get('server_manager_usuario', 'admin'),
-                "password": data.get('server_manager_senha', ''),
+                "password": senha_ou_atual('server_manager_senha', 'server_manager'),
                 "regional": data.get('server_manager_regional', 'Paraná')
             },
             "gps_amigo": {
@@ -8651,14 +9252,14 @@ def api_salvar_configuracoes():
                 'host': data.get('fortigate_host', 'fortigate.example.local'),
                 'port': int(data.get('fortigate_porta', 20443)),
                 'username': data.get('fortigate_usuario', 'admin'),
-                'password': data.get('fortigate_senha', '')
+                'password': senha_ou_atual('fortigate_senha', 'fortigate')
             }
             
             # Atualiza as credenciais do Zabbix
             credentials['zabbix'] = {
                 'url': data.get('zabbix_url', 'https://zabbix.example.local/zabbix/api_jsonrpc.php'),
                 'username': data.get('zabbix_usuario', 'admin'),
-                'password': data.get('zabbix_senha', ''),
+                'password': senha_ou_atual('zabbix_senha', 'zabbix'),
                 'excel_file': data.get('zabbix_arquivo_excel', 'switches_zabbix.xlsx')
             }
             
@@ -8666,7 +9267,7 @@ def api_salvar_configuracoes():
             credentials['naos'] = {
                 'host': data.get('naos_ip', ''),
                 'username': data.get('naos_usuario', ''),
-                'password': data.get('naos_senha', '')
+                'password': senha_ou_atual('naos_senha', 'naos_server', 'senha')
             }
             
             # Atualiza as credenciais do UniFi
@@ -8674,14 +9275,14 @@ def api_salvar_configuracoes():
                 'host': data.get('unifi_host', ''),
                 'port': int(data.get('unifi_port', 8443)),
                 'username': data.get('unifi_usuario', ''),
-                'password': data.get('unifi_senha', '')
+                'password': senha_ou_atual('unifi_senha', 'unifi_controller')
             }
             
             # Atualiza as credenciais do Server Manager
             credentials['server_manager'] = {
                 'host': data.get('server_manager_host', '203.0.113.20'),
                 'username': data.get('server_manager_usuario', 'admin'),
-                'password': data.get('server_manager_senha', ''),
+                'password': senha_ou_atual('server_manager_senha', 'server_manager'),
                 'regional': data.get('server_manager_regional', 'Paraná')
             }
             

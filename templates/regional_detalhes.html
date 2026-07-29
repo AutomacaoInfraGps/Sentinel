@@ -8,6 +8,7 @@
     .license-warning  { background-color: #fff3cd !important; border-left: 4px solid #ffc107 !important; }
     .license-ok       { background-color: #d4edda !important; border-left: 4px solid #28a745 !important; }
     .license-expired  { background-color: #f8d7da !important; border-left: 4px solid #842029 !important; }
+    .license-unknown  { background-color: #eef1f4 !important; border-left: 4px solid #6c757d !important; }
 
     .ip-link {
         color: var(--bs-code-color, #d63384);
@@ -408,7 +409,7 @@
                                 {% endif %}
                                 
                                 {% if servidor.ultima_verificacao_formatada %}
-                                <div class="verification-meta mt-2">
+                                <div class="verification-meta mt-2" id="servidor-verificacao-{{ servidor.id }}">
                                     <i class="bi bi-clock-history"></i>
                                     <strong>Última verificação</strong>
                                     <span>{{ servidor.ultima_verificacao_formatada.data }}</span>
@@ -419,6 +420,8 @@
                                     </span>
                                     {% endif %}
                                 </div>
+                                {% else %}
+                                <div class="verification-meta mt-2 d-none" id="servidor-verificacao-{{ servidor.id }}"></div>
                                 {% endif %}
                             </div>
                             
@@ -851,20 +854,24 @@
                                         <span class="small" style="font-family: monospace;">{{ firewall.serial }}</span>
                                     </div>
                                     {% endif %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-muted">Versão da Firmware:</span>
+                                        <span class="small">{{ firewall.firmware or 'N/A' }}</span>
+                                    </div>
                                 </div>
 
                                 <!-- Licenças -->
-                                {% set forticare_lics = firewall.licencas|selectattr('nome','equalto','forticare')|list %}
+                                {% set forticare_lics = (firewall.licencas|selectattr('nome','equalto','forticare')|list) + (firewall.licencas|selectattr('nome','equalto','fortiguard')|list) %}
                                 {% if forticare_lics %}
                                 <div class="mb-0">
                                     <div class="list-group list-group-sm">
                                         {% for licenca in forticare_lics %}
-                                        <div class="list-group-item px-2 py-2 {% if licenca.notificacao_expirada %}license-expired{% elif licenca.notificacao_critica %}license-critical{% elif licenca.dias_restantes <= 60 %}license-warning{% else %}license-ok{% endif %}">
+                                        <div class="list-group-item px-2 py-2 {% if licenca.status == 'offline' %}license-unknown{% elif licenca.notificacao_expirada %}license-expired{% elif licenca.notificacao_critica %}license-critical{% elif licenca.dias_restantes <= 60 %}license-warning{% else %}license-ok{% endif %}">
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <div>
-                                                    <small class="fw-semibold">FortiCare</small>
+                                                    <small class="fw-semibold">{{ 'FortiGuard' if licenca.nome == 'fortiguard' else 'FortiCare' }}</small>
                                                     <small class="text-muted ms-2">Status:
-                                                        <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
+                                                        <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
                                                             {%- if licenca.status == 'offline' %}Sem Sinal
                                                             {%- elif licenca.status in ('valid','licensed') %}Válida
                                                             {%- elif licenca.status == 'registered' %}Registrada
@@ -874,7 +881,7 @@
                                                         </span>
                                                     </small>
                                                 </div>
-                                                <span class="badge bg-{{ 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
+                                                <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
                                                     {%- if licenca.status == 'offline' %}Sem Sinal
                                                     {%- elif licenca.notificacao_expirada %}Expirada
                                                     {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
@@ -1026,6 +1033,18 @@ function esconderOverlayRelatorioRegional() {
     overlay.setAttribute('aria-hidden', 'true');
 }
 
+function mostrarOverlayAcaoRegional(titulo, texto) {
+    mostrarOverlayRelatorioRegional(titulo, texto);
+}
+
+function finalizarOverlayAcaoRegional(titulo, texto) {
+    sucessoOverlayRelatorioRegional(titulo, texto, null);
+}
+
+function falharOverlayAcaoRegional(titulo, texto) {
+    erroOverlayRelatorioRegional(titulo, texto);
+}
+
 function verificarRegional(codigo) {
     const btn = $('.btn-info');
     showLoading(btn);
@@ -1087,32 +1106,36 @@ function excluirServidor(codigoRegional, servidorId, nomeServidor) {
 }
 
 function testarServidor(codigoRegional, idServidor, nomeServidor) {
-    showToast(`Testando servidor ${nomeServidor}...`, 'info');
+    mostrarOverlayAcaoRegional('Testando servidor', `Verificando conectividade de ${nomeServidor}.`);
 
-    $.get(`/api/regional/${codigoRegional}/servidor/${idServidor}/testar`)
+    $.ajax({
+        url: `/api/regional/${codigoRegional}/servidor/${idServidor}/testar`,
+        method: 'POST',
+        cache: false
+    })
         .done(function (response) {
 
             if (!response.success) {
+                falharOverlayAcaoRegional('Falha ao testar servidor', response.message || `Erro ao testar ${nomeServidor}.`);
                 showToast(`Erro ao testar ${nomeServidor}: ${response.message}`, 'danger');
                 return;
             }
 
-            const badge = document.getElementById(`status-badge-${idServidor}`);
-            const texto = document.getElementById(`status-text-${idServidor}`);
-            const icone = document.getElementById(`status-icon-${idServidor}`);
-
             if (response.status === "online") {
+                finalizarOverlayAcaoRegional('Servidor online', `${nomeServidor} respondeu ao teste.`);
                 showToast(`${nomeServidor}: ONLINE`, 'success', { delay: 9000 });
 
             } else {
+                finalizarOverlayAcaoRegional('Servidor offline', `${nomeServidor} nao respondeu ao teste.`);
                 showToast(`${nomeServidor}: OFFLINE`, 'danger', { delay: 9000 });
             }
 
             aplicarResultadoTesteServidor({
                 id: idServidor,
                 status: response.status,
-                erro: response.status === 'online' ? null : 'Timeout',
-                timestamp: new Date().toISOString()
+                tempo_resposta: response.tempo_resposta,
+                erro: response.erro ?? (response.status === 'online' ? null : 'Timeout'),
+                timestamp: response.timestamp || response.ultima_verificacao || new Date().toISOString()
             });
             atualizarResumoServidoresRegional(servidoresRegionaisAtuais);
         })
@@ -1127,6 +1150,7 @@ function verificarSwitchesRegional(regionalSwitches) {
         return;
     }
 
+    mostrarOverlayAcaoRegional('Verificando switches', `Atualizando switches da regional ${regionalSwitches}.`);
     showToast(`Verificando switches da regional ${regionalSwitches}...`, "info", { delay: 9000 });
 
     fetch(`/api/switches/regional/${encodeURIComponent(regionalSwitches)}`, {
@@ -1135,13 +1159,16 @@ function verificarSwitchesRegional(regionalSwitches) {
         .then(res => res.json())
         .then(data => {
             if (!data.success && !data.job_id) {
+                falharOverlayAcaoRegional('Falha ao verificar switches', data.message || "Erro ao verificar switches da regional.");
                 showToast(data.message || "Erro ao verificar switches da regional", "danger", { delay: 9000 });
                 return;
             }
+            finalizarOverlayAcaoRegional('Verificacao iniciada', 'A pagina sera atualizada em instantes.');
             showToast("Verificacao de switches iniciada. A pagina sera atualizada em instantes.", "success", { delay: 9000 });
             setTimeout(() => location.reload(), 2500);
         })
         .catch(() => {
+            falharOverlayAcaoRegional('Falha ao verificar switches', 'Erro de conexao ao verificar switches da regional.');
             showToast("Erro de conexao ao verificar switches da regional", "danger", { delay: 9000 });
         });
 }
@@ -1152,6 +1179,7 @@ function verificarSwitchRegional(host) {
         return;
     }
 
+    mostrarOverlayAcaoRegional('Verificando switch', `Atualizando ${host}.`);
     showToast(`Verificando switch ${host}...`, "info", { delay: 9000 });
 
     fetch(`/api/switches/verificar/${encodeURIComponent(host)}`, {
@@ -1160,13 +1188,16 @@ function verificarSwitchRegional(host) {
         .then(res => res.json())
         .then(data => {
             if (!data.success && !data.job_id) {
+                falharOverlayAcaoRegional('Falha ao verificar switch', data.message || "Erro ao verificar switch.");
                 showToast(data.message || "Erro ao verificar switch", "danger", { delay: 9000 });
                 return;
             }
+            finalizarOverlayAcaoRegional('Switch atualizado', 'A pagina sera atualizada em instantes.');
             showToast("Verificacao do switch concluida/iniciada. A pagina sera atualizada em instantes.", "success", { delay: 9000 });
             setTimeout(() => location.reload(), 1800);
         })
         .catch(() => {
+            falharOverlayAcaoRegional('Falha ao verificar switch', 'Erro de conexao ao verificar switch.');
             showToast("Erro de conexao ao verificar switch", "danger", { delay: 9000 });
         });
 }
@@ -1174,6 +1205,7 @@ function verificarSwitchRegional(host) {
 function verificarTodosServidores() {
     const btn = $(`.btn[onclick="verificarTodosServidores()"]`);
     showLoading(btn);
+    mostrarOverlayAcaoRegional('Atualizando servidores', 'Testando todos os servidores da regional.');
     showToast("Verificando servidores da regional...", "info", { delay: 9000 });
 
     fetch(`/api/regional/{{ regional.codigo }}/servidores/testar-todos`, {
@@ -1184,12 +1216,14 @@ function verificarTodosServidores() {
             hideLoading(btn);
 
             if (!response.success) {
+                falharOverlayAcaoRegional('Falha ao atualizar servidores', response.message || 'Erro ao verificar servidores.');
                 showToast(response.message, "danger");
                 return;
             }
 
             if (!Array.isArray(response.resultados) || response.resultados.length === 0) {
                 atualizarResumoServidoresRegional([]);
+                finalizarOverlayAcaoRegional('Nenhum servidor cadastrado', 'Nao ha servidores para testar nesta regional.');
                 showToast("Nenhum servidor cadastrado nesta regional", "info", { delay: 9000 });
                 return;
             }
@@ -1206,6 +1240,10 @@ function verificarTodosServidores() {
                 (resumo.offline ?? 0) === 0 ? "success" : "info",
                 { delay: 9000 }
             );
+            finalizarOverlayAcaoRegional(
+                'Servidores atualizados',
+                `${resumo.total ?? response.resultados.length} servidor(es), ${resumo.online ?? 0} online e ${resumo.offline ?? 0} offline.`
+            );
         })
         .catch(function () {
             hideLoading(btn);
@@ -1219,14 +1257,17 @@ function carregarHardware(codigoRegional, idServidor) {
 
     box.style.display = "block";
     content.innerHTML = "Carregando...";
+    mostrarOverlayAcaoRegional('Coletando hardware', 'Buscando detalhes do servidor selecionado.');
 
     fetch(`/api/regional/${codigoRegional}/servidor/${idServidor}/hardware`)
         .then(res => res.json())
         .then(data => {
             if (!data.success) {
+                falharOverlayAcaoRegional('Falha ao coletar hardware', data.message || 'Erro ao buscar hardware.');
                 content.innerHTML = `<span class="text-danger">Erro: ${data.message}</span>`;
                 return;
             }
+            finalizarOverlayAcaoRegional('Hardware coletado', 'Detalhes do servidor atualizados na tela.');
 
             const hw = data.hardware;
             const discos = Array.isArray(hw.discos) ? hw.discos : [];
@@ -1287,6 +1328,7 @@ function carregarHardware(codigoRegional, idServidor) {
             content.innerHTML = html;
         })
         .catch(() => {
+            falharOverlayAcaoRegional('Falha ao coletar hardware', 'Erro ao conectar na API.');
             content.innerHTML = `<span class="text-danger">Erro ao conectar na API</span>`;
         });
 }
@@ -1378,6 +1420,7 @@ function gerarRelatorioRegional(tipo = 'completo', button = null) {
 function verificarTodosLinks() {
     const btn = $(`.btn[onclick="verificarTodosLinks()"]`);
     showLoading(btn);
+    mostrarOverlayAcaoRegional('Verificando links', 'Testando todos os links da regional.');
     
     showToast("Verificando todos os links...", "info");
     
@@ -1387,6 +1430,7 @@ function verificarTodosLinks() {
     
     if (!links || links.length === 0) {
         hideLoading(btn);
+        finalizarOverlayAcaoRegional('Nenhum link cadastrado', 'Nao ha links para testar nesta regional.');
         showToast("Nenhum link para verificar", "warning");
         return;
     }
@@ -1403,6 +1447,7 @@ function verificarTodosLinks() {
             atualizarLinksRegionalTempoReal(regionalLinksAtuais);
             const offlineCount = Math.max(links.length - successCount, 0);
             const message = `Verificação concluída: ${links.length} link(s) verificado(s), ${successCount} online, ${offlineCount} offline`;
+            finalizarOverlayAcaoRegional('Links verificados', `${links.length} link(s), ${successCount} online e ${offlineCount} offline.`);
             showToast(message, successCount === links.length ? 'success' : 'info', { delay: 9000 });
             return;
         }
@@ -1433,6 +1478,7 @@ function verificarTodosLinks() {
 function sincronizarLinksRegional(button = null) {
     const btn = button ? $(button) : $(`.btn[onclick*="sincronizarLinksRegional"]`);
     showLoading(btn);
+    mostrarOverlayAcaoRegional('Atualizando links', 'Buscando os links da regional no FortiManager/FortiGate.');
 
     showToast("Atualizando links da regional...", "info");
 
@@ -1446,6 +1492,7 @@ function sincronizarLinksRegional(button = null) {
             hideLoading(btn);
 
             if (!ok || !data.success) {
+                falharOverlayAcaoRegional('Falha ao atualizar links', data.message || "Erro ao atualizar links da regional.");
                 showToast(data.message || "Erro ao atualizar links da regional", "danger", { delay: 9000 });
                 return;
             }
@@ -1456,10 +1503,12 @@ function sincronizarLinksRegional(button = null) {
             const online = links.filter((link) => String(link.status || '').toLowerCase() === 'online').length;
             const offline = links.filter((link) => String(link.status || '').toLowerCase() === 'offline').length;
             const message = `Atualizacao concluida: ${total} link(s), ${online} online, ${offline} offline`;
+            finalizarOverlayAcaoRegional('Links atualizados', `${total} link(s), ${online} online e ${offline} offline.`);
             showToast(message, offline ? 'info' : 'success', { delay: 9000 });
         })
         .catch(() => {
             hideLoading(btn);
+            falharOverlayAcaoRegional('Falha ao atualizar links', 'Erro de conexao ao atualizar links da regional.');
             showToast("Erro de conexao ao atualizar links da regional", "danger", { delay: 9000 });
         });
 }
@@ -1467,6 +1516,7 @@ function sincronizarLinksRegional(button = null) {
 function testarLink(codigoRegional, linkId, nomeLink) {
     const btn = $(`.btn[onclick*="testarLink('${codigoRegional}', '${linkId}'"]`);
     showLoading(btn);
+    mostrarOverlayAcaoRegional('Testando link', `Verificando ${nomeLink}.`);
     
     showToast(`Testando link ${nomeLink}...`, 'info');
     
@@ -1481,17 +1531,21 @@ function testarLink(codigoRegional, linkId, nomeLink) {
                 atualizarLinksRegionalTempoReal(regionalLinksAtuais);
                 
                 if (status === 'online') {
+                    finalizarOverlayAcaoRegional('Link online', message || `${nomeLink} esta online.`);
                     showToast(message, 'success', { delay: 9000 });
                 } else {
+                    finalizarOverlayAcaoRegional('Link atualizado', message || `${nomeLink} verificado.`);
                     showToast(message, 'info', { delay: 9000 });
                 }
             } else {
+                falharOverlayAcaoRegional('Falha ao testar link', response.message || 'Erro ao testar link.');
                 showToast(response.message || 'Erro ao testar link', 'danger');
             }
         })
         .fail(function(xhr) {
             hideLoading(btn);
             const errorMsg = xhr.responseJSON?.message || 'Erro desconhecido ao testar link';
+            falharOverlayAcaoRegional('Falha ao testar link', errorMsg);
             showToast(errorMsg, 'danger');
         });
 }
@@ -1627,6 +1681,7 @@ function aplicarResultadoTesteServidor(resultado) {
         servidoresRegionaisAtuais[indice] = {
             ...servidoresRegionaisAtuais[indice],
             status: resultado.status || servidoresRegionaisAtuais[indice].status,
+            tempo_resposta: resultado.tempo_resposta ?? servidoresRegionaisAtuais[indice].tempo_resposta,
             erro: resultado.erro ?? (resultado.status === 'online' ? null : servidoresRegionaisAtuais[indice].erro),
             ultima_verificacao: resultado.timestamp || resultado.ultima_verificacao || servidoresRegionaisAtuais[indice].ultima_verificacao
         };
@@ -1655,6 +1710,18 @@ function aplicarResultadoTesteServidor(resultado) {
     if (cardHeader) {
         cardHeader.classList.remove('bg-success', 'bg-danger', 'bg-warning');
         cardHeader.classList.add(`bg-${tone}`);
+    }
+
+    const verificacao = document.getElementById(`servidor-verificacao-${idServidor}`);
+    const ultima = formatarUltimaVerificacaoISO(resultado.timestamp || resultado.ultima_verificacao);
+    if (verificacao && ultima) {
+        verificacao.classList.remove('d-none');
+        verificacao.innerHTML = `
+            <i class="bi bi-clock-history"></i>
+            <strong>Ultima verificacao</strong>
+            <span>${escapeHtml(ultima.data)}</span>
+            ${ultima.hora ? `<span class="verification-time"><i class="bi bi-dot"></i>${escapeHtml(ultima.hora)}</span>` : ''}
+        `;
     }
 }
 
