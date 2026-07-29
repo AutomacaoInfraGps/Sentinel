@@ -23,6 +23,94 @@ def _load(root, name):
         return {}
 
 
+_CENTRAL_ADMIN_TYPES = {"fortimanager", "fortianalyzer"}
+
+_REGIONAL_DEVICE_OVERRIDE = {
+    "REG_GLOBAL_SEGURANCA": ["FTG_GLOBALSEG"],
+    "REG_GALAXIA": ["FTG_GLX_100F_MATRIZ"],
+    "REG_ALAGOAS": ["FTG_REGALAGOAS"],
+    "REG_PARA": ["FGT_REGPARA"],
+    "REG_ORMEC_PARA": ["FTG_ORMEC_PARA"],
+    "REG_SAO_LEOPOLDO": ["FGT_REGSAOLEOPOLDO"],
+    "REG_SULZER": ["FTG_REGSULZERTRIUNFO"],
+    "REG_SJC": ["FGT_REGSAOJOSEDOSCAMPOS"],
+    "REG_LC": ["FGT_GRSA_MACAE"],
+}
+
+_REGIONAL_ALIAS = {
+    "REG_GALAXIA": ["GLX"],
+    "REG_GLOBAL_SEGURANCA": ["GLOBALSEG"],
+    "REG_SJC": ["REGSAOJOSEDOSCAMPOS", "SAOJOSEDOSCAMPOS"],
+}
+
+
+def _load_regional_info(root):
+    path = Path(root) / "estrutura_regionais.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        regionais = data.get("regionais") or {}
+        return regionais if isinstance(regionais, dict) else {}
+    except Exception:
+        return {}
+
+
+def _resolve_regional_code(candidate, regionals):
+    wanted = _normalize(candidate)
+    for regional in regionals:
+        if _normalize(regional) == wanted:
+            return regional
+    return candidate
+
+
+def _regional_alias_tokens(value):
+    raw = str(value or "")
+    candidates = [raw]
+    words_clean = re.sub(r"\b(REG|REGIONAL|DE|DA|DO|DAS|DOS)\b", " ", raw, flags=re.IGNORECASE)
+    candidates.append(words_clean)
+    for prefix in ("REG_", "REGIONAL "):
+        if raw.upper().startswith(prefix):
+            candidates.append(raw[len(prefix):])
+    normalized_raw = _normalize(raw)
+    if normalized_raw.startswith("REGIONAL"):
+        candidates.append(normalized_raw[len("REGIONAL"):])
+    if normalized_raw.startswith("REG"):
+        without_reg = normalized_raw[len("REG"):]
+        candidates.append(without_reg)
+        if without_reg.startswith("REGIONAL"):
+            candidates.append(without_reg[len("REGIONAL"):])
+    return candidates
+
+
+def _build_regional_matchers(root, firewalls_by_regional):
+    regional_info = _load_regional_info(root)
+    regional_codes = []
+    for code in list(regional_info) + list(firewalls_by_regional):
+        if code not in regional_codes:
+            regional_codes.append(code)
+
+    matchers = []
+    for code in regional_codes:
+        info = regional_info.get(code) or {}
+        aliases = []
+        aliases.extend(_regional_alias_tokens(code))
+        if isinstance(info, dict):
+            aliases.extend(_regional_alias_tokens(info.get("nome")))
+            aliases.extend(_regional_alias_tokens(info.get("descricao")))
+        aliases.extend(_REGIONAL_ALIAS.get(_resolve_regional_code(code, regional_codes), []))
+        for alias in aliases:
+            token = _normalize(alias)
+            if token and len(token) >= 2:
+                matchers.append((code, token))
+
+    for code, device_names in _REGIONAL_DEVICE_OVERRIDE.items():
+        resolved = _resolve_regional_code(code, regional_codes)
+        for device_name in device_names:
+            token = _normalize(device_name)
+            if token:
+                matchers.append((resolved, token))
+    return regional_codes, matchers
+
+
 def _kpi(title, icon, target, items):
     cells = "".join(
         f'<div class="kpi-combo-item {css} nav-detail-trigger" data-detail-target="{target}-{action}" '
@@ -38,6 +126,9 @@ def _kpi(title, icon, target, items):
 
 
 def _firewall_status(firewall):
+    licencas = firewall.get("licencas") or []
+    if any(str(lic.get("status") or "").lower() == "offline" for lic in licencas if isinstance(lic, dict)):
+        return "sem-sinal"
     if int(firewall.get("licencas_expiradas") or 0) > 0:
         return "expirado"
     if int(firewall.get("licencas_criticas") or 0) > 0:
@@ -57,33 +148,50 @@ def _admin_status(device):
 
 def _status_badge(status):
     labels = {
-        "ok": "OK", "warning": "A vencer", "expirado": "Expirada",
+        "ok": "OK", "warning": "A vencer", "expirado": "Expirada", "sem-sinal": "Sem Sinal",
         "alerta": "Com alerta", "offline": "Offline", "sem-permissao": "Sem permissão",
     }
     css = {
-        "ok": "security-ok", "warning": "security-warning", "expirado": "security-danger",
+        "ok": "security-ok", "warning": "security-warning", "expirado": "security-danger", "sem-sinal": "security-inactive",
         "alerta": "security-danger", "offline": "security-inactive", "sem-permissao": "security-warning",
     }
     return f'<span class="security-badge {css.get(status, "security-inactive")}">{labels.get(status, status)}</span>'
 
 
-def _regional_for_device(device_name, regionals):
+def _regional_for_device(device_name, device_type, regional_codes, regional_matchers):
+    normalized_type = _normalize(device_type).lower()
+    if normalized_type == "fortimanager":
+        return "FortiManager"
+    if normalized_type == "fortianalyzer":
+        return "FortiAnalyzer"
+
     normalized = _normalize(device_name)
     best = "CENTRAL"
     best_len = 0
-    for regional in regionals:
-        token = _normalize(str(regional).removeprefix("REG_"))
+    for regional, token in regional_matchers:
         if token and len(token) >= 2 and token in normalized and len(token) > best_len:
             best = regional
             best_len = len(token)
+    if best != "CENTRAL":
+        return _resolve_regional_code(best, regional_codes)
     return best
+
+
+def _is_central_admin_regional(regional):
+    return _normalize(regional).lower() in _CENTRAL_ADMIN_TYPES
 
 
 def build_security_dashboard(project_root):
     firewall_cache = _load(project_root, "firewalls")
     admin_cache = _load(project_root, "admins")
+    active_regionals = set(_load_regional_info(project_root).keys())
 
-    firewalls_by_regional = firewall_cache.get("firewalls_por_regional") or {}
+    raw_firewalls_by_regional = firewall_cache.get("firewalls_por_regional") or {}
+    firewalls_by_regional = {
+        regional: entries
+        for regional, entries in raw_firewalls_by_regional.items()
+        if not active_regionals or regional in active_regionals
+    }
     firewalls = []
     for regional, entries in firewalls_by_regional.items():
         for firewall in entries or []:
@@ -93,31 +201,44 @@ def build_security_dashboard(project_root):
             firewalls.append(item)
 
     fw_counts = {status: sum(1 for item in firewalls if item["dashboard_status"] == status)
-                 for status in ("ok", "warning", "expirado")}
+                 for status in ("ok", "warning", "expirado", "sem-sinal")}
     fw_total = len(firewalls)
 
     regional_fw = []
     for regional, entries in firewalls_by_regional.items():
         statuses = [_firewall_status(item) for item in entries or []]
-        status = "expirado" if "expirado" in statuses else "warning" if "warning" in statuses else "ok"
+        status = "expirado" if "expirado" in statuses else "warning" if "warning" in statuses else "sem-sinal" if "sem-sinal" in statuses else "ok"
         regional_fw.append((regional, len(entries or []), status))
     fw_reg_counts = {status: sum(1 for _, _, item_status in regional_fw if item_status == status)
-                     for status in ("ok", "warning", "expirado")}
+                     for status in ("ok", "warning", "expirado", "sem-sinal")}
 
     admin_devices = admin_cache.get("dispositivos") or {}
     admins = []
-    regional_names = list(firewalls_by_regional)
+    regional_codes, regional_matchers = _build_regional_matchers(project_root, firewalls_by_regional)
     for key, device in admin_devices.items():
         item = dict(device)
         item["key"] = key
         item["dashboard_status"] = _admin_status(item)
-        item["regional"] = _regional_for_device(item.get("nome") or key, regional_names)
+        item["regional"] = _regional_for_device(
+            item.get("nome") or key,
+            item.get("tipo"),
+            regional_codes,
+            regional_matchers,
+        )
+        if (
+            active_regionals
+            and not _is_central_admin_regional(item.get("regional"))
+            and item.get("regional") not in active_regionals
+        ):
+            continue
         admins.append(item)
     admin_counts = {status: sum(1 for item in admins if item["dashboard_status"] == status)
                     for status in ("ok", "alerta", "offline", "sem-permissao")}
 
     regional_admin_map = {}
     for item in admins:
+        if _is_central_admin_regional(item.get("regional")):
+            continue
         regional_admin_map.setdefault(item["regional"], []).append(item["dashboard_status"])
     regional_admin = []
     for regional, statuses in regional_admin_map.items():
@@ -131,12 +252,14 @@ def build_security_dashboard(project_root):
         ("Licenças OK", fw_counts["ok"], "status-online", "ok"),
         ("A vencer", fw_counts["warning"], "status-warning", "warning"),
         ("Expiradas", fw_counts["expirado"], "status-offline", "expirado"),
+        ("Sem Sinal", fw_counts["sem-sinal"], "status-inactive", "sem-sinal"),
     ])
     firewall_regional_kpi = _kpi("Firewalls por Regional", "fa-shield-alt", "firewalls", [
         ("Total", len(regional_fw), "status-neutral", "regional-total"),
         ("Sem alerta", fw_reg_counts["ok"], "status-online", "regional-ok"),
         ("A vencer", fw_reg_counts["warning"], "status-warning", "regional-warning"),
         ("Com expirada", fw_reg_counts["expirado"], "status-offline", "regional-expirado"),
+        ("Com sem sinal", fw_reg_counts["sem-sinal"], "status-inactive", "regional-sem-sinal"),
     ])
     admin_device_kpi = _kpi("Monitor de Admins", "fa-user-shield", "admin-monitor", [
         ("Total", len(admins), "status-neutral", "total"),
@@ -172,12 +295,12 @@ def build_security_dashboard(project_root):
             changes.append("Removidos: " + ", ".join(map(str, item["removidos"])))
         admin_rows.append(
             f'<tr class="security-row" data-status="{item["dashboard_status"]}" data-regional="{_escape(item["regional"])}">'
-            f'<td>{_escape(item["regional"])}</td><td>{_escape(item.get("tipo"))}</td>'
-            f'<td><strong>{_escape(item.get("nome"))}</strong></td><td>{len(item.get("admins") or [])}</td>'
+            f'<td>{_escape(item["regional"])}</td><td><strong>{_escape(item.get("nome"))}</strong></td>'
+            f'<td>{len(item.get("admins") or [])}</td>'
             f'<td>{_escape("; ".join(changes) or item.get("motivo") or "Sem divergências")}</td>'
             f'<td>{_status_badge(item["dashboard_status"])}</td></tr>'
         )
-    admin_detail = _table("Monitor de Admins", "Regional|Tipo|Dispositivo|Admins|Observação|Status", admin_rows, admin_cache)
+    admin_detail = _table("Monitor de Admins", "Regional|Dispositivo|Admins|Observação|Status", admin_rows, admin_cache)
 
     return {
         "firewall_device_kpi": firewall_device_kpi,
@@ -190,6 +313,14 @@ def build_security_dashboard(project_root):
         "firewall_regional_counts": fw_reg_counts,
         "admin_counts": admin_counts,
         "admin_regional_counts": admin_reg_counts,
+        "firewall_regional_summary": {
+            regional: {"total": total, "status": status}
+            for regional, total, status in regional_fw
+        },
+        "admin_regional_summary": {
+            regional: {"total": total, "status": status}
+            for regional, total, status in regional_admin
+        },
     }
 
 

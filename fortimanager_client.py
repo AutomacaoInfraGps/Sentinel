@@ -299,6 +299,23 @@ class FortiManagerClient:
         licenses = response_body.get("results", {}) if isinstance(response_body, dict) else {}
         return licenses if licenses else {}
 
+    def request_raw(self, method: str, url: str, data=None) -> dict:
+        """Executa uma chamada JSON-RPC bruta para diagnosticos pontuais."""
+        payload = {
+            "id": 1,
+            "method": method,
+            "params": [
+                {
+                    "url": url,
+                    "data": data or {},
+                }
+            ],
+            "session": self.sessionid,
+        }
+        response = self.session.post(self.base_url, json=payload, timeout=20)
+        response.raise_for_status()
+        return response.json()
+
     def get_device_info(self, adom="root"):
         """Retorna lista de dispositivos com informações básicas (name, hostname, model, serialnumber, status).
         """
