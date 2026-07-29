@@ -1071,6 +1071,7 @@ _REGIONAL_DEVICE_OVERRIDE = {
     "REG_SULZER": ["FTG_REGSULZERTRIUNFO"],
     "REG_SJC": ["FGT_REGSAOJOSEDOSCAMPOS"],
     "REG_LC": ["FGT_GRSA_MACAE"],
+    "REG_GRSA_MACAE": ["FGT_GRSA_MACAE"],
 }
 
 _REGIONAL_LINK_INTERFACE_INCLUDE_OVERRIDE = {
@@ -8388,7 +8389,7 @@ def api_testar_link_regional(codigo_regional, id_link):
             or ""
         ).strip()
 
-        interfaces_result = _load_regional_interfaces(codigo_regional, regional_info)
+        interfaces_result = _load_regional_interfaces(codigo_regional, regional_info, auth_timeout=12)
         resolved = interfaces_result.get("resolved") or {}
         gerenciador_regional = interfaces_result.get("manager")
         device_info = interfaces_result.get("device") if resolved else None
@@ -8682,7 +8683,7 @@ def api_sincronizar_links_regional(codigo_regional):
 
         total_antes = len(_obter_links_internet_exibicao(regional_info))
 
-        resultado = _coletar_links_regional(codigo_regional, regional_info, persist=True)
+        resultado = _coletar_links_regional(codigo_regional, regional_info, persist=True, auth_timeout=12)
         resolved = resultado.get("resolved") or {}
 
         if not resultado.get("success"):
