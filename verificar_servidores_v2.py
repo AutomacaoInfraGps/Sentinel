@@ -5,6 +5,7 @@ Estrutura hierárquica: Regional → Servidores (iDRAC/ILO)
 
 import requests
 import json
+import argparse
 import urllib3
 import socket
 import builtins
@@ -606,9 +607,24 @@ class VerificadorServidoresV2:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Verificador de servidores do Sentinel")
+    parser.add_argument("--modo", choices=["rapido", "interativo"], default="interativo")
+    parser.add_argument("--regional", help="Codigo da regional para verificar")
+    args = parser.parse_args()
+
     """Função principal"""
     
     verificador = VerificadorServidoresV2()
+    if args.modo == "rapido":
+        print("[SERVER] Verificacao automatica de servidores")
+        if args.regional:
+            verificador.verificar_regional(args.regional)
+        else:
+            verificador.verificar_todas_regionais()
+        verificador.salvar_resultados()
+        verificador.gerar_html_status()
+        print("[OK] Verificacao automatica concluida")
+        return
     
     print("[SERVER] Verificador de Servidores - Versão 2.0")
     print("Estrutura hierárquica: Regional → Servidores")
