@@ -10,11 +10,12 @@ import threading
 import time
 import json
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 # Importa configurações
-from config import PROJECT_ROOT, ensure_directories
+from config import PROJECT_ROOT, GPS_HTML, ensure_directories
 
 # Diretório de saída
 OUTPUT_DIR = PROJECT_ROOT / "output"
@@ -25,12 +26,11 @@ STATUS_FILE = OUTPUT_DIR / "status_atualizacao.json"
 
 # Configuração para Windows - força UTF-8
 if sys.platform == "win32":
-    import codecs
     
     # Tenta configurar UTF-8 para saída
     try:
-        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
-        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception as e:
         print(f"Erro em {__file__}: {e}")
 
@@ -157,6 +157,17 @@ def check_replication():
             
             # Importa a função executar_repadmin do módulo web_config
             try:
+                if shutil.which("repadmin") is None:
+                    log_message("Replicacao AD indisponivel nesta maquina: repadmin nao encontrado")
+                    update_status('replicacao_ad', interval)
+                    replicacao_json = PROJECT_ROOT / "data" / "replicacao.json"
+                    if replicacao_json.exists():
+                        log_message(f"Mantendo ultimo arquivo de replicacao: {replicacao_json}")
+                    else:
+                        log_message("Nenhum arquivo de replicacao em cache encontrado")
+                    time.sleep(interval)
+                    continue
+
                 from web_config import executar_repadmin
                 
                 # Executa a função
@@ -272,7 +283,7 @@ def check_gps():
             update_status('gps_amigo', interval)
             
             # Verifica se o arquivo foi gerado
-            gps_html = PROJECT_ROOT / "output" / "print_temp.html"
+            gps_html = GPS_HTML
             if gps_html.exists():
                 log_message(f"Arquivo GPS gerado: {gps_html}")
             else:
