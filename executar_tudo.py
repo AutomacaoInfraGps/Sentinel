@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 # garante que importações peguem C:\Automacao primeiro
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
-PREVIEW_MODE = "--preview" in sys.argv
+from web_config import gerenciador_fortigate, coletar_hardware_vm, atualizar_cache_seguranca_dashboard
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG, UNIFI_CLIENTS_HTML, UNIFI_CLIENTS_IMG, UNIFI_CLIENTS_DASHBOARD, UNIFI_CONFIG
 
@@ -19,28 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import json, html
 from dashboard_security_sections import build_security_dashboard
 
-PREVIEW_MODE = "--preview" in sys.argv or os.environ.get("AUTOMACAO_DASHBOARD_PREVIEW", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_NO_BROWSER = "--no-browser" in sys.argv or os.environ.get("AUTOMACAO_NO_BROWSER", "").strip().lower() in {"1", "true", "yes", "on"}
-
-if PREVIEW_MODE:
-    gerenciador_fortigate = None
-
-    def coletar_hardware_vm(_servidor):
-        return {"success": False, "message": "Preview usando cache local"}
-
-    def atualizar_cache_seguranca_dashboard():
-        return None
-else:
-    from web_config import gerenciador_fortigate, coletar_hardware_vm, atualizar_cache_seguranca_dashboard
-
-if PREVIEW_MODE:
-    _REAL_SUBPROCESS_RUN = subprocess.run
-
-    def _preview_subprocess_run(cmd, *args, **kwargs):
-        print(f"[PREVIEW] Pulando comando externo: {cmd}")
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-
-    subprocess.run = _preview_subprocess_run
 from config import REPLICACAO_HTML, REPLICACAO_JSON
 try:
     from config import REPLICACAO_HTML_FRAGMENT
@@ -367,9 +346,7 @@ if config_errors:
     print("[ERRO] Erros de configuração encontrados:")
     for error in config_errors:
         print(f"   - {error}")
-    if not PREVIEW_MODE:
-        sys.exit(1)
-    print("[PREVIEW] Continuando apesar dos erros de configuracao")
+    sys.exit(1)
 
 # Garante que os diretórios necessários existem
 ensure_directories()
@@ -661,14 +638,12 @@ def _carregar_indice_regionais():
     indice = []
     for chave, dados in (data.get("regionais") or {}).items():
         nome = str((dados or {}).get("nome") or chave).strip()
-        descricao = str((dados or {}).get("descricao") or "").strip()
         nome_sem_prefixo = _remover_prefixo_regional(nome).replace("_", " ").strip()
         nome_exibicao = nome_sem_prefixo or nome
 
         tokens = set()
         tokens.update(_gerar_tokens_regional(chave))
         tokens.update(_gerar_tokens_regional(nome))
-        tokens.update(_gerar_tokens_regional(descricao))
 
         indice.append({
             "chave": chave,
@@ -1166,43 +1141,6 @@ for servidor in servidores_configurados:
     current_regional_html_content = ""
     has_error_for_regional = False
 
-    if PREVIEW_MODE:
-        if html_path.exists():
-            current_regional_html_content = html_path.read_text(encoding="utf-8", errors="replace")
-        else:
-            current_regional_html_content = _montar_vm_regional_card(
-                servidor,
-                tempo_resposta=None,
-                details={},
-                error_message='Preview sem cache desta regional',
-                details_available=False,
-                status_class="warning",
-                status_label="CACHE",
-            )
-
-        has_error_for_regional = _regional_html_indicates_error(current_regional_html_content)
-        server_status = _regional_html_status(current_regional_html_content)
-        regional_key = nome.strip().upper()
-        regional_data = regionais_processadas.setdefault(
-            regional_key,
-            {
-                "nome": nome,
-                "has_error": False,
-                "has_warning": False,
-                "server_entries": [],
-            },
-        )
-        regional_data["has_error"] = regional_data["has_error"] or has_error_for_regional
-        regional_data["has_warning"] = regional_data["has_warning"] or server_status == "warning"
-        regional_data["server_entries"].append(
-            {
-                "html": current_regional_html_content,
-                "has_error": has_error_for_regional,
-                "status": server_status,
-            }
-        )
-        continue
-
     # Executa o script de checklist apropriado baseado no 'tipo'
     try:
         from vm_manager import verificar_vm_online
@@ -1351,7 +1289,7 @@ for regional_data in regionais_processadas.values():
     else:
         regional_status = "online"
     regional_html_block = f"""
-    <details class="regional-item" data-status="{regional_status}" data-regional-key="{regional_data['nome'].strip().upper()}"{regional_open_attr}>
+    <details class="regional-item" data-status="{regional_status}"{regional_open_attr}>
         <summary><strong>{regional_data['nome']}</strong></summary>
         <div class="regional-content regional-servers-grid">
             {''.join(entry['html'] for entry in regional_data['server_entries'])}
@@ -1398,11 +1336,7 @@ try:
     else:
         vms_configuradas = []
     
-    if PREVIEW_MODE:
-        def verificar_vm_online(_ip):
-            return False
-    else:
-        from vm_manager import verificar_vm_online
+    from vm_manager import verificar_vm_online
     
     for vm in vms_configuradas:
         try:
@@ -1791,46 +1725,9 @@ switches_warning = 0
 switches_inativo = 0
 switches_html_content = ""
 try:
-    if PREVIEW_MODE:
-        switches_cache_path = PROJECT_ROOT / "output" / "switches_status_cache.json"
-        switches_cache = {}
-        if switches_cache_path.exists():
-            try:
-                switches_cache = json.loads(switches_cache_path.read_text(encoding="utf-8"))
-            except Exception as exc:
-                print(f"[PREVIEW] Falha ao ler cache de switches: {exc}")
-
-        def _preview_regional_switch(nome_switch):
-            nome = str(nome_switch or "").strip()
-            if " - SWITCH" in nome.upper():
-                return nome.split(" - SWITCH", 1)[0].strip().upper()
-            return "N/A"
-
-        class _PreviewGerenciadorSwitches:
-            def __init__(self, cache):
-                self._cache = cache
-                self.switches = [
-                    {
-                        "host": nome,
-                        "ip": dados.get("ip", "N/A") if isinstance(dados, dict) else "N/A",
-                        "regional": _preview_regional_switch(nome),
-                        "status_reason": dados.get("status_reason") if isinstance(dados, dict) else None,
-                        "status_details": dados.get("status_details") if isinstance(dados, dict) else None,
-                        "warning_problemas": dados.get("warning_problemas", []) if isinstance(dados, dict) else [],
-                        "warning_resumo": dados.get("warning_resumo") if isinstance(dados, dict) else None,
-                        "ultima_verificacao": dados.get("ultima_verificacao") if isinstance(dados, dict) else None,
-                    }
-                    for nome, dados in sorted(cache.items())
-                ]
-
-            def verificar_todos_switches(self):
-                print(f"[PREVIEW] Usando cache de switches ({len(self._cache)} item(ns))")
-                return self._cache
-
-        gerenciador_switches = _PreviewGerenciadorSwitches(switches_cache)
-    else:
-        from gerenciar_switches import GerenciadorSwitches
-        gerenciador_switches = GerenciadorSwitches()
+    from gerenciar_switches import GerenciadorSwitches
+    
+    gerenciador_switches = GerenciadorSwitches()
     
     # Verifica TODOS os switches para relatório completo
     print("[EXEC] Verificando TODOS os switches (relatório completo)...")
@@ -2295,11 +2192,10 @@ def _link_percentual_trafego(valor):
         return 0.0
 
 try:
+    from gerenciar_fortigate import GerenciadorFortigate
     from config import ENV_CONFIG
-    if not PREVIEW_MODE:
-        from gerenciar_fortigate import GerenciadorFortigate
 
-    fortigates = {} if PREVIEW_MODE else ENV_CONFIG.get("fortigate")
+    fortigates = ENV_CONFIG.get("fortigate")
 
     if not isinstance(fortigates, dict):
         raise Exception("ENV_CONFIG['fortigate'] deve conter SP/RJ")
@@ -2449,10 +2345,6 @@ try:
     # ===== ENRIQUECE COM STATS VIA FORTIMANAGER PROXY =====
     # Para regionais sem FortiGate direto, busca download/upload via proxy do FortiManager.
     try:
-        if PREVIEW_MODE:
-            print("[PREVIEW] Pulando enriquecimento de links via FortiManager; usando dados locais")
-            raise StopIteration
-
         from fortimanager_client import FortiManagerClient
         _fmg_cfg = ENV_CONFIG.get("fortimanager") or {}
         _fmg_adom = _fmg_cfg.get("adom", "root")
@@ -2514,8 +2406,6 @@ try:
                     print(f"[FMG] {dev_name}: stats coletadas para {len(host_links)} link(s)")
                 except Exception as exc_dev:
                     print(f"[AVISO] FMG proxy stats {dev_name}: {exc_dev}")
-    except StopIteration:
-        pass
     except Exception as exc_fmg:
         print(f"[AVISO] Enriquecimento FMG stats: {exc_fmg}")
 
@@ -2674,38 +2564,26 @@ except Exception as e:
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo, gerar_print_saturno_portal, gerar_print_appgate, gerar_print_unifi_clientes_marte
 ensure_gps_placeholder()
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando print real GPS; usando cache")
-    else:
-        gerar_print_gps_amigo()
+    gerar_print_gps_amigo()
     print("[GPS] Print gerado com sucesso.")
 except Exception as e:
     print("[GPS] Falha ao gerar print:", e)
 
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando prints reais da Rede Saturno; usando cache")
-    else:
-        gerar_print_saturno_portal()
-        print("[PRINT-REDE] Prints gerados com sucesso.")
+    gerar_print_saturno_portal()
+    print("[PRINT-REDE] Prints gerados com sucesso.")
 except Exception as e:
     print("[PRINT-REDE] Falha ao gerar prints:", e)
 
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando print real AppGate; usando cache")
-    else:
-        gerar_print_appgate()
-        print("[APPGATE] Print gerado com sucesso.")
+    gerar_print_appgate()
+    print("[APPGATE] Print gerado com sucesso.")
 except Exception as e:
     print("[APPGATE] Falha ao gerar print:", e)
 
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando print real UniFi clientes; usando cache")
-    else:
-        gerar_print_unifi_clientes_marte()
-        print("[UNIFI-CLIENTES] Print gerado com sucesso.")
+    gerar_print_unifi_clientes_marte()
+    print("[UNIFI-CLIENTES] Print gerado com sucesso.")
 except Exception as e:
     print("[UNIFI-CLIENTES] Falha ao gerar print:", e)
 
@@ -3026,10 +2904,7 @@ links_regionais_sem_alerta = sum(
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 ensure_gps_placeholder()
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando print real GPS; usando cache")
-    else:
-        gerar_print_gps_amigo()
+    gerar_print_gps_amigo()
 except Exception as e:
     print("[GPS] Falha ao gerar print:", e)
 
@@ -3063,10 +2938,7 @@ def render_bloco_gps():
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 ensure_gps_placeholder()
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando print real GPS; usando cache")
-    else:
-        gerar_print_gps_amigo()
+    gerar_print_gps_amigo()
 except Exception as e:
     print("[GPS] Falha ao gerar print:", e)
 
@@ -3076,11 +2948,7 @@ gps_section = render_bloco_gps()
 # --- INÍCIO DA LÓGICA DE VPN ---
 try:
     # 1. Busca os dados usando seu gerenciador existente
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando consulta real de VPN IPSEC; usando bloco vazio")
-        dados_vpn = {"success": True, "vpns": []}
-    else:
-        dados_vpn = gerenciador_fortigate.obter_vpn_ipsec()
+    dados_vpn = gerenciador_fortigate.obter_vpn_ipsec()
     lista_vpns = dados_vpn.get("vpns", []) if dados_vpn and dados_vpn.get("success") else []
     lista_vpns = [
         vpn for vpn in lista_vpns
@@ -3130,13 +2998,6 @@ try:
     vpn_regionais_total = len(regionais_vpn_ordenadas)
     vpn_regionais_com_offline = len(regionais_vpn_com_offline)
     vpn_regionais_sem_offline = max(vpn_regionais_total - vpn_regionais_com_offline, 0)
-    vpn_regionais_status = {
-        regional: {
-            "online": int(dados.get("online", 0) or 0),
-            "offline": int(dados.get("offline", 0) or 0),
-        }
-        for regional, dados in vpns_por_regional.items()
-    }
 
     if not lista_vpns:
         vpn_html_content = """
@@ -3299,7 +3160,6 @@ except Exception as e:
     vpn_regionais_total = 0
     vpn_regionais_com_offline = 0
     vpn_regionais_sem_offline = 0
-    vpn_regionais_status = {}
     vpn_html_content = f"<div class='error-container'>Erro ao consultar Fortigate: {str(e)}</div>"
 # --- FIM DA LÓGICA DE VPN ---
 
@@ -3307,1009 +3167,11 @@ except Exception as e:
 # Construct the final HTML dashboard using f-strings for dynamic content insertion.
 sentinel_logo_uri = _carregar_logo_sentinel_src()
 try:
-    if PREVIEW_MODE:
-        print("[PREVIEW] Pulando atualizacao de Firewalls/licencas e Monitor de Admins; usando cache")
-    else:
-        print("[INFO] Atualizando Firewalls/licencas e Monitor de Admins...")
-        atualizar_cache_seguranca_dashboard()
+    print("[INFO] Atualizando Firewalls/licencas e Monitor de Admins...")
+    atualizar_cache_seguranca_dashboard()
 except Exception as exc:
     print(f"[AVISO] Nao foi possivel atualizar o cache de seguranca: {exc}")
 security_dashboard = build_security_dashboard(PROJECT_ROOT)
-
-
-def _regional_card_status_class(dados):
-    if any(int(dados.get(key, 0) or 0) > 0 for key in ("offline", "warning", "inativo", "expirado", "sem-sinal", "alerta")):
-        return "regional-monitor-alert"
-    return "regional-monitor-ok"
-
-
-def _regional_metric(regional, title, icon, detail_target, dados, order):
-    total = sum(int(dados.get(key, 0) or 0) for key, _, _ in order)
-    chips = []
-    resumo = []
-    for key, label, css in order:
-        value = int(dados.get(key, 0) or 0)
-        if value > 0:
-            resumo.append(f"{value} {label}")
-            action = "" if key == "total" else f"-{key}"
-            chips.append(
-                f'<button type="button" class="regional-monitor-chip {css} nav-detail-trigger" '
-                f'data-detail-target="{detail_target}{action}" data-regional-filter="{regional}">'
-                f'<span>{label}</span><strong>{value}</strong></button>'
-            )
-    resumo_texto = " | ".join(resumo[:3]) if resumo else "Sem alerta"
-    metric_state = "" if total > 0 else " regional-monitor-metric-empty"
-    if total <= 0:
-        resumo_texto = "Sem dado no cache"
-
-    return f"""
-        <div class="regional-monitor-metric{metric_state}">
-            <button type="button" class="regional-monitor-metric-head nav-detail-trigger" data-detail-target="{detail_target}" data-regional-filter="{regional}">
-                <span class="regional-monitor-icon"><i class="fas {icon}"></i></span>
-                <span class="regional-monitor-text">
-                    <span class="regional-monitor-label">{title}</span>
-                    <span class="regional-monitor-summary">{resumo_texto}</span>
-                </span>
-                <strong>{total}</strong>
-            </button>
-            <div class="regional-monitor-chip-row">{''.join(chips)}</div>
-        </div>
-    """
-
-
-def _regional_metric_compact(regional, title, icon, detail_target, dados, order):
-    total = sum(int(dados.get(key, 0) or 0) for key, _, _ in order)
-    chips = []
-    resumo = []
-    for key, label, css in order:
-        value = int(dados.get(key, 0) or 0)
-        if value > 0:
-            resumo.append(f"{value} {label}")
-            action = "" if key == "total" else f"-{key}"
-            chips.append(
-                f'<button type="button" class="infra-map-detail-chip {css} nav-detail-trigger" '
-                f'data-detail-target="{detail_target}{action}" data-regional-filter="{html.escape(str(regional))}">'
-                f'<span>{html.escape(str(label))}</span><strong>{value}</strong></button>'
-            )
-
-    resumo_texto = " | ".join(resumo[:2]) if resumo else "Sem alerta"
-    metric_state = "" if total > 0 else " infra-map-detail-metric-empty"
-    if total <= 0:
-        resumo_texto = "Sem dado no cache"
-
-    return f"""
-        <div class="infra-map-detail-metric{metric_state}">
-            <button type="button" class="infra-map-detail-head nav-detail-trigger" data-detail-target="{detail_target}" data-regional-filter="{html.escape(str(regional))}">
-                <span class="infra-map-detail-icon"><i class="fas {icon}"></i></span>
-                <span class="infra-map-detail-text">
-                    <span>{html.escape(str(title))}</span>
-                    <em>{html.escape(str(resumo_texto))}</em>
-                </span>
-                <strong>{total}</strong>
-            </button>
-            <div class="infra-map-detail-chips">{''.join(chips)}</div>
-        </div>
-    """
-
-
-def _regional_card_indice():
-    indice = _carregar_indice_regionais()
-    if indice:
-        return indice
-
-    regionais = sorted({
-        *regionais_servidor_status.keys(),
-        *aps_regionais_status.keys(),
-        *switches_regionais_status.keys(),
-        *links_regionais_status.keys(),
-    })
-    return [{"chave": regional, "nome_exibicao": regional, "tokens": _gerar_tokens_regional(regional)} for regional in regionais]
-
-
-def _resolver_regional_card(valor, indice):
-    texto = str(valor or "").strip()
-    if not texto:
-        return "N/A"
-
-    candidatos = _gerar_tokens_regional(texto)
-    normalizado = _normalizar_texto_regional(texto)
-    for item in indice:
-        if item["chave"] == texto:
-            return item["chave"]
-        tokens = item.get("tokens") or set()
-        if normalizado and normalizado in tokens:
-            return item["chave"]
-        if candidatos.intersection(tokens):
-            return item["chave"]
-
-    melhor = None
-    melhor_score = 0
-    for candidato in candidatos:
-        for item in indice:
-            for token in item.get("tokens") or set():
-                if not candidato or not token:
-                    continue
-                if candidato in token or token in candidato:
-                    score = min(len(candidato), len(token))
-                    if score > melhor_score:
-                        melhor = item["chave"]
-                        melhor_score = score
-
-    return melhor or texto.upper()
-
-
-def _somar_status_por_regional(origem, indice):
-    consolidado = {}
-    for regional, dados in (origem or {}).items():
-        chave = _resolver_regional_card(regional, indice)
-        destino = consolidado.setdefault(chave, {})
-        for status, valor in (dados or {}).items():
-            try:
-                destino[status] = int(destino.get(status, 0) or 0) + int(valor or 0)
-            except (TypeError, ValueError):
-                continue
-    return consolidado
-
-
-_REGIONAL_INVENTORY_TARGETS = {
-    "Servidores": "regional-inventory-servidores",
-    "APs": "regional-inventory-aps",
-    "Switches": "regional-inventory-switches",
-    "Links": "regional-inventory-links",
-    "VPNs": "regional-inventory-vpns",
-    "Firewalls": "regional-inventory-firewalls",
-    "Admins": "regional-inventory-admins",
-}
-
-
-def _regional_inventory_target(title, fallback):
-    return _REGIONAL_INVENTORY_TARGETS.get(title, fallback)
-
-
-def _status_texto_curto(status):
-    labels = {
-        "online": "Online",
-        "offline": "Offline",
-        "warning": "Warning",
-        "inativo": "Inativo",
-        "ok": "OK",
-        "alerta": "Alerta",
-        "expirado": "Expirada",
-        "sem-sinal": "Sem sinal",
-        "sem-permissao": "Sem permissao",
-    }
-    return labels.get(str(status or "").lower(), str(status or "N/A"))
-
-
-def _status_css_curto(status):
-    status = str(status or "").lower()
-    if status in {"online", "ok"}:
-        return "ok"
-    if status in {"warning", "alerta"}:
-        return "warning"
-    if status in {"offline", "expirado", "sem-sinal"}:
-        return "danger"
-    return "neutral"
-
-
-def _load_json_cache(path):
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def _inventory_item_html(tipo, nome, subtitulo, status, extras=""):
-    return f"""
-        <div class="regional-inventory-device" data-device-type="{html.escape(str(tipo))}" data-status="{html.escape(str(status or 'unknown').lower())}">
-            <div>
-                <strong>{html.escape(str(nome or 'N/A'))}</strong>
-                <span>{html.escape(str(subtitulo or ''))}</span>
-                {extras}
-            </div>
-            <em class="regional-inventory-status {_status_css_curto(status)}">{html.escape(_status_texto_curto(status))}</em>
-        </div>
-    """
-
-
-def _inventory_group_html(tipo, titulo, icon, itens):
-    body = "".join(itens) if itens else "<div class='regional-inventory-empty'>Sem dados no cache desta categoria.</div>"
-    return f"""
-        <section class="regional-inventory-group" data-device-type="{tipo}">
-            <header><span><i class="fas {icon}"></i> {titulo}</span><strong>{len(itens)}</strong></header>
-            <div class="regional-inventory-list">{body}</div>
-        </section>
-    """
-
-
-def _build_regional_cards_html():
-    firewall_summary = security_dashboard.get("firewall_regional_summary") or {}
-    admin_summary = security_dashboard.get("admin_regional_summary") or {}
-    indice = _regional_card_indice()
-    servidores_status = _somar_status_por_regional(regionais_servidor_status, indice)
-    aps_status = _somar_status_por_regional(aps_regionais_status, indice)
-    switches_status = _somar_status_por_regional(switches_regionais_status, indice)
-    links_status = _somar_status_por_regional(links_regionais_status, indice)
-    vpns_status = _somar_status_por_regional(globals().get("vpn_regionais_status", {}), indice)
-    vpns_status = _somar_status_por_regional(globals().get("vpn_regionais_status", {}), indice)
-
-    firewall_status_por_regional = {}
-    for regional, dados in firewall_summary.items():
-        chave = _resolver_regional_card(regional, indice)
-        status = str((dados or {}).get("status") or "ok")
-        firewall_status_por_regional.setdefault(chave, {})
-        firewall_status_por_regional[chave][status] = firewall_status_por_regional[chave].get(status, 0) + int((dados or {}).get("total") or 0)
-
-    admin_status_por_regional = {}
-    for regional, dados in admin_summary.items():
-        chave = _resolver_regional_card(regional, indice)
-        status = str((dados or {}).get("status") or "ok")
-        admin_status_por_regional.setdefault(chave, {})
-        admin_status_por_regional[chave][status] = admin_status_por_regional[chave].get(status, 0) + int((dados or {}).get("total") or 0)
-
-    regionais = [item["chave"] for item in indice]
-    cards = []
-    for regional in regionais:
-        servidores = servidores_status.get(regional, {})
-        aps = aps_status.get(regional, {})
-        switches = switches_status.get(regional, {})
-        links = links_status.get(regional, {})
-        vpns = vpns_status.get(regional, {})
-        firewalls = firewall_status_por_regional.get(regional, {})
-        admins = admin_status_por_regional.get(regional, {})
-
-        status_class = _regional_card_status_class({
-            **servidores,
-            **aps,
-            **switches,
-            **links,
-            **vpns,
-            "expirado": firewalls.get("expirado", 0),
-            "sem-sinal": firewalls.get("sem-sinal", 0),
-            "alerta": admins.get("alerta", 0),
-        })
-        metrics = [
-            _regional_metric(regional, "Servidores", "fa-server", _regional_inventory_target("Servidores", "regionais"), servidores, [
-                ("online", "Online", "status-online"), ("offline", "Offline", "status-offline"), ("warning", "Warning", "status-warning"),
-            ]),
-            _regional_metric(regional, "APs", "fa-wifi", _regional_inventory_target("APs", "unifi"), aps, [
-                ("online", "Online", "status-online"), ("offline", "Offline", "status-offline"),
-            ]),
-            _regional_metric(regional, "Switches", "fa-network-wired", _regional_inventory_target("Switches", "switches"), switches, [
-                ("online", "Online", "status-online"), ("offline", "Offline", "status-offline"), ("warning", "Warning", "status-warning"), ("inativo", "Inativo", "status-inactive"),
-            ]),
-            _regional_metric(regional, "Links", "fa-globe", _regional_inventory_target("Links", "links"), links, [
-                ("online", "Online", "status-online"), ("offline", "Offline", "status-offline"), ("inativo", "Inativo", "status-inactive"),
-            ]),
-            _regional_metric(regional, "VPNs", "fa-shield-alt", _regional_inventory_target("VPNs", "vpn-details"), vpns, [
-                ("online", "Online", "status-online"), ("offline", "Offline", "status-offline"),
-            ]),
-            _regional_metric(regional, "Firewalls", "fa-shield-alt", _regional_inventory_target("Firewalls", "firewalls"), firewalls, [
-                ("ok", "OK", "status-online"), ("warning", "A vencer", "status-warning"), ("expirado", "Expirada", "status-offline"), ("sem-sinal", "Sem sinal", "status-inactive"),
-            ]),
-            _regional_metric(regional, "Admins", "fa-user-shield", _regional_inventory_target("Admins", "admin-monitor"), admins, [
-                ("ok", "OK", "status-online"), ("alerta", "Alerta", "status-offline"), ("offline", "Offline", "status-inactive"), ("sem-permissao", "Sem perm.", "status-warning"),
-            ]),
-        ]
-        metrics_html = "".join(metric for metric in metrics if metric)
-        if not metrics_html:
-            metrics_html = "<div class='regional-monitor-empty'>Sem dispositivos monitorados nesta regional.</div>"
-
-        cards.append(f"""
-            <article class="regional-monitor-card {status_class}">
-                <header>
-                    <h3>{regional}</h3>
-                    <button type="button" class="regional-monitor-open nav-detail-trigger" data-detail-target="regional-inventory" data-regional-filter="{regional}">
-                        Detalhes
-                    </button>
-                </header>
-                <div class="regional-monitor-grid">{metrics_html}</div>
-            </article>
-        """)
-
-    return f'<div class="regional-monitor-cards">{"".join(cards)}</div>'
-
-
-def _build_regional_inventory_html():
-    indice = _regional_card_indice()
-    estrutura_data = _load_json_cache(PROJECT_ROOT / "estrutura_regionais.json")
-    regionais_info = estrutura_data.get("regionais") or {}
-
-    firewalls_cache = _load_json_cache(PROJECT_ROOT / "output" / "dashboard_firewalls_cache.json")
-    firewalls_por_regional = {}
-    for regional, itens in (firewalls_cache.get("firewalls_por_regional") or {}).items():
-        chave = _resolver_regional_card(regional, indice)
-        firewalls_por_regional.setdefault(chave, []).extend(itens or [])
-
-    admins_cache = _load_json_cache(PROJECT_ROOT / "output" / "dashboard_admins_cache.json")
-    admins_por_regional = {}
-    for key, item in (admins_cache.get("dispositivos") or {}).items():
-        tipo = str((item or {}).get("tipo") or "").lower()
-        if tipo in {"fortimanager", "fortianalyzer"}:
-            continue
-        chave = _resolver_regional_card((item or {}).get("nome") or key, indice)
-        admins_por_regional.setdefault(chave, []).append(item or {})
-
-    switches_por_regional = {}
-    for switch in switches_data:
-        chave = _resolver_regional_card(switch.get("regional"), indice)
-        switches_por_regional.setdefault(chave, []).append(switch)
-
-    links_por_regional = {}
-    for link in links_data:
-        chave = _resolver_regional_card(link.get("regiao") or link.get("regional"), indice)
-        links_por_regional.setdefault(chave, []).append(link)
-
-    cards = []
-    for reg in indice:
-        regional = reg["chave"]
-        info = regionais_info.get(regional) or {}
-        servidores = [srv for srv in (info.get("servidores") or []) if isinstance(srv, dict) and srv.get("ativo", True)]
-        links = links_por_regional.get(regional, [])
-        switches = switches_por_regional.get(regional, [])
-        firewalls = firewalls_por_regional.get(regional, [])
-        admins = admins_por_regional.get(regional, [])
-
-        servidores_html = [
-            _inventory_item_html("servidores", srv.get("nome"), f"{srv.get('funcao') or srv.get('tipo') or 'Servidor'} - {srv.get('ip') or 'N/A'}", srv.get("status") or "unknown")
-            for srv in servidores
-        ]
-        links_html_items = [
-            _inventory_item_html("links", link.get("nome"), f"{link.get('provedor') or 'Provedor N/A'} - {link.get('ip') or 'N/A'}", link.get("status") or "unknown")
-            for link in links
-        ]
-        switches_html_items = [
-            _inventory_item_html("switches", switch.get("name"), switch.get("ip") or "IP N/A", switch.get("status") or "unknown")
-            for switch in switches
-        ]
-        firewalls_html_items = []
-        for firewall in firewalls:
-            licencas = firewall.get("licencas") or []
-            licenca = next(iter(licencas), {}) if licencas else {}
-            status = "ok"
-            if any(str(lic.get("status") or "").lower() == "offline" for lic in licencas if isinstance(lic, dict)):
-                status = "sem-sinal"
-            elif int(firewall.get("licencas_expiradas") or 0) > 0:
-                status = "expirado"
-            elif int(firewall.get("licencas_criticas") or 0) > 0:
-                status = "warning"
-            extra = f"<small>FortiCare: {html.escape(str(licenca.get('dias_restantes', 'N/A')))} dias</small>" if licenca else ""
-            firewalls_html_items.append(_inventory_item_html("firewalls", firewall.get("nome") or firewall.get("hostname"), f"{firewall.get('ip') or 'IP N/A'} - {firewall.get('model') or 'Modelo N/A'}", status, extra))
-
-        admins_html_items = []
-        for admin in admins:
-            status = "alerta" if admin.get("novos") or admin.get("removidos") else "offline" if admin.get("offline") else "sem-permissao" if admin.get("sem_permissao") else "ok"
-            admins_html_items.append(_inventory_item_html("admins", admin.get("nome"), f"{len(admin.get('admins') or [])} admin(s)", status))
-
-        groups = [
-            _inventory_group_html("servidores", "Servidores", "fa-server", servidores_html),
-            _inventory_group_html("links", "Links", "fa-globe", links_html_items),
-            _inventory_group_html("switches", "Switches", "fa-network-wired", switches_html_items),
-            _inventory_group_html("firewalls", "Firewalls", "fa-shield-alt", firewalls_html_items),
-            _inventory_group_html("admins", "Admins", "fa-user-shield", admins_html_items),
-        ]
-        cards.append(f"""
-            <details class="regional-inventory-region" data-regional-key="{html.escape(regional)}" open>
-                <summary>
-                    <span>{html.escape(regional)}</span>
-                    <strong>{len(servidores) + len(links) + len(switches) + len(firewalls)} aparelho(s)</strong>
-                </summary>
-                <div class="regional-inventory-grid">{''.join(groups)}</div>
-            </details>
-        """)
-
-    return f"""
-        <div id="regional-inventory" class="regional-only-detail regional-inventory-wrapper">
-            {''.join(cards)}
-            <div class="regional-inventory-empty-filter" hidden>Nenhuma regional corresponde ao filtro selecionado.</div>
-        </div>
-    """
-
-
-def _build_brazil_state_paths(state_health=None):
-    geojson_path = Path(__file__).parent / "static" / "maps" / "br_states.geojson"
-    try:
-        data = json.loads(geojson_path.read_text(encoding="utf-8"))
-        features = data.get("features") or []
-        coords_flat = []
-
-        def iter_rings(geometry):
-            if not geometry:
-                return
-            geo_type = geometry.get("type")
-            coordinates = geometry.get("coordinates") or []
-            if geo_type == "Polygon":
-                for ring in coordinates:
-                    yield ring
-            elif geo_type == "MultiPolygon":
-                for polygon in coordinates:
-                    for ring in polygon:
-                        yield ring
-
-        for feature in features:
-            for ring in iter_rings(feature.get("geometry")):
-                for point in ring:
-                    if isinstance(point, (list, tuple)) and len(point) >= 2:
-                        coords_flat.append((point[0], point[1]))
-
-        if not coords_flat:
-            raise ValueError("GeoJSON do Brasil sem coordenadas")
-
-        min_lon = min(lon for lon, _lat in coords_flat)
-        max_lon = max(lon for lon, _lat in coords_flat)
-        min_lat = min(lat for _lon, lat in coords_flat)
-        max_lat = max(lat for _lon, lat in coords_flat)
-        width = 620
-        height = 620
-        pad_x = 34
-        pad_y = 30
-        scale = min((width - pad_x * 2) / (max_lon - min_lon), (height - pad_y * 2) / (max_lat - min_lat))
-        map_w = (max_lon - min_lon) * scale
-        map_h = (max_lat - min_lat) * scale
-        offset_x = (width - map_w) / 2
-        offset_y = (height - map_h) / 2
-
-        def project(lon, lat):
-            x = offset_x + (lon - min_lon) * scale
-            y = offset_y + (max_lat - lat) * scale
-            return round(x, 1), round(y, 1)
-
-        def project_percent(lon, lat):
-            x, y = project(lon, lat)
-            # O SVG do mapa ocupa 88% x 92% do palco, com inset de 6%/4%.
-            # Os pontos são posicionados no palco inteiro, então precisam do mesmo ajuste.
-            return round((x / width) * 100, 2), round((y / height) * 100, 2)
-
-        state_label_points = {}
-        for feature in features:
-            uf = str(feature.get("id") or feature.get("properties", {}).get("sigla") or "").upper()
-            state_points = []
-            for ring in iter_rings(feature.get("geometry")):
-                for point in ring:
-                    if isinstance(point, (list, tuple)) and len(point) >= 2:
-                        state_points.append((point[0], point[1]))
-            if state_points:
-                avg_lon = sum(lon for lon, _lat in state_points) / len(state_points)
-                avg_lat = sum(lat for _lon, lat in state_points) / len(state_points)
-                state_label_points[uf] = project(avg_lon, avg_lat)
-
-        label_offsets = {
-            "DF": (0, 8), "ES": (10, 0), "RJ": (10, 4), "AL": (10, -2),
-            "SE": (10, 5), "PB": (10, -2), "RN": (8, -4), "PE": (10, 0),
-        }
-
-        paths = []
-        for feature in features:
-            uf = str(feature.get("id") or feature.get("properties", {}).get("sigla") or "").upper()
-            path_parts = []
-            for ring in iter_rings(feature.get("geometry")):
-                if not ring:
-                    continue
-                step = max(1, len(ring) // 180)
-                reduced = ring[::step]
-                if reduced[-1] != ring[-1]:
-                    reduced.append(ring[-1])
-                projected = [project(lon, lat) for lon, lat in reduced]
-                if not projected:
-                    continue
-                first_x, first_y = projected[0]
-                commands = [f"M {first_x} {first_y}"]
-                commands.extend(f"L {x} {y}" for x, y in projected[1:])
-                commands.append("Z")
-                path_parts.append(" ".join(commands))
-            if path_parts:
-                health = str((state_health or {}).get(uf) or "neutral")
-                title = f"<title>{html.escape(uf)}</title>" if uf else ""
-                paths.append(f'<path class="infra-map-state {html.escape(health)}" data-uf="{html.escape(uf)}" d="{" ".join(path_parts)}">{title}</path>')
-
-        labels = []
-        for uf, (x, y) in state_label_points.items():
-            dx, dy = label_offsets.get(uf, (0, 0))
-            labels.append(f'<text class="infra-map-state-label" x="{x + dx}" y="{y + dy}" data-uf="{html.escape(uf)}">{html.escape(uf)}</text>')
-
-        return "\n".join(paths), "\n".join(labels), project_percent
-    except Exception as exc:
-        print(f"[WARN] Falha ao renderizar GeoJSON do Brasil: {exc}")
-        def fallback_project_percent(_lon, _lat):
-            return 50, 50
-
-        return """
-            <path class="infra-map-land" d="M259 28 329 47 388 74 429 110 470 127 503 156 521 197 552 236 574 291 559 343 548 389 511 425 489 468 446 502 413 542 356 557 318 587 260 574 218 539 168 522 127 482 82 451 67 397 39 349 50 295 47 244 76 201 101 154 146 120 184 79Z"/>
-            <path class="infra-map-coast" d="M429 110 470 127 503 156 521 197 552 236 574 291 559 343 548 389 511 425 489 468 446 502 413 542"/>
-        """, "", fallback_project_percent
-
-
-def _build_infra_map_html():
-    indice = _regional_card_indice()
-    servidores_status = _somar_status_por_regional(regionais_servidor_status, indice)
-    aps_status = _somar_status_por_regional(aps_regionais_status, indice)
-    switches_status = _somar_status_por_regional(switches_regionais_status, indice)
-    links_status = _somar_status_por_regional(links_regionais_status, indice)
-    vpns_status = _somar_status_por_regional(globals().get("vpn_regionais_status", {}), indice)
-
-    firewall_summary = security_dashboard.get("firewall_regional_summary") or {}
-    admin_summary = security_dashboard.get("admin_regional_summary") or {}
-    firewall_status_por_regional = {}
-    for regional, dados in firewall_summary.items():
-        chave = _resolver_regional_card(regional, indice)
-        status = str((dados or {}).get("status") or "ok")
-        firewall_status_por_regional.setdefault(chave, {})
-        firewall_status_por_regional[chave][status] = firewall_status_por_regional[chave].get(status, 0) + int((dados or {}).get("total") or 0)
-    admin_status_por_regional = {}
-    for regional, dados in admin_summary.items():
-        chave = _resolver_regional_card(regional, indice)
-        status = str((dados or {}).get("status") or "ok")
-        admin_status_por_regional.setdefault(chave, {})
-        admin_status_por_regional[chave][status] = admin_status_por_regional[chave].get(status, 0) + int((dados or {}).get("total") or 0)
-
-    _brazil_state_paths_base, _brazil_state_labels_base, project_map_point = _build_brazil_state_paths()
-    coords_geo = {
-        "REG_AMAZONAS": (-60.02, -3.10, "AM"), "REG_PARA": (-48.50, -1.45, "PA"), "REG_ORMEC_PARA": (-48.34, -1.41, "PA"),
-        "REG_MARANHAO": (-44.30, -2.53, "MA"), "REG_PIAU": (-42.80, -5.09, "PI"), "REG_CEARA": (-38.54, -3.73, "CE"), "REG_CEARA_2": (-38.50, -3.78, "CE"),
-        "REG_PERNAMBUCO": (-34.88, -8.05, "PE"), "REG_ALAGOAS": (-35.74, -9.66, "AL"), "REG_BAHIA": (-38.50, -12.97, "BA"),
-        "REG_GOIAS": (-49.25, -16.68, "GO"), "REG_CONTROL_MCO": (-35.74, -9.66, "AL"), "REG_CTRLBP": (-35.77, -9.70, "AL"), "REG_GRSASP": (-46.63, -23.55, "SP"),
-        "REG_ABC": (-46.56, -23.68, "SP"), "REG_CAMPINAS": (-47.06, -22.91, "SP"), "REG_CAMPINAS_02": (-47.06, -22.86, "SP"),
-        "REG_ARARAS": (-47.38, -22.36, "SP"), "REG_CAXIAS": (-51.18, -29.17, "RS"), "REG_RIO_DE_JANEIRO": (-43.17, -22.91, "RJ"),
-        "REG_ESPIRITO_SANTO": (-40.34, -20.32, "ES"), "REG_PRAIA_GRANDE": (-46.40, -24.01, "SP"), "REG_SJC": (-45.88, -23.18, "SP"),
-        "REG_SAO_LEOPOLDO": (-51.15, -29.76, "RS"), "REG_PARANA": (-49.27, -25.43, "PR"), "REG_UBERLANDIA": (-48.28, -18.91, "MG"),
-        "REG_RIO_GRANDE_DO_NORTE": (-35.21, -5.79, "RN"), "REG_RUDDER": (-51.20, -30.02, "RS"), "REG_MACAE": (-41.79, -22.37, "RJ"),
-        "REG_LC": (-43.20, -22.90, "RJ"), "REG_GALAXIA": (-46.64, -23.55, "SP"), "REG_GLOBAL_SEGURANCA": (-47.88, -15.79, "DF"),
-        "REG_MOTUS": (-46.64, -23.55, "SP"), "REG_NUTRICAR": (-46.65, -23.57, "SP"), "REG_LOGHIS": (-46.62, -23.54, "SP"),
-        "REG_SOROCABA": (-47.45, -23.50, "SP"), "REG_RHMED": (-43.20, -22.91, "RJ"),
-        "REG_TLSV_POA": (-51.23, -30.03, "RS"), "REG_TRADETALENTOS": (-46.64, -23.56, "SP"),
-        "REG_SULZER": (-51.18, -29.16, "RS"), "REG_LEOPOLDO_B2": (-51.16, -29.78, "RS"),
-        "REG_REGIONAL_BELO_HORIZONTE": (-43.94, -19.92, "MG"), "REG_REGIONAL BELO HORIZONTE": (-43.94, -19.92, "MG"),
-    }
-
-    state_anchor_geo = {
-        "AM": (-63.5, -4.6), "PA": (-52.0, -4.0), "MA": (-45.2, -5.0), "PI": (-42.2, -7.0),
-        "CE": (-39.7, -5.3), "RN": (-36.8, -5.8), "PB": (-36.6, -7.1), "PE": (-37.8, -8.4),
-        "AL": (-36.7, -9.6), "BA": (-41.7, -12.8), "GO": (-49.7, -16.0), "DF": (-47.9, -15.8),
-        "MG": (-44.4, -18.7), "ES": (-40.7, -19.6), "RJ": (-42.4, -22.3), "SP": (-48.5, -22.6),
-        "PR": (-51.2, -24.7), "SC": (-50.2, -27.1), "RS": (-53.1, -30.0), "MS": (-54.6, -20.7),
-        "MT": (-56.1, -12.8), "TO": (-48.3, -10.2), "RO": (-63.0, -10.8), "AC": (-70.4, -9.3),
-        "RR": (-61.3, 2.0), "AP": (-51.9, 1.2), "SE": (-37.4, -10.7),
-    }
-    state_anchor_options_geo = {
-        "SP": [
-            (-49.6, -22.0), (-48.7, -22.8), (-47.6, -22.3), (-46.8, -23.1),
-            (-47.8, -23.5), (-48.9, -23.8), (-46.2, -23.7), (-49.7, -23.0),
-            (-47.1, -21.8), (-48.2, -21.5), (-46.4, -22.4), (-49.2, -21.3),
-        ],
-        "RJ": [
-            (-42.8, -22.1), (-42.1, -22.35), (-43.25, -22.6), (-41.7, -22.0),
-        ],
-        "RS": [
-            (-53.8, -29.5), (-52.7, -29.6), (-51.7, -29.8), (-52.9, -30.5),
-            (-51.8, -30.8), (-53.6, -31.0),
-        ],
-        "AL": [(-36.8, -9.35), (-36.3, -9.75), (-37.05, -9.85)],
-        "CE": [(-39.9, -4.7), (-39.1, -5.3), (-40.1, -5.8)],
-        "PA": [(-52.8, -3.7), (-50.8, -2.8), (-48.8, -3.3)],
-    }
-
-    spread_offsets = [
-        (0.0, 0.0), (0.55, -0.35), (-0.55, 0.35), (0.65, 0.4), (-0.65, -0.4),
-        (0.0, -0.72), (0.0, 0.72), (0.9, 0.0), (-0.9, 0.0),
-        (0.95, -0.55), (-0.95, 0.55), (0.95, 0.55), (-0.95, -0.55),
-    ]
-    spread_state_counts = {}
-
-    def next_state_anchor(uf, fallback_lon_lat):
-        uf_key = uf or "NA"
-        index = spread_state_counts.get(uf_key, 0)
-        spread_state_counts[uf_key] = index + 1
-        options = state_anchor_options_geo.get(uf_key) or []
-        if options:
-            return options[index % len(options)], index
-        return state_anchor_geo.get(uf_key) or fallback_lon_lat, index
-
-    def spread_map_point(x, y, uf, index):
-        uf_key = uf or "NA"
-        ox, oy = spread_offsets[index % len(spread_offsets)]
-        ring = index // len(spread_offsets)
-        scale = 0.45 + (ring * 0.12)
-        if uf_key in {"SP", "RJ", "RS", "AL", "CE"}:
-            scale = 0.28 + (ring * 0.08)
-        return (
-            max(3, min(97, x + (ox * scale))),
-            max(3, min(97, y + (oy * scale))),
-        )
-
-    def total_status(dados):
-        return sum(int(v or 0) for v in (dados or {}).values())
-
-    def status_count(dados, *keys):
-        return sum(int((dados or {}).get(key, 0) or 0) for key in keys)
-
-    estrutura_data = _load_json_cache(PROJECT_ROOT / "estrutura_regionais.json")
-    regionais_info = estrutura_data.get("regionais") or {}
-
-    firewalls_cache = _load_json_cache(PROJECT_ROOT / "output" / "dashboard_firewalls_cache.json")
-    firewalls_por_regional_items = {}
-    for regional_cache, itens in (firewalls_cache.get("firewalls_por_regional") or {}).items():
-        chave = _resolver_regional_card(regional_cache, indice)
-        firewalls_por_regional_items.setdefault(chave, []).extend(itens or [])
-
-    admins_cache = _load_json_cache(PROJECT_ROOT / "output" / "dashboard_admins_cache.json")
-    admins_por_regional_items = {}
-    for key, item in (admins_cache.get("dispositivos") or {}).items():
-        tipo = str((item or {}).get("tipo") or "").lower()
-        if tipo in {"fortimanager", "fortianalyzer"}:
-            continue
-        chave = _resolver_regional_card((item or {}).get("nome") or key, indice)
-        admins_por_regional_items.setdefault(chave, []).append(item or {})
-
-    switches_por_regional_items = {}
-    for switch in switches_data:
-        chave = _resolver_regional_card(switch.get("regional"), indice)
-        switches_por_regional_items.setdefault(chave, []).append(switch)
-
-    links_por_regional_items = {}
-    for link in links_data:
-        chave = _resolver_regional_card(link.get("regiao") or link.get("regional"), indice)
-        links_por_regional_items.setdefault(chave, []).append(link)
-
-    aps_por_regional_items = {}
-    try:
-        unifi_json_path = PROJECT_ROOT / "data" / "unifi.json"
-        if unifi_json_path.exists():
-            unifi_json_map_data = json.loads(unifi_json_path.read_text(encoding="utf-8"))
-            for ap in unifi_json_map_data.get("aps", []):
-                chave = _resolver_regional_card(ap.get("site"), indice)
-                if chave == "N/A":
-                    continue
-                aps_por_regional_items.setdefault(chave, []).append(ap)
-    except Exception as exc:
-        print(f"[AVISO] Nao foi possivel carregar APs para o mapa regional: {exc}")
-
-    vpns_por_regional_items = {
-        _resolver_regional_card(regional, indice): (dados or {}).get("tunels", [])
-        for regional, dados in globals().get("vpns_por_regional", {}).items()
-    }
-
-    def status_bucket(status, default="online"):
-        texto = str(status or "").strip().lower()
-        if texto in {"online", "ok", "active", "registered", "registrada", "registrado"}:
-            return "online"
-        if texto in {"offline", "down", "danger", "erro", "falha", "sem-sinal", "sem sinal"}:
-            return "offline"
-        if texto in {"warning", "atencao", "atenção", "critico", "crítico"}:
-            return "warning"
-        if texto in {"inativo", "inactive", "disabled"}:
-            return "inativo"
-        return default
-
-    def incrementar_status(destino, status, default="online"):
-        bucket = status_bucket(status, default)
-        destino[bucket] = destino.get(bucket, 0) + 1
-
-    def servidores_ativos_regional(regional):
-        info = regionais_info.get(regional) or {}
-        return [srv for srv in (info.get("servidores") or []) if isinstance(srv, dict) and srv.get("ativo", True)]
-
-    servidores_status = {}
-    for reg in indice:
-        regional = reg["chave"]
-        dados = {}
-        for servidor in servidores_ativos_regional(regional):
-            incrementar_status(dados, servidor.get("status"), "online")
-        servidores_status[regional] = dados
-
-    aps_status = {}
-    for regional, aps in aps_por_regional_items.items():
-        dados = {}
-        for ap in aps:
-            incrementar_status(dados, ap.get("status"), "offline")
-        aps_status[regional] = dados
-
-    switches_status = {}
-    for regional, switches in switches_por_regional_items.items():
-        dados = {}
-        for switch in switches:
-            incrementar_status(dados, switch.get("status"), "online")
-        switches_status[regional] = dados
-
-    links_status = {}
-    for regional, links in links_por_regional_items.items():
-        dados = {}
-        for link in links:
-            incrementar_status(dados, link.get("status"), "online")
-        links_status[regional] = dados
-
-    firewall_status_por_regional = {}
-    for regional, firewalls in firewalls_por_regional_items.items():
-        dados = {}
-        for firewall in firewalls:
-            licencas = firewall.get("licencas") or []
-            if any(str(lic.get("status") or "").lower() == "offline" for lic in licencas if isinstance(lic, dict)):
-                dados["sem-sinal"] = dados.get("sem-sinal", 0) + 1
-            elif int(firewall.get("licencas_expiradas") or 0) > 0:
-                dados["expirado"] = dados.get("expirado", 0) + 1
-            elif int(firewall.get("licencas_criticas") or 0) > 0:
-                dados["warning"] = dados.get("warning", 0) + 1
-            else:
-                dados["ok"] = dados.get("ok", 0) + 1
-        firewall_status_por_regional[regional] = dados
-
-    admin_status_por_regional = {}
-    for regional, admins in admins_por_regional_items.items():
-        dados = {}
-        for admin in admins:
-            if admin.get("novos") or admin.get("removidos"):
-                dados["alerta"] = dados.get("alerta", 0) + 1
-            elif admin.get("offline"):
-                dados["offline"] = dados.get("offline", 0) + 1
-            elif admin.get("sem_permissao"):
-                dados["sem-permissao"] = dados.get("sem-permissao", 0) + 1
-            else:
-                dados["ok"] = dados.get("ok", 0) + 1
-        admin_status_por_regional[regional] = dados
-
-    def build_regional_details(regional):
-        servidores = servidores_ativos_regional(regional)
-        aps = aps_por_regional_items.get(regional, [])
-        links = links_por_regional_items.get(regional, [])
-        switches = switches_por_regional_items.get(regional, [])
-        vpns = vpns_por_regional_items.get(regional, [])
-        firewalls = firewalls_por_regional_items.get(regional, [])
-        admins = admins_por_regional_items.get(regional, [])
-
-        servidores_html = [
-            _inventory_item_html("servidores", srv.get("nome"), f"{srv.get('funcao') or srv.get('tipo') or 'Servidor'} - {srv.get('ip') or 'N/A'}", srv.get("status") or "unknown")
-            for srv in servidores
-        ]
-        aps_html_items = [
-            _inventory_item_html("aps", ap.get("nome") or ap.get("name") or ap.get("ap_name"), f"{ap.get('modelo') or ap.get('model') or 'AP'} - {ap.get('ip') or 'N/A'}", ap.get("status") or "offline")
-            for ap in aps
-        ]
-        links_html_items = [
-            _inventory_item_html("links", link.get("nome"), f"{link.get('provedor') or 'Provedor N/A'} - {link.get('ip') or 'N/A'}", link.get("status") or "unknown")
-            for link in links
-        ]
-        switches_html_items = [
-            _inventory_item_html("switches", switch.get("name"), switch.get("ip") or "IP N/A", switch.get("status") or "unknown")
-            for switch in switches
-        ]
-        vpns_html_items = [
-            _inventory_item_html("vpns", vpn.get("nome") or vpn.get("tunel") or "Tunel VPN", vpn.get("gateway") or vpn.get("remote_gateway") or "VPN IPSEC", vpn.get("status") or "unknown")
-            for vpn in vpns
-        ]
-        firewalls_html_items = []
-        for firewall in firewalls:
-            licencas = firewall.get("licencas") or []
-            licenca = next(iter(licencas), {}) if licencas else {}
-            status = "ok"
-            if any(str(lic.get("status") or "").lower() == "offline" for lic in licencas if isinstance(lic, dict)):
-                status = "sem-sinal"
-            elif int(firewall.get("licencas_expiradas") or 0) > 0:
-                status = "expirado"
-            elif int(firewall.get("licencas_criticas") or 0) > 0:
-                status = "warning"
-            extra = f"<small>FortiCare: {html.escape(str(licenca.get('dias_restantes', 'N/A')))} dias</small>" if licenca else ""
-            firewalls_html_items.append(_inventory_item_html("firewalls", firewall.get("nome") or firewall.get("hostname"), f"{firewall.get('ip') or 'IP N/A'} - {firewall.get('model') or 'Modelo N/A'}", status, extra))
-
-        admins_html_items = []
-        for admin in admins:
-            status = "alerta" if admin.get("novos") or admin.get("removidos") else "offline" if admin.get("offline") else "sem-permissao" if admin.get("sem_permissao") else "ok"
-            admins_html_items.append(_inventory_item_html("admins", admin.get("nome"), f"{len(admin.get('admins') or [])} admin(s)", status))
-
-        total_aparelhos = len(servidores) + len(aps) + len(links) + len(switches) + len(vpns) + len(firewalls) + len(admins)
-        groups = [
-            _inventory_group_html("servidores", "Servidores", "fa-server", servidores_html),
-            _inventory_group_html("aps", "APs", "fa-wifi", aps_html_items),
-            _inventory_group_html("links", "Links", "fa-globe", links_html_items),
-            _inventory_group_html("switches", "Switches", "fa-network-wired", switches_html_items),
-            _inventory_group_html("vpns", "VPNs", "fa-shield-alt", vpns_html_items),
-            _inventory_group_html("firewalls", "Firewalls", "fa-shield-alt", firewalls_html_items),
-            _inventory_group_html("admins", "Admins", "fa-user-shield", admins_html_items),
-        ]
-        return f"""
-            <div class="infra-map-regional-detail-title">
-                <strong>{html.escape(regional)}</strong>
-                <span>{total_aparelhos} aparelho(s)</span>
-            </div>
-            <div class="infra-map-regional-detail-grid">{''.join(groups)}</div>
-        """
-
-    def regional_health(regional):
-        servidores = servidores_status.get(regional, {})
-        aps = aps_status.get(regional, {})
-        switches = switches_status.get(regional, {})
-        links = links_status.get(regional, {})
-        vpns = vpns_status.get(regional, {})
-        firewalls = firewall_status_por_regional.get(regional, {})
-        admins = admin_status_por_regional.get(regional, {})
-        danger = (
-            int(servidores.get("offline", 0) or 0)
-            + int(aps.get("offline", 0) or 0)
-            + int(switches.get("offline", 0) or 0)
-            + int(links.get("offline", 0) or 0)
-            + int(vpns.get("offline", 0) or 0)
-            + int(firewalls.get("expirado", 0) or 0)
-            + int(firewalls.get("sem-sinal", 0) or 0)
-            + int(admins.get("alerta", 0) or 0)
-            + int(admins.get("offline", 0) or 0)
-            + int(admins.get("sem-permissao", 0) or 0)
-        )
-        warning = (
-            int(servidores.get("warning", 0) or 0)
-            + int(switches.get("warning", 0) or 0)
-            + int(switches.get("inativo", 0) or 0)
-            + int(links.get("inativo", 0) or 0)
-            + int(firewalls.get("warning", 0) or 0)
-        )
-        if danger:
-            return "danger"
-        if warning:
-            return "warning"
-        return "ok"
-
-    pontos = []
-    lista = []
-    detalhes_templates = []
-    regionais_payload = []
-    state_health = {}
-    state_priority = {"neutral": 0, "ok": 1, "warning": 2, "danger": 3}
-    for idx, reg in enumerate(indice):
-        regional = reg["chave"]
-        geo = coords_geo.get(regional)
-        lon_lat = geo[:2] if geo else None
-        uf = geo[2] if geo else "NA"
-        anchor_lon_lat, anchor_index = next_state_anchor(uf, lon_lat)
-        x, y = project_map_point(*anchor_lon_lat) if anchor_lon_lat else (28 + (idx % 9) * 5, 20 + (idx // 9) * 9)
-        x, y = spread_map_point(x, y, uf, anchor_index)
-        health = regional_health(regional)
-        if state_priority.get(health, 0) > state_priority.get(state_health.get(uf, "neutral"), 0):
-            state_health[uf] = health
-        servidores = servidores_status.get(regional, {})
-        aps = aps_status.get(regional, {})
-        switches = switches_status.get(regional, {})
-        links = links_status.get(regional, {})
-        vpns = vpns_status.get(regional, {})
-        firewalls = firewall_status_por_regional.get(regional, {})
-        admins = admin_status_por_regional.get(regional, {})
-        total_aparelhos = total_status(servidores) + total_status(aps) + total_status(switches) + total_status(links) + total_status(vpns) + total_status(firewalls) + total_status(admins)
-        payload = {
-            "regional": regional,
-            "uf": uf,
-            "status": health,
-            "total": total_aparelhos,
-            "servidores": total_status(servidores),
-            "servidores_online": status_count(servidores, "online"),
-            "servidores_offline": status_count(servidores, "offline"),
-            "servidores_warning": status_count(servidores, "warning"),
-            "aps": total_status(aps),
-            "aps_online": status_count(aps, "online"),
-            "aps_offline": status_count(aps, "offline"),
-            "switches": total_status(switches),
-            "switches_online": status_count(switches, "online"),
-            "switches_offline": status_count(switches, "offline"),
-            "switches_warning": status_count(switches, "warning", "inativo"),
-            "links": total_status(links),
-            "links_online": status_count(links, "online"),
-            "links_offline": status_count(links, "offline", "inativo"),
-            "vpns": total_status(vpns),
-            "vpns_online": status_count(vpns, "online"),
-            "vpns_offline": status_count(vpns, "offline"),
-            "firewalls": total_status(firewalls),
-            "firewalls_ok": status_count(firewalls, "ok"),
-            "firewalls_alerta": status_count(firewalls, "warning", "expirado", "sem-sinal"),
-            "admins": total_status(admins),
-            "admins_ok": status_count(admins, "ok"),
-            "admins_alerta": status_count(admins, "alerta", "offline", "sem-permissao"),
-            "firewall_warning": int(firewalls.get("warning", 0) or 0),
-            "alertas": (
-                int(servidores.get("offline", 0) or 0) + int(servidores.get("warning", 0) or 0)
-                + int(aps.get("offline", 0) or 0)
-                + int(switches.get("offline", 0) or 0) + int(switches.get("warning", 0) or 0) + int(switches.get("inativo", 0) or 0)
-                + int(links.get("offline", 0) or 0) + int(links.get("inativo", 0) or 0)
-                + int(vpns.get("offline", 0) or 0)
-                + int(firewalls.get("warning", 0) or 0) + int(firewalls.get("expirado", 0) or 0) + int(firewalls.get("sem-sinal", 0) or 0)
-                + int(admins.get("alerta", 0) or 0) + int(admins.get("offline", 0) or 0) + int(admins.get("sem-permissao", 0) or 0)
-            ),
-        }
-        details_id = f"infraMapDetailsTpl{idx}"
-        payload["details_id"] = details_id
-        detalhes_templates.append(f'<template id="{details_id}">{build_regional_details(regional)}</template>')
-        regionais_payload.append(payload)
-        data_attrs = " ".join(f"data-{k.replace('_', '-')}=\"{html.escape(str(v))}\"" for k, v in payload.items())
-        svg_x = round((x / 100) * 620, 1)
-        svg_y = round((y / 100) * 620, 1)
-        pontos.append(f"""
-            <g class="infra-map-dot {health}" transform="translate({svg_x} {svg_y})" {data_attrs} tabindex="0" role="button" aria-label="{html.escape(regional)}">
-                <circle class="infra-map-dot-halo" r="9"></circle>
-                <circle class="infra-map-dot-core" r="4.5"></circle>
-            </g>
-        """)
-        lista.append(f"<button type='button' class='infra-map-list-item {health}' {data_attrs}><span>{html.escape(regional)}</span><strong>{payload['alertas']}</strong></button>")
-
-    total_regionais_mapa = len(regionais_payload)
-    regionais_com_servidores = sum(1 for item in regionais_payload if int(item.get("servidores", 0) or 0) > 0)
-    regionais_com_links = sum(1 for item in regionais_payload if int(item.get("links", 0) or 0) > 0)
-    regionais_com_switches = sum(1 for item in regionais_payload if int(item.get("switches", 0) or 0) > 0)
-    regionais_com_firewall_warning = sum(1 for item in regionais_payload if int(item.get("firewall_warning", 0) or 0) > 0)
-    primeiro = indice[0]["chave"] if indice else "N/A"
-    brazil_state_paths, brazil_state_labels, _project_unused = _build_brazil_state_paths(state_health)
-    return f"""
-        <div class="infra-map-shell">
-            <div class="infra-map-topbar">
-                <div><strong>SENTINEL</strong><span>Visao Infraestrutura Brasil</span></div>
-                <em>{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</em>
-            </div>
-            <div class="infra-map-layout">
-                <div class="infra-map-stage">
-                    <div id="infraMapDotTooltip" class="infra-map-dot-tooltip" role="tooltip" hidden></div>
-                    <svg class="infra-map-brazil" viewBox="0 0 620 620" aria-label="Mapa do Brasil">
-                        <defs>
-                            <linearGradient id="infraMapLand" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#10202a"/>
-                                <stop offset="55%" stop-color="#182b35"/>
-                                <stop offset="100%" stop-color="#213946"/>
-                            </linearGradient>
-                            <filter id="infraMapGlow" x="-20%" y="-20%" width="140%" height="140%">
-                                <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#020617" flood-opacity=".35"/>
-                            </filter>
-                        </defs>
-                        <g filter="url(#infraMapGlow)">
-                            {brazil_state_paths}
-                        </g>
-                        <g class="infra-map-state-labels">
-                            {brazil_state_labels}
-                        </g>
-                        <g class="infra-map-dots">
-                            {''.join(pontos)}
-                        </g>
-                    </svg>
-                </div>
-                <aside class="infra-map-side">
-                    <div class="infra-map-card">
-                        <div class="infra-map-card-head">
-                            <button type="button" id="infraMapBack" class="infra-map-back" hidden aria-label="Voltar">&larr;</button>
-                            <span id="infraMapStatus" class="infra-map-badge ok">OK</span>
-                            <h3 id="infraMapRegional">{html.escape(primeiro)}</h3>
-                            <p id="infraMapScope" class="infra-map-scope">Clique em um estado para ver suas regionais.</p>
-                        </div>
-                        <div id="infraMapInitialStats" class="infra-map-stats">
-                            <button type="button" class="infra-map-stat-main" data-map-filter="all"><span>Total de Regionais</span><strong id="infraMapTotalRegionais">{total_regionais_mapa}</strong></button>
-                            <button type="button" data-map-filter="com-servidores"><span>Com Servidores</span><strong id="infraMapComServidores">{regionais_com_servidores}</strong></button>
-                            <button type="button" class="infra-map-stat-muted" data-map-filter="sem-servidores"><span>Sem Servidores</span><strong id="infraMapSemServidores">{max(total_regionais_mapa - regionais_com_servidores, 0)}</strong></button>
-                            <button type="button" data-map-filter="com-links"><span>Com Links</span><strong id="infraMapComLinks">{regionais_com_links}</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-map-filter="sem-links"><span>Sem Links</span><strong id="infraMapSemLinks">{max(total_regionais_mapa - regionais_com_links, 0)}</strong></button>
-                            <button type="button" data-map-filter="com-switches"><span>Com Switches</span><strong id="infraMapComSwitches">{regionais_com_switches}</strong></button>
-                            <button type="button" class="infra-map-stat-muted" data-map-filter="sem-switches"><span>Sem Switches</span><strong id="infraMapSemSwitches">{max(total_regionais_mapa - regionais_com_switches, 0)}</strong></button>
-                            <button type="button" class="infra-map-stat-warning" data-map-filter="firewall-warning"><span>Firewall a Vencer</span><strong id="infraMapFirewallWarning">{regionais_com_firewall_warning}</strong></button>
-                        </div>
-                        <div id="infraMapSummaryStats" class="infra-map-stats" hidden>
-                            <button type="button" class="infra-map-stat-ok" data-detail-filter-type="servidores" data-detail-filter-status="online"><span>Servidores Online</span><strong id="infraMapServidoresOnline">0</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-detail-filter-type="servidores" data-detail-filter-status="offline"><span>Servidores Offline</span><strong id="infraMapServidoresOffline">0</strong></button>
-                            <button type="button" class="infra-map-stat-warning" data-detail-filter-type="servidores" data-detail-filter-status="warning"><span>Servidores Warning</span><strong id="infraMapServidoresWarning">0</strong></button>
-                            <button type="button" class="infra-map-stat-ok" data-detail-filter-type="aps" data-detail-filter-status="online"><span>APs Online</span><strong id="infraMapApsOnline">0</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-detail-filter-type="aps" data-detail-filter-status="offline"><span>APs Offline</span><strong id="infraMapApsOffline">0</strong></button>
-                            <button type="button" class="infra-map-stat-ok" data-detail-filter-type="switches" data-detail-filter-status="online"><span>Switches Online</span><strong id="infraMapSwitchesOnline">0</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-detail-filter-type="switches" data-detail-filter-status="offline"><span>Switches Offline</span><strong id="infraMapSwitchesOffline">0</strong></button>
-                            <button type="button" class="infra-map-stat-warning" data-detail-filter-type="switches" data-detail-filter-status="warning,inativo"><span>Switches Warning</span><strong id="infraMapSwitchesWarning">0</strong></button>
-                            <button type="button" class="infra-map-stat-ok" data-detail-filter-type="vpns" data-detail-filter-status="online"><span>VPNs Online</span><strong id="infraMapVpnsOnline">0</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-detail-filter-type="vpns" data-detail-filter-status="offline"><span>VPNs Offline</span><strong id="infraMapVpnsOffline">0</strong></button>
-                            <button type="button" class="infra-map-stat-ok" data-detail-filter-type="links" data-detail-filter-status="online"><span>Links Online</span><strong id="infraMapLinksOnline">0</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-detail-filter-type="links" data-detail-filter-status="offline,inativo"><span>Links Offline/Inativos</span><strong id="infraMapLinksOffline">0</strong></button>
-                            <button type="button" data-detail-filter-type="firewalls" data-detail-filter-status="warning,expirado,sem-sinal"><span>Firewalls com Alerta</span><strong id="infraMapFirewallsAlerta">0</strong></button>
-                            <button type="button" class="infra-map-stat-alert" data-detail-filter-type="admins" data-detail-filter-status="alerta,offline,sem-permissao"><span>Admins com Alerta</span><strong id="infraMapAdminsAlerta">0</strong></button>
-                        </div>
-                        <div id="infraMapDetails" class="infra-map-details"></div>
-                    </div>
-                    <div class="infra-map-list">{''.join(lista)}</div>
-                    <div class="infra-map-templates">{''.join(detalhes_templates)}</div>
-                </aside>
-            </div>
-        </div>
-    """
-
-
-regional_cards_html = _build_regional_cards_html()
-regional_inventory_html = _build_regional_inventory_html()
-infra_map_html = _build_infra_map_html()
 dashboard_html = f"""
 <!DOCTYPE html>
 <html>
@@ -4724,939 +3586,6 @@ dashboard_html = f"""
         #regional-view .kpi-combo-item strong {{
             font-size: 1.28rem;
             line-height: 1;
-        }}
-
-        .regional-monitor-cards {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-            gap: 16px;
-            margin: 22px 0 28px;
-        }}
-
-        .regional-monitor-card {{
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 251, 0.96));
-            border: 1px solid rgba(203, 216, 226, 0.95);
-            border-left: 5px solid #0f6c8c;
-            border-radius: 8px;
-            padding: 14px;
-            min-height: 214px;
-            box-shadow: 0 12px 28px rgba(1, 46, 64, 0.13);
-        }}
-
-        .regional-monitor-card.regional-monitor-ok {{
-            border-left-color: #2f855a;
-        }}
-
-        .regional-monitor-card.regional-monitor-alert {{
-            border-left-color: #dd6b20;
-        }}
-
-        .regional-monitor-card header {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
-        }}
-
-        .regional-monitor-card h3 {{
-            margin: 0;
-            color: #1f2937;
-            font-size: 1rem;
-            font-weight: 800;
-            letter-spacing: 0;
-            overflow-wrap: anywhere;
-        }}
-
-        .regional-monitor-open {{
-            border: 1px solid #bdd6e2;
-            background: #f8fbfd;
-            color: #084a61;
-            border-radius: 6px;
-            padding: 5px 8px;
-            font-size: .72rem;
-            font-weight: 800;
-            cursor: pointer;
-            flex: 0 0 auto;
-        }}
-
-        .regional-monitor-grid {{
-            display: grid;
-            gap: 8px;
-        }}
-
-        .regional-monitor-metric {{
-            background: rgba(248, 250, 252, 0.94);
-            border: 1px solid #dbe6ef;
-            border-radius: 7px;
-            padding: 8px 9px;
-        }}
-
-        .regional-monitor-metric-empty {{
-            background: rgba(241, 245, 249, 0.75);
-            border-style: dashed;
-            opacity: .82;
-        }}
-
-        .regional-monitor-metric-empty .regional-monitor-icon,
-        .regional-monitor-metric-empty .regional-monitor-metric-head strong {{
-            color: #94a3b8;
-        }}
-
-        .regional-monitor-metric-head {{
-            width: 100%;
-            display: grid;
-            grid-template-columns: 22px 1fr auto;
-            align-items: center;
-            gap: 8px;
-            border: 0;
-            background: transparent;
-            color: #334155;
-            cursor: pointer;
-            padding: 0;
-            text-align: left;
-        }}
-
-        .regional-monitor-icon {{
-            color: #0f6c8c;
-            font-size: .86rem;
-            text-align: center;
-        }}
-
-        .regional-monitor-text {{
-            min-width: 0;
-            display: grid;
-            gap: 2px;
-        }}
-
-        .regional-monitor-label {{
-            font-size: .72rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: .03em;
-            color: #475569;
-        }}
-
-        .regional-monitor-summary {{
-            font-size: .76rem;
-            color: #64748b;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }}
-
-        .regional-monitor-metric-head strong {{
-            color: #0f172a;
-            font-size: 1.18rem;
-            line-height: 1;
-        }}
-
-        .regional-monitor-chip-row {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 7px;
-        }}
-
-        .regional-monitor-chip {{
-            min-width: 0;
-            border: 1px solid #cbd5e1;
-            background: #fff;
-            border-radius: 999px;
-            padding: 3px 7px;
-            color: #334155;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }}
-
-        .regional-monitor-chip span {{
-            font-size: .64rem;
-            font-weight: 800;
-            line-height: 1.1;
-        }}
-
-        .regional-monitor-chip strong {{
-            font-size: .72rem;
-            color: #0f172a;
-        }}
-
-        .regional-monitor-chip.status-online {{ background: #ecfdf3; border-color: #86efac; }}
-        .regional-monitor-chip.status-offline {{ background: #fff1f2; border-color: #fda4af; }}
-        .regional-monitor-chip.status-warning {{ background: #fffbeb; border-color: #fbbf24; }}
-        .regional-monitor-chip.status-inactive {{ background: #eef2f7; border-color: #cbd5e1; }}
-        .regional-monitor-empty {{ color: #64748b; font-size: .8rem; }}
-
-        .regional-inventory-toolbar {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            background: linear-gradient(90deg, rgba(236, 253, 243, .96), rgba(240, 249, 255, .96));
-            border: 1px solid #bae6fd;
-            border-left: 6px solid #0f6c8c;
-            border-radius: 10px;
-            padding: 14px 16px;
-            margin-bottom: 16px;
-            color: #0f172a;
-        }}
-
-        .regional-inventory-toolbar strong {{
-            font-size: 1rem;
-            color: #084a61;
-        }}
-
-        .regional-inventory-toolbar span {{
-            color: #64748b;
-            font-size: .86rem;
-        }}
-
-        .regional-inventory-wrapper {{
-            display: grid;
-            gap: 14px;
-        }}
-
-        .regional-inventory-region {{
-            background: rgba(255, 255, 255, .94);
-            border: 1px solid #cbd5e1;
-            border-left: 5px solid #0f6c8c;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 12px 28px rgba(1, 46, 64, .10);
-        }}
-
-        .regional-inventory-region summary {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 14px 16px;
-            background: linear-gradient(90deg, #f8fafc, #eef6fb);
-            color: #1f2937;
-            font-weight: 900;
-            cursor: pointer;
-        }}
-
-        .regional-inventory-region summary strong {{
-            background: #084a61;
-            color: #fff;
-            border-radius: 999px;
-            padding: 4px 9px;
-            font-size: .72rem;
-        }}
-
-        .regional-inventory-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 12px;
-            padding: 14px;
-        }}
-
-        .regional-inventory-group {{
-            border: 1px solid #dbe6ef;
-            border-radius: 8px;
-            background: #f8fafc;
-            overflow: hidden;
-        }}
-
-        .regional-inventory-group header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            background: #084a61;
-            color: #fff;
-            font-weight: 900;
-            font-size: .8rem;
-            text-transform: uppercase;
-        }}
-
-        .regional-inventory-list {{
-            display: grid;
-            gap: 7px;
-            padding: 10px;
-        }}
-
-        .regional-inventory-device {{
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            align-items: flex-start;
-            border: 1px solid #dbe2ea;
-            border-radius: 8px;
-            background: #fff;
-            padding: 9px 10px;
-        }}
-
-        .regional-inventory-device strong {{
-            display: block;
-            color: #0f172a;
-            font-size: .84rem;
-            line-height: 1.25;
-            overflow-wrap: anywhere;
-        }}
-
-        .regional-inventory-device span,
-        .regional-inventory-device small {{
-            display: block;
-            margin-top: 3px;
-            color: #64748b;
-            font-size: .74rem;
-            line-height: 1.25;
-        }}
-
-        .regional-inventory-status {{
-            flex: 0 0 auto;
-            border-radius: 999px;
-            padding: 4px 8px;
-            font-size: .68rem;
-            font-weight: 900;
-            font-style: normal;
-            text-transform: uppercase;
-        }}
-
-        .regional-inventory-status.ok {{ color: #166534; background: #dcfce7; }}
-        .regional-inventory-status.warning {{ color: #854d0e; background: #fef3c7; }}
-        .regional-inventory-status.danger {{ color: #991b1b; background: #fee2e2; }}
-        .regional-inventory-status.neutral {{ color: #334155; background: #e2e8f0; }}
-        .regional-inventory-empty,
-        .regional-inventory-empty-filter {{
-            padding: 16px;
-            color: #64748b;
-            text-align: center;
-            font-size: .84rem;
-        }}
-
-        .infra-map-shell {{
-            background: linear-gradient(135deg, #0b2430 0%, #162f3a 58%, #203e49 100%);
-            border: 1px solid rgba(186, 230, 253, .22);
-            border-radius: 16px;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, .28);
-            overflow: hidden;
-            margin: 18px 0 28px;
-        }}
-
-        .infra-map-topbar {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 20px;
-            padding: 16px 20px;
-            background: rgba(8, 74, 97, .88);
-            color: #fff;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }}
-
-        .infra-map-topbar div {{
-            display: flex;
-            gap: 22px;
-            align-items: center;
-        }}
-
-        .infra-map-topbar span {{
-            font-weight: 900;
-            color: #dff6ff;
-        }}
-
-        .infra-map-topbar em {{
-            font-style: normal;
-            font-size: .78rem;
-            opacity: .82;
-        }}
-
-        .infra-map-layout {{
-            display: grid;
-            grid-template-columns: minmax(760px, 1fr) minmax(360px, 420px);
-            gap: 0;
-            height: clamp(680px, 78vh, 860px);
-            background: #102832;
-        }}
-
-        .infra-map-stage {{
-            position: relative;
-            min-height: 0;
-            background:
-                radial-gradient(circle at 30% 25%, rgba(14, 165, 233, .16), transparent 35%),
-                radial-gradient(circle at 72% 48%, rgba(34, 197, 94, .08), transparent 28%),
-                linear-gradient(135deg, #101f27, #172b34);
-            overflow: hidden;
-            cursor: grab;
-            touch-action: none;
-            user-select: none;
-        }}
-
-        .infra-map-stage::after {{
-            content: none;
-        }}
-
-        .infra-map-stage.is-dragging {{
-            cursor: grabbing;
-        }}
-
-        .infra-map-brazil {{
-            position: absolute;
-            inset: 12px 18px;
-            width: calc(100% - 36px);
-            height: calc(100% - 24px);
-            transform-origin: center center;
-            transition: transform .16s ease;
-            will-change: transform;
-        }}
-
-        .infra-map-state {{
-            fill: url(#infraMapLand);
-            stroke: rgba(148, 163, 184, .34);
-            stroke-width: 1;
-            vector-effect: non-scaling-stroke;
-            cursor: pointer;
-            transition: fill .16s ease, stroke .16s ease;
-        }}
-
-        .infra-map-state.ok {{ fill: #12382f; }}
-        .infra-map-state.warning {{ fill: #453615; }}
-        .infra-map-state.danger {{ fill: #471f25; }}
-
-        .infra-map-state:hover {{
-            fill: #244755;
-            stroke: rgba(186, 230, 253, .82);
-        }}
-
-        .infra-map-state-label {{
-            fill: rgba(226, 232, 240, .88);
-            font-size: 13px;
-            font-weight: 900;
-            text-anchor: middle;
-            dominant-baseline: middle;
-            pointer-events: none;
-            paint-order: stroke;
-            stroke: rgba(2, 6, 23, .72);
-            stroke-width: 3px;
-            letter-spacing: 0;
-        }}
-
-        .infra-map-state.active {{
-            stroke: #e0f2fe;
-            stroke-width: 2.4;
-            fill: #1f5466;
-        }}
-
-        .infra-map-stage.state-selected .infra-map-state:not(.active) {{
-            opacity: .35;
-        }}
-
-        .infra-map-dot {{
-            cursor: pointer;
-            outline: none;
-        }}
-
-        .infra-map-dot-halo {{
-            fill: rgba(255, 255, 255, .12);
-            stroke: rgba(255, 255, 255, .32);
-            stroke-width: 2;
-        }}
-
-        .infra-map-dot-core {{
-            fill: #94a3b8;
-            stroke: rgba(255, 255, 255, .72);
-            stroke-width: 2;
-            filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .35));
-        }}
-
-        .infra-map-dot.ok .infra-map-dot-core {{ fill: #22c55e; }}
-        .infra-map-dot.warning .infra-map-dot-core {{ fill: #f59e0b; }}
-        .infra-map-dot.danger .infra-map-dot-core {{ fill: #ef4444; }}
-        .infra-map-dot.active .infra-map-dot-halo {{
-            fill: rgba(14, 165, 233, .26);
-            stroke: rgba(125, 211, 252, .72);
-            stroke-width: 4;
-        }}
-
-        .infra-map-stage.filtering .infra-map-dot:not(.filter-match),
-        .infra-map-list.filtering .infra-map-list-item:not(.filter-match) {{
-            opacity: .22;
-        }}
-
-        .infra-map-dot.filter-match .infra-map-dot-halo {{
-            fill: rgba(14, 165, 233, .24);
-            stroke: rgba(125, 211, 252, .9);
-            stroke-width: 4;
-        }}
-
-        .infra-map-dot-tooltip {{
-            position: absolute;
-            z-index: 8;
-            left: 0;
-            top: 0;
-            transform: translate(-50%, calc(-100% - 14px));
-            pointer-events: none;
-            background: rgba(248, 250, 252, .98);
-            color: #0f172a;
-            border: 1px solid rgba(14, 116, 144, .28);
-            border-top: 4px solid #0e7490;
-            border-radius: 10px;
-            padding: 8px 12px;
-            box-shadow: 0 16px 32px rgba(2, 6, 23, .28);
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 0;
-            white-space: nowrap;
-        }}
-
-        .infra-map-dot-tooltip::after {{
-            content: "";
-            position: absolute;
-            left: 50%;
-            bottom: -7px;
-            width: 12px;
-            height: 12px;
-            transform: translateX(-50%) rotate(45deg);
-            background: rgba(248, 250, 252, .98);
-            border-right: 1px solid rgba(14, 116, 144, .22);
-            border-bottom: 1px solid rgba(14, 116, 144, .22);
-        }}
-
-        .infra-map-list-item.filter-match {{
-            outline: 2px solid #0ea5e9;
-        }}
-
-        .infra-map-hidden {{
-            display: none !important;
-        }}
-
-        .infra-map-side {{
-            position: relative;
-            z-index: 2;
-            background: transparent;
-            border-left: 0;
-            border-radius: 0;
-            margin: 16px 0 16px -28px;
-            padding: 16px 10px 16px 18px;
-            display: block;
-            min-height: 0;
-            overflow-y: auto;
-            overflow-x: visible;
-            box-shadow: none;
-            scrollbar-width: thin;
-            scrollbar-color: #6b7f8a transparent;
-        }}
-
-        .infra-map-side::-webkit-scrollbar {{
-            width: 10px;
-        }}
-
-        .infra-map-side::-webkit-scrollbar-track {{
-            background: transparent;
-        }}
-
-        .infra-map-side::-webkit-scrollbar-thumb {{
-            background: linear-gradient(180deg, #7f96a2, #526977);
-            border: 2px solid #102832;
-            border-radius: 999px;
-        }}
-
-        .infra-map-side::-webkit-scrollbar-corner {{
-            background: transparent;
-        }}
-
-        .infra-map-side::before {{
-            content: none;
-        }}
-
-        .infra-map-side::after {{
-            content: none;
-        }}
-
-        .infra-map-card {{
-            position: relative;
-            background: linear-gradient(145deg, #ffffff 0%, #f8fafc 56%, #e7eef5 100%);
-            border: 1px solid #cbd5e1;
-            border-top: 5px solid #0f6c8c;
-            border-radius: 18px;
-            padding: 16px;
-            box-shadow:
-                -14px 12px 34px rgba(2, 6, 23, .24),
-                0 22px 38px rgba(15, 23, 42, .16),
-                0 4px 0 rgba(148, 163, 184, .34),
-                inset 0 1px 0 rgba(255, 255, 255, .95),
-                inset 0 -12px 22px rgba(15, 23, 42, .045);
-            outline: 1px solid rgba(255, 255, 255, .78);
-            overflow: hidden;
-            margin-bottom: 12px;
-        }}
-
-        .infra-map-card::before {{
-            content: "";
-            position: absolute;
-            inset: 0;
-            border-radius: 18px;
-            pointer-events: none;
-            box-shadow:
-                inset 1px 1px 0 rgba(255, 255, 255, .92),
-                inset -1px -1px 0 rgba(15, 23, 42, .10);
-        }}
-
-        .infra-map-card.mode-ok {{ border-top-color: #22c55e; background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 58%, #dff7e9 100%); }}
-        .infra-map-card.mode-warning {{ border-top-color: #f59e0b; background: linear-gradient(145deg, #ffffff 0%, #fffbeb 58%, #fff1c7 100%); }}
-        .infra-map-card.mode-danger {{ border-top-color: #ef4444; background: linear-gradient(145deg, #ffffff 0%, #fff1f2 58%, #ffe0e4 100%); }}
-        .infra-map-card.mode-neutral {{ border-top-color: #0f6c8c; }}
-
-        .infra-map-card-head {{
-            display: grid;
-            gap: 8px;
-            border-bottom: 0;
-            padding-bottom: 11px;
-            margin-bottom: 11px;
-        }}
-
-        .infra-map-back {{
-            width: 34px;
-            height: 30px;
-            border: 1px solid #bae6fd;
-            border-radius: 8px;
-            background: #e0f2fe;
-            color: #075985;
-            font-size: 1.05rem;
-            font-weight: 900;
-            cursor: pointer;
-        }}
-
-        .infra-map-back:hover {{
-            background: #bae6fd;
-        }}
-
-        .infra-map-card h3 {{
-            margin: 0;
-            color: #0f172a;
-            font-size: 1.05rem;
-            overflow-wrap: anywhere;
-        }}
-
-        .infra-map-scope {{
-            margin: -2px 0 0;
-            color: #64748b;
-            font-size: .78rem;
-            line-height: 1.35;
-        }}
-
-        .infra-map-badge {{
-            width: max-content;
-            border-radius: 999px;
-            padding: 5px 10px;
-            font-size: .72rem;
-            font-weight: 900;
-            text-transform: uppercase;
-        }}
-
-        .infra-map-badge.ok {{ color: #166534; background: #dcfce7; }}
-        .infra-map-badge.warning {{ color: #854d0e; background: #fef3c7; }}
-        .infra-map-badge.danger {{ color: #991b1b; background: #fee2e2; }}
-        .infra-map-badge.neutral {{ color: #075985; background: #e0f2fe; }}
-
-        .infra-map-stats {{
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 7px;
-            margin: 14px 0;
-        }}
-
-        .infra-map-stats button,
-        .infra-map-stats div {{
-            border: 1px solid #d5e1ec;
-            border-radius: 9px;
-            padding: 8px;
-            background: linear-gradient(180deg, #ffffff 0%, #f3f7fb 100%);
-            text-align: left;
-            box-shadow:
-                0 2px 0 rgba(148, 163, 184, .28),
-                0 8px 16px rgba(15, 23, 42, .06),
-                inset 0 1px 0 rgba(255, 255, 255, .95);
-        }}
-
-        .infra-map-stats button {{
-            cursor: pointer;
-            transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease;
-        }}
-
-        .infra-map-stats button:hover,
-        .infra-map-stats button.active {{
-            border-color: #0ea5e9;
-            box-shadow: 0 8px 18px rgba(14, 165, 233, .16);
-            transform: translateY(-1px);
-        }}
-
-        .infra-map-stats .infra-map-stat-main {{
-            grid-column: 1 / -1;
-            background: linear-gradient(180deg, #effaff 0%, #dff3ff 100%);
-            border-color: #7dd3fc;
-        }}
-
-        .infra-map-stats .infra-map-stat-muted {{
-            background: linear-gradient(180deg, #f8fafc 0%, #e9eef4 100%);
-            border-color: #cbd5e1;
-        }}
-
-        .infra-map-stats .infra-map-stat-ok {{
-            background: linear-gradient(180deg, #f4fff8 0%, #e4fbea 100%);
-            border-color: #86efac;
-        }}
-
-        .infra-map-stats .infra-map-stat-alert {{
-            background: linear-gradient(180deg, #fff7f8 0%, #ffe7eb 100%);
-            border-color: #fda4af;
-        }}
-
-        .infra-map-stats .infra-map-stat-warning {{
-            background: linear-gradient(180deg, #fffdf4 0%, #fff3c4 100%);
-            border-color: #fbbf24;
-        }}
-
-        .infra-map-stats span {{
-            display: block;
-            color: #64748b;
-            font-size: .68rem;
-            font-weight: 800;
-            text-transform: uppercase;
-        }}
-
-        .infra-map-stats strong {{
-            display: block;
-            color: #0f172a;
-            font-size: 1.08rem;
-            line-height: 1.2;
-        }}
-
-        .infra-map-details {{
-            display: grid;
-            gap: 8px;
-            margin: 10px 0 12px;
-            max-height: none;
-            overflow: visible;
-            padding: 8px 2px 2px 0;
-            border-top: 0;
-        }}
-
-        .infra-map-templates {{
-            display: none;
-        }}
-
-        .infra-map-regional-detail-title {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            padding: 6px 2px 2px;
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 900;
-        }}
-
-        .infra-map-regional-detail-title span {{
-            border-radius: 999px;
-            background: #084a61;
-            color: #fff;
-            padding: 4px 8px;
-            font-size: .68rem;
-        }}
-
-        .infra-map-regional-detail-grid {{
-            display: grid;
-            gap: 8px;
-        }}
-
-        .infra-map-regional-detail-grid .regional-inventory-group header {{
-            padding: 8px 10px;
-            font-size: .72rem;
-        }}
-
-        .infra-map-regional-detail-grid .regional-inventory-list {{
-            padding: 8px;
-            gap: 6px;
-        }}
-
-        .infra-map-regional-detail-grid .regional-inventory-device {{
-            padding: 8px;
-        }}
-
-        .infra-map-detail-metric {{
-            border: 1px solid #dbe7f1;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #ffffff 0%, #f4f8fb 100%);
-            padding: 8px;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), 0 5px 12px rgba(15, 23, 42, .05);
-        }}
-
-        .infra-map-detail-metric-empty {{
-            opacity: .72;
-            border-style: dashed;
-        }}
-
-        .infra-map-detail-head {{
-            width: 100%;
-            display: grid;
-            grid-template-columns: 20px minmax(0, 1fr) auto;
-            gap: 8px;
-            align-items: center;
-            border: 0;
-            background: transparent;
-            padding: 0;
-            color: #334155;
-            text-align: left;
-            cursor: pointer;
-        }}
-
-        .infra-map-detail-icon {{
-            color: #0f6c8c;
-            text-align: center;
-        }}
-
-        .infra-map-detail-text span {{
-            display: block;
-            color: #475569;
-            font-size: .72rem;
-            font-weight: 900;
-            text-transform: uppercase;
-        }}
-
-        .infra-map-detail-text em {{
-            display: block;
-            color: #64748b;
-            font-style: normal;
-            font-size: .72rem;
-            line-height: 1.2;
-        }}
-
-        .infra-map-detail-head strong {{
-            color: #0f172a;
-            font-size: 1rem;
-        }}
-
-        .infra-map-detail-chips {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 7px;
-        }}
-
-        .infra-map-detail-chip {{
-            border: 1px solid #cbd5e1;
-            border-radius: 999px;
-            background: #fff;
-            color: #334155;
-            padding: 3px 7px;
-            font-size: .68rem;
-            font-weight: 800;
-            cursor: pointer;
-        }}
-
-        .infra-map-detail-chip.status-online {{ background: #ecfdf3; border-color: #86efac; }}
-        .infra-map-detail-chip.status-offline {{ background: #fff1f2; border-color: #fda4af; }}
-        .infra-map-detail-chip.status-warning {{ background: #fffbeb; border-color: #fbbf24; }}
-        .infra-map-detail-chip.status-inactive {{ background: #eef2f7; border-color: #cbd5e1; }}
-
-        .infra-map-detail-empty {{
-            border: 1px dashed #cbd5e1;
-            border-radius: 8px;
-            padding: 10px;
-            color: #64748b;
-            font-size: .76rem;
-            line-height: 1.35;
-            background: #f8fafc;
-        }}
-
-        .infra-map-state-regionals {{
-            display: grid;
-            gap: 6px;
-            margin-top: 8px;
-        }}
-
-        .infra-map-state-regional {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid #dbe7f1;
-            border-left: 4px solid #22c55e;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #ffffff 0%, #f5f8fb 100%);
-            color: #334155;
-            padding: 8px 9px;
-            font-size: .78rem;
-            font-weight: 900;
-            cursor: pointer;
-            text-align: left;
-            box-shadow: 0 2px 0 rgba(148, 163, 184, .24), 0 7px 14px rgba(15, 23, 42, .06);
-        }}
-
-        .infra-map-state-regional.warning {{ border-left-color: #f59e0b; }}
-        .infra-map-state-regional.danger {{ border-left-color: #ef4444; }}
-
-        .infra-map-open {{
-            width: 100%;
-            border: 0;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #0b5e78 0%, #073f54 100%);
-            color: #fff;
-            padding: 10px 12px;
-            font-weight: 900;
-            cursor: pointer;
-            box-shadow: 0 3px 0 rgba(2, 6, 23, .26), 0 10px 18px rgba(8, 74, 97, .20);
-        }}
-
-        .infra-map-reset {{
-            width: 100%;
-            border: 1px solid #bae6fd;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #f8fdff 0%, #e0f2fe 100%);
-            color: #075985;
-            padding: 9px 12px;
-            font-weight: 900;
-            cursor: pointer;
-            margin-bottom: 8px;
-            box-shadow: 0 2px 0 rgba(125, 211, 252, .28), 0 8px 14px rgba(14, 165, 233, .08);
-        }}
-
-        .infra-map-list {{
-            overflow: visible;
-            display: grid;
-            gap: 7px;
-            align-content: start;
-            padding-right: 2px;
-            filter: drop-shadow(-10px 10px 20px rgba(2, 6, 23, .18));
-        }}
-
-        .infra-map-list-item {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            border: 1px solid #dbe2ea;
-            border-left: 5px solid #22c55e;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #ffffff 0%, #f6f9fc 100%);
-            padding: 9px 10px;
-            color: #334155;
-            font-weight: 800;
-            cursor: pointer;
-            text-align: left;
-            box-shadow: 0 2px 0 rgba(148, 163, 184, .24), 0 8px 14px rgba(15, 23, 42, .06);
-        }}
-
-        .infra-map-list-item.warning {{ border-left-color: #f59e0b; }}
-        .infra-map-list-item.danger {{ border-left-color: #ef4444; }}
-        .infra-map-list-item.active {{ outline: 2px solid #0ea5e9; }}
-
-        @media (max-width: 980px) {{
-            .infra-map-layout {{
-                grid-template-columns: 1fr;
-            }}
-
-            .infra-map-side {{
-                border-left: 0;
-                border-top: 1px solid rgba(203, 213, 225, .45);
-            }}
         }}
 
         .regionais-parent {{
@@ -6724,18 +4653,14 @@ dashboard_html = f"""
 
         <div class="dashboard-view-tabs-wrap">
             <div class="dashboard-view-tabs" role="tablist" aria-label="Modo de visualização do dashboard">
-                <button type="button" class="dashboard-view-tab active" data-dashboard-view-target="map-view" role="tab" aria-selected="true">
-                    <i class="fas fa-map-marker-alt"></i> Por regional
-                </button>
-                <button type="button" class="dashboard-view-tab" data-dashboard-view-target="device-view" role="tab" aria-selected="false">
+                <button type="button" class="dashboard-view-tab active" data-dashboard-view-target="device-view" role="tab" aria-selected="true">
                     <i class="fas fa-server"></i> Por dispositivo
+                </button>
+                <button type="button" class="dashboard-view-tab" data-dashboard-view-target="regional-view" role="tab" aria-selected="false">
+                    <i class="fas fa-map-marker-alt"></i> Por regional
                 </button>
             </div>
         </div>
-
-        <section id="map-view" class="dashboard-view active" data-dashboard-view="map">
-            {infra_map_html}
-        </section>
 
         <section id="regional-view" class="dashboard-view" data-dashboard-view="regional">
         
@@ -6749,9 +4674,7 @@ dashboard_html = f"""
             <p>Este painel mostra, de forma simples, a situação das regionais: antenas, switches, servidores e links.</p>
         </div>
 
-        {regional_cards_html}
-
-        <div class="kpi-container regional-summary-legacy" hidden>
+        <div class="kpi-container">
             <div class="kpi nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
                 <div class="kpi-header">
                     <div class="kpi-icon error">
@@ -6889,7 +4812,7 @@ dashboard_html = f"""
 
         </section>
 
-        <section id="device-view" class="dashboard-view" data-dashboard-view="device">
+        <section id="device-view" class="dashboard-view active" data-dashboard-view="device">
 
         <div class="kpi-container">
             <div class="kpi nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0">
@@ -7054,81 +4977,79 @@ dashboard_html = f"""
 
         <hr class="divider">
 
-        <details id="regionais" class="details-section device-only-detail">
+        <details id="regionais" class="details-section">
             <summary>[SERVER] Status dos Servidores</summary>
             <div class="details-content">
                 {regionais_html}
             </div>
         </details>
 
-        {regional_inventory_html}
-
-        <details id="gps" class="details-section device-only-detail">
+        <details id="gps" class="details-section">
             <summary>[URL] Print GPS Amigo</summary>
             <div class="details-content">
                 {gps_html}
             </div>
         </details>
 
-        <details id="print-rede" class="details-section device-only-detail">
+        <details id="print-rede" class="details-section">
             <summary>[URL] Print Rede</summary>
             <div class="details-content">
                 {print_rede_html}
             </div>
         </details>
 
-        <details id="appgate" class="details-section device-only-detail">
+        <details id="appgate" class="details-section">
             <summary>[URL] Print Firewall Rio de Janeiro</summary>
             <div class="details-content">
                 {appgate_html}
             </div>
         </details>
 
-        <details id="unifi-clientes" class="details-section device-only-detail">
+        <details id="unifi-clientes" class="details-section">
             <summary>[URL] Print Rede MARTE</summary>
             <div class="details-content">
                 {unifi_clientes_html}
             </div>
         </details>
 
-        <details id="replicacao" class="details-section device-only-detail">
+        <details id="replicacao" class="details-section">
             <summary>[UPDATE] Status de Replicação do Active Directory</summary>
             <div class="details-content">
                 {rep_html}
             </div>
         </details>
 
-        <details id="unifi" class="details-section device-only-detail">
+        <details id="unifi" class="details-section">
             <summary> Status das Antenas UniFi (por site)</summary>
             <div class="details-content">
                 {unifi_html}
             </div>
         </details>
 
-        <details id="switches" class="details-section device-only-detail">
+        <details id="switches" class="details-section">
             <summary> Status dos Switches</summary>
             <div class="details-content">
                 {switches_html_content}
             </div>
         </details>
 
-        <details id="links" class="details-section device-only-detail">
+        <details id="links" class="details-section">
             <summary>Status dos Links de Internet</summary>
             <div class="details-content">
                 {links_html_content}
             </div>
         </details>
-        <details id="vpn-details" class="details-section device-only-detail">
+        <details id="vpn-details" class="details-section">
             <summary>[FORTIGATE] Status VPNs IPSEC</summary>
             <div class="details-content">
                 {vpn_html_content}
             </div>
         </details>
-        <details id="firewalls" class="details-section device-only-detail">
+        <details id="firewalls" class="details-section">
             <summary>Firewalls e Licenças</summary>
             <div class="details-content">{security_dashboard['firewall_detail']}</div>
         </details>
-        <details id="admin-monitor" class="details-section device-only-detail">
+        <details id="admin-monitor" class="details-section">
             <summary>Monitor de Admins</summary>
             <div class="details-content">{security_dashboard['admin_detail']}</div>
         </details>
@@ -7149,21 +5070,13 @@ function setDashboardView(viewId) {{
         tab.classList.toggle('active', active);
         tab.setAttribute('aria-selected', active ? 'true' : 'false');
     }});
-    document.querySelectorAll('.device-only-detail').forEach((detail) => {{
-        detail.hidden = targetId !== 'device-view';
-        if (detail.hidden) detail.open = false;
-    }});
-    document.querySelectorAll('.regional-only-detail').forEach((detail) => {{
-        detail.hidden = targetId !== 'regional-view';
-        if (detail.hidden) detail.open = false;
-    }});
     setTimeout(() => {{
         Object.values(Chart.instances || {{}}).forEach((chart) => chart.resize());
     }}, 0);
 }}
 
 function dashboardViewForDetail(detailId) {{
-    return detailId === 'regional-inventory' ? 'regional-view' : 'device-view';
+    return detailId === 'regionais' ? 'regional-view' : 'device-view';
 }}
 
 function resetUnifiSections(detail) {{
@@ -7239,58 +5152,6 @@ function resetRegionaisSection(detail) {{
     }});
 }}
 
-function resetRegionalInventorySection(detail) {{
-    detail.querySelectorAll('.regional-inventory-region').forEach((regional) => {{
-        regional.style.display = '';
-        regional.open = true;
-        regional.querySelectorAll('.regional-inventory-group').forEach((group) => {{
-            group.style.display = '';
-            group.querySelectorAll('.regional-inventory-device').forEach((device) => {{
-                device.style.display = '';
-            }});
-        }});
-    }});
-    const empty = detail.querySelector('.regional-inventory-empty-filter');
-    if (empty) empty.hidden = true;
-}}
-
-function filterRegionalInventorySection(detail, action, regionalFilter) {{
-    const regions = Array.from(detail.querySelectorAll('.regional-inventory-region'));
-    const parts = String(action || '').split('-').filter(Boolean);
-    const category = parts[0] || '';
-    const status = parts.slice(1).join('-');
-    let visibleRegions = 0;
-
-    regions.forEach((regional) => {{
-        const matchRegional = !regionalFilter || regional.dataset.regionalKey === regionalFilter;
-        let visibleGroups = 0;
-
-        regional.querySelectorAll('.regional-inventory-group').forEach((group) => {{
-            const matchCategory = !category || group.dataset.deviceType === category;
-            let visibleDevices = 0;
-
-            group.querySelectorAll('.regional-inventory-device').forEach((device) => {{
-                const matchStatus = !status || device.dataset.status === status;
-                const showDevice = matchRegional && matchCategory && matchStatus;
-                device.style.display = showDevice ? '' : 'none';
-                if (showDevice) visibleDevices += 1;
-            }});
-
-            const showGroup = matchRegional && matchCategory && (visibleDevices > 0 || !status);
-            group.style.display = showGroup ? '' : 'none';
-            if (showGroup) visibleGroups += 1;
-        }});
-
-        const showRegional = matchRegional && visibleGroups > 0;
-        regional.style.display = showRegional ? '' : 'none';
-        regional.open = showRegional;
-        if (showRegional) visibleRegions += 1;
-    }});
-
-    const empty = detail.querySelector('.regional-inventory-empty-filter');
-    if (empty) empty.hidden = visibleRegions > 0;
-}}
-
 function resetLinksSection(detail) {{
     detail.querySelectorAll('.link-item').forEach((item) => {{
         item.style.display = '';
@@ -7359,7 +5220,6 @@ function filterSecuritySection(detail, action) {{
 function resetSectionFilters(detail) {{
     if (!detail) return;
     if (detail.id === 'regionais') resetRegionaisSection(detail);
-    if (detail.id === 'regional-inventory') resetRegionalInventorySection(detail);
     if (detail.id === 'unifi') resetUnifiSections(detail);
     if (detail.id === 'switches') resetSwitchesSection(detail);
     if (detail.id === 'links') resetLinksSection(detail);
@@ -7367,7 +5227,7 @@ function resetSectionFilters(detail) {{
     if (detail.id === 'firewalls' || detail.id === 'admin-monitor') resetSecuritySection(detail);
 }}
 
-function abrirEIrParaDetalhe(detailTarget, regionalFilter) {{
+function abrirEIrParaDetalhe(detailTarget) {{
     const parts = String(detailTarget || '').split('-');
     let detailId = detailTarget;
     let action = '';
@@ -7393,7 +5253,6 @@ function abrirEIrParaDetalhe(detailTarget, regionalFilter) {{
         const regionalItems = detail.querySelectorAll('.regional-item');
         if (action === 'offline' || action === 'online' || action === 'warning') {{
             regionalItems.forEach((item) => {{
-                const matchRegional = !regionalFilter || item.dataset.regionalKey === regionalFilter;
                 const serverCards = item.querySelectorAll('.regional-server-card');
                 let hasMatchingServer = false;
 
@@ -7405,32 +5264,20 @@ function abrirEIrParaDetalhe(detailTarget, regionalFilter) {{
                             'online'
                         );
                         const matchCard = cardStatus === action;
-                        card.style.display = (matchRegional && matchCard) ? '' : 'none';
-                        hasMatchingServer = hasMatchingServer || (matchRegional && matchCard);
+                        card.style.display = matchCard ? '' : 'none';
+                        hasMatchingServer = hasMatchingServer || matchCard;
                     }});
                 }} else {{
-                    hasMatchingServer = matchRegional && item.dataset.status === action;
+                    hasMatchingServer = item.dataset.status === action;
                 }}
 
-                const match = matchRegional && (hasMatchingServer || item.dataset.status === action);
+                const match = hasMatchingServer || item.dataset.status === action;
                 item.style.display = match ? '' : 'none';
                 item.open = match;
             }});
         }} else {{
             resetRegionaisSection(detail);
-            if (regionalFilter) {{
-                regionalItems.forEach((item) => {{
-                    const matchRegional = item.dataset.regionalKey === regionalFilter;
-                    item.style.display = matchRegional ? '' : 'none';
-                    item.open = matchRegional;
-                }});
-            }}
         }}
-    }}
-
-    if (detailId === 'regional-inventory') {{
-        resetRegionalInventorySection(detail);
-        filterRegionalInventorySection(detail, action, regionalFilter);
     }}
 
     if (detailId === 'unifi') {{
@@ -7535,16 +5382,16 @@ function navegarPeloGrafico(chartId, datasetIndex) {{
         chartDeviceSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
         chartDeviceLinks: ['links-online', 'links-offline', 'links-inativo'],
         chartDeviceVpn: ['vpn-details-online', 'vpn-details-offline'],
-        chartDeviceFirewalls: ['firewalls-ok', 'firewalls-warning', 'firewalls-expirado', 'firewalls-sem-sinal'],
+        chartDeviceFirewalls: ['firewalls-ok', 'firewalls-warning', 'firewalls-expirado'],
         chartDeviceAdmins: ['admin-monitor-ok', 'admin-monitor-alerta', 'admin-monitor-offline', 'admin-monitor-sem-permissao'],
-        chartRegionalServers: ['regional-inventory-servidores-online', 'regional-inventory-servidores-offline', 'regional-inventory-servidores-warning'],
-        chartRegionalUnifi: ['regional-inventory-aps-online', 'regional-inventory-aps-offline'],
+        chartRegionalServers: ['regionais-online', 'regionais-offline', 'regionais-warning'],
+        chartRegionalUnifi: ['unifi-online', 'unifi-offline'],
         chartRegionalReplicacao: ['replicacao', 'replicacao'],
-        chartRegionalSwitches: ['regional-inventory-switches-online', 'regional-inventory-switches-offline', 'regional-inventory-switches-warning', 'regional-inventory-switches-inativo'],
-        chartRegionalLinks: ['regional-inventory-links-online', 'regional-inventory-links-offline', 'regional-inventory-links-inativo'],
-        chartRegionalVpn: ['regional-inventory-vpns-online', 'regional-inventory-vpns-offline'],
-        chartRegionalFirewalls: ['regional-inventory-firewalls-ok', 'regional-inventory-firewalls-warning', 'regional-inventory-firewalls-expirado', 'regional-inventory-firewalls-sem-sinal'],
-        chartRegionalAdmins: ['regional-inventory-admins-ok', 'regional-inventory-admins-alerta', 'regional-inventory-admins-offline', 'regional-inventory-admins-sem-permissao'],
+        chartRegionalSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
+        chartRegionalLinks: ['links-regional-online', 'links-regional-offline', 'links-regional-inativo'],
+        chartRegionalVpn: ['vpn-details-online', 'vpn-details-offline'],
+        chartRegionalFirewalls: ['firewalls-regional-ok', 'firewalls-regional-warning', 'firewalls-regional-expirado'],
+        chartRegionalAdmins: ['admin-monitor-regional-ok', 'admin-monitor-regional-alerta', 'admin-monitor-regional-offline', 'admin-monitor-regional-sem-permissao'],
     }};
 
     const rota = (rotas[chartId] && rotas[chartId][datasetIndex]) || null;
@@ -7556,7 +5403,7 @@ function navegarPeloGrafico(chartId, datasetIndex) {{
 document.querySelectorAll('[data-detail-target]').forEach((elemento) => {{
     const navegar = (event) => {{
         if (event) event.stopPropagation();
-        abrirEIrParaDetalhe(elemento.dataset.detailTarget, elemento.dataset.regionalFilter || '');
+        abrirEIrParaDetalhe(elemento.dataset.detailTarget);
     }};
     elemento.addEventListener('click', navegar);
     elemento.addEventListener('keydown', (event) => {{
@@ -7567,642 +5414,11 @@ document.querySelectorAll('[data-detail-target]').forEach((elemento) => {{
     }});
 }});
 
-document.addEventListener('click', (event) => {{
-    const dynamicTarget = event.target.closest('.infra-map-details [data-detail-target]');
-    if (!dynamicTarget) return;
-    event.preventDefault();
-    event.stopPropagation();
-    abrirEIrParaDetalhe(dynamicTarget.dataset.detailTarget, dynamicTarget.dataset.regionalFilter || '');
-}});
-
 document.querySelectorAll('.dashboard-view-tab').forEach((tab) => {{
     tab.addEventListener('click', () => {{
         setDashboardView(tab.dataset.dashboardViewTarget);
     }});
 }});
-
-let infraMapSelectedRegional = '';
-let infraMapSelectedUf = '';
-const infraMapView = {{
-    scale: 1,
-    x: 0,
-    y: 0,
-    dragging: false,
-    moved: false,
-    startX: 0,
-    startY: 0,
-    baseX: 0,
-    baseY: 0,
-}};
-
-function clampInfraMapPan() {{
-    if (infraMapView.scale <= 1) {{
-        infraMapView.x = 0;
-        infraMapView.y = 0;
-        return;
-    }}
-    const limitX = 260 * (infraMapView.scale - 1);
-    const limitY = 220 * (infraMapView.scale - 1);
-    infraMapView.x = Math.max(-limitX, Math.min(limitX, infraMapView.x));
-    infraMapView.y = Math.max(-limitY, Math.min(limitY, infraMapView.y));
-}}
-
-function applyInfraMapView() {{
-    const map = document.querySelector('.infra-map-brazil');
-    if (!map) return;
-    clampInfraMapPan();
-    map.style.transform = `translate(${{infraMapView.x}}px, ${{infraMapView.y}}px) scale(${{infraMapView.scale}})`;
-}}
-
-function resetInfraMapView() {{
-    infraMapView.scale = 1;
-    infraMapView.x = 0;
-    infraMapView.y = 0;
-    applyInfraMapView();
-}}
-
-function initInfraMapNavigation() {{
-    const stage = document.querySelector('.infra-map-stage');
-    if (!stage) return;
-    const tooltip = document.getElementById('infraMapDotTooltip');
-    let tooltipTimer = null;
-    let tooltipTarget = null;
-
-    const hideDotTooltip = () => {{
-        window.clearTimeout(tooltipTimer);
-        tooltipTimer = null;
-        tooltipTarget = null;
-        if (tooltip) {{
-            tooltip.hidden = true;
-            tooltip.textContent = '';
-        }}
-    }};
-
-    const positionDotTooltip = (event) => {{
-        if (!tooltip || tooltip.hidden) return;
-        const rect = stage.getBoundingClientRect();
-        const padding = 18;
-        const x = Math.max(padding, Math.min(event.clientX - rect.left, rect.width - padding));
-        const y = Math.max(padding, Math.min(event.clientY - rect.top, rect.height - padding));
-        tooltip.style.left = `${{x}}px`;
-        tooltip.style.top = `${{y}}px`;
-    }};
-
-    const scheduleDotTooltip = (dot, event) => {{
-        if (!tooltip || !dot) return;
-        hideDotTooltip();
-        tooltipTarget = dot;
-        const regional = dot.dataset.regional || dot.getAttribute('aria-label') || 'Regional';
-        tooltipTimer = window.setTimeout(() => {{
-            if (tooltipTarget !== dot) return;
-            tooltip.textContent = regional;
-            tooltip.hidden = false;
-            positionDotTooltip(event);
-        }}, 5000);
-    }};
-
-    stage.addEventListener('pointerover', (event) => {{
-        const dot = event.target.closest && event.target.closest('.infra-map-dot');
-        if (!dot || !stage.contains(dot)) return;
-        scheduleDotTooltip(dot, event);
-    }});
-
-    stage.addEventListener('pointermove', (event) => {{
-        positionDotTooltip(event);
-    }});
-
-    stage.addEventListener('pointerout', (event) => {{
-        const dot = event.target.closest && event.target.closest('.infra-map-dot');
-        if (!dot) return;
-        const related = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest('.infra-map-dot') : null;
-        if (related === dot) return;
-        hideDotTooltip();
-    }});
-
-    stage.addEventListener('wheel', (event) => {{
-        hideDotTooltip();
-        event.preventDefault();
-        const delta = event.deltaY > 0 ? -0.12 : 0.12;
-        infraMapView.scale = Math.max(1, Math.min(2.6, Number((infraMapView.scale + delta).toFixed(2))));
-        applyInfraMapView();
-    }}, {{ passive: false }});
-
-    stage.addEventListener('pointerdown', (event) => {{
-        hideDotTooltip();
-        if (event.button !== 0) return;
-        if (event.target.closest && event.target.closest('.infra-map-state, .infra-map-dot')) return;
-        infraMapView.dragging = true;
-        infraMapView.moved = false;
-        infraMapView.startX = event.clientX;
-        infraMapView.startY = event.clientY;
-        infraMapView.baseX = infraMapView.x;
-        infraMapView.baseY = infraMapView.y;
-        stage.classList.add('is-dragging');
-        stage.setPointerCapture(event.pointerId);
-    }});
-
-    stage.addEventListener('pointermove', (event) => {{
-        if (!infraMapView.dragging || infraMapView.scale <= 1) return;
-        const dx = event.clientX - infraMapView.startX;
-        const dy = event.clientY - infraMapView.startY;
-        if (Math.abs(dx) + Math.abs(dy) > 4) infraMapView.moved = true;
-        infraMapView.x = infraMapView.baseX + dx;
-        infraMapView.y = infraMapView.baseY + dy;
-        applyInfraMapView();
-    }});
-
-    stage.addEventListener('pointerup', (event) => {{
-        infraMapView.dragging = false;
-        stage.classList.remove('is-dragging');
-        try {{
-            stage.releasePointerCapture(event.pointerId);
-        }} catch (error) {{}}
-        window.setTimeout(() => {{
-            infraMapView.moved = false;
-        }}, 0);
-    }});
-
-    stage.addEventListener('dblclick', () => resetInfraMapView());
-}}
-
-function infraMapStatusLabel(status) {{
-    if (status === 'danger') return 'Crítico';
-    if (status === 'warning') return 'Atenção';
-    return 'OK';
-}}
-
-function updateInfraMapPanel(source) {{
-    if (!source) return;
-
-    infraMapSelectedRegional = source.dataset.regional || '';
-    document.querySelectorAll('.infra-map-dot, .infra-map-list-item').forEach((item) => {{
-        item.classList.toggle('active', item.dataset.regional === infraMapSelectedRegional);
-    }});
-
-    const status = source.dataset.status || 'ok';
-    const statusBadge = document.getElementById('infraMapStatus');
-    if (statusBadge) {{
-        statusBadge.className = `infra-map-badge ${{status}}`;
-        statusBadge.textContent = infraMapStatusLabel(status);
-    }}
-    setInfraMapCardMode(status === 'danger' ? 'danger' : status === 'warning' ? 'warning' : 'ok');
-
-    const fields = {{
-        infraMapRegional: infraMapSelectedRegional || 'Regional',
-        infraMapServidoresOnline: source.dataset.servidoresOnline || '0',
-        infraMapServidoresOffline: source.dataset.servidoresOffline || '0',
-        infraMapServidoresWarning: source.dataset.servidoresWarning || '0',
-        infraMapApsOnline: source.dataset.apsOnline || '0',
-        infraMapApsOffline: source.dataset.apsOffline || '0',
-        infraMapSwitchesOnline: source.dataset.switchesOnline || '0',
-        infraMapSwitchesOffline: source.dataset.switchesOffline || '0',
-        infraMapSwitchesWarning: source.dataset.switchesWarning || '0',
-        infraMapVpnsOnline: source.dataset.vpnsOnline || '0',
-        infraMapVpnsOffline: source.dataset.vpnsOffline || '0',
-        infraMapLinksOnline: source.dataset.linksOnline || '0',
-        infraMapLinksOffline: source.dataset.linksOffline || '0',
-        infraMapFirewallsAlerta: source.dataset.firewallsAlerta || '0',
-        infraMapAdminsAlerta: source.dataset.adminsAlerta || '0',
-    }};
-    setInfraMapStatsMode('summary');
-
-    Object.entries(fields).forEach(([id, value]) => {{
-        const element = document.getElementById(id);
-        if (element) element.textContent = value;
-    }});
-
-    const details = document.getElementById('infraMapDetails');
-    if (details) {{
-        const template = source.dataset.detailsId ? document.getElementById(source.dataset.detailsId) : null;
-        details.innerHTML = template ? template.innerHTML : '';
-    }}
-    clearInfraMapDetailFilter();
-    setInfraMapBackVisible(true);
-    setInfraMapListVisible(false);
-}}
-
-function setInfraMapCardMode(mode) {{
-    const card = document.querySelector('.infra-map-card');
-    if (!card) return;
-    card.classList.remove('mode-neutral', 'mode-ok', 'mode-warning', 'mode-danger');
-    card.classList.add(`mode-${{mode || 'neutral'}}`);
-}}
-
-function setInfraMapStatsMode(mode) {{
-    const initialStats = document.getElementById('infraMapInitialStats');
-    const summaryStats = document.getElementById('infraMapSummaryStats');
-    if (initialStats) initialStats.hidden = mode !== 'initial';
-    if (summaryStats) summaryStats.hidden = mode !== 'summary';
-}}
-
-function setInfraMapBackVisible(visible) {{
-    const back = document.getElementById('infraMapBack');
-    if (back) back.hidden = !visible;
-}}
-
-function setInfraMapListVisible(visible) {{
-    const list = document.querySelector('.infra-map-list');
-    if (list) list.hidden = !visible;
-}}
-
-function clearInfraMapDetailFilter() {{
-    document.querySelectorAll('[data-detail-filter-type]').forEach((button) => button.classList.remove('active'));
-    const details = document.getElementById('infraMapDetails');
-    if (!details) return;
-    details.querySelectorAll('.regional-inventory-group').forEach((group) => {{
-        group.hidden = false;
-        group.classList.remove('filter-match');
-    }});
-    details.querySelectorAll('.regional-inventory-device').forEach((device) => {{
-        device.hidden = false;
-        device.classList.remove('filter-match');
-    }});
-    details.querySelectorAll('.infra-map-detail-filter-empty').forEach((empty) => empty.remove());
-}}
-
-function applyInfraMapDetailFilter(button) {{
-    if (!button || !infraMapSelectedRegional) return;
-    const type = button.dataset.detailFilterType || '';
-    const statuses = (button.dataset.detailFilterStatus || '')
-        .split(',')
-        .map((status) => status.trim().toLowerCase())
-        .filter(Boolean);
-    const alreadyActive = button.classList.contains('active');
-    clearInfraMapDetailFilter();
-    if (alreadyActive || !type || !statuses.length) return;
-    button.classList.add('active');
-
-    const details = document.getElementById('infraMapDetails');
-    if (!details) return;
-    let visibleCount = 0;
-    details.querySelectorAll('.regional-inventory-group').forEach((group) => {{
-        const groupMatch = group.dataset.deviceType === type;
-        let groupVisible = false;
-        group.querySelectorAll('.regional-inventory-device').forEach((device) => {{
-            const status = (device.dataset.status || '').toLowerCase();
-            const visible = groupMatch && statuses.includes(status);
-            device.hidden = !visible;
-            device.classList.toggle('filter-match', visible);
-            if (visible) {{
-                groupVisible = true;
-                visibleCount += 1;
-            }}
-        }});
-        group.hidden = !groupVisible;
-        group.classList.toggle('filter-match', groupVisible);
-    }});
-
-    if (!visibleCount) {{
-        const label = button.querySelector('span')?.textContent || 'Filtro';
-        details.insertAdjacentHTML('beforeend', `<div class="infra-map-detail-empty infra-map-detail-filter-empty">Nenhum item encontrado para: ${{label}}.</div>`);
-    }}
-}}
-
-function buildInfraMapRegionalSummary(items) {{
-    const regionais = items.filter((item) => item.classList.contains('infra-map-list-item'));
-    const totals = {{
-        total: regionais.length,
-        comServidores: 0,
-        comLinks: 0,
-        comSwitches: 0,
-        firewallWarning: 0,
-    }};
-
-    regionais.forEach((item) => {{
-        if (Number(item.dataset.servidores || 0) > 0) totals.comServidores += 1;
-        if (Number(item.dataset.links || 0) > 0) totals.comLinks += 1;
-        if (Number(item.dataset.switches || 0) > 0) totals.comSwitches += 1;
-        if (Number(item.dataset.firewallWarning || 0) > 0) totals.firewallWarning += 1;
-    }});
-
-    return {{
-        regionais,
-        fields: {{
-            infraMapTotalRegionais: String(totals.total),
-            infraMapComServidores: String(totals.comServidores),
-            infraMapSemServidores: String(Math.max(totals.total - totals.comServidores, 0)),
-            infraMapComLinks: String(totals.comLinks),
-            infraMapSemLinks: String(Math.max(totals.total - totals.comLinks, 0)),
-            infraMapComSwitches: String(totals.comSwitches),
-            infraMapSemSwitches: String(Math.max(totals.total - totals.comSwitches, 0)),
-            infraMapFirewallWarning: String(totals.firewallWarning),
-        }}
-    }};
-}}
-
-function resetInfraMapPanel() {{
-    infraMapSelectedRegional = '';
-    infraMapSelectedUf = '';
-    document.querySelectorAll('.infra-map-dot, .infra-map-list-item').forEach((item) => {{
-        item.classList.remove('active');
-        item.hidden = false;
-        item.classList.remove('infra-map-hidden', 'filter-match');
-    }});
-    document.querySelectorAll('.infra-map-state').forEach((state) => {{
-        state.classList.remove('active');
-    }});
-    const stage = document.querySelector('.infra-map-stage');
-    if (stage) stage.classList.remove('state-selected', 'filtering');
-    const regionalList = document.querySelector('.infra-map-list');
-    if (regionalList) regionalList.classList.remove('filtering');
-    setInfraMapListVisible(true);
-    document.querySelectorAll('[data-map-filter]').forEach((button) => button.classList.remove('active'));
-
-    const statusBadge = document.getElementById('infraMapStatus');
-    if (statusBadge) {{
-        statusBadge.className = 'infra-map-badge neutral';
-        statusBadge.textContent = 'Brasil';
-    }}
-    setInfraMapCardMode('neutral');
-    setInfraMapStatsMode('initial');
-    setInfraMapBackVisible(false);
-
-    const summary = buildInfraMapRegionalSummary(Array.from(document.querySelectorAll('.infra-map-list-item')));
-    const fields = {{
-        infraMapRegional: 'Brasil completo',
-        ...summary.fields,
-    }};
-
-    Object.entries(fields).forEach(([id, value]) => {{
-        const element = document.getElementById(id);
-        if (element) element.textContent = value;
-    }});
-
-    const details = document.getElementById('infraMapDetails');
-    if (details) {{
-        details.innerHTML = '<div class="infra-map-detail-empty">Selecione uma regional para ver servidores, APs, switches, links, VPNs, firewalls e admins.</div>';
-    }}
-}}
-
-function infraMapMatchesFilter(item, filter) {{
-    const servidores = Number(item.dataset.servidores || 0);
-    const links = Number(item.dataset.links || 0);
-    const switches = Number(item.dataset.switches || 0);
-    const firewallWarning = Number(item.dataset.firewallWarning || 0);
-
-    if (!filter || filter === 'all') return true;
-    if (filter === 'com-servidores') return servidores > 0;
-    if (filter === 'sem-servidores') return servidores <= 0;
-    if (filter === 'com-links') return links > 0;
-    if (filter === 'sem-links') return links <= 0;
-    if (filter === 'com-switches') return switches > 0;
-    if (filter === 'sem-switches') return switches <= 0;
-    if (filter === 'firewall-warning') return firewallWarning > 0;
-    return true;
-}}
-
-function applyInfraMapCounterFilter(filter, label) {{
-    infraMapSelectedRegional = '';
-    infraMapSelectedUf = '';
-    setInfraMapListVisible(true);
-
-    document.querySelectorAll('.infra-map-state').forEach((state) => state.classList.remove('active'));
-    const stage = document.querySelector('.infra-map-stage');
-    if (stage) {{
-        stage.classList.remove('state-selected');
-        stage.classList.toggle('filtering', !!filter && filter !== 'all');
-    }}
-
-    const list = document.querySelector('.infra-map-list');
-    if (list) {{
-        list.classList.toggle('filtering', !!filter && filter !== 'all');
-        list.scrollTop = 0;
-    }}
-
-    document.querySelectorAll('[data-map-filter]').forEach((button) => {{
-        button.classList.toggle('active', (button.dataset.mapFilter || 'all') === (filter || 'all'));
-    }});
-
-    const listItems = Array.from(document.querySelectorAll('.infra-map-list-item'));
-    const matches = listItems.filter((item) => infraMapMatchesFilter(item, filter));
-    listItems.forEach((item) => {{
-        const match = infraMapMatchesFilter(item, filter);
-        item.hidden = !!filter && filter !== 'all' && !match;
-        item.classList.toggle('infra-map-hidden', !!filter && filter !== 'all' && !match);
-        item.classList.toggle('filter-match', !!filter && filter !== 'all' && match);
-        item.classList.remove('active');
-    }});
-
-    document.querySelectorAll('.infra-map-dot').forEach((dot) => {{
-        const target = listItems.find((item) => item.dataset.regional === dot.dataset.regional);
-        const match = target ? infraMapMatchesFilter(target, filter) : false;
-        dot.classList.toggle('filter-match', !!filter && filter !== 'all' && match);
-        dot.classList.remove('active');
-    }});
-
-    setInfraMapCardMode(filter && filter !== 'all' ? 'warning' : 'neutral');
-    setInfraMapStatsMode('initial');
-    setInfraMapBackVisible(!!filter && filter !== 'all');
-    setInfraMapScopeText(
-        filter && filter !== 'all'
-            ? `Filtro aplicado: ${{label}}. Clique em uma regional ou ponto destacado para ver os detalhes.`
-            : 'Clique em um estado para ver suas regionais.'
-    );
-
-    const regionalTitle = document.getElementById('infraMapRegional');
-    if (regionalTitle) regionalTitle.textContent = filter && filter !== 'all' ? `${{label}} (${{matches.length}})` : 'Brasil completo';
-    const statusBadge = document.getElementById('infraMapStatus');
-    if (statusBadge) {{
-        statusBadge.className = `infra-map-badge ${{filter && filter !== 'all' ? 'warning' : 'neutral'}}`;
-        statusBadge.textContent = filter && filter !== 'all' ? 'Filtro' : 'Brasil';
-    }}
-
-    const details = document.getElementById('infraMapDetails');
-    if (details) {{
-        details.innerHTML = filter && filter !== 'all'
-            ? `<div class="infra-map-detail-empty">${{matches.length}} regional(is) encontradas para este filtro.</div>`
-            : '<div class="infra-map-detail-empty">Selecione uma regional para ver servidores, APs, switches, links, VPNs, firewalls e admins.</div>';
-    }}
-}}
-
-function updateInfraMapStatePanel(uf, matchingItems) {{
-    infraMapSelectedRegional = '';
-    setInfraMapListVisible(true);
-    document.querySelectorAll('.infra-map-dot, .infra-map-list-item').forEach((item) => {{
-        item.classList.remove('active');
-    }});
-
-    const statusBadge = document.getElementById('infraMapStatus');
-    if (statusBadge) {{
-        statusBadge.className = 'infra-map-badge neutral';
-        statusBadge.textContent = uf || 'Estado';
-    }}
-
-    const regionais = matchingItems.filter((item) => item.classList.contains('infra-map-list-item'));
-    const fields = {{
-        infraMapRegional: uf ? `Regionais de ${{uf}}` : 'Brasil completo',
-        infraMapServidoresOnline: '0',
-        infraMapServidoresOffline: '0',
-        infraMapServidoresWarning: '0',
-        infraMapApsOnline: '0',
-        infraMapApsOffline: '0',
-        infraMapSwitchesOnline: '0',
-        infraMapSwitchesOffline: '0',
-        infraMapSwitchesWarning: '0',
-        infraMapVpnsOnline: '0',
-        infraMapVpnsOffline: '0',
-        infraMapLinksOnline: '0',
-        infraMapLinksOffline: '0',
-        infraMapFirewallsAlerta: '0',
-        infraMapAdminsAlerta: '0',
-    }};
-    regionais.forEach((item) => {{
-        fields.infraMapServidoresOnline = String(Number(fields.infraMapServidoresOnline) + Number(item.dataset.servidoresOnline || 0));
-        fields.infraMapServidoresOffline = String(Number(fields.infraMapServidoresOffline) + Number(item.dataset.servidoresOffline || 0));
-        fields.infraMapServidoresWarning = String(Number(fields.infraMapServidoresWarning) + Number(item.dataset.servidoresWarning || 0));
-        fields.infraMapApsOnline = String(Number(fields.infraMapApsOnline) + Number(item.dataset.apsOnline || 0));
-        fields.infraMapApsOffline = String(Number(fields.infraMapApsOffline) + Number(item.dataset.apsOffline || 0));
-        fields.infraMapSwitchesOnline = String(Number(fields.infraMapSwitchesOnline) + Number(item.dataset.switchesOnline || 0));
-        fields.infraMapSwitchesOffline = String(Number(fields.infraMapSwitchesOffline) + Number(item.dataset.switchesOffline || 0));
-        fields.infraMapSwitchesWarning = String(Number(fields.infraMapSwitchesWarning) + Number(item.dataset.switchesWarning || 0));
-        fields.infraMapVpnsOnline = String(Number(fields.infraMapVpnsOnline) + Number(item.dataset.vpnsOnline || 0));
-        fields.infraMapVpnsOffline = String(Number(fields.infraMapVpnsOffline) + Number(item.dataset.vpnsOffline || 0));
-        fields.infraMapLinksOnline = String(Number(fields.infraMapLinksOnline) + Number(item.dataset.linksOnline || 0));
-        fields.infraMapLinksOffline = String(Number(fields.infraMapLinksOffline) + Number(item.dataset.linksOffline || 0));
-        fields.infraMapFirewallsAlerta = String(Number(fields.infraMapFirewallsAlerta) + Number(item.dataset.firewallsAlerta || 0));
-        fields.infraMapAdminsAlerta = String(Number(fields.infraMapAdminsAlerta) + Number(item.dataset.adminsAlerta || 0));
-    }});
-    const stateHasDanger = regionais.some((item) => item.dataset.status === 'danger');
-    const stateHasWarning = regionais.some((item) => item.dataset.status === 'warning');
-    setInfraMapCardMode(stateHasDanger ? 'danger' : stateHasWarning ? 'warning' : 'ok');
-    setInfraMapStatsMode('summary');
-
-    Object.entries(fields).forEach(([id, value]) => {{
-        const element = document.getElementById(id);
-        if (element) element.textContent = value;
-    }});
-
-    const details = document.getElementById('infraMapDetails');
-    if (details) {{
-        details.innerHTML = `<div class="infra-map-detail-empty">${{regionais.length}} regional(is) neste estado. Use a lista lateral abaixo para abrir os detalhes de cada regional.</div>`;
-    }}
-    setInfraMapBackVisible(true);
-}}
-
-function setInfraMapScopeText(text) {{
-    const scope = document.getElementById('infraMapScope');
-    if (scope) scope.textContent = text;
-}}
-
-function selectInfraMapUf(uf) {{
-    const nextUf = uf || '';
-    infraMapSelectedUf = nextUf && nextUf === infraMapSelectedUf ? '' : nextUf;
-    const stage = document.querySelector('.infra-map-stage');
-    if (stage) {{
-        stage.classList.toggle('state-selected', !!infraMapSelectedUf);
-        stage.classList.remove('filtering');
-    }}
-    const regionalListFilter = document.querySelector('.infra-map-list');
-    if (regionalListFilter) regionalListFilter.classList.remove('filtering');
-    document.querySelectorAll('[data-map-filter]').forEach((button) => button.classList.remove('active'));
-
-    document.querySelectorAll('.infra-map-state').forEach((state) => {{
-        state.classList.toggle('active', !!infraMapSelectedUf && state.dataset.uf === infraMapSelectedUf);
-    }});
-
-    const matchingItems = Array.from(document.querySelectorAll('.infra-map-dot, .infra-map-list-item')).filter((item) => {{
-        const match = !infraMapSelectedUf || item.dataset.uf === infraMapSelectedUf;
-        item.hidden = !match;
-        item.classList.toggle('infra-map-hidden', !match);
-        item.classList.remove('filter-match');
-        return match;
-    }});
-    document.querySelectorAll('.infra-map-dot').forEach((dot) => dot.classList.remove('filter-match'));
-
-    const regionalList = document.querySelector('.infra-map-list');
-    if (regionalList) {{
-        regionalList.scrollTop = 0;
-    }}
-
-    setInfraMapScopeText(
-        infraMapSelectedUf
-            ? `Regionais de ${{infraMapSelectedUf}}. Clique em uma regional para ver os detalhes.`
-            : 'Clique em um estado para ver suas regionais.'
-    );
-
-    if (infraMapSelectedUf) {{
-        updateInfraMapStatePanel(infraMapSelectedUf, matchingItems);
-    }} else {{
-        resetInfraMapPanel();
-    }}
-}}
-
-document.addEventListener('click', (event) => {{
-    const mapPoint = event.target.closest('.infra-map-dot, .infra-map-list-item');
-    if (mapPoint) {{
-        event.preventDefault();
-        event.stopPropagation();
-        updateInfraMapPanel(mapPoint);
-        return;
-    }}
-
-    const mapState = event.target.closest('.infra-map-state');
-    if (mapState) {{
-        event.preventDefault();
-        event.stopPropagation();
-        selectInfraMapUf(mapState.dataset.uf || '');
-        return;
-    }}
-
-    const mapStateLabel = event.target.closest('.infra-map-state-label');
-    if (mapStateLabel) {{
-        event.preventDefault();
-        event.stopPropagation();
-        selectInfraMapUf(mapStateLabel.dataset.uf || '');
-        return;
-    }}
-
-    const stateRegional = event.target.closest('.infra-map-state-regional');
-    if (!stateRegional) return;
-    const regional = stateRegional.dataset.regional || '';
-    const target = Array.from(document.querySelectorAll('.infra-map-list-item, .infra-map-dot'))
-        .find((item) => item.dataset.regional === regional);
-    if (target) {{
-        updateInfraMapPanel(target);
-    }}
-}});
-
-document.querySelectorAll('[data-map-filter]').forEach((button) => {{
-    button.addEventListener('click', () => {{
-        applyInfraMapCounterFilter(button.dataset.mapFilter || 'all', button.querySelector('span')?.textContent || 'Filtro');
-    }});
-}});
-
-document.querySelectorAll('[data-detail-filter-type]').forEach((button) => {{
-    button.addEventListener('click', () => applyInfraMapDetailFilter(button));
-}});
-
-const infraMapBack = document.getElementById('infraMapBack');
-if (infraMapBack) {{
-    infraMapBack.addEventListener('click', () => {{
-        clearInfraMapDetailFilter();
-        if (infraMapSelectedRegional && infraMapSelectedUf) {{
-            const matchingItems = Array.from(document.querySelectorAll('.infra-map-dot, .infra-map-list-item')).filter((item) => item.dataset.uf === infraMapSelectedUf);
-            updateInfraMapStatePanel(infraMapSelectedUf, matchingItems);
-        }} else {{
-            resetInfraMapPanel();
-        }}
-    }});
-}}
-
-const infraMapResetState = document.getElementById('infraMapResetState');
-if (infraMapResetState) {{
-    infraMapResetState.addEventListener('click', () => selectInfraMapUf(''));
-}}
-
-const infraMapOpenRegional = document.getElementById('infraMapOpenRegional');
-if (infraMapOpenRegional) {{
-    infraMapOpenRegional.addEventListener('click', () => {{
-        if (infraMapSelectedRegional) {{
-            abrirEIrParaDetalhe('regional-inventory', infraMapSelectedRegional);
-        }}
-    }});
-}}
-
-initInfraMapNavigation();
-resetInfraMapPanel();
-
-setDashboardView(document.querySelector('.dashboard-view-tab.active')?.dataset.dashboardViewTarget || 'map-view');
 
 document.querySelectorAll('details.details-section').forEach((detail) => {{
     const summary = detail.querySelector('summary');
@@ -8465,7 +5681,7 @@ new Chart(document.getElementById('chartDeviceVpn'), {{
     }}
 }});
 
-criarGraficoRegional('chartDeviceFirewalls', 'Firewalls e Licenças', ['Licenças OK', 'A vencer', 'Expiradas', 'Sem Sinal'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}, {security_dashboard['firewall_counts']['sem-sinal']}], ['#2f855a', '#d69e2e', '#e53e3e', '#718096'], 'firewalls');
+criarGraficoRegional('chartDeviceFirewalls', 'Firewalls e Licenças', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
 criarGraficoRegional('chartDeviceAdmins', 'Monitor de Admins', ['OK', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_counts']['ok']}, {security_dashboard['admin_counts']['alerta']}, {security_dashboard['admin_counts']['offline']}, {security_dashboard['admin_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
 
 // Botão flutuante: fechar tudo e voltar ao topo
@@ -8498,7 +5714,7 @@ criarGraficoRegional('chartRegionalReplicacao', 'Replicação AD por Regional', 
 criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com warning', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
 criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline', 'Com inativo'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}, {links_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#718096'], 'links');
 criarGraficoRegional('chartRegionalVpn', 'VPNs por Regional', ['Sem offline', 'Com offline'], [{vpn_regionais_sem_offline}, {vpn_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'vpn-details');
-criarGraficoRegional('chartRegionalFirewalls', 'Firewalls por Regional', ['Sem alerta', 'A vencer', 'Com expirada', 'Com sem sinal'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}, {security_dashboard['firewall_regional_counts']['sem-sinal']}], ['#2f855a', '#d69e2e', '#e53e3e', '#718096'], 'firewalls');
+criarGraficoRegional('chartRegionalFirewalls', 'Firewalls por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
 criarGraficoRegional('chartRegionalAdmins', 'Admins por Regional', ['Sem alerta', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_regional_counts']['ok']}, {security_dashboard['admin_regional_counts']['alerta']}, {security_dashboard['admin_regional_counts']['offline']}, {security_dashboard['admin_regional_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
 
 const backToTopBtn = document.getElementById('backToTopBtn');
@@ -8531,12 +5747,7 @@ if (backToTopBtn) {{
 
 # === 10. SALVA O RELATÓRIO ===
 # Salva o relatório no novo local (área de trabalho com estrutura de pastas)
-dashboard_output = PROJECT_ROOT / "output" / "dashboard_preview.html" if PREVIEW_MODE else DASHBOARD_FINAL
-dashboard_output.write_text(dashboard_html, encoding="utf-8")
-if PREVIEW_MODE:
-    print(f"[PREVIEW] Dashboard de preview salvo em: {dashboard_output}")
-    DASHBOARD_FINAL = dashboard_output
-    DASHBOARD_FINAL_ORIGINAL = dashboard_output
+DASHBOARD_FINAL.write_text(dashboard_html, encoding="utf-8")
 print(f"[OK] Relatório salvo em: {DASHBOARD_FINAL}")
 
 # Também salva no local original para compatibilidade
@@ -8556,13 +5767,6 @@ print(f"\n[TARGET] Acesse o relatório em: {DASHBOARD_FINAL}")
 
 # === 11. REMOVE ARQUIVOS TEMPORÁRIOS ===
 # Limpa arquivos HTML temporários gerados durante o processo
-if PREVIEW_MODE:
-    REGIONAL_HTMLS_DIR = PROJECT_ROOT / "output" / "__preview_no_cleanup__"
-    GPS_HTML = PROJECT_ROOT / "output" / "__preview_keep_gps__.html"
-    REPLICACAO_HTML = PROJECT_ROOT / "output" / "__preview_keep_replicacao__.html"
-    UNIFI_HTML = PROJECT_ROOT / "output" / "__preview_keep_unifi__.html"
-    print("[PREVIEW] Mantendo artefatos em cache para novos testes")
-
 for file in REGIONAL_HTMLS_DIR.glob("*.html"):
     file.unlink() # Remove cada arquivo HTML regional
 if GPS_HTML.exists():
