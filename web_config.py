@@ -911,6 +911,11 @@ def _carregar_indice_regionais_vpn():
     return indice
 
 
+_VPN_REGIONAL_ALIAS = {
+    "SLUIS": "REG_MARANHAO",
+}
+
+
 def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     if not indice_regionais:
         return None
@@ -919,6 +924,12 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     candidatos.extend(_gerar_tokens_regional(nome_exibicao_vpn))
     candidatos.extend(_gerar_tokens_regional(codigo_vpn))
     candidatos = [candidato for candidato in candidatos if candidato]
+
+    indice_por_chave = {str(regional.get("chave") or "").strip().upper(): regional for regional in indice_regionais}
+    for candidato in candidatos:
+        regional_alias = _VPN_REGIONAL_ALIAS.get(candidato)
+        if regional_alias and regional_alias in indice_por_chave:
+            return indice_por_chave[regional_alias]
 
     for candidato in candidatos:
         for regional in indice_regionais:
