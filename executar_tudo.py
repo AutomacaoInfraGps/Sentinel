@@ -2719,9 +2719,24 @@ gps_status_display = (
 )
 
 
-# Conta APs online/offline do conteúdo HTML do UniFi
-aps_online = unifi_html.count("Online") if "[ERROR]" not in unifi_html else 0
-aps_offline = unifi_html.count("Offline") if "[ERROR]" not in unifi_html else 0
+# Conta APs online/offline pelo unifi.json (mesma fonte da aba de infraestrutura)
+aps_online = 0
+aps_offline = 0
+try:
+    unifi_json_path = PROJECT_ROOT / "data" / "unifi.json"
+    if unifi_json_path.exists():
+        _unifi_json = json.loads(unifi_json_path.read_text(encoding="utf-8"))
+        _aps_visiveis = [ap for ap in (_unifi_json.get("aps") or []) if not ap.get("oculto")]
+        aps_online = sum(1 for ap in _aps_visiveis if str(ap.get("status") or "").lower() == "online")
+        aps_offline = len(_aps_visiveis) - aps_online
+    elif "[ERROR]" not in unifi_html:
+        # fallback: conta pelo HTML se o JSON não existir
+        aps_online = unifi_html.count('"status-online"') or unifi_html.count('status-online')
+        aps_offline = unifi_html.count('"status-offline"') or unifi_html.count('status-offline')
+except Exception as _e:
+    print(f"[AVISO] Falha ao contar APs pelo JSON, usando HTML: {_e}")
+    aps_online = unifi_html.count("Online") if "[ERROR]" not in unifi_html else 0
+    aps_offline = unifi_html.count("Offline") if "[ERROR]" not in unifi_html else 0
 
 # Métrica regional das APs: quantas regionais têm ao menos 1 AP offline
 aps_regionais_status = {}

@@ -1671,7 +1671,6 @@ def _is_internet_link_candidate(link: dict) -> bool:
         False
     )
 
-
 def _filtrar_links_internet(links: list) -> list:
     return [link for link in (links or []) if _is_internet_link_candidate(link)]
 
@@ -2405,6 +2404,627 @@ def servidores():
             'estrutura_hierarquica': True
         }
         return render_template('index.html', stats=stats, regionais=[])
+
+
+@app.route('/mapa')
+@login_required
+def mapa_monitoramento():
+    """Tela de monitoramento do mapa das regionais."""
+    return render_template('mapa_monitoramento.html')
+
+
+_MAPA_CACHE_TTL_SECONDS = int(os.environ.get("MAPA_MONITORAMENTO_TTL_SECONDS", "300"))
+_MAPA_CACHE_FILE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
+_mapa_cache_refresh_lock = Lock()
+_mapa_cache_refresh_em_andamento = False
+
+_MAPA_REGIONAL_ESTADOS = {
+    "REG_BAHIA": "BA",
+    "REG_GOIAS": "GO",
+    "REG_AMAZONAS": "AM",
+    "REG_ESPIRITO_SANTO": "ES",
+    "REG_CEARA": "CE",
+    "REG_RIO_DE_JANEIRO": "RJ",
+    "REG_MARANHAO": "MA",
+    "REG_ABC": "SP",
+    "REG_RUDDER": "RS",
+    "REG_SAO_LEOPOLDO": "RS",
+    "REG_UBERLANDIA": "MG",
+    "REG_PARA": "PA",
+    "REG_PARANA": "PR",
+    "REG_MACAE": "RJ",
+    "REG_GRSA_MACAE": "RJ",
+    "REG_RHMED": "RJ",
+    "REG_SULZER": "RS",
+    "REG_TLSV_POA": "RS",
+    "REG_ARARAS": "SP",
+    "REG_LOGHIS": "SP",
+    "REG_PRAIA_GRANDE": "SP",
+    "REG_CAMPINAS": "SP",
+    "REG_SJC": "SP",
+    "REG_SOROCABA": "SP",
+    "REG_TRADETALENTOS": "SP",
+    "REG_TRADE&TALENTOS": "SP",
+    "REG_LEOPOLDO_B2": "RS",
+    "REG_CEARA_2": "CE",
+    "REG_RIO_GRANDE_DO_NORTE": "RN",
+    "REG_CAXIAS": "RS",
+    "REG_NUTRICAR": "SP",
+    "REG_CAMPINAS_02": "SP",
+    "REG_ORMEC_PARA": "PA",
+    "REG_PIAU": "PI",
+    "REG_LC": "RJ",
+    "REG_GRSASP": "SP",
+    "REG_CONTROL_MCO": "AL",
+    "REG_REGIONAL_BELO_HORIZONTE": "MG",
+    "REG_MOTUS": "SP",
+    "REG_PERNAMBUCO": "PE",
+    "REG_GALAXIA": "SP",
+    "REG_GLOBAL_SEGURANCA": "DF",
+    "REG_GLOBAL_SEGURANÇA": "DF",
+    "REG_CTRLBP": "AL",
+    "REG_ALAGOAS": "AL",
+}
+
+
+def _mapa_ler_json_output(nome_arquivo):
+    try:
+        caminho = PROJECT_ROOT / "output" / nome_arquivo
+        if caminho.exists():
+            return json.loads(caminho.read_text(encoding="utf-8"))
+    except Exception as exc:
+        current_app.logger.warning("Falha ao carregar %s para o mapa: %s", nome_arquivo, exc)
+    return {}
+
+
+def _mapa_salvar_cache(dados):
+    try:
+        payload = dict(dados or {})
+        payload["cache_atualizado_em"] = datetime.now().isoformat()
+        payload["cache_ttl_segundos"] = _MAPA_CACHE_TTL_SECONDS
+        _MAPA_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _MAPA_CACHE_FILE.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        return payload
+    except Exception as exc:
+        current_app.logger.warning("Falha ao salvar cache do mapa: %s", exc)
+        return dados
+
+
+def _mapa_carregar_cache():
+    try:
+        if not _MAPA_CACHE_FILE.exists():
+            return None, None
+
+        dados = json.loads(_MAPA_CACHE_FILE.read_text(encoding="utf-8"))
+        atualizado_em = dados.get("cache_atualizado_em") or dados.get("fontes", {}).get("atualizado_em")
+        idade = None
+        if atualizado_em:
+            atualizado_dt = datetime.fromisoformat(str(atualizado_em))
+            if atualizado_dt.tzinfo is not None:
+                atualizado_dt = atualizado_dt.astimezone().replace(tzinfo=None)
+            idade = (datetime.now() - atualizado_dt).total_seconds()
+        return dados, idade
+    except Exception as exc:
+        current_app.logger.warning("Falha ao carregar cache do mapa: %s", exc)
+        return None, None
+
+
+def _mapa_cache_esta_fresco(idade):
+    return idade is not None and idade <= _MAPA_CACHE_TTL_SECONDS
+
+
+def _mapa_marcar_refresh_iniciado():
+    global _mapa_cache_refresh_em_andamento
+    with _mapa_cache_refresh_lock:
+        if _mapa_cache_refresh_em_andamento:
+            return False
+        _mapa_cache_refresh_em_andamento = True
+        return True
+
+
+def _mapa_marcar_refresh_finalizado():
+    global _mapa_cache_refresh_em_andamento
+    with _mapa_cache_refresh_lock:
+        _mapa_cache_refresh_em_andamento = False
+
+
+def _mapa_atualizar_cache_background():
+    with app.app_context():
+        try:
+            dados = _montar_dados_mapa_monitoramento()
+            _mapa_salvar_cache(dados)
+        except Exception as exc:
+            current_app.logger.exception("Falha ao atualizar cache do mapa em segundo plano: %s", exc)
+        finally:
+            _mapa_marcar_refresh_finalizado()
+
+
+def _mapa_iniciar_refresh_background():
+    if not _mapa_marcar_refresh_iniciado():
+        return False
+    _start_background_job(
+        _mapa_atualizar_cache_background,
+        name="mapa-monitoramento-refresh",
+    )
+    return True
+
+
+def _mapa_normalizar_token(valor):
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = texto.upper()
+    texto = texto.replace("&", "E")
+    texto = re.sub(r"[^A-Z0-9]+", "_", texto)
+    texto = re.sub(r"_+", "_", texto).strip("_")
+    if texto.startswith("REG_"):
+        texto = texto[4:]
+    for termo in ("REGIONAL_", "_MATRIZ", "_REGIONAL", "_SWITCH"):
+        texto = texto.replace(termo, "_")
+    return re.sub(r"_+", "_", texto).strip("_")
+
+
+def _mapa_status(valor):
+    texto = str(valor or "").strip().lower()
+    if texto in {"online", "up", "ok", "active", "registered", "registrada", "ativo"}:
+        return "online"
+    if texto in {"warning", "aviso", "atencao", "atenção"}:
+        return "warning"
+    if texto in {"inactive", "inativo", "disabled", "desabilitado"}:
+        return "inativo"
+    if texto in {"offline", "down", "erro", "falha"}:
+        return "offline"
+    return "desconhecido"
+
+
+def _mapa_criar_regional(codigo, info=None):
+    info = info or {}
+    return {
+        "codigo": codigo,
+        "nome": info.get("nome") or codigo,
+        "descricao": info.get("descricao") or "",
+        "uf": _MAPA_REGIONAL_ESTADOS.get(codigo, ""),
+        "servidores": [],
+        "switches": [],
+        "links": [],
+        "aps": [],
+        "vpns": [],
+        "firewalls": [],
+        "admins": [],
+        "totais": {},
+        "alertas": [],
+        "status": "ok",
+    }
+
+
+def _mapa_encontrar_regional_por_nome(regionais, nome):
+    alvo = _mapa_normalizar_token(nome)
+    if not alvo:
+        return None
+
+    for codigo, dados in regionais.items():
+        candidatos = {
+            _mapa_normalizar_token(codigo),
+            _mapa_normalizar_token(dados.get("nome")),
+            _mapa_normalizar_token(dados.get("descricao")),
+        }
+        if alvo in candidatos or any(alvo and (alvo in c or c in alvo) for c in candidatos if c):
+            return codigo
+    return None
+
+
+_MAPA_UNIFI_SITE_ALIAS = {
+    "REGIONAL_BH": "REG_REGIONAL BELO HORIZONTE",
+    "SAO_JOSE_DOS_CAMPOS": "REG_SJC",
+    "SANTO_ANDRE": "REG_ABC",
+    "REGALAGOAS": "REG_ALAGOAS",
+    "REGMARANHAO": "REG_MARANHAO",
+    "REG_S_LEOPOLDO": "REG_SAO_LEOPOLDO",
+    "S_LEOPOLDO": "REG_SAO_LEOPOLDO",
+    "S_LEOPOLDO_2": "REG_LEOPOLDO_B2",
+    "TLSV_PORTO_ALEGRE": "REG_TLSV_POA",
+    "TRADE_POP": None,
+    "TAGG": None,
+    "CONTROL_MACEIO": "REG_CONTROL_MCO",
+    "CEARA1": "REG_CEARA",
+    "MACAE_MARFOOD": "REG_MACAE",
+}
+
+
+def _mapa_normalizar_site_unifi(nome):
+    token = _mapa_normalizar_token(nome)
+    token = re.sub(r"^V\d+_", "", token)
+    return token
+
+
+def _mapa_encontrar_regional_unifi(regionais, nome):
+    alvo = _mapa_normalizar_site_unifi(nome)
+    if not alvo:
+        return None
+
+    if alvo in _MAPA_UNIFI_SITE_ALIAS:
+        return _MAPA_UNIFI_SITE_ALIAS[alvo]
+
+    for codigo, dados in regionais.items():
+        candidatos = {
+            _mapa_normalizar_token(codigo),
+            _mapa_normalizar_token(dados.get("nome")),
+            _mapa_normalizar_token(dados.get("descricao")),
+        }
+        candidatos_sem_reg = {c[4:] if c.startswith("REG_") else c for c in candidatos if c}
+        if alvo in candidatos_sem_reg:
+            return codigo
+    return None
+
+
+def _mapa_adicionar_alerta(regional, tipo, quantidade, severidade, descricao):
+    if quantidade <= 0:
+        return
+    regional["alertas"].append({
+        "tipo": tipo,
+        "quantidade": quantidade,
+        "severidade": severidade,
+        "descricao": descricao,
+    })
+    prioridade = {
+        "ok": 0,
+        "atencao": 1,
+        "medio": 2,
+        "alto": 3,
+        "critico": 4,
+    }
+    if prioridade.get(severidade, 0) > prioridade.get(regional.get("status"), 0):
+        regional["status"] = severidade
+
+
+def _mapa_status_servidor_tempo_real(servidor):
+    ip = str(servidor.get("ip") or "").strip()
+    if not ip:
+        return _mapa_status(servidor.get("status")), None, "Servidor sem IP"
+
+    try:
+        inicio = datetime.now()
+        online = verificar_vm_online(ip)
+        tempo_resposta = round((datetime.now() - inicio).total_seconds(), 2)
+        return ("online" if online else "offline"), tempo_resposta, (None if online else "Timeout")
+    except Exception as exc:
+        current_app.logger.warning(
+            "Falha ao testar servidor %s no mapa: %s",
+            servidor.get("nome") or servidor.get("id") or ip,
+            exc,
+        )
+        return _mapa_status(servidor.get("status")), None, str(exc)
+
+
+def _mapa_recalcular_regionais(regionais):
+    resumo = {
+        "total_regionais": len(regionais),
+        "regionais_com_servidores": 0,
+        "regionais_sem_servidores": 0,
+        "regionais_com_links": 0,
+        "regionais_sem_links": 0,
+        "regionais_com_switches": 0,
+        "regionais_sem_switches": 0,
+        "regionais_com_alerta": 0,
+        "servidores_online": 0,
+        "servidores_offline": 0,
+        "servidores_warning": 0,
+        "servidores_inativo": 0,
+        "switches_online": 0,
+        "switches_offline": 0,
+        "switches_warning": 0,
+        "switches_inativo": 0,
+        "links_online": 0,
+        "links_offline": 0,
+        "links_warning": 0,
+        "links_inativo": 0,
+        "aps_online": 0,
+        "aps_offline": 0,
+        "aps_warning": 0,
+        "aps_inativo": 0,
+        "vpns_online": 0,
+        "vpns_offline": 0,
+        "vpns_warning": 0,
+        "vpns_inativo": 0,
+        "firewalls_ok": 0,
+        "firewalls_alerta": 0,
+        "admins_ok": 0,
+        "admins_alerta": 0,
+    }
+
+    for regional in regionais.values():
+        regional["alertas"] = []
+        regional["status"] = "ok"
+
+        for grupo, prefixo in (
+            ("servidores", "servidores"),
+            ("switches", "switches"),
+            ("links", "links"),
+            ("aps", "aps"),
+            ("vpns", "vpns"),
+        ):
+            online = sum(1 for item in regional[grupo] if item.get("status") == "online")
+            warning = sum(1 for item in regional[grupo] if item.get("status") == "warning")
+            offline = sum(1 for item in regional[grupo] if item.get("status") == "offline")
+            inativo = sum(1 for item in regional[grupo] if item.get("status") == "inativo")
+            regional["totais"][f"{prefixo}_online"] = online
+            regional["totais"][f"{prefixo}_warning"] = warning
+            regional["totais"][f"{prefixo}_offline"] = offline
+            regional["totais"][f"{prefixo}_inativo"] = inativo
+            resumo[f"{prefixo}_online"] += online
+            resumo[f"{prefixo}_warning"] += warning
+            resumo[f"{prefixo}_offline"] += offline
+            resumo[f"{prefixo}_inativo"] += inativo
+            severidade_offline = {
+                "servidores": "alto",
+                "switches": "alto",
+                "aps": "medio",
+                "links": "medio",
+                "vpns": "alto",
+            }.get(grupo, "medio")
+            _mapa_adicionar_alerta(regional, grupo, offline, severidade_offline, f"{grupo} offline")
+            _mapa_adicionar_alerta(regional, grupo, warning, "atencao", f"{grupo} em atenção")
+
+        fw_expirado = sum(1 for item in regional["firewalls"] if item.get("status") == "offline")
+        fw_warning = sum(1 for item in regional["firewalls"] if item.get("status") == "warning")
+        fw_alerta = fw_expirado + fw_warning
+        fw_ok = len(regional["firewalls"]) - fw_alerta
+        adm_alerta = sum(1 for item in regional["admins"] if item.get("status") != "online")
+        adm_ok = len(regional["admins"]) - adm_alerta
+        regional["totais"]["firewalls_ok"] = fw_ok
+        regional["totais"]["firewalls_alerta"] = fw_alerta
+        regional["totais"]["firewalls_expirados"] = fw_expirado
+        regional["totais"]["firewalls_warning"] = fw_warning
+        regional["totais"]["admins_ok"] = adm_ok
+        regional["totais"]["admins_alerta"] = adm_alerta
+        resumo["firewalls_ok"] += fw_ok
+        resumo["firewalls_alerta"] += fw_alerta
+        resumo["admins_ok"] += adm_ok
+        resumo["admins_alerta"] += adm_alerta
+        _mapa_adicionar_alerta(regional, "firewalls", fw_expirado, "critico", "firewall offline")
+        _mapa_adicionar_alerta(regional, "firewalls", fw_warning, "atencao", "licencas a vencer")
+        _mapa_adicionar_alerta(regional, "admins", adm_alerta, "atencao", "admins com alerta")
+
+        if regional["servidores"]:
+            resumo["regionais_com_servidores"] += 1
+        else:
+            resumo["regionais_sem_servidores"] += 1
+        if regional["links"]:
+            resumo["regionais_com_links"] += 1
+        else:
+            resumo["regionais_sem_links"] += 1
+        if regional["switches"]:
+            resumo["regionais_com_switches"] += 1
+        else:
+            resumo["regionais_sem_switches"] += 1
+        if regional["status"] != "ok":
+            resumo["regionais_com_alerta"] += 1
+
+        regional["totais"]["total"] = sum(len(regional[grupo]) for grupo in ("servidores", "switches", "links", "aps", "vpns", "firewalls", "admins"))
+    return resumo
+
+
+def _montar_dados_mapa_monitoramento():
+    gerenciador_regionais.recarregar_regionais()
+    regionais = {}
+    for codigo in gerenciador_regionais.listar_regionais():
+        info = gerenciador_regionais.obter_regional(codigo) or {}
+        regionais[codigo] = _mapa_criar_regional(codigo, info)
+
+        for servidor in info.get("servidores", []) or []:
+            status_servidor, tempo_resposta, erro_servidor = _mapa_status_servidor_tempo_real(servidor)
+            regionais[codigo]["servidores"].append({
+                "nome": servidor.get("nome") or servidor.get("id") or "Servidor",
+                "ip": servidor.get("ip") or "",
+                "descricao": servidor.get("funcao") or servidor.get("tipo") or "",
+                "status": status_servidor,
+                "tempo_resposta": tempo_resposta,
+                "erro": erro_servidor,
+            })
+
+        for link in _obter_links_internet_exibicao(info):
+            link_completo = _preparar_link_para_template(link)
+            regionais[codigo]["links"].append({
+                "nome": link_completo.get("nome") or link_completo.get("interface_monitorada") or link_completo.get("interface") or "Link",
+                "ip": link_completo.get("ip") or link_completo.get("ip_exibicao") or link_completo.get("url") or "",
+                "descricao": link_completo.get("provedor") or link_completo.get("tipo") or "",
+                "status": _mapa_status(link_completo.get("status") or ("online" if link_completo.get("ativo", True) else "offline")),
+            })
+
+    dashboard = _mapa_ler_json_output("dados_dashboard.json")
+    for codigo, dados in (dashboard.get("regionais") or {}).items():
+        if codigo not in regionais:
+            continue
+        servidores = dados.get("servidores") or []
+        if servidores and not regionais[codigo]["servidores"]:
+            regionais[codigo]["servidores"] = []
+            for servidor in servidores:
+                regionais[codigo]["servidores"].append({
+                    "nome": servidor.get("nome") or servidor.get("id") or "Servidor",
+                    "ip": servidor.get("ip") or "",
+                    "descricao": servidor.get("funcao") or servidor.get("tipo") or "",
+                    "status": _mapa_status(servidor.get("status")),
+                })
+
+    switches_cache = _mapa_ler_json_output("switches_status_cache.json")
+    for nome_switch, switch in switches_cache.items():
+        regional_nome = str(nome_switch).split(" - SWITCH - ")[0]
+        codigo = _mapa_encontrar_regional_por_nome(regionais, regional_nome)
+        if not codigo:
+            continue
+        regionais[codigo]["switches"].append({
+            "nome": nome_switch,
+            "ip": switch.get("ip") or "",
+            "descricao": switch.get("warning_resumo") or switch.get("status_reason") or "",
+            "status": _mapa_status(switch.get("status")),
+        })
+
+    unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
+    for ap in (unifi_data.get("aps") or []):
+        codigo = _mapa_encontrar_regional_unifi(regionais, ap.get("site") or ap.get("regional") or ap.get("nome"))
+        if not codigo:
+            continue
+        regionais[codigo]["aps"].append({
+            "nome": ap.get("nome") or ap.get("name") or "AP",
+            "ip": ap.get("ip") or "",
+            "descricao": ap.get("modelo") or ap.get("model") or "",
+            "status": _mapa_status(ap.get("status")),
+        })
+
+    try:
+        if gerenciador_fortigate.autenticar():
+            resultado_vpn = gerenciador_fortigate.obter_vpn_ipsec()
+            vpns = resultado_vpn.get("vpns", []) if isinstance(resultado_vpn, dict) and resultado_vpn.get("success") else []
+            vpns = [
+                vpn for vpn in vpns
+                if not str(vpn.get("tunel") or "").upper().startswith("VPN_IPSECCLI")
+            ]
+            resumo_vpn = _agrupar_vpns_por_regional(vpns)
+            for codigo, dados_vpn in (resumo_vpn.get("vpns_por_regional") or {}).items():
+                if codigo not in regionais:
+                    continue
+                regionais[codigo]["vpns"] = []
+                for vpn in dados_vpn.get("tunels") or []:
+                    status = "online" if str(vpn.get("status") or "").strip().lower() == "up" else "offline"
+                    regionais[codigo]["vpns"].append({
+                        "nome": vpn.get("tunel") or "VPN",
+                        "ip": vpn.get("remote_ip") or vpn.get("gateway") or "",
+                        "descricao": vpn.get("interface") or "",
+                        "status": status,
+                    })
+    except Exception as exc:
+        current_app.logger.warning("Falha ao consultar VPNs para o mapa: %s", exc)
+
+    firewalls_cache = _mapa_ler_json_output("dashboard_firewalls_cache.json")
+    for codigo, firewalls in (firewalls_cache.get("firewalls_por_regional") or {}).items():
+        if codigo not in regionais:
+            continue
+        for firewall in firewalls or []:
+            licencas = [lic for lic in (firewall.get("licencas") or []) if isinstance(lic, dict)]
+            tem_expirada = any(
+                bool(lic.get("notificacao_expirada"))
+                and str(lic.get("status") or "").lower() != "offline"
+                for lic in licencas
+            )
+            tem_critica = any(
+                bool(lic.get("notificacao_critica"))
+                and not bool(lic.get("notificacao_expirada"))
+                and str(lic.get("status") or "").lower() != "offline"
+                for lic in licencas
+            )
+            regionais[codigo]["firewalls"].append({
+                "nome": firewall.get("nome") or firewall.get("hostname") or "Firewall",
+                "ip": firewall.get("ip") or "",
+                "descricao": firewall.get("model") or firewall.get("modelo") or "",
+                "status": "offline" if tem_expirada else "warning" if tem_critica else "online",
+            })
+
+    admins_cache = _mapa_ler_json_output("dashboard_admins_cache.json")
+    for device_key, device in (admins_cache.get("dispositivos") or {}).items():
+        if device.get("tipo") in {"fortimanager", "fortianalyzer"}:
+            continue
+        codigo = _mapa_encontrar_regional_por_nome(regionais, device_key)
+        if not codigo:
+            codigo = _mapa_encontrar_regional_por_nome(regionais, device.get("nome"))
+        if not codigo:
+            continue
+        tem_alerta = bool(device.get("novos") or device.get("removidos") or device.get("offline") or device.get("sem_permissao"))
+        regionais[codigo]["admins"].append({
+            "nome": device.get("nome") or device_key,
+            "ip": "",
+            "descricao": f'{len(device.get("admins") or [])} admin(s)',
+            "status": "offline" if tem_alerta else "online",
+        })
+
+    resumo = _mapa_recalcular_regionais(regionais)
+    return {
+        "success": True,
+        "resumo": resumo,
+        "regionais": list(regionais.values()),
+        "fontes": {
+            "modo": "hibrido",
+            "servidores": "estrutura_regionais.json/status_persistido",
+            "vpns": "fortigate_api",
+            "links": "links_internet_auto",
+            "aps": "unifi_snapshot",
+            "switches": "zabbix_cache",
+            "firewalls": "fortimanager_cache",
+            "admins": "forti_cache",
+            "atualizado_em": datetime.now().isoformat(),
+            "proxima_atualizacao_sugerida_segundos": _MAPA_CACHE_TTL_SECONDS,
+        },
+    }
+
+
+@app.route('/api/mapa/dados')
+@login_required
+def api_mapa_dados():
+    """Dados consolidados para o mapa de monitoramento."""
+    try:
+        force_refresh = str(request.args.get("refresh") or "").strip().lower() in {"1", "true", "yes", "on"}
+        cached, idade = _mapa_carregar_cache()
+
+        if cached and not force_refresh:
+            if _mapa_cache_esta_fresco(idade):
+                cached["cache_status"] = "fresh"
+                cached["cache_idade_segundos"] = int(idade or 0)
+                return jsonify(cached)
+
+            refresh_started = _mapa_iniciar_refresh_background()
+            cached["cache_status"] = "refreshing" if refresh_started else "stale_refreshing"
+            cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
+            cached["message"] = "Cache antigo entregue enquanto o mapa atualiza em segundo plano."
+            return jsonify(cached)
+
+        dados = _montar_dados_mapa_monitoramento()
+        dados = _mapa_salvar_cache(dados)
+        dados["cache_status"] = "fresh"
+        dados["cache_idade_segundos"] = 0
+        return jsonify(dados)
+    except Exception as exc:
+        current_app.logger.exception("Falha ao montar dados do mapa")
+        cached, idade = _mapa_carregar_cache()
+        if cached:
+            cached["cache_status"] = "stale_error"
+            cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
+            cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
+            return jsonify(cached)
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route('/api/mapa/estados')
+@login_required
+def api_mapa_estados():
+    """Paths SVG dos estados usados pelo mapa de monitoramento."""
+    try:
+        preview_path = PROJECT_ROOT / "output" / "dashboard_preview.html"
+        if not preview_path.exists():
+            return jsonify({"success": False, "message": "dashboard_preview.html nao encontrado"}), 404
+
+        html = preview_path.read_text(encoding="utf-8", errors="ignore")
+        estados = []
+        padrao = re.compile(r'<path class="infra-map-state[^"]*" data-uf="([^"]+)" d="([^"]+)"', re.IGNORECASE)
+        for match in padrao.finditer(html):
+            uf = match.group(1).strip().upper()
+            d_attr = html_lib.unescape(match.group(2))
+            pontos = [
+                (float(x), float(y))
+                for x, y in re.findall(r'[ML]\s*([0-9.]+)\s+([0-9.]+)', d_attr)
+            ]
+            if pontos:
+                centro_x = sum(p[0] for p in pontos) / len(pontos)
+                centro_y = sum(p[1] for p in pontos) / len(pontos)
+            else:
+                centro_x = 310
+                centro_y = 310
+            estados.append({"uf": uf, "d": d_attr, "centro": [centro_x, centro_y]})
+
+        return jsonify({"success": True, "viewBox": [0, 0, 620, 620], "estados": estados})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao carregar paths dos estados")
+        return jsonify({"success": False, "message": str(exc)}), 500
         
 
 # === ROTAS DE CERTIFICADOS ===
@@ -2530,21 +3150,25 @@ def api_certificados_refresh():
 
 # === ROTAS DE REGIONAIS ===
 
+# Threshold alinhado com regional_detalhes.html: warning=60d, critical=30d
+_FIREWALL_ALERTA_DIAS = 60
+
 def _obter_regionais_com_firewall_a_vencer():
-    """Usa o cache do dashboard de firewalls para sinalizar regionais com licenca critica."""
-    cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600) or {}
+    """Sinaliza regionais com firewall expirado ou vencendo em até _FIREWALL_ALERTA_DIAS dias."""
+    cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}  # 24h
     firewalls_por_regional = cached.get("firewalls_por_regional") or {}
+
     regionais_alerta = {}
 
     for codigo_regional, firewalls in firewalls_por_regional.items():
         total_alertas = 0
         for firewall in firewalls or []:
-            if int(firewall.get("licencas_criticas") or 0) > 0:
-                total_alertas += int(firewall.get("licencas_criticas") or 0)
-                continue
-
             for licenca in firewall.get("licencas") or []:
-                if licenca.get("notificacao_critica"):
+                if licenca.get("notificacao_expirada"):
+                    total_alertas += 1
+                elif licenca.get("notificacao_critica"):
+                    total_alertas += 1
+                elif isinstance(licenca.get("dias_restantes"), (int, float)) and 0 < licenca["dias_restantes"] <= _FIREWALL_ALERTA_DIAS:
                     total_alertas += 1
 
         if total_alertas > 0:
@@ -2571,6 +3195,48 @@ def listar_regionais():
                     for link in _obter_links_internet_exibicao(regional_info)
                 ]
                 _, switches = _obter_switches_detalhe_regional(codigo_regional, regional_info)
+                firewalls_cache = _obter_firewalls_regionais_cache(codigo_regional)
+                # Prepara resumo dos firewalls para exibição no card
+                firewalls_resumo = []
+                for fw in firewalls_cache:
+                    # Pega vencimento FortiCare
+                    vencimento_ts = None
+                    dias_restantes = None
+                    for lic in fw.get('licencas', []):
+                        if lic.get('tipo', '').lower() in ('forticare', 'forticare_elite', 'support'):
+                            vencimento_ts = lic.get('expiracao')
+                            dias_restantes = lic.get('dias_restantes')
+                            break
+                    vencimento_fmt = None
+                    if vencimento_ts and isinstance(vencimento_ts, (int, float)) and vencimento_ts > 0:
+                        try:
+                            from datetime import datetime as _dt
+                            vencimento_fmt = _dt.fromtimestamp(vencimento_ts).strftime('%d/%m/%Y')
+                        except Exception:
+                            pass
+                    # Pega flags de alerta da licença FortiCare para alinhar com a tela de detalhes
+                    notificacao_critica = False
+                    notificacao_expirada = False
+                    sem_sinal = False
+                    for lic in fw.get('licencas', []):
+                        if lic.get('tipo', '').lower() in ('forticare', 'forticare_elite', 'support'):
+                            notificacao_critica = bool(lic.get('notificacao_critica'))
+                            notificacao_expirada = bool(lic.get('notificacao_expirada'))
+                            sem_sinal = str(lic.get('status', '')).lower() == 'offline'
+                            break
+                    # Sem licenças também é sem sinal
+                    if not fw.get('licencas'):
+                        sem_sinal = True
+                    firewalls_resumo.append({
+                        'nome': fw.get('nome', ''),
+                        'model': fw.get('model', 'N/A'),
+                        'firmware': fw.get('firmware', ''),
+                        'vencimento': vencimento_fmt,
+                        'dias_restantes': dias_restantes,
+                        'notificacao_critica': notificacao_critica,
+                        'notificacao_expirada': notificacao_expirada,
+                        'sem_sinal': sem_sinal,
+                    })
                 regionais_dados.append({
                     'codigo': codigo_regional,
                     'nome': regional_info.get('nome', codigo_regional),
@@ -2578,11 +3244,13 @@ def listar_regionais():
                     'total_servidores': len(servidores),
                     'total_links': len(links),
                     'total_switches': len(switches),
+                    'total_firewalls': len(firewalls_resumo),
                     'total_firewalls_a_vencer': firewalls_a_vencer.get(str(codigo_regional).strip().upper(), 0),
                     'tem_firewall_a_vencer': str(codigo_regional).strip().upper() in firewalls_a_vencer,
                     'servidores': servidores,
                     'links': links,
-                    'switches': switches
+                    'switches': switches,
+                    'firewalls': firewalls_resumo,
                 })
         
         return render_template('regionais.html', regionais=regionais_dados)
@@ -3019,7 +3687,7 @@ def _formatar_preventiva_data(valor):
 
 
 def _obter_firewalls_regionais_cache(codigo_regional):
-    cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600) or {}
+    cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}  # 24h
     firewalls_por_regional = cached.get("firewalls_por_regional") or {}
     codigo_norm = str(codigo_regional or "").strip().upper()
     return [dict(item) for item in firewalls_por_regional.get(codigo_norm, [])]
@@ -4665,11 +5333,41 @@ def _invalidar_cache_dashboard(nome):
 def listar_firewalls(return_data=False):
     """Página de listagem de firewalls (FortiGates) com status de licenças"""
     try:
+        def _formatar_ultima_verificacao_firewall(valor):
+            texto = str(valor or '').strip()
+            if not texto:
+                return None
+
+            try:
+                data = datetime.fromisoformat(texto.replace('Z', '+00:00'))
+                return {
+                    'completa': data.strftime('%d/%m/%Y às %H:%M:%S'),
+                    'data': data.strftime('%d/%m/%Y'),
+                    'hora': data.strftime('%H:%M:%S')
+                }
+            except ValueError:
+                texto = texto.replace('T', ' ').replace('Z', '')
+                partes = texto.split()
+                return {
+                    'completa': texto,
+                    'data': partes[0] if partes else texto,
+                    'hora': partes[1].split('.')[0] if len(partes) > 1 else ''
+                }
+
+        def _preparar_datas_firewalls(firewalls_por_regional):
+            for firewalls in (firewalls_por_regional or {}).values():
+                for firewall in firewalls or []:
+                    firewall["ultima_verificacao_formatada"] = _formatar_ultima_verificacao_firewall(
+                        firewall.get("ultima_verificacao")
+                    )
+            return firewalls_por_regional
+
         force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
         if not force_refresh:
             cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
             if cached:
                 cached_firewalls = cached.get("firewalls_por_regional", {})
+                _preparar_datas_firewalls(cached_firewalls)
                 total_firewalls_cache, total_alertas_cache, total_expirados_cache, total_sem_sinal_cache = _recalcular_totais_firewalls(cached_firewalls)
                 if return_data:
                     cached["firewalls_por_regional"] = cached_firewalls
@@ -4917,6 +5615,7 @@ def listar_firewalls(return_data=False):
             current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
         
         total_firewalls, total_alertas, total_expirados, total_sem_sinal = _recalcular_totais_firewalls(firewalls_por_regional)
+        _preparar_datas_firewalls(firewalls_por_regional)
 
         firewall_snapshot = {
                 "atualizado_em": datetime.now().isoformat(),
@@ -8411,15 +9110,17 @@ def api_testar_link_regional(codigo_regional, id_link):
             if not link_oficial:
                 return None
 
+            # FortiGate inacessível: não confirma "online" sem verificar
             resultado = {
                 "success": True,
+                "warning": True,
                 "link": link_oficial.get("interface_monitorada") or link_oficial.get("nome") or id_link,
                 "ip_testado": link_oficial.get("ip") or link_ip,
-                "status": link_oficial.get("status") or "unknown",
-                "sla_status": link_oficial.get("sla_status") or "unknown",
+                "status": "offline",
+                "sla_status": "",        # vazio para não ser contado como 'inativo' pelo checklist
                 "sla_data": {},
                 "sdwan_member_id": link_oficial.get("sdwan_member_id"),
-                "modo_verificacao": link_oficial.get("modo_verificacao") or "cache_oficial",
+                "modo_verificacao": "indisponivel",
                 "interface_monitorada": link_oficial.get("interface_monitorada") or link_oficial.get("nome"),
                 "fortigate_host": link_oficial.get("fortigate_host"),
                 "fortigate_porta": link_oficial.get("fortigate_porta"),
@@ -8429,8 +9130,10 @@ def api_testar_link_regional(codigo_regional, id_link):
 
             link_atualizado = dict(link_oficial)
             link_atualizado.update({
+                "status": "offline",
+                "sla_status": "",        # vazio para não ser contado como 'inativo' pelo checklist
                 "ultima_verificacao": resultado["ultima_verificacao"],
-                "modo_verificacao": resultado["modo_verificacao"],
+                "modo_verificacao": "indisponivel",
                 "fortigate_host": resultado["fortigate_host"],
                 "fortigate_porta": resultado["fortigate_porta"],
             })
@@ -8440,7 +9143,7 @@ def api_testar_link_regional(codigo_regional, id_link):
 
         if not gerenciador_regional:
             fallback_response = _retornar_status_oficial_indisponivel(
-                "FortiManager/FortiGate indisponível; mantendo último status sincronizado do link"
+                "FortiManager/FortiGate indisponível; link marcado como offline"
             )
             if fallback_response:
                 return fallback_response
@@ -8460,7 +9163,7 @@ def api_testar_link_regional(codigo_regional, id_link):
 
         if not interfaces_result.get("success"):
             fallback_response = _retornar_status_oficial_indisponivel(
-                "FortiGate indisponível; mantendo último status sincronizado do link"
+                "FortiGate indisponível; link marcado como offline"
             )
             if fallback_response:
                 return fallback_response
@@ -8698,11 +9401,46 @@ def api_sincronizar_links_regional(codigo_regional):
         resolved = resultado.get("resolved") or {}
 
         if not resultado.get("success"):
-            status_code = 404 if resultado.get("status") in {"fortigate_not_mapped", "wan_not_found"} else 500
+            # Falhas de conectividade com FortiManager/FortiGate retornam os links existentes
+            # com aviso, sem erro bloqueante — igual ao comportamento do botão "Testar Link"
+            status_falha = resultado.get("status") or ""
+            falha_conectividade = status_falha in {
+                "fortimanager_proxy_error", "fortigate_auth_error",
+                "fortigate_error", "fortigate_not_mapped",
+            }
+            links_fallback = resultado.get("links") or []
+            if falha_conectividade and links_fallback:
+                # Persiste status offline nos links para o checklist refletir a indisponibilidade
+                agora = datetime.now().isoformat()
+                for lf in links_fallback:
+                    link_id = str(lf.get("id") or lf.get("interface_monitorada") or lf.get("nome") or "").strip()
+                    if link_id:
+                        _atualizar_link_internet_exibicao(codigo_regional, link_id, {
+                            "status": "offline",
+                            "sla_status": "",
+                            "modo_verificacao": "indisponivel",
+                            "ultima_verificacao": agora,
+                        })
+                    lf["status"] = "offline"
+                    lf["sla_status"] = ""
+                return jsonify({
+                    "success": True,
+                    "warning": True,
+                    "message": f"FortiGate indisponível; exibindo último estado dos links. Detalhe: {resultado.get('message')}",
+                    "links": links_fallback,
+                    "atualizados": [],
+                    "criados": [],
+                    "total_atualizados": 0,
+                    "total_criados": 0,
+                    "total_links": len(links_fallback),
+                    "total_removidos": 0,
+                    "source": "fallback_cache",
+                })
+            status_code = 404 if status_falha in {"fortigate_not_mapped", "wan_not_found"} else 500
             return jsonify({
                 "success": False,
                 "message": resultado.get("message"),
-                "status": resultado.get("status"),
+                "status": status_falha,
                 "adom": resolved.get("adom") if resolved else None,
                 "candidate_devices": resolved.get("candidate_devices", []) if resolved else []
             }), status_code
