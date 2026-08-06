@@ -871,7 +871,7 @@
                                                 <div>
                                                     <small class="fw-semibold">{{ 'FortiGuard' if licenca.nome == 'fortiguard' else 'FortiCare' }}</small>
                                                     <small class="text-muted ms-2">Status:
-                                                        <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
+                                                        <span class="badge bg-{{ 'danger' if licenca.status == 'offline' else 'secondary' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
                                                             {%- if licenca.status == 'offline' %}Offline
                                                             {%- elif licenca.status in ('valid','licensed') %}Válida
                                                             {%- elif licenca.status == 'registered' %}Registrada
@@ -881,7 +881,7 @@
                                                         </span>
                                                     </small>
                                                 </div>
-                                                <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
+                                                <span class="badge bg-{{ 'danger' if licenca.status == 'offline' else 'secondary' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
                                                     {%- if licenca.status == 'offline' %}Offline
                                                     {%- elif licenca.notificacao_expirada %}Expirada
                                                     {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
