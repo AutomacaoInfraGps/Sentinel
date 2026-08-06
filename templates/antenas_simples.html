@@ -534,6 +534,7 @@ function filtrarCanais(filtro) {
 
 /* ===== ANTENAS: filtro por status ===== */
 let antenaBuscaAtual = '';
+let filtroAntenaAtual = 'all';
 
 function normalizeAntenaText(text) {
     return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -596,7 +597,7 @@ $(document).ready(function() {
         antenaBuscaAtual = normalizeAntenaText(this.value);
         atualizarFiltroAntenaAtivo();
     });
-    atualizarFiltroAntenaAtivo();
+    aplicarFiltroAntena('all');
 });
 </script>
 {% endblock %}

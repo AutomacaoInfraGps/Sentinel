@@ -1,0 +1,1867 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mapa - Sentinel</title>
+    <style>
+        :root {
+            --bg: #0b2530;
+            --bg-2: #0f3440;
+            --line: rgba(148, 203, 221, .28);
+            --text: #f8fafc;
+            --muted: #c7d7e2;
+            --green: #22c55e;
+            --yellow: #f59e0b;
+            --red: #ef4444;
+            --blue: #0ea5e9;
+        }
+
+        * { box-sizing: border-box; }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 35% 35%, rgba(20, 184, 166, .18), transparent 36%),
+                linear-gradient(135deg, #071923, #0c3340 58%, #09202b);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .monitor {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .monitor::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: -18%;
+            z-index: 4;
+            height: 16%;
+            pointer-events: none;
+            background: linear-gradient(180deg, transparent, rgba(125, 211, 252, .06) 45%, rgba(125, 211, 252, .16) 50%, rgba(125, 211, 252, .06) 55%, transparent);
+            animation: scanLine 9s linear infinite;
+        }
+
+        .monitor.syncing::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: -22%;
+            z-index: 5;
+            width: 18%;
+            pointer-events: none;
+            background: linear-gradient(90deg, transparent, rgba(125, 211, 252, .16), transparent);
+            filter: blur(10px);
+            animation: syncSweep 1.3s ease-out 1;
+        }
+
+        @keyframes scanLine {
+            from { transform: translateY(0); }
+            to { transform: translateY(760%); }
+        }
+
+        @keyframes syncSweep {
+            from { transform: translateX(0); opacity: 0; }
+            12% { opacity: 1; }
+            to { transform: translateX(690%); opacity: 0; }
+        }
+
+        .map-shell {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .map-grid {
+            position: absolute;
+            inset: 0;
+            opacity: .22;
+            background-image:
+                linear-gradient(rgba(125, 211, 252, .18) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(125, 211, 252, .18) 1px, transparent 1px);
+            background-size: 80px 80px;
+            pointer-events: none;
+            animation: gridBreath 7s ease-in-out infinite;
+        }
+
+        @keyframes gridBreath {
+            0%, 100% { opacity: .18; }
+            50% { opacity: .28; }
+        }
+
+        .brand-logo {
+            position: absolute;
+            top: clamp(18px, 1.4vw, 26px);
+            left: clamp(18px, 1.5vw, 28px);
+            z-index: 20;
+            width: clamp(260px, 20vw, 390px);
+            filter: drop-shadow(0 16px 28px rgba(0, 0, 0, .55));
+            pointer-events: none;
+        }
+
+        .live-box {
+            position: absolute;
+            top: clamp(18px, 1.5vw, 28px);
+            right: clamp(18px, 1.6vw, 30px);
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: clamp(8px, .6vw, 10px) clamp(12px, .9vw, 16px);
+            border: 1px solid rgba(125, 211, 252, .34);
+            border-radius: 8px;
+            background: rgba(4, 28, 39, .72);
+            box-shadow: 0 16px 34px rgba(0, 0, 0, .28);
+            backdrop-filter: blur(8px);
+            font-size: clamp(12px, .72vw, 14px);
+        }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            color: #064e3b;
+            background: #dcfce7;
+            border: 1px solid #86efac;
+            border-radius: 999px;
+            font-weight: 900;
+            animation: liveBlink 1.4s ease-in-out infinite;
+        }
+
+        .live-pill::before {
+            content: "";
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 0 7px rgba(34, 197, 94, .18);
+            animation: liveDotPulse 1.4s ease-in-out infinite;
+        }
+
+        @keyframes liveBlink {
+            0%, 100% {
+                background: #dcfce7;
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, .12);
+            }
+            50% {
+                background: #bbf7d0;
+                box-shadow: 0 0 18px 3px rgba(34, 197, 94, .28);
+            }
+        }
+
+        @keyframes liveDotPulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 7px rgba(34, 197, 94, .18);
+            }
+            50% {
+                opacity: .72;
+                box-shadow: 0 0 0 11px rgba(34, 197, 94, .08);
+            }
+        }
+
+        .map-stage {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        .map-stage.dragging {
+            cursor: grabbing;
+        }
+
+        .map-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .surrounding-map {
+            pointer-events: none;
+            opacity: .58;
+        }
+
+        .surrounding-land {
+            fill: rgba(18, 52, 68, .18);
+            stroke: rgba(148, 194, 214, .22);
+            stroke-width: 1.1;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+        }
+
+        .surrounding-line {
+            fill: none;
+            stroke: rgba(148, 194, 214, .14);
+            stroke-width: .9;
+        }
+
+        .state {
+            fill: rgba(15, 45, 63, .88);
+            stroke: rgba(191, 219, 254, .24);
+            stroke-width: 1.15;
+            transition: fill .18s, stroke .18s, filter .18s;
+            cursor: pointer;
+        }
+
+        .state.status-ok { fill: rgba(20, 83, 45, .96); }
+        .state.status-alto { fill: rgba(136, 19, 55, .96); }
+        .state.status-medio { fill: rgba(154, 82, 20, .96); }
+        .state.status-warning { fill: rgba(146, 91, 10, .96); }
+        .state.status-critico { fill: rgba(127, 29, 29, .96); }
+        .state.status-sem-monitoramento { fill: rgba(15, 45, 63, .9); }
+        .state.status-alto,
+        .state.status-medio,
+        .state.status-warning { animation: warningStatePulse 3.2s ease-in-out infinite; }
+        .state.status-critico { animation: criticalStatePulse 2.4s ease-in-out infinite; }
+        .state:hover,
+        .state.selected {
+            stroke: rgba(224, 242, 254, .95);
+            stroke-width: 2.2;
+            filter: drop-shadow(0 0 14px rgba(125, 211, 252, .22));
+        }
+
+        .state.selected {
+            animation: selectedStateGlow 1.9s ease-in-out infinite;
+        }
+
+        .state.data-updated {
+            animation: stateRefreshFlash 1.1s ease-out 1;
+        }
+
+        .state.status-warning.data-updated {
+            animation: stateRefreshFlash 1.1s ease-out 1, warningStatePulse 3.2s ease-in-out infinite 1.1s;
+        }
+
+        .state.status-critico.data-updated {
+            animation: stateRefreshFlash 1.1s ease-out 1, criticalStatePulse 2.4s ease-in-out infinite 1.1s;
+        }
+
+        @keyframes warningStatePulse {
+            0%, 100% { filter: drop-shadow(0 0 0 rgba(245, 158, 11, 0)); }
+            50% { filter: drop-shadow(0 0 10px rgba(245, 158, 11, .24)); }
+        }
+
+        @keyframes criticalStatePulse {
+            0%, 100% { filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0)); }
+            50% { filter: drop-shadow(0 0 14px rgba(239, 68, 68, .3)); }
+        }
+
+        @keyframes stateRefreshFlash {
+            0% { stroke: #38bdf8; stroke-width: 3.4; filter: drop-shadow(0 0 20px rgba(56, 189, 248, .75)); }
+            100% { }
+        }
+
+        @keyframes selectedStateGlow {
+            0%, 100% {
+                filter: drop-shadow(0 0 10px rgba(125, 211, 252, .28));
+                stroke-opacity: .92;
+            }
+            50% {
+                filter: drop-shadow(0 0 24px rgba(125, 211, 252, .58));
+                stroke-opacity: 1;
+            }
+        }
+
+        .state-label {
+            pointer-events: none;
+            fill: #e2e8f0;
+            paint-order: stroke;
+            stroke: #0f172a;
+            stroke-width: 3.4;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: .03em;
+        }
+
+        .dot {
+            cursor: pointer;
+            transition: opacity .16s ease, filter .16s ease;
+        }
+
+        .dot.focus-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .dot-halo {
+            fill: none;
+            stroke: rgba(226, 232, 240, .26);
+            stroke-width: 4;
+        }
+
+        .dot-core {
+            stroke: #e2e8f0;
+            stroke-width: 2;
+        }
+
+        .dot.status-ok .dot-core { fill: var(--green); }
+        .dot.status-alto .dot-core { fill: #fb7185; }
+        .dot.status-medio .dot-core { fill: #fb923c; }
+        .dot.status-warning .dot-core { fill: var(--yellow); }
+        .dot.status-critico .dot-core { fill: var(--red); }
+        .dot.status-alto .dot-halo,
+        .dot.status-medio .dot-halo,
+        .dot.status-warning .dot-halo {
+            stroke: rgba(250, 204, 21, .38);
+            animation: warningHaloPulse 2.1s ease-in-out infinite;
+        }
+        .dot.status-alto .dot-core,
+        .dot.status-medio .dot-core,
+        .dot.status-warning .dot-core {
+            animation: warningCorePulse 2.1s ease-in-out infinite;
+        }
+        .dot.status-critico .dot-halo {
+            stroke: rgba(248, 113, 113, .48);
+            animation: criticalHaloPulse 1.25s ease-in-out infinite;
+        }
+        .dot.status-critico .dot-core {
+            animation: criticalCorePulse 1.25s ease-in-out infinite;
+        }
+        .dot.active .dot-halo {
+            stroke: rgba(125, 211, 252, .95);
+            stroke-width: 5;
+        }
+        .dot.active .dot-core {
+            stroke: #ffffff;
+            stroke-width: 3;
+            filter: drop-shadow(0 0 10px rgba(56, 189, 248, .95));
+        }
+
+        .dot.alert-new .dot-halo {
+            animation: newAlertPing 1s ease-out 3;
+        }
+
+        .dot.status-critico.alert-new .dot-halo {
+            animation: newAlertPing 1s ease-out 3, criticalHaloPulse 1.25s ease-in-out infinite 3s;
+        }
+
+        .dot.status-alto.alert-new .dot-halo,
+        .dot.status-medio.alert-new .dot-halo,
+        .dot.status-warning.alert-new .dot-halo {
+            animation: newAlertPing 1s ease-out 3, warningHaloPulse 2.1s ease-in-out infinite 3s;
+        }
+
+        .dot.recent-alert .dot-core {
+            stroke: #ffffff;
+            stroke-width: 3;
+            filter: drop-shadow(0 0 13px rgba(125, 211, 252, .9));
+        }
+
+        @keyframes warningHaloPulse {
+            0%, 100% {
+                stroke-width: 4;
+                stroke-opacity: .32;
+            }
+            50% {
+                stroke-width: 6.5;
+                stroke-opacity: .68;
+            }
+        }
+
+        @keyframes warningCorePulse {
+            0%, 100% { filter: drop-shadow(0 0 0 rgba(250, 204, 21, 0)); }
+            50% { filter: drop-shadow(0 0 6px rgba(250, 204, 21, .72)); }
+        }
+
+        @keyframes newAlertPing {
+            0% {
+                stroke-width: 5;
+                stroke-opacity: .9;
+                filter: drop-shadow(0 0 12px rgba(248, 113, 113, .85));
+            }
+            100% {
+                stroke-width: 15;
+                stroke-opacity: 0;
+                filter: drop-shadow(0 0 0 rgba(248, 113, 113, 0));
+            }
+        }
+
+        @keyframes criticalHaloPulse {
+            0%, 100% {
+                stroke-width: 4;
+                stroke-opacity: .42;
+            }
+            50% {
+                stroke-width: 8;
+                stroke-opacity: .82;
+            }
+        }
+
+        @keyframes criticalCorePulse {
+            0%, 100% {
+                opacity: 1;
+                filter: drop-shadow(0 0 0 rgba(248, 113, 113, 0));
+            }
+            50% {
+                opacity: .78;
+                filter: drop-shadow(0 0 7px rgba(248, 113, 113, .85));
+            }
+        }
+
+        .fixed-tooltip {
+            cursor: pointer;
+        }
+
+        .tooltip-guide {
+            fill: none;
+            stroke-width: 1.1;
+            stroke-dasharray: 4 5;
+            opacity: .78;
+            filter: drop-shadow(0 0 5px rgba(0, 0, 0, .35));
+            animation: guideDash 2.8s linear infinite;
+        }
+
+        .tooltip-guide.status-critico { stroke: rgba(248, 113, 113, .72); }
+        .tooltip-guide.status-alto { stroke: rgba(251, 113, 133, .72); }
+        .tooltip-guide.status-medio { stroke: rgba(251, 146, 60, .72); }
+        .tooltip-guide.status-warning { stroke: rgba(250, 204, 21, .72); }
+
+        .fixed-tooltip rect {
+            fill: rgba(8, 15, 31, .9);
+            stroke-width: 1.1;
+            filter: drop-shadow(0 10px 14px rgba(0, 0, 0, .28));
+        }
+
+        .fixed-tooltip.status-warning rect { stroke: #facc15; }
+        .fixed-tooltip.status-alto rect { stroke: #fb7185; }
+        .fixed-tooltip.status-medio rect { stroke: #fb923c; }
+        .fixed-tooltip.status-critico rect { stroke: #f87171; }
+        .fixed-tooltip.status-alto rect,
+        .fixed-tooltip.status-medio rect,
+        .fixed-tooltip.status-warning rect { animation: warningTooltipGlow 2.1s ease-in-out infinite; }
+        .fixed-tooltip.status-critico rect { animation: criticalTooltipGlow 1.8s ease-in-out infinite; }
+        .fixed-tooltip text {
+            fill: white;
+            font-weight: 700;
+            paint-order: stroke;
+            stroke: rgba(15, 23, 42, .7);
+            stroke-width: 1.6;
+            font-size: 10.5px;
+        }
+        .fixed-tooltip .tip-detail {
+            fill: #fecaca;
+            font-size: 8.6px;
+        }
+        .fixed-tooltip.status-warning .tip-detail { fill: #fef3c7; }
+        .fixed-tooltip.status-alto .tip-detail { fill: #ffe4e6; }
+        .fixed-tooltip.status-medio .tip-detail { fill: #ffedd5; }
+
+        @keyframes warningTooltipGlow {
+            0%, 100% { filter: drop-shadow(0 10px 14px rgba(0, 0, 0, .28)); }
+            50% { filter: drop-shadow(0 0 12px rgba(250, 204, 21, .28)); }
+        }
+
+        @keyframes criticalTooltipGlow {
+            0%, 100% { filter: drop-shadow(0 10px 14px rgba(0, 0, 0, .28)); }
+            50% { filter: drop-shadow(0 0 16px rgba(248, 113, 113, .36)); }
+        }
+
+        @keyframes guideDash {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: -18; }
+        }
+
+        .alert-panel {
+            position: absolute;
+            top: clamp(92px, 7.2vw, 110px);
+            right: clamp(18px, 1.35vw, 24px);
+            bottom: clamp(18px, 1.35vw, 24px);
+            z-index: 25;
+            width: clamp(285px, 18vw, 350px);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 6px 0 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+            overflow: hidden;
+        }
+
+        .alert-panel.panel-enter {
+            animation: panelEnter .22s ease-out 1;
+        }
+
+        @keyframes panelEnter {
+            from {
+                opacity: .72;
+                transform: translateX(14px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .panel-head {
+            padding: clamp(13px, .85vw, 16px);
+            border-bottom: 1px solid rgba(148, 163, 184, .22);
+            border: 1px solid rgba(125, 211, 252, .28);
+            border-radius: 10px;
+            background: rgba(5, 18, 32, .72);
+            box-shadow: 0 22px 48px rgba(0, 0, 0, .32);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-kicker {
+            display: inline-flex;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: rgba(245, 158, 11, .18);
+            color: #fde68a;
+            font-size: clamp(10px, .58vw, 11px);
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .panel-title {
+            margin: 8px 0 3px;
+            font-size: clamp(17px, 1.05vw, 21px);
+            font-weight: 700;
+        }
+
+        .panel-subtitle {
+            color: var(--muted);
+            font-size: clamp(12px, .68vw, 13px);
+        }
+
+        .alert-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 7px;
+            margin-top: 12px;
+        }
+
+        .alert-tab {
+            border: 1px solid rgba(148, 163, 184, .28);
+            border-radius: 7px;
+            padding: clamp(7px, .48vw, 9px);
+            color: var(--text);
+            background: rgba(15, 23, 42, .42);
+            font-size: clamp(10px, .58vw, 12px);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .alert-tab.critico { border-color: rgba(248, 113, 113, .65); color: #fecaca; }
+        .alert-tab.alto { border-color: rgba(251, 113, 133, .62); color: #ffe4e6; }
+        .alert-tab.medio { border-color: rgba(251, 146, 60, .62); color: #ffedd5; }
+        .alert-tab.atencao,
+        .alert-tab.warning { border-color: rgba(250, 204, 21, .65); color: #fef3c7; }
+        .alert-tab.active { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .12); }
+
+        .alert-list {
+            min-height: 0;
+            overflow: auto;
+            padding: 0 6px 2px 0;
+            scrollbar-color: rgba(125, 211, 252, .45) transparent;
+            scrollbar-width: thin;
+        }
+
+        .timeline {
+            display: none;
+            border: 1px solid rgba(125, 211, 252, .18);
+            border-radius: 8px;
+            padding: 10px 11px;
+            background: rgba(5, 18, 32, .48);
+            box-shadow: 0 16px 34px rgba(0, 0, 0, .18);
+            backdrop-filter: blur(8px);
+        }
+
+        .timeline.has-events {
+            display: block;
+        }
+
+        .timeline-title {
+            margin: 0 0 8px;
+            color: #bae6fd;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .timeline-item {
+            position: relative;
+            display: grid;
+            grid-template-columns: 38px 1fr;
+            gap: 9px;
+            padding: 0 0 9px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            left: 42px;
+            top: 5px;
+            bottom: -3px;
+            border-left: 1px solid rgba(148, 203, 221, .22);
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-item:last-child::before {
+            display: none;
+        }
+
+        .timeline-time {
+            color: #e0f2fe;
+            font-weight: 700;
+        }
+
+        .timeline-text {
+            position: relative;
+            min-width: 0;
+            padding-left: 12px;
+        }
+
+        .timeline-text::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 4px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--red);
+            box-shadow: 0 0 0 5px rgba(248, 113, 113, .12);
+        }
+
+        .timeline-item.status-alto .timeline-text::before {
+            background: #fb7185;
+            box-shadow: 0 0 0 5px rgba(251, 113, 133, .12);
+        }
+
+        .timeline-item.status-medio .timeline-text::before {
+            background: #fb923c;
+            box-shadow: 0 0 0 5px rgba(251, 146, 60, .12);
+        }
+
+        .timeline-item.status-warning .timeline-text::before,
+        .timeline-item.warning .timeline-text::before {
+            background: var(--yellow);
+            box-shadow: 0 0 0 5px rgba(250, 204, 21, .12);
+        }
+
+        .timeline-regional {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        .alert-card {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: clamp(10px, .72vw, 13px) clamp(11px, .78vw, 14px);
+            border: 1px solid rgba(148, 163, 184, .22);
+            border-left: 4px solid var(--red);
+            border-radius: 8px;
+            color: var(--text);
+            background: rgba(15, 23, 42, .54);
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .alert-card.card-enter {
+            animation-name: cardEnter;
+            animation-duration: .28s;
+            animation-timing-function: ease-out;
+            animation-fill-mode: both;
+        }
+
+        .alert-card.status-warning { border-left-color: var(--yellow); }
+        .alert-card.status-alto { border-left-color: #fb7185; }
+        .alert-card.status-medio { border-left-color: #fb923c; }
+        .alert-card.status-ok { border-left-color: var(--green); }
+        .alert-card.status-critico { animation: criticalCardPulse 2.2s ease-in-out infinite; }
+        .alert-card.status-alto,
+        .alert-card.status-medio,
+        .alert-card.status-warning { animation: warningCardPulse 2.8s ease-in-out infinite; }
+        .alert-card.status-critico.card-enter {
+            animation: cardEnter .28s ease-out both, criticalCardPulse 2.2s ease-in-out infinite .28s;
+        }
+        .alert-card.status-alto.card-enter,
+        .alert-card.status-medio.card-enter,
+        .alert-card.status-warning.card-enter {
+            animation: cardEnter .28s ease-out both, warningCardPulse 2.8s ease-in-out infinite .28s;
+        }
+        .alert-card.status-ok.card-enter {
+            animation: cardEnter .28s ease-out both;
+        }
+        .alert-card:hover,
+        .alert-card.active {
+            border-color: rgba(125, 211, 252, .62);
+            background: rgba(14, 116, 144, .28);
+        }
+
+        @keyframes criticalCardPulse {
+            0%, 100% { box-shadow: inset 0 0 0 0 rgba(248, 113, 113, 0); }
+            50% { box-shadow: inset 0 0 0 1px rgba(248, 113, 113, .34), 0 0 18px rgba(248, 113, 113, .1); }
+        }
+
+        @keyframes warningCardPulse {
+            0%, 100% { box-shadow: inset 0 0 0 0 rgba(250, 204, 21, 0); }
+            50% { box-shadow: inset 0 0 0 1px rgba(250, 204, 21, .3), 0 0 18px rgba(250, 204, 21, .08); }
+        }
+
+        .alert-card-title {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .alert-count {
+            min-width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: rgba(14, 116, 144, .78);
+        }
+
+        .alert-count.count-pop {
+            animation: countPop .38s ease-out 1;
+        }
+
+        @keyframes cardEnter {
+            from {
+                opacity: 0;
+                transform: translateX(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes countPop {
+            0% { transform: translateY(6px) scale(.88); }
+            60% { transform: translateY(-2px) scale(1.08); }
+            100% { transform: translateY(0) scale(1); }
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chip {
+            display: inline-flex;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(248, 113, 113, .18);
+            border: 1px solid rgba(248, 113, 113, .4);
+            color: #fecaca;
+            font-size: clamp(10px, .62vw, 12px);
+            font-weight: 700;
+        }
+
+        .chip.alto {
+            background: rgba(251, 113, 133, .16);
+            border-color: rgba(251, 113, 133, .42);
+            color: #ffe4e6;
+        }
+
+        .chip.medio {
+            background: rgba(251, 146, 60, .16);
+            border-color: rgba(251, 146, 60, .42);
+            color: #ffedd5;
+        }
+
+        .chip.atencao,
+        .chip.warning {
+            background: rgba(250, 204, 21, .14);
+            border-color: rgba(250, 204, 21, .42);
+            color: #fef3c7;
+        }
+
+        .chip.ok {
+            background: rgba(34, 197, 94, .14);
+            border-color: rgba(34, 197, 94, .42);
+            color: #bbf7d0;
+        }
+
+        .chip.inativo {
+            background: rgba(148, 163, 184, .16);
+            border-color: rgba(148, 163, 184, .42);
+            color: #cbd5e1;
+        }
+
+        .problem-detail {
+            min-height: 0;
+            overflow: auto;
+            padding-right: 6px;
+            scrollbar-color: rgba(125, 211, 252, .45) transparent;
+            scrollbar-width: thin;
+        }
+
+        .detail-back {
+            border: 1px solid rgba(125, 211, 252, .5);
+            border-radius: 7px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            color: #bae6fd;
+            background: rgba(14, 116, 144, .22);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .device-group {
+            border: 1px solid rgba(148, 163, 184, .22);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            background: rgba(15, 23, 42, .4);
+        }
+
+        .device-group h3 {
+            margin: 0;
+            padding: 9px 11px;
+            font-size: clamp(11px, .68vw, 13px);
+            background: rgba(8, 92, 116, .9);
+        }
+
+        .device-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 11px;
+            border-top: 1px solid rgba(148, 163, 184, .16);
+        }
+
+        .device-name { font-weight: 700; }
+        .device-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+        .device-status {
+            height: 24px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(248, 113, 113, .18);
+            color: #fecaca;
+            white-space: nowrap;
+        }
+        .device-status.warning {
+            background: rgba(250, 204, 21, .16);
+            color: #fef3c7;
+        }
+        .device-status.inativo {
+            background: rgba(148, 163, 184, .18);
+            color: #cbd5e1;
+        }
+
+        .empty-state {
+            color: var(--muted);
+            border: 1px dashed rgba(148, 163, 184, .28);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+        }
+        .empty-state.ok {
+            color: #bbf7d0;
+            border-color: rgba(34, 197, 94, .42);
+            background: rgba(34, 197, 94, .08);
+        }
+
+        @media (max-width: 1100px) {
+            .map-stage { inset-right: 0; }
+            .alert-panel {
+                width: calc(100vw - 32px);
+                left: 16px;
+                right: 16px;
+                top: auto;
+                height: 42vh;
+                padding-right: 0;
+            }
+            .brand-logo { width: 300px; }
+        }
+
+        @media (min-width: 2200px) {
+            .brand-logo {
+                width: clamp(300px, 15vw, 360px);
+            }
+
+            .alert-panel {
+                width: clamp(340px, 18vw, 380px);
+                top: 96px;
+            }
+
+            .live-box {
+                transform-origin: top right;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="monitor" aria-label="Mapa de monitoramento Sentinel">
+        <section id="mapStage" class="map-stage">
+            <div class="map-grid"></div>
+            <svg id="mapSvg" class="map-svg" role="img" aria-label="Mapa do Brasil"></svg>
+        </section>
+
+        <img class="brand-logo"
+             src="{{ url_for('static', filename='branding/sentinel_dashboard_logo_monitor.png') }}"
+             alt="Sentinel Infraestrutura Regional Grupo GPS">
+
+        <div class="live-box" aria-live="polite">
+            <span class="live-pill">LIVE</span>
+            <strong id="updatedAt">--:--:--</strong>
+        </div>
+
+        <aside class="alert-panel" aria-label="Alertas por regional">
+            <div class="panel-head">
+                <span class="panel-kicker">Alertas</span>
+                <div id="panelTitle" class="panel-title">Carregando...</div>
+                <div id="panelSubtitle" class="panel-subtitle">Buscando dados consolidados.</div>
+                <div class="alert-tabs">
+                    <button id="tabCritico" class="alert-tab critico active" type="button">0 críticos</button>
+                    <button id="tabAlto" class="alert-tab alto active" type="button">0 alto risco</button>
+                    <button id="tabMedio" class="alert-tab medio active" type="button">0 médio risco</button>
+                    <button id="tabAtencao" class="alert-tab atencao active" type="button">0 atenção</button>
+                </div>
+            </div>
+            <div id="timeline" class="timeline" aria-live="polite"></div>
+            <div id="alertList" class="alert-list"></div>
+            <div id="problemDetail" class="problem-detail" hidden></div>
+        </aside>
+    </main>
+
+    <script>
+        const DATA_URL = "/api/mapa/dados";
+        const STATES_URL = "/static/maps/br_states_paths.json";
+        const SURROUNDING_URL = "/static/maps/south_america_paths.json";
+        const REFRESH_MS = 5 * 60 * 1000;
+        const svg = document.getElementById('mapSvg');
+        const stage = document.getElementById('mapStage');
+        const updatedAt = document.getElementById('updatedAt');
+        const alertList = document.getElementById('alertList');
+        const problemDetail = document.getElementById('problemDetail');
+        const panelTitle = document.getElementById('panelTitle');
+        const panelSubtitle = document.getElementById('panelSubtitle');
+        const tabCritico = document.getElementById('tabCritico');
+        const tabAlto = document.getElementById('tabAlto');
+        const tabMedio = document.getElementById('tabMedio');
+        const tabAtencao = document.getElementById('tabAtencao');
+        const timeline = document.getElementById('timeline');
+        const monitor = document.querySelector('.monitor');
+        const ALERT_ROTATION_MS = 3 * 60 * 1000;
+        const ALERT_HOME_MS = 12 * 1000;
+
+        let appData = null;
+        let geoData = null;
+        let surroundingData = null;
+        let view = { x: 0, y: 0, scale: 1 };
+        let activeRegional = null;
+        let activeState = null;
+        let activeSeverity = 'todos';
+        let stateCentroids = {};
+        let dotPositions = {};
+        let previousRegionalSignature = {};
+        let previousRegionalAlerts = {};
+        let recentlyUpdatedRegionals = new Set();
+        let pendingVisualUpdateRegionals = new Set();
+        let previousCountSignature = {};
+        let currentMapScale = 1;
+        let timelineEvents = [];
+        let rotationTimer = null;
+        let rotationIndex = 0;
+        let rotationShowingDetail = false;
+
+        const stateNames = {
+            AC: 'Acre', AL: 'Alagoas', AP: 'Amapa', AM: 'Amazonas', BA: 'Bahia',
+            CE: 'Ceara', DF: 'Distrito Federal', ES: 'Espirito Santo', GO: 'Goias',
+            MA: 'Maranhao', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul',
+            MG: 'Minas Gerais', PA: 'Para', PB: 'Paraiba', PR: 'Parana',
+            PE: 'Pernambuco', PI: 'Piaui', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
+            RS: 'Rio Grande do Sul', RO: 'Rondonia', RR: 'Roraima', SC: 'Santa Catarina',
+            SP: 'Sao Paulo', SE: 'Sergipe', TO: 'Tocantins'
+        };
+
+        function formatDate(value) {
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            }).format(value ? new Date(value) : new Date());
+        }
+
+        function updateLiveClock() {
+            updatedAt.textContent = formatDate(new Date());
+        }
+
+        async function fetchJson(url) {
+            const separator = url.includes('?') ? '&' : '?';
+            const response = await fetch(`${url}${separator}t=${Date.now()}`, { cache: 'no-store', credentials: 'same-origin' });
+            const contentType = response.headers.get('content-type') || '';
+            if (!response.ok) {
+                throw new Error(`${url} retornou HTTP ${response.status}`);
+            }
+            if (!contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error(`${url} nao retornou JSON (${contentType || 'sem content-type'}): ${text.slice(0, 80)}`);
+            }
+            const payload = await response.json();
+            if (payload && payload.success === false) {
+                throw new Error(payload.message || `${url} retornou erro`);
+            }
+            return payload;
+        }
+
+        function showLoadError(error) {
+            const message = error && error.message ? error.message : String(error || 'Erro desconhecido');
+            updatedAt.textContent = 'erro';
+            panelTitle.textContent = 'Falha ao carregar';
+            panelSubtitle.textContent = message;
+            alertList.hidden = false;
+            problemDetail.hidden = true;
+            alertList.innerHTML = `<div class="empty-state">Nao foi possivel montar o mapa. ${message}</div>`;
+            animatePanel();
+        }
+
+        function statusClass(status) {
+            if (status === 'critico') return 'status-critico';
+            if (status === 'alto') return 'status-alto';
+            if (status === 'medio') return 'status-medio';
+            if (status === 'atencao') return 'status-warning';
+            if (status === 'warning') return 'status-warning';
+            if (status === 'sem-monitoramento') return 'status-sem-monitoramento';
+            return 'status-ok';
+        }
+
+        function severityLabel(status) {
+            return {
+                critico: 'Crítico',
+                alto: 'Alto risco',
+                medio: 'Risco médio',
+                atencao: 'Atenção',
+                warning: 'Atenção',
+                ok: 'OK'
+            }[status] || 'OK';
+        }
+
+        function severityRank(status) {
+            return {
+                critico: 4,
+                alto: 3,
+                medio: 2,
+                atencao: 1,
+                warning: 1,
+                ok: 0
+            }[status] || 0;
+        }
+
+        function isInactiveAlert(alerta) {
+            const text = `${alerta.tipo || ''} ${alerta.descricao || ''}`.toLowerCase();
+            return text.includes('inativo') || text.includes('inactive') || text.includes('desabilitado');
+        }
+
+        function visibleRegionalAlerts(regional) {
+            return (regional.alertas || []).filter((alerta) => (
+                Number(alerta.quantidade || 0) > 0 && !isInactiveAlert(alerta)
+            ));
+        }
+
+        function regionalSignature(regional) {
+            const alerts = visibleRegionalAlerts(regional)
+                .map((alerta) => [
+                    alerta.tipo || '',
+                    alerta.severidade || '',
+                    alerta.descricao || '',
+                    Number(alerta.quantidade || 0)
+                ].join(':'))
+                .sort();
+            return JSON.stringify({
+                alerts,
+                totais: regional.totais || {}
+            });
+        }
+
+        function alertKey(alerta) {
+            return [
+                alerta.tipo || '',
+                alerta.severidade || '',
+                alerta.descricao || ''
+            ].join('|');
+        }
+
+        function alertFromKey(key) {
+            const parts = String(key || '').split('|');
+            return {
+                tipo: parts[0] || '',
+                severidade: parts[1] || 'critico',
+                descricao: parts[2] || 'alerta'
+            };
+        }
+
+        function alertSnapshot(regional) {
+            const snapshot = {};
+            visibleRegionalAlerts(regional).forEach((alerta) => {
+                snapshot[alertKey(alerta)] = Number(alerta.quantidade || 0);
+            });
+            return snapshot;
+        }
+
+        function addTimelineEvent(event) {
+            timelineEvents.unshift({
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                time: new Date(),
+                ...event
+            });
+            timelineEvents = timelineEvents.slice(0, 8);
+        }
+
+        function renderTimeline() {
+            if (!timeline) return;
+            if (!timelineEvents.length) {
+                timeline.classList.remove('has-events');
+                timeline.innerHTML = '';
+                return;
+            }
+
+            timeline.classList.add('has-events');
+            timeline.innerHTML = `
+                <div class="timeline-title">Últimos alertas</div>
+                ${timelineEvents.map((event) => `
+                    <div class="timeline-item ${statusClass(event.severity)}">
+                        <div class="timeline-time">${event.time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div class="timeline-text">
+                            <span class="timeline-regional">${event.regional}</span>
+                            ${event.text}
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function triggerSyncSweep() {
+            if (!monitor) return;
+            monitor.classList.remove('syncing');
+            void monitor.offsetWidth;
+            monitor.classList.add('syncing');
+        }
+
+        function markRegionalChanges(regionais) {
+            const nextSignature = {};
+            const nextAlerts = {};
+            const changed = new Set();
+            (regionais || []).forEach((regional) => {
+                const codigo = regional.codigo;
+                if (!codigo) return;
+                const signature = regionalSignature(regional);
+                nextSignature[codigo] = signature;
+                if (previousRegionalSignature[codigo] && previousRegionalSignature[codigo] !== signature) {
+                    changed.add(codigo);
+                }
+
+                const snapshot = alertSnapshot(regional);
+                nextAlerts[codigo] = snapshot;
+                const previousSnapshot = previousRegionalAlerts[codigo];
+                if (previousSnapshot) {
+                    const currentAlerts = {};
+                    visibleRegionalAlerts(regional).forEach((alerta) => {
+                        currentAlerts[alertKey(alerta)] = alerta;
+                    });
+
+                    const keys = new Set([
+                        ...Object.keys(previousSnapshot),
+                        ...Object.keys(snapshot)
+                    ]);
+
+                    keys.forEach((key) => {
+                        const previousValue = Number(previousSnapshot[key] || 0);
+                        const nextValue = Number(snapshot[key] || 0);
+                        if (previousValue === nextValue) return;
+
+                        changed.add(codigo);
+                        const alerta = currentAlerts[key] || alertFromKey(key);
+                        const delta = nextValue - previousValue;
+                        addTimelineEvent({
+                            regional: codigo,
+                            severity: alerta.severidade || 'atencao',
+                            text: nextValue <= 0
+                                ? `${alerta.descricao} normalizado`
+                                : `${alerta.descricao} ${delta > 0 ? '+' : ''}${delta}`
+                        });
+                    });
+                }
+            });
+            previousRegionalSignature = nextSignature;
+            previousRegionalAlerts = nextAlerts;
+            recentlyUpdatedRegionals = changed;
+            pendingVisualUpdateRegionals = new Set(changed);
+            renderTimeline();
+        }
+
+        function animateCards(container) {
+            if (!container) return;
+            container.querySelectorAll('.alert-card').forEach((card, index) => {
+                card.classList.add('card-enter');
+                card.style.animationDelay = `${Math.min(index * 45, 320)}ms`;
+            });
+        }
+
+        function animateCount(element, key, value) {
+            if (!element) return;
+            const normalizedValue = String(value);
+            if (previousCountSignature[key] && previousCountSignature[key] !== normalizedValue) {
+                element.classList.remove('count-pop');
+                void element.offsetWidth;
+                element.classList.add('count-pop');
+            }
+            previousCountSignature[key] = normalizedValue;
+        }
+
+        function animatePanel() {
+            const panel = document.querySelector('.alert-panel');
+            if (!panel) return;
+            panel.classList.remove('panel-enter');
+            void panel.offsetWidth;
+            panel.classList.add('panel-enter');
+        }
+
+        function regionalAlerts(regional) {
+            return visibleRegionalAlerts(regional).filter((alerta) => {
+                if (activeSeverity === 'critico') return alerta.severidade === 'critico';
+                if (activeSeverity === 'alto') return alerta.severidade === 'alto';
+                if (activeSeverity === 'medio') return alerta.severidade === 'medio';
+                if (activeSeverity === 'atencao') return ['atencao', 'warning'].includes(alerta.severidade);
+                return true;
+            });
+        }
+
+        function regionalVisualStatus(regional) {
+            const alerts = visibleRegionalAlerts(regional);
+            if (alerts.some((alerta) => alerta.severidade === 'critico')) return 'critico';
+            if (alerts.some((alerta) => alerta.severidade === 'alto')) return 'alto';
+            if (alerts.some((alerta) => alerta.severidade === 'medio')) return 'medio';
+            if (alerts.some((alerta) => ['atencao', 'warning'].includes(alerta.severidade))) return 'atencao';
+            return 'ok';
+        }
+
+        function alertTotal(regional) {
+            return regionalAlerts(regional).reduce((total, alerta) => total + Number(alerta.quantidade || 0), 0);
+        }
+
+        function problemRegionals() {
+            return (appData?.regionais || [])
+                .filter((regional) => regionalAlerts(regional).length)
+                .sort((a, b) => alertTotal(b) - alertTotal(a));
+        }
+
+        function rotationRegionals() {
+            return (appData?.regionais || [])
+                .filter((regional) => visibleRegionalAlerts(regional).length)
+                .sort((a, b) => {
+                    const severityDelta = severityRank(regionalVisualStatus(b)) - severityRank(regionalVisualStatus(a));
+                    if (severityDelta) return severityDelta;
+                    const totalA = visibleRegionalAlerts(a).reduce((sum, alerta) => sum + Number(alerta.quantidade || 0), 0);
+                    const totalB = visibleRegionalAlerts(b).reduce((sum, alerta) => sum + Number(alerta.quantidade || 0), 0);
+                    return totalB - totalA;
+                });
+        }
+
+        function returnToAlertHome() {
+            activeRegional = null;
+            activeState = null;
+            problemDetail.hidden = true;
+            alertList.hidden = false;
+            renderAlertList();
+            drawMap();
+        }
+
+        function scheduleAlertRotation(delay = ALERT_HOME_MS) {
+            window.clearTimeout(rotationTimer);
+            rotationTimer = window.setTimeout(rotateAlertPanel, delay);
+        }
+
+        function rotateAlertPanel() {
+            if (!appData) {
+                scheduleAlertRotation(ALERT_HOME_MS);
+                return;
+            }
+
+            if (rotationShowingDetail) {
+                rotationShowingDetail = false;
+                returnToAlertHome();
+                scheduleAlertRotation(ALERT_HOME_MS);
+                return;
+            }
+
+            const regionals = rotationRegionals();
+            if (!regionals.length) {
+                rotationShowingDetail = false;
+                returnToAlertHome();
+                scheduleAlertRotation(ALERT_ROTATION_MS);
+                return;
+            }
+
+            const regional = regionals[rotationIndex % regionals.length];
+            rotationIndex += 1;
+            rotationShowingDetail = true;
+            renderRegionalDetail(regional.codigo);
+            scheduleAlertRotation(ALERT_ROTATION_MS);
+        }
+
+        function drawMap() {
+            if (!geoData || !appData) return;
+
+            const width = stage.clientWidth || window.innerWidth;
+            const height = stage.clientHeight || window.innerHeight;
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            svg.innerHTML = '';
+            stateCentroids = {};
+
+            const viewport = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const baseScale = Math.min(width / 700, height / 700);
+            const baseX = (width - (620 * baseScale)) / 2 - 70;
+            const baseY = (height - (620 * baseScale)) / 2 + 24;
+            currentMapScale = baseScale * view.scale;
+            viewport.setAttribute('transform', `translate(${baseX + view.x} ${baseY + view.y}) scale(${currentMapScale})`);
+            svg.appendChild(viewport);
+            drawSurroundingMap(viewport);
+
+            const statesByUf = {};
+            appData.regionais.forEach((regional) => {
+                if (!regional.uf) return;
+                statesByUf[regional.uf] = statesByUf[regional.uf] || [];
+                statesByUf[regional.uf].push(regional);
+            });
+
+            const stateLabels = [];
+            (geoData.estados || []).forEach((feature) => {
+                const uf = String(feature.uf || '').toUpperCase();
+                stateCentroids[uf] = feature.centro || [310, 310];
+
+                const regionaisDoEstado = statesByUf[uf] || [];
+                const stateStatus = regionaisDoEstado.length === 0
+                    ? 'sem-monitoramento'
+                    : regionaisDoEstado
+                        .map((r) => regionalVisualStatus(r))
+                        .sort((a, b) => severityRank(b) - severityRank(a))[0] || 'ok';
+                const hasRecentChange = regionaisDoEstado.some((r) => pendingVisualUpdateRegionals.has(r.codigo));
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('class', `state ${statusClass(stateStatus)} ${uf === activeState ? 'selected' : ''} ${hasRecentChange ? 'data-updated' : ''}`);
+                path.setAttribute('d', feature.d);
+                path.addEventListener('click', () => renderStatePanel(uf));
+                viewport.appendChild(path);
+
+                stateLabels.push({ uf, centro: stateCentroids[uf] });
+            });
+
+            drawDots(viewport);
+            const labelOffsets = {
+                GO: [0, -11],
+                DF: [0, 10],
+                SP: [0, 12],
+                RJ: [4, -11],
+                PR: [-7, 8],
+                SC: [-5, 12],
+                AL: [0, 11],
+                SE: [0, 10],
+            };
+            stateLabels.forEach(({ uf, centro }) => {
+                const [labelX, labelY] = labelOffsets[uf] || [0, 0];
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('class', 'state-label');
+                label.setAttribute('x', centro[0] + labelX);
+                label.setAttribute('y', centro[1] + labelY);
+                label.setAttribute('text-anchor', 'middle');
+                label.textContent = uf;
+                viewport.appendChild(label);
+            });
+            drawFixedTooltips(viewport);
+        }
+
+        function drawSurroundingMap(viewport) {
+            if (!surroundingData || !surroundingData.paises) return;
+
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            group.setAttribute('class', 'surrounding-map');
+            group.setAttribute('transform', 'matrix(1.075 0 0 1.080 6 -30)');
+
+            surroundingData.paises.forEach((pais) => {
+                (pais.paths || []).forEach((d) => {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('class', 'surrounding-land');
+                    path.setAttribute('d', d);
+                    group.appendChild(path);
+                });
+            });
+
+            viewport.appendChild(group);
+            return;
+
+            const lands = [
+                // Guianas / Venezuela / Colombia, acima e a oeste do norte do Brasil.
+                'M 145 22 C 178 12 218 8 254 25 C 286 40 306 42 334 46 L 329 69 C 314 69 300 80 288 88 C 266 93 246 86 221 86 C 197 86 181 100 163 91 C 146 82 129 73 109 78 C 93 84 77 80 60 72 C 77 48 102 33 145 22 Z',
+                // Peru / Bolivia / Paraguai, acompanhando a lateral oeste do Brasil.
+                'M -62 162 C -12 150 20 160 45 185 C 36 205 36 225 44 246 C 55 277 52 306 67 332 C 85 365 110 384 139 403 C 159 416 181 431 205 443 C 220 452 236 459 254 463 C 250 482 248 501 251 519 C 225 514 204 502 184 484 C 161 463 138 457 113 454 C 83 450 60 433 38 407 C 14 380 2 347 -21 322 C -45 296 -50 256 -38 221 C -29 194 -43 183 -62 162 Z',
+                // Argentina / Uruguai, abaixo do sul do Brasil.
+                'M 253 520 C 274 529 297 537 322 538 C 336 551 350 563 370 571 C 355 604 326 631 287 645 C 249 659 212 651 180 626 C 197 603 204 575 198 548 C 217 532 233 523 253 520 Z',
+                // Oceano/continente sutil a leste para dar sensação de mapa amplo.
+                'M 558 268 C 596 287 626 318 638 360 C 654 416 636 462 611 504 C 594 533 582 568 589 606 L 650 606 L 650 120 C 620 156 597 197 579 238 C 572 251 566 260 558 268 Z'
+            ];
+
+            lands.forEach((d) => {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('class', 'surrounding-land');
+                path.setAttribute('d', d);
+                group.appendChild(path);
+            });
+
+            const lines = [
+                'M 63 73 C 91 118 91 169 45 185',
+                'M 44 246 C 95 253 142 272 191 291 C 214 300 238 307 263 309',
+                'M 139 403 C 173 391 209 388 244 395',
+                'M 207 443 C 227 421 247 405 271 394',
+                'M 252 519 C 283 507 315 504 346 514'
+            ];
+
+            lines.forEach((d) => {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('class', 'surrounding-line');
+                path.setAttribute('d', d);
+                group.appendChild(path);
+            });
+
+            viewport.appendChild(group);
+        }
+
+        const dotLayoutByUf = {
+            SP: { columns: 6, spacingX: 10, spacingY: 8.4, shiftX: -18, shiftY: 9 },
+            RJ: { columns: 4, spacingX: 8.2, spacingY: 7.2, shiftX: 5, shiftY: 0 },
+            RS: { columns: 3, spacingX: 9, spacingY: 8, shiftX: 0, shiftY: 0 },
+            CE: { columns: 2, spacingX: 8, spacingY: 7, shiftX: 0, shiftY: 0 },
+            AL: { columns: 2, spacingX: 8, spacingY: 7, shiftX: 0, shiftY: 0 },
+        };
+
+        function offsetFor(index, total, uf) {
+            if (total <= 1) return [0, 0];
+            const layout = dotLayoutByUf[uf] || {};
+            const columns = Math.min(layout.columns || 4, Math.ceil(Math.sqrt(total)));
+            const rows = Math.ceil(total / columns);
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            const spacingX = layout.spacingX || (total > 8 ? 8 : 8.5);
+            const spacingY = layout.spacingY || (total > 8 ? 7 : 8);
+            return [
+                ((col - (columns - 1) / 2) * spacingX) + (layout.shiftX || 0),
+                ((row - (rows - 1) / 2) * spacingY) + (layout.shiftY || 0)
+            ];
+        }
+
+        function drawDots(viewport) {
+            dotPositions = {};
+            const byUf = {};
+            appData.regionais.forEach((regional) => {
+                if (!regional.uf || !stateCentroids[regional.uf]) return;
+                byUf[regional.uf] = byUf[regional.uf] || [];
+                byUf[regional.uf].push(regional);
+            });
+
+            Object.entries(byUf).forEach(([uf, regionals]) => {
+                const [cx, cy] = stateCentroids[uf];
+                regionals.forEach((regional, index) => {
+                    const [ox, oy] = offsetFor(index, regionals.length, uf);
+                    const x = cx + ox;
+                    const y = cy + oy;
+                    dotPositions[regional.codigo] = { x, y };
+
+                    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    const visualStatus = regionalVisualStatus(regional);
+                    const isActive = regional.codigo === activeRegional;
+                    const isHiddenByFocus = activeRegional && !isActive;
+                    const isNewAlert = pendingVisualUpdateRegionals.has(regional.codigo) && visualStatus !== 'ok';
+                    dot.setAttribute('class', `dot ${statusClass(visualStatus)} ${isActive ? 'active' : ''} ${isHiddenByFocus ? 'focus-hidden' : ''} ${isNewAlert ? 'alert-new recent-alert' : ''}`);
+                    dot.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        renderRegionalDetail(regional.codigo);
+                    });
+
+                    const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    halo.setAttribute('class', 'dot-halo');
+                    halo.setAttribute('cx', x);
+                    halo.setAttribute('cy', y);
+                    halo.setAttribute('r', 9);
+                    dot.appendChild(halo);
+
+                    const core = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    core.setAttribute('class', 'dot-core');
+                    core.setAttribute('cx', x);
+                    core.setAttribute('cy', y);
+                    core.setAttribute('r', 5.5);
+                    dot.appendChild(core);
+
+                    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                    title.textContent = `${regional.codigo} - ${visualStatus}`;
+                    dot.appendChild(title);
+                    viewport.appendChild(dot);
+                });
+            });
+        }
+
+        function tooltipDetail(regional) {
+            const alerts = regionalAlerts(regional);
+            if (!alerts.length) return '';
+            return alerts.slice(0, 2).map((a) => `${a.descricao}: ${a.quantidade}`).join(' | ');
+        }
+
+        function fitTooltipText(value, maxChars) {
+            const text = String(value || '');
+            if (text.length <= maxChars) return text;
+            return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
+        }
+
+        function drawFixedTooltips(viewport) {
+            const problematic = (appData.regionais || []).filter((regional) => (
+                regionalAlerts(regional).length
+                && dotPositions[regional.codigo]
+                && (!activeRegional || regional.codigo === activeRegional)
+            ));
+            const grouped = problematic.reduce((acc, regional) => {
+                const uf = regional.uf || 'NA';
+                acc[uf] = acc[uf] || [];
+                acc[uf].push(regional);
+                return acc;
+            }, {});
+
+            Object.entries(grouped).forEach(([uf, regionals]) => {
+                const stateLayout = {
+                    RJ: { side: 'right', shiftX: 18, shiftY: -8 },
+                    SP: { side: 'left', shiftX: -20, shiftY: -14 },
+                    PR: { side: 'left', shiftX: -18, shiftY: -8 },
+                    RS: { side: 'left', shiftX: -18, shiftY: -8 },
+                    AL: { side: 'right', shiftX: 18, shiftY: -8 },
+                    CE: { side: 'right', shiftX: 18, shiftY: -8 },
+                    PA: { side: 'right', shiftX: 18, shiftY: -8 },
+                    AM: { side: 'right', shiftX: 18, shiftY: -8 },
+                }[uf] || { side: 'right', shiftX: 18, shiftY: -8 };
+
+                regionals.forEach((regional, index) => {
+                const pos = dotPositions[regional.codigo];
+                const visualStatus = regionalVisualStatus(regional);
+                const title = fitTooltipText(`${regional.codigo.replace(/^REG_/, '')} - ${severityLabel(visualStatus)}`, 28);
+                const detail = fitTooltipText(tooltipDetail(regional), 38);
+                const width = Math.min(290, Math.max(150, title.length * 8.4 + 20, detail.length * 5.8 + 20));
+                const height = 39;
+                const stackOffset = (index - ((regionals.length - 1) / 2)) * (height + 5);
+                const tooltipScale = Math.max(.42, Math.min(1, 1.55 / currentMapScale));
+                const x = stateLayout.side === 'left'
+                    ? pos.x + stateLayout.shiftX - (width * tooltipScale)
+                    : pos.x + stateLayout.shiftX;
+                const y = pos.y - (20 * tooltipScale) + stateLayout.shiftY + (stackOffset * tooltipScale);
+                const guideStartX = pos.x + (stateLayout.side === 'left' ? -7 : 7);
+                const guideStartY = pos.y;
+                const guideEndX = stateLayout.side === 'left' ? x + (width * tooltipScale) : x;
+                const guideEndY = y + ((height * tooltipScale) / 2);
+
+                const guide = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                guide.setAttribute('class', `tooltip-guide ${statusClass(visualStatus)}`);
+                guide.setAttribute('d', `M ${guideStartX} ${guideStartY} C ${(guideStartX + guideEndX) / 2} ${guideStartY}, ${(guideStartX + guideEndX) / 2} ${guideEndY}, ${guideEndX} ${guideEndY}`);
+                viewport.appendChild(guide);
+
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.setAttribute('class', `fixed-tooltip ${statusClass(visualStatus)}`);
+                group.setAttribute('transform', `translate(${x} ${y}) scale(${tooltipScale})`);
+                group.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    renderRegionalDetail(regional.codigo);
+                });
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', 0);
+                rect.setAttribute('y', 0);
+                rect.setAttribute('width', width);
+                rect.setAttribute('height', height);
+                rect.setAttribute('rx', 6);
+                group.appendChild(rect);
+
+                const textTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                textTitle.setAttribute('x', 8);
+                textTitle.setAttribute('y', 16);
+                textTitle.textContent = title;
+                group.appendChild(textTitle);
+
+                const textDetail = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                textDetail.setAttribute('class', 'tip-detail');
+                textDetail.setAttribute('x', 8);
+                textDetail.setAttribute('y', 30);
+                textDetail.textContent = detail;
+                group.appendChild(textDetail);
+
+                viewport.appendChild(group);
+                });
+            });
+        }
+
+        function chips(regional) {
+            return regionalAlerts(regional)
+                .map((alerta) => {
+                    const chipClass = ['alto', 'medio', 'atencao', 'warning'].includes(alerta.severidade)
+                        ? (alerta.severidade === 'warning' ? 'atencao' : alerta.severidade)
+                        : '';
+                    return `<span class="chip ${chipClass}">${alerta.descricao}: ${alerta.quantidade}</span>`;
+                })
+                .join('');
+        }
+
+        function updateAlertTabs(regionals) {
+            const lista = regionals || [];
+            const countSeverity = (severities) => lista.reduce((sum, regional) => (
+                sum + visibleRegionalAlerts(regional)
+                    .filter((a) => severities.includes(a.severidade))
+                    .reduce((acc, alerta) => acc + Number(alerta.quantidade || 0), 0)
+            ), 0);
+            tabCritico.textContent = `${countSeverity(['critico'])} críticos`;
+            tabAlto.textContent = `${countSeverity(['alto'])} alto risco`;
+            tabMedio.textContent = `${countSeverity(['medio'])} médio risco`;
+            tabAtencao.textContent = `${countSeverity(['atencao', 'warning'])} atenção`;
+            [
+                [tabCritico, 'tab-critico'],
+                [tabAlto, 'tab-alto'],
+                [tabMedio, 'tab-medio'],
+                [tabAtencao, 'tab-atencao'],
+            ].forEach(([tab, key]) => animateCount(tab, key, tab.textContent));
+        }
+
+        function renderAlertList() {
+            activeRegional = null;
+            activeState = null;
+            const regionals = problemRegionals();
+            updateAlertTabs(appData.regionais || []);
+            panelTitle.textContent = `${regionals.length} regional(is)`;
+            panelSubtitle.textContent = `${regionals.reduce((sum, r) => sum + alertTotal(r), 0)} ocorrência(s) em alerta`;
+
+            if (!regionals.length) {
+                alertList.innerHTML = '<div class="empty-state">Nenhuma regional com alerta no filtro atual.</div>';
+                animatePanel();
+                return;
+            }
+
+            alertList.innerHTML = regionals.map((regional) => `
+                <button class="alert-card ${statusClass(regionalVisualStatus(regional))}" type="button" data-regional="${regional.codigo}">
+                    <div class="alert-card-title">
+                        <span>${regional.codigo}</span>
+                        <span class="alert-count">${alertTotal(regional)}</span>
+                    </div>
+                    <div class="chips">${chips(regional)}</div>
+                </button>
+            `).join('');
+
+            alertList.querySelectorAll('[data-regional]').forEach((button) => {
+                button.addEventListener('click', () => renderRegionalDetail(button.dataset.regional));
+            });
+            animateCards(alertList);
+            alertList.querySelectorAll('.alert-count').forEach((count, index) => {
+                animateCount(count, `alert-list-${regionals[index]?.codigo || index}`, count.textContent);
+            });
+            animatePanel();
+        }
+
+        function backButtonHtml() {
+            return '<button class="detail-back" type="button" data-back-alerts>Voltar aos alertas</button>';
+        }
+
+        function bindBackButtons() {
+            document.querySelectorAll('[data-back-alerts]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    rotationShowingDetail = false;
+                    returnToAlertHome();
+                    scheduleAlertRotation();
+                });
+            });
+        }
+
+        function renderStatePanel(uf) {
+            if (activeState === uf && !activeRegional) {
+                activeState = null;
+                renderAlertList();
+                drawMap();
+                return;
+            }
+
+            const regionals = (appData.regionais || []).filter((regional) => regional.uf === uf);
+            activeRegional = null;
+            activeState = uf;
+            updateAlertTabs(regionals);
+            panelTitle.textContent = `${stateNames[uf] || uf}`;
+            panelSubtitle.textContent = `${regionals.length} regional(is) neste estado. Clique em uma regional para ver detalhes.`;
+            alertList.innerHTML = `
+                ${backButtonHtml()}
+                ${regionals.map((regional) => `
+                <button class="alert-card ${statusClass(regionalVisualStatus(regional))}" type="button" data-regional="${regional.codigo}">
+                    <div class="alert-card-title">
+                        <span>${regional.codigo}</span>
+                        <span class="alert-count">${alertTotal(regional)}</span>
+                    </div>
+                    <div class="chips">${chips(regional) || '<span class="chip ok">Sem alerta</span>'}</div>
+                </button>
+                `).join('')}
+            `;
+            problemDetail.hidden = true;
+            alertList.hidden = false;
+            bindBackButtons();
+            alertList.querySelectorAll('[data-regional]').forEach((button) => {
+                button.addEventListener('click', () => renderRegionalDetail(button.dataset.regional));
+            });
+            animateCards(alertList);
+            alertList.querySelectorAll('.alert-count').forEach((count, index) => {
+                animateCount(count, `state-${uf}-${regionals[index]?.codigo || index}`, count.textContent);
+            });
+            animatePanel();
+            drawMap();
+        }
+
+        function problematicItems(regional, group) {
+            return (regional[group] || []).filter((item) => ['offline', 'warning'].includes(item.status));
+        }
+
+        function deviceStatusLabel(status) {
+            if (status === 'warning') return 'atenção';
+            return status || 'alerta';
+        }
+
+        function renderRegionalDetail(codigo) {
+            const regional = (appData.regionais || []).find((item) => item.codigo === codigo);
+            if (!regional) return;
+            activeRegional = codigo;
+            activeState = regional.uf || null;
+            updateAlertTabs([regional]);
+            panelTitle.textContent = regional.codigo;
+            panelSubtitle.textContent = regional.descricao || 'Dispositivos com alerta nesta regional.';
+
+            const groups = [
+                ['aps', 'APs'],
+                ['servidores', 'Servidores'],
+                ['switches', 'Switches'],
+                ['links', 'Links'],
+                ['vpns', 'VPNs'],
+                ['firewalls', 'Firewalls'],
+                ['admins', 'Admins'],
+            ];
+
+            const html = groups.map(([key, label]) => {
+                const items = problematicItems(regional, key);
+                if (!items.length) return '';
+                return `
+                    <section class="device-group">
+                        <h3>${label} - ${items.length}</h3>
+                        ${items.map((item) => `
+                            <div class="device-row">
+                                <div>
+                                    <div class="device-name">${item.nome || label}</div>
+                                    <div class="device-meta">${[item.descricao, item.ip].filter(Boolean).join(' - ') || 'Sem detalhe'}</div>
+                                </div>
+                                <span class="device-status ${item.status === 'warning' ? 'warning' : item.status === 'inativo' ? 'inativo' : ''}">${deviceStatusLabel(item.status)}</span>
+                            </div>
+                        `).join('')}
+                    </section>
+                `;
+            }).join('');
+
+            problemDetail.innerHTML = `
+                ${backButtonHtml()}
+                ${html || '<div class="empty-state ok">Nenhum dispositivo com problema nesta regional.</div>'}
+            `;
+            problemDetail.hidden = false;
+            alertList.hidden = true;
+            animatePanel();
+            drawMap();
+            bindBackButtons();
+        }
+
+        function applySeverity(severity) {
+            activeSeverity = activeSeverity === severity ? 'todos' : severity;
+            [
+                [tabCritico, 'critico'],
+                [tabAlto, 'alto'],
+                [tabMedio, 'medio'],
+                [tabAtencao, 'atencao'],
+            ].forEach(([tab, value]) => {
+                tab.classList.toggle('active', activeSeverity === value || activeSeverity === 'todos');
+            });
+            problemDetail.hidden = true;
+            alertList.hidden = false;
+            renderAlertList();
+            drawMap();
+        }
+
+        async function loadData() {
+            try {
+                const results = await Promise.all([
+                    fetchJson(STATES_URL),
+                    fetchJson(SURROUNDING_URL),
+                    fetchJson(`${DATA_URL}?refresh=1`),
+                ]);
+                geoData = results[0];
+                surroundingData = results[1];
+                markRegionalChanges(results[2].regionais || []);
+                appData = results[2];
+                updateLiveClock();
+                renderAlertList();
+                drawMap();
+                pendingVisualUpdateRegionals = new Set();
+                triggerSyncSweep();
+                if (!rotationTimer) scheduleAlertRotation();
+            } catch (error) {
+                console.error(error);
+                showLoadError(error);
+            }
+        }
+
+        tabCritico.addEventListener('click', () => applySeverity('critico'));
+        tabAlto.addEventListener('click', () => applySeverity('alto'));
+        tabMedio.addEventListener('click', () => applySeverity('medio'));
+        tabAtencao.addEventListener('click', () => applySeverity('atencao'));
+        window.addEventListener('resize', drawMap);
+
+        let dragStart = null;
+        stage.addEventListener('mousedown', (event) => {
+            dragStart = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
+            stage.classList.add('dragging');
+        });
+        window.addEventListener('mousemove', (event) => {
+            if (!dragStart) return;
+            view.x = dragStart.viewX + (event.clientX - dragStart.x);
+            view.y = dragStart.viewY + (event.clientY - dragStart.y);
+            drawMap();
+        });
+        window.addEventListener('mouseup', () => {
+            dragStart = null;
+            stage.classList.remove('dragging');
+        });
+        stage.addEventListener('wheel', (event) => {
+            event.preventDefault();
+            const delta = event.deltaY > 0 ? .9 : 1.1;
+            view.scale = Math.max(.8, Math.min(3.4, view.scale * delta));
+            drawMap();
+        }, { passive: false });
+
+        updateLiveClock();
+        loadData();
+        setInterval(updateLiveClock, 1000);
+        setInterval(loadData, REFRESH_MS);
+    </script>
+</body>
+</html>

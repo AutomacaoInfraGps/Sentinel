@@ -154,7 +154,7 @@ for site in sites:
         html += f"<h2 onclick='toggle(this)'>{site_desc} ({len(aps)} APs)</h2><div style='display:none'><table>"
         html += "<tr><th>Nome</th><th>IP</th><th>MAC</th><th>Modelo</th><th>Firmware</th><th>Status</th><th>Usuários</th><th>Uptime (s)</th></tr>"
 
-        # ========= COLETA 5GHz =========
+        # ========= PERCORRE APs: HTML + COLETA 5GHz =========
         for ap in aps:
             # === Adiciona ao all_aps independente de status/rádio ===
             status_ap = "online" if ap.get("state") == 1 else "offline"
@@ -170,12 +170,27 @@ for site in sites:
                 "site": site_desc
             })
 
-            # Configuração do rádio 5GHz (canal)
+            # ===== HTML DA LINHA (sempre gerado, independente de rádio) =====
+            status = "Online" if ap.get("state") == 1 else "Offline"
+            status_class = "ap-online" if status == "Online" else "ap-offline"
+            html += f"""
+            <tr>
+                <td>{ap.get("name", "")}</td>
+                <td>{ap.get("ip", "")}</td>
+                <td>{ap.get("mac", "")}</td>
+                <td>{modelo_amigavel(ap.get("model", ""))}</td>
+                <td>{ap.get("version", "")}</td>
+                <td class="{status_class}">{status}</td>
+                <td>{ap.get("num_sta", 0)}</td>
+                <td>{ap.get("uptime", 0)}</td>
+            </tr>
+            """
+
+            # ========= COLETA 5GHz (só para APs com rádio configurado) =========
             radio_5ghz = next(
                 (r for r in ap.get("radio_table", []) if r.get("radio") == "na"),
                 None
             )
-            # Estatísticas em tempo real do rádio 5GHz
             radio_5ghz_stats = next(
                 (r for r in ap.get("radio_table_stats", []) if r.get("radio") == "na"),
                 None
@@ -211,23 +226,6 @@ for site in sites:
             })
             canal_5ghz_por_site[site_desc][canal]["cu_vals"].append(cu_total)
             canal_5ghz_por_site[site_desc][canal]["retry_vals"].append(tx_retry)
-
-            # ===== HTML NORMAL =====
-            status = "Online" if ap.get("state") == 1 else "Offline"
-            status_class = "ap-online" if status == "Online" else "ap-offline"
-
-            html += f"""
-            <tr>
-                <td>{ap.get("name", "")}</td>
-                <td>{ap.get("ip", "")}</td>
-                <td>{ap.get("mac", "")}</td>
-                <td>{modelo_amigavel(ap.get("model", ""))}</td>
-                <td>{ap.get("version", "")}</td>
-                <td class="{status_class}">{status}</td>
-                <td>{ap.get("num_sta", 0)}</td>
-                <td>{ap.get("uptime", 0)}</td>
-            </tr>
-            """
 
         html += "</table></div>"
         print(f"Site {site_desc} processado com {len(aps)} APs.")

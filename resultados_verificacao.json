@@ -1,0 +1,849 @@
+{
+  "timestamp": "2026-07-31T08:40:37.406987",
+  "total_regionais": 42,
+  "resultados": {
+    "REG_BAHIA": [
+      {
+        "regional": "REG_BAHIA",
+        "servidor": "Denebola",
+        "ip": "10.171.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:19.550557"
+      },
+      {
+        "regional": "REG_BAHIA",
+        "servidor": "Saiph",
+        "ip": "10.171.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:19.551557"
+      }
+    ],
+    "REG_GOIAS": [
+      {
+        "regional": "REG_GOIAS",
+        "servidor": "Caph",
+        "ip": "10.162.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:24.574641"
+      },
+      {
+        "regional": "REG_GOIAS",
+        "servidor": "Izar",
+        "ip": "10.162.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:24.576586"
+      }
+    ],
+    "REG_AMAZONAS": [
+      {
+        "regional": "REG_AMAZONAS",
+        "servidor": "Nunki",
+        "ip": "10.192.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:29.612653"
+      },
+      {
+        "regional": "REG_AMAZONAS",
+        "servidor": "Menkent",
+        "ip": "10.192.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:29.613636"
+      }
+    ],
+    "REG_ESPIRITO_SANTO": [
+      {
+        "regional": "REG_ESPIRITO_SANTO",
+        "servidor": "Alkaid",
+        "ip": "10.127.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:34.651290"
+      },
+      {
+        "regional": "REG_ESPIRITO_SANTO",
+        "servidor": "Avior",
+        "ip": "10.127.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:34.653288"
+      }
+    ],
+    "REG_CEARA": [
+      {
+        "regional": "REG_CEARA",
+        "servidor": "Mirach",
+        "ip": "192.168.85.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:36.850235"
+      },
+      {
+        "regional": "REG_CEARA",
+        "servidor": "Centauri",
+        "ip": "192.168.85.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:36.849237"
+      }
+    ],
+    "REG_RIO_DE_JANEIRO": [
+      {
+        "regional": "REG_RIO_DE_JANEIRO",
+        "servidor": "Shedar",
+        "ip": "192.168.21.28",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:41.900667"
+      },
+      {
+        "regional": "REG_RIO_DE_JANEIRO",
+        "servidor": "Algieba",
+        "ip": "192.168.21.25",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:41.886911"
+      },
+      {
+        "regional": "REG_RIO_DE_JANEIRO",
+        "servidor": "Naos",
+        "ip": "192.168.21.27",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:41.896968"
+      },
+      {
+        "regional": "REG_RIO_DE_JANEIRO",
+        "servidor": "Lesath",
+        "ip": "192.168.21.50",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:44.037777"
+      },
+      {
+        "regional": "REG_RIO_DE_JANEIRO",
+        "servidor": "Hamal",
+        "ip": "192.168.21.24",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:41.890341"
+      },
+      {
+        "regional": "REG_RIO_DE_JANEIRO",
+        "servidor": "Mintaka",
+        "ip": "192.168.21.29",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:41.888318"
+      }
+    ],
+    "REG_MARANHAO": [
+      {
+        "regional": "REG_MARANHAO",
+        "servidor": "Alnilan",
+        "ip": "10.198.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:46.937975"
+      },
+      {
+        "regional": "REG_MARANHAO",
+        "servidor": "Miaplacidus",
+        "ip": "10.198.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:46.936957"
+      }
+    ],
+    "REG_ABC": [
+      {
+        "regional": "REG_ABC",
+        "servidor": "Dschubba",
+        "ip": "10.111.10.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:49.237642"
+      },
+      {
+        "regional": "REG_ABC",
+        "servidor": "Larawag",
+        "ip": "10.111.10.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:49.238652"
+      }
+    ],
+    "REG_RUDDER": [
+      {
+        "regional": "REG_RUDDER",
+        "servidor": "Vega",
+        "ip": "172.16.112.11",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:51.371044"
+      },
+      {
+        "regional": "REG_RUDDER",
+        "servidor": "Capella",
+        "ip": "172.16.112.10",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:51.370043"
+      }
+    ],
+    "REG_SAO_LEOPOLDO": [
+      {
+        "regional": "REG_SAO_LEOPOLDO",
+        "servidor": "Acrux",
+        "ip": "192.168.52.15",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:53.586070"
+      },
+      {
+        "regional": "REG_SAO_LEOPOLDO",
+        "servidor": "Altair",
+        "ip": "192.168.52.14",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:53.585168"
+      }
+    ],
+    "REG_UBERLANDIA": [
+      {
+        "regional": "REG_UBERLANDIA",
+        "servidor": "Suhail",
+        "ip": "10.134.0.14",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:38:58.611916"
+      },
+      {
+        "regional": "REG_UBERLANDIA",
+        "servidor": "Mirfak",
+        "ip": "10.134.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:38:58.612919"
+      }
+    ],
+    "REG_PARA": [
+      {
+        "regional": "REG_PARA",
+        "servidor": "Alphecca",
+        "ip": "10.191.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:03.638140"
+      }
+    ],
+    "REG_PARANA": [],
+    "REG_MACAE": [
+      {
+        "regional": "REG_MACAE",
+        "servidor": "Alpheratz",
+        "ip": "10.121.4.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:08.663902"
+      },
+      {
+        "regional": "REG_MACAE",
+        "servidor": "Rasalhague",
+        "ip": "10.121.4.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:08.664903"
+      }
+    ],
+    "REG_RHMED": [
+      {
+        "regional": "REG_RHMED",
+        "servidor": "Menkalinan",
+        "ip": "10.121.8.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:13.685778"
+      },
+      {
+        "regional": "REG_RHMED",
+        "servidor": "Eltanin",
+        "ip": "10.121.8.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:13.685778"
+      }
+    ],
+    "REG_SULZER": [
+      {
+        "regional": "REG_SULZER",
+        "servidor": "Arcturo",
+        "ip": "10.133.72.14",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:18.715941"
+      }
+    ],
+    "REG_TLSV_POA": [],
+    "REG_ARARAS": [
+      {
+        "regional": "REG_ARARAS",
+        "servidor": "Girtab",
+        "ip": "10.119.14.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:23.748873"
+      },
+      {
+        "regional": "REG_ARARAS",
+        "servidor": "Merak",
+        "ip": "10.119.14.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:23.747873"
+      }
+    ],
+    "REG_LOGHIS": [],
+    "REG_PRAIA_GRANDE": [
+      {
+        "regional": "REG_PRAIA_GRANDE",
+        "servidor": "Sadr",
+        "ip": "10.113.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:28.783169"
+      }
+    ],
+    "REG_CAMPINAS": [
+      {
+        "regional": "REG_CAMPINAS",
+        "servidor": "Alnath",
+        "ip": "10.119.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:33.802954"
+      },
+      {
+        "regional": "REG_CAMPINAS",
+        "servidor": "Bellatrix",
+        "ip": "10.119.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:33.802954"
+      }
+    ],
+    "REG_SJC": [
+      {
+        "regional": "REG_SJC",
+        "servidor": "Aludra",
+        "ip": "10.112.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:35.956728"
+      },
+      {
+        "regional": "REG_SJC",
+        "servidor": "Phecda",
+        "ip": "10.112.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:35.956728"
+      }
+    ],
+    "REG_SOROCABA": [
+      {
+        "regional": "REG_SOROCABA",
+        "servidor": "Alsephina",
+        "ip": "10.115.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:38.163585"
+      }
+    ],
+    "REG_TRADETALENTOS": [
+      {
+        "regional": "REG_TRADETALENTOS",
+        "servidor": "Sabik",
+        "ip": "10.111.24.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:43.179514"
+      }
+    ],
+    "REG_LEOPOLDO_B2": [
+      {
+        "regional": "REG_LEOPOLDO_B2",
+        "servidor": "Scheat",
+        "ip": "10.151.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:48.212563"
+      },
+      {
+        "regional": "REG_LEOPOLDO_B2",
+        "servidor": "Castor",
+        "ip": "10.151.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:39:48.212563"
+      }
+    ],
+    "REG_CEARA_2": [],
+    "REG_RIO_GRANDE_DO_NORTE": [],
+    "REG_CAXIAS": [
+      {
+        "regional": "REG_CAXIAS",
+        "servidor": "Gacrux",
+        "ip": "10.154.0.11",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:50.422993"
+      },
+      {
+        "regional": "REG_CAXIAS",
+        "servidor": "Dubhe",
+        "ip": "10.154.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:50.422993"
+      },
+      {
+        "regional": "REG_CAXIAS",
+        "servidor": "Alnitak",
+        "ip": "10.154.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:50.422993"
+      }
+    ],
+    "REG_NUTRICAR": [
+      {
+        "regional": "REG_NUTRICAR",
+        "servidor": "Kaus",
+        "ip": "10.111.14.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:55.450913"
+      },
+      {
+        "regional": "REG_NUTRICAR",
+        "servidor": "Sargas",
+        "ip": "10.111.14.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:55.447898"
+      },
+      {
+        "regional": "REG_NUTRICAR",
+        "servidor": "Adhara",
+        "ip": "10.111.14.11",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:39:55.447898"
+      }
+    ],
+    "REG_CAMPINAS_02": [],
+    "REG_ORMEC_PARA": [],
+    "REG_PIAU": [],
+    "REG_GRSASP": [
+      {
+        "regional": "REG_GRSASP",
+        "servidor": "Mira",
+        "ip": "10.111.36.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:00.575525"
+      }
+    ],
+    "REG_CONTROL_MCO": [
+      {
+        "regional": "REG_CONTROL_MCO",
+        "servidor": "Ogma",
+        "ip": "10.182.4.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:05.623835"
+      },
+      {
+        "regional": "REG_CONTROL_MCO",
+        "servidor": "Gomeisa",
+        "ip": "10.182.4.11",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:05.622834"
+      },
+      {
+        "regional": "REG_CONTROL_MCO",
+        "servidor": "Rana",
+        "ip": "10.182.4.14",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:05.625856"
+      }
+    ],
+    "REG_REGIONAL BELO HORIZONTE": [
+      {
+        "regional": "REG_REGIONAL BELO HORIZONTE",
+        "servidor": "Hadar",
+        "ip": "10.31.0.10",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:07.935048"
+      },
+      {
+        "regional": "REG_REGIONAL BELO HORIZONTE",
+        "servidor": "Betelgeuse",
+        "ip": "10.31.0.14",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:07.934055"
+      }
+    ],
+    "REG_MOTUS": [
+      {
+        "regional": "REG_MOTUS",
+        "servidor": "Alhena",
+        "ip": "10.111.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:12.959554"
+      },
+      {
+        "regional": "REG_MOTUS",
+        "servidor": "Markeb",
+        "ip": "10.111.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:12.960556"
+      }
+    ],
+    "REG_PERNAMBUCO": [
+      {
+        "regional": "REG_PERNAMBUCO",
+        "servidor": "Alioth",
+        "ip": "10.181.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:17.979856"
+      },
+      {
+        "regional": "REG_PERNAMBUCO",
+        "servidor": "Alnair",
+        "ip": "10.181.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:17.980855"
+      }
+    ],
+    "REG_GALAXIA": [
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Mirzam",
+        "ip": "10.254.12.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:23.017180"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Almach",
+        "ip": "10.254.12.26",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:23.014174"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Regulus",
+        "ip": "10.254.12.16",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:25.083729"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Acrab",
+        "ip": "10.254.13.10",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:23.013188"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Polaris",
+        "ip": "10.254.12.21",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:23.019188"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Regor",
+        "ip": "10.254.12.24",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:23.023520"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Sirius",
+        "ip": "10.254.12.11",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:25.084786"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Diphda",
+        "ip": "10.254.12.42",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:28.035462"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Rigel",
+        "ip": "10.254.12.63",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:28.038896"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Alcione",
+        "ip": "10.254.12.36",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:28.043012"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Observador",
+        "ip": "10.254.12.15",
+        "tipo": "vm",
+        "status": "warning",
+        "tempo_resposta": 0.13,
+        "erro": "HTTP 404",
+        "timestamp": "2026-07-31T08:40:30.105023"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Navi",
+        "ip": "10.254.12.22",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:30.102244"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Shaula",
+        "ip": "10.254.12.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:27.186255"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "FOMALHAUT",
+        "ip": "10.254.12.35",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:30.208581"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Aljanah",
+        "ip": "10.254.12.33",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:30.173922"
+      },
+      {
+        "regional": "REG_GALAXIA",
+        "servidor": "Atria",
+        "ip": "10.254.12.38",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:30.235035"
+      }
+    ],
+    "REG_GLOBAL_SEGURANCA": [
+      {
+        "regional": "REG_GLOBAL_SEGURANCA",
+        "servidor": "Tiaki",
+        "ip": "10.161.0.13",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Conexão recusada",
+        "timestamp": "2026-07-31T08:40:32.343609"
+      },
+      {
+        "regional": "REG_GLOBAL_SEGURANCA",
+        "servidor": "Algol",
+        "ip": "10.161.0.12",
+        "tipo": "vm",
+        "status": "offline",
+        "tempo_resposta": null,
+        "erro": "Timeout",
+        "timestamp": "2026-07-31T08:40:32.343609"
+      }
+    ],
+    "REG_CTRLBP": [],
+    "REG_ALAGOAS": [],
+    "REG_GRSA_MACAE": []
+  }
+}
