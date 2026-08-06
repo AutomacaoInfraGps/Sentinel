@@ -258,7 +258,7 @@
         </div>
         <div class="stat-card" id="card-semsinal" style="background: linear-gradient(135deg, #5c6770, #343a40);" onclick="aplicarFiltroFirewall('semsinal')">
             <div class="number">{{ total_sem_sinal|default(0) }}</div>
-            <div class="label"><i class="bi bi-slash-circle-fill me-1"></i>Sem Sinal</div>
+            <div class="label"><i class="bi bi-slash-circle-fill me-1"></i>Offline</div>
         </div>
         <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
             <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) - (total_sem_sinal|default(0)) }}</div>
@@ -341,7 +341,7 @@
                                     <div>
                                         <small class="fw-semibold">{{ 'FortiGuard' if licenca.nome == 'fortiguard' else 'FortiCare' }}</small>
                                         <small class="text-muted ms-2">Status: <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
-                            {%- if licenca.status == 'offline' %}Sem Sinal
+                            {%- if licenca.status == 'offline' %}Offline
                             {%- elif licenca.status in ('valid', 'licensed') %}Válida
                             {%- elif licenca.status == 'registered' %}Registrada
                             {%- elif licenca.status == 'expired' %}Expirada
@@ -351,7 +351,7 @@
                         </span></small>
                                     </div>
                                     <span class="badge bg-{{ 'secondary' if licenca.status == 'offline' else 'danger' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'warning text-dark' if licenca.dias_restantes <= 60 else 'success' }}">
-                                        {%- if licenca.status == 'offline' %}Sem Sinal
+                                        {%- if licenca.status == 'offline' %}Offline
                                         {%- elif licenca.notificacao_expirada %}Expirada
                                         {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
                                     </span>
