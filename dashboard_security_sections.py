@@ -148,7 +148,7 @@ def _admin_status(device):
 
 def _status_badge(status):
     labels = {
-        "ok": "OK", "warning": "A vencer", "expirado": "Expirada", "sem-sinal": "Sem Sinal",
+        "ok": "OK", "warning": "A vencer", "expirado": "Expirada", "sem-sinal": "Offline",
         "alerta": "Com alerta", "offline": "Offline", "sem-permissao": "Sem permissão",
     }
     css = {
@@ -252,14 +252,14 @@ def build_security_dashboard(project_root):
         ("Licenças OK", fw_counts["ok"], "status-online", "ok"),
         ("A vencer", fw_counts["warning"], "status-warning", "warning"),
         ("Expiradas", fw_counts["expirado"], "status-offline", "expirado"),
-        ("Sem Sinal", fw_counts["sem-sinal"], "status-inactive", "sem-sinal"),
+        ("Offline", fw_counts["sem-sinal"], "status-inactive", "sem-sinal"),
     ])
     firewall_regional_kpi = _kpi("Firewalls por Regional", "fa-shield-alt", "firewalls", [
         ("Total", len(regional_fw), "status-neutral", "regional-total"),
         ("Sem alerta", fw_reg_counts["ok"], "status-online", "regional-ok"),
         ("A vencer", fw_reg_counts["warning"], "status-warning", "regional-warning"),
         ("Com expirada", fw_reg_counts["expirado"], "status-offline", "regional-expirado"),
-        ("Com sem sinal", fw_reg_counts["sem-sinal"], "status-inactive", "regional-sem-sinal"),
+        ("Com offline", fw_reg_counts["sem-sinal"], "status-inactive", "regional-sem-sinal"),
     ])
     admin_device_kpi = _kpi("Monitor de Admins", "fa-user-shield", "admin-monitor", [
         ("Total", len(admins), "status-neutral", "total"),
