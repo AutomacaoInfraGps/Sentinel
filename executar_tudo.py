@@ -3373,6 +3373,35 @@ dashboard_html = f"""
         .dashboard-view.active {{
             display: block;
         }}
+
+        .checklist-map-shell {{
+            background: linear-gradient(135deg, rgba(8, 74, 97, 0.16), rgba(15, 23, 42, 0.10));
+            border: 1px solid rgba(8, 74, 97, 0.20);
+            border-radius: 18px;
+            padding: 14px;
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+        }}
+
+        .checklist-map-frame {{
+            width: 100%;
+            min-height: 780px;
+            border: 0;
+            border-radius: 14px;
+            background: #062837;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+        }}
+
+        .checklist-map-fallback {{
+            margin: 12px 4px 0;
+            color: #e2e8f0;
+            font-size: 0.86rem;
+        }}
+
+        .checklist-map-fallback a {{
+            color: #7dd3fc;
+            font-weight: 700;
+            text-decoration: none;
+        }}
         
         .kpi-container {{
             display: grid;
@@ -4713,11 +4742,27 @@ dashboard_html = f"""
                 <button type="button" class="dashboard-view-tab active" data-dashboard-view-target="device-view" role="tab" aria-selected="true">
                     <i class="fas fa-server"></i> Por dispositivo
                 </button>
-                <button type="button" class="dashboard-view-tab" data-dashboard-view-target="regional-view" role="tab" aria-selected="false">
+                <button type="button" class="dashboard-view-tab" data-dashboard-view-target="map-view" role="tab" aria-selected="false">
                     <i class="fas fa-map-marker-alt"></i> Por regional
                 </button>
             </div>
         </div>
+
+        <section id="map-view" class="dashboard-view" data-dashboard-view="map">
+            <div class="checklist-map-shell">
+                <iframe
+                    id="checklistMapFrame"
+                    class="checklist-map-frame"
+                    title="Mapa Brasil - VisÃ£o por regional"
+                    loading="lazy"
+                    data-map-src="/mapa">
+                </iframe>
+                <p class="checklist-map-fallback">
+                    Se o mapa nÃ£o carregar automaticamente, abra a tela dedicada em
+                    <a href="/mapa" target="_blank" rel="noopener">/mapa</a>.
+                </p>
+            </div>
+        </section>
 
         <section id="regional-view" class="dashboard-view" data-dashboard-view="regional">
         
@@ -5103,7 +5148,7 @@ dashboard_html = f"""
             </div>
         </details>
         <details id="firewalls" class="details-section">
-            <summary>Firewalls e Licenças</summary>
+            <summary>Licenças de Firewalls</summary>
             <div class="details-content">{security_dashboard['firewall_detail']}</div>
         </details>
         <details id="admin-monitor" class="details-section">
@@ -5127,6 +5172,9 @@ function setDashboardView(viewId) {{
         tab.classList.toggle('active', active);
         tab.setAttribute('aria-selected', active ? 'true' : 'false');
     }});
+    if (targetId === 'map-view') {{
+        carregarMapaChecklist();
+    }}
     setTimeout(() => {{
         Object.values(Chart.instances || {{}}).forEach((chart) => chart.resize());
     }}, 0);
@@ -5134,6 +5182,16 @@ function setDashboardView(viewId) {{
 
 function dashboardViewForDetail(detailId) {{
     return detailId === 'regionais' ? 'regional-view' : 'device-view';
+}}
+
+function carregarMapaChecklist() {{
+    const frame = document.getElementById('checklistMapFrame');
+    if (!frame || frame.getAttribute('src')) return;
+    let mapaUrl = frame.dataset.mapSrc || '/mapa';
+    if (window.location.protocol === 'file:') {{
+        mapaUrl = 'http://localhost:5000/mapa';
+    }}
+    frame.setAttribute('src', mapaUrl);
 }}
 
 function resetUnifiSections(detail) {{
@@ -5244,7 +5302,29 @@ function filterSecuritySection(detail, action) {{
     }}
 
     let visible = 0;
-    if (action.startsWith('regional-')) {{
+    if (action.startsWith('fw-')) {{
+        const expected = action.replace('fw-', '');
+        rows.forEach((row) => {{
+            const show = row.dataset.fwStatus === expected;
+            row.style.display = show ? '' : 'none';
+            if (show) visible += 1;
+        }});
+    }} else if (action.startsWith('regional-fw-')) {{
+        const expected = action.replace('regional-fw-', '');
+        const grouped = {{}};
+        rows.forEach((row) => {{
+            const regional = row.dataset.regional || 'CENTRAL';
+            (grouped[regional] ||= []).push(row);
+        }});
+        Object.values(grouped).forEach((regionalRows) => {{
+            const statuses = regionalRows.map((row) => row.dataset.fwStatus);
+            const regionalStatus = statuses.includes('offline') ? 'offline'
+                : statuses.length && statuses.every((status) => status === 'inativo') ? 'inativo' : 'online';
+            const show = regionalStatus === expected;
+            regionalRows.forEach((row) => {{ row.style.display = show ? '' : 'none'; }});
+            if (show) visible += regionalRows.length;
+        }});
+    }} else if (action.startsWith('regional-')) {{
         const expected = action.replace('regional-', '');
         const grouped = {{}};
         rows.forEach((row) => {{
@@ -5738,7 +5818,7 @@ new Chart(document.getElementById('chartDeviceVpn'), {{
     }}
 }});
 
-criarGraficoRegional('chartDeviceFirewalls', 'Firewalls e Licenças', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
+criarGraficoRegional('chartDeviceFirewalls', 'Licenças de Firewalls', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
 criarGraficoRegional('chartDeviceAdmins', 'Monitor de Admins', ['OK', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_counts']['ok']}, {security_dashboard['admin_counts']['alerta']}, {security_dashboard['admin_counts']['offline']}, {security_dashboard['admin_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
 
 // Botão flutuante: fechar tudo e voltar ao topo
@@ -5771,7 +5851,7 @@ criarGraficoRegional('chartRegionalReplicacao', 'Replicação AD por Regional', 
 criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com warning', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
 criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline', 'Com inativo'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}, {links_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#718096'], 'links');
 criarGraficoRegional('chartRegionalVpn', 'VPNs por Regional', ['Sem offline', 'Com offline'], [{vpn_regionais_sem_offline}, {vpn_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'vpn-details');
-criarGraficoRegional('chartRegionalFirewalls', 'Firewalls por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
+criarGraficoRegional('chartRegionalFirewalls', 'Licenças por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
 criarGraficoRegional('chartRegionalAdmins', 'Admins por Regional', ['Sem alerta', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_regional_counts']['ok']}, {security_dashboard['admin_regional_counts']['alerta']}, {security_dashboard['admin_regional_counts']['offline']}, {security_dashboard['admin_regional_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
 
 const backToTopBtn = document.getElementById('backToTopBtn');
