@@ -36,9 +36,26 @@ Observação: arquivos pessoais de contexto para IA, como `COPILOT_CONTEXT.md`, 
 ### 🏢 Regionais
 
 - Cadastro e visualização de regionais.
-- Servidores, VMs, links, switches e firewalls agrupados por regional.
+- Servidores, VMs, links, switches, firewalls e dados operacionais agrupados por regional.
+- Contadores clicáveis para filtrar regionais com/sem servidores, links, switches e firewalls a vencer.
+- Detalhes por regional com seções de servidores, links, switches, firewalls e ações operacionais.
 - Tela principal em `/regionais`.
 - Detalhe individual em `/regional/<codigo>`.
+- Botões de preventiva por grupo: servidores, switches, firewalls e relatório consolidado da regional.
+- Botão de preventiva geral para gerar relatórios individuais por dispositivo e entregar em arquivo ZIP.
+
+### 🗺️ Mapa de Monitoramento
+
+- Tela dedicada em `/mapa`, acessível pelo menu de Infraestrutura.
+- Exibe mapa do Brasil com pontos por regional e painel lateral de alertas.
+- Atualização periódica para uso em monitoramento operacional.
+- Destaque visual por criticidade:
+  - Crítico: itens offline que exigem ação.
+  - Atenção: alertas operacionais como warnings.
+  - Normal: regionais sem alerta acionável.
+- Tooltips automáticos para regionais com problemas.
+- Clique em estado, regional, bolinha ou tooltip para filtrar e abrir detalhes.
+- Inativos/desabilitados propositalmente não devem ser tratados como alerta acionável.
 
 ### 🖥️ Servidores e VMs
 
@@ -53,12 +70,16 @@ Observação: arquivos pessoais de contexto para IA, como `COPILOT_CONTEXT.md`, 
 - Sincronização manual com FortiManager/FortiGate.
 - Identificação de interfaces WAN, IPs públicos, provedores, velocidades e status.
 - A sincronização automática ao abrir a tela de regionais foi desativada para reduzir consumo de API.
+- Suporte a aliases de regionais renomeadas para manter links antigos associados corretamente.
+- Botões de teste e atualização usam feedback visual com load flutuante.
 
 ### 🔥 Firewalls
 
 - Tela em `/firewalls`.
 - Consulta FortiGates via FortiManager.
-- Exibe status, modelo, serial e licenças FortiCare.
+- Exibe status, modelo, serial, versão da firmware e licenças FortiCare.
+- Licenças usam regra operacional por status: OK, a vencer, expirada e sem sinal.
+- A tela de mapa considera como alerta acionável apenas licenças expiradas ou a vencer.
 - Usa cache local por até **60 minutos** para reduzir chamadas repetidas ao FortiManager.
 - O botão **Atualizar Forti** força nova consulta em tempo real.
 
@@ -75,6 +96,8 @@ Observação: arquivos pessoais de contexto para IA, como `COPILOT_CONTEXT.md`, 
 - Tela em `/switches`.
 - Integração com Zabbix.
 - Consulta status de switches, alertas e organização por regional.
+- Diferencia online, offline, warning e inativo.
+- Itens inativos/desabilitados não devem entrar como alerta crítico no mapa operacional.
 - Usa `gerenciar_switches.py` e planilha/configuração definida no ambiente.
 
 ### 🔐 VPN IPsec
@@ -82,13 +105,16 @@ Observação: arquivos pessoais de contexto para IA, como `COPILOT_CONTEXT.md`, 
 - Tela em `/vpn-ipsec`.
 - Exibe túneis VPN agrupados por regional.
 - Dados obtidos via FortiManager/FortiGate.
+- Mapeamento por regional revisado para evitar túneis aparecendo em unidades incorretas.
 
 ### 📡 Antenas UniFi
 
 - Telas de antenas UniFi e dashboards relacionados.
 - Coleta por `Unifi.Py`.
 - Agrupamento por site/regional.
-- Exibe status de APs, clientes e informações operacionais.
+- Exibe status de APs, usuários conectados, modelo, firmware e informações operacionais.
+- A visão de interferência/co-canal 5GHz foca em APs com Atenção ou Crítico.
+- Há atualização manual das antenas para recarregar status, modelo e dados operacionais.
 
 ### 📜 Certificados
 
@@ -100,6 +126,10 @@ Observação: arquivos pessoais de contexto para IA, como `COPILOT_CONTEXT.md`, 
 
 - Dashboard consolidado por `executar_tudo.py`.
 - Relatórios de infraestrutura.
+- Dashboard preview em `output/dashboard_preview.html` usado para homologação visual.
+- Checklist consolidado com visão por dispositivo e visão por regional/mapa.
+- Preventivas por regional e por tipo de dispositivo.
+- Relatórios preventivos individuais por dispositivo empacotados em ZIP.
 - Rotinas de replicação AD.
 - Capturas de portais internos, GPS Amigo, Saturno e AppGate.
 - Envio de e-mails via Microsoft Graph.
@@ -137,6 +167,7 @@ Automacao/
 |-- executar_tudo.py               # Dashboard consolidado
 |-- gps_print.py                   # Capturas de portais
 |-- sofia/                         # Assistente SofIA
+|-- docs/                          # Documentacao e backlog operacional
 |-- templates/                     # Templates HTML/Jinja2
 |-- static/                        # CSS, JS, imagens e branding
 |-- data/                          # Dados gerados em runtime
@@ -198,6 +229,20 @@ python executar_tudo.py --no-browser
 
 O dashboard consolidado gera arquivos em `output/` e também em pastas públicas configuradas em `config.py`.
 
+O preview visual do dashboard pode ser acessado pelo Sentinel quando o arquivo `output/dashboard_preview.html` existir. Ele é usado para validar layout e navegação antes de aplicar mudanças no checklist oficial.
+
+## 🧾 Preventivas
+
+As preventivas são relatórios operacionais gerados a partir dos dados já coletados pelo Sentinel.
+
+- **Gerar Relatório:** consolida servidores, links, switches e firewalls da regional.
+- **Preventiva Servidores:** gera visão focada apenas nos servidores da regional.
+- **Preventiva Switches:** gera visão focada apenas nos switches da regional.
+- **Preventiva Firewalls:** gera visão focada apenas nos firewalls/licenças da regional.
+- **Preventiva geral:** gera relatórios individuais por dispositivo e compacta o resultado.
+
+Os arquivos gerados ficam organizados em `output/preventivas/` por ano, mês e dia.
+
 ## 🧯 Cache e Consumo de API Forti
 
 Para reduzir consumo no FortiManager/FortiAnalyzer:
@@ -207,6 +252,8 @@ Para reduzir consumo no FortiManager/FortiAnalyzer:
 - Os botões **Atualizar Forti** forçam consulta em tempo real.
 - A sincronização automática de links ao abrir regionais foi desativada.
 - A sincronização de links continua disponível manualmente.
+- O mapa de monitoramento deve reaproveitar cache operacional e atualizar somente o necessário.
+- O checklist diário continua sendo uma fotografia consolidada do horário programado.
 
 Isso mantém as consultas funcionando, mas evita chamadas repetidas a cada navegação.
 
@@ -249,9 +296,12 @@ O Sentinel hoje é uma plataforma interna de automação de infraestrutura com f
 
 - Operação regional
 - Monitoramento de rede
+- Mapa Brasil para acompanhamento operacional
 - Inventário e status de firewalls
 - Controle de admins Forti
 - Links, VPNs e switches
+- Antenas UniFi e interferência 5GHz
+- Preventivas por regional e por dispositivo
 - Certificados e relatórios
 - Assistente SofIA integrada
 

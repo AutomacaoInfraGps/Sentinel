@@ -967,8 +967,8 @@
         const tabAtencao = document.getElementById('tabAtencao');
         const timeline = document.getElementById('timeline');
         const monitor = document.querySelector('.monitor');
-        const ALERT_ROTATION_MS = 3 * 60 * 1000;
-        const ALERT_HOME_MS = 12 * 1000;
+        const ALERT_DETAIL_MS = 30 * 1000;
+        const ALERT_HOME_MS = 3 * 60 * 1000;
 
         let appData = null;
         let geoData = null;
@@ -1328,7 +1328,7 @@
             if (!regionals.length) {
                 rotationShowingDetail = false;
                 returnToAlertHome();
-                scheduleAlertRotation(ALERT_ROTATION_MS);
+                scheduleAlertRotation(ALERT_HOME_MS);
                 return;
             }
 
@@ -1336,7 +1336,7 @@
             rotationIndex += 1;
             rotationShowingDetail = true;
             renderRegionalDetail(regional.codigo);
-            scheduleAlertRotation(ALERT_ROTATION_MS);
+            scheduleAlertRotation(ALERT_DETAIL_MS);
         }
 
         function drawMap() {

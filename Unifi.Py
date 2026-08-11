@@ -22,7 +22,7 @@ UNIFI_MODEL_NAMES = {
     "UAL6":      "AP Lite 6",
     "UALR6v2":   "AP Long-Range 6 v2",
     "UAP6MP":    "U6 Mesh Pro",
-    "UAPA693":   "AP Pro Gen3",
+    "UAPA693":   "UAP AC Pro",
     "UKPW":      "UniFi Swiss Wall",
     # modelos legados comuns
     "UAP":       "AP Classic",
@@ -41,6 +41,19 @@ UNIFI_MODEL_NAMES = {
 
 def modelo_amigavel(codigo):
     return UNIFI_MODEL_NAMES.get(codigo, codigo)
+
+
+def modelo_ap(ap, site_desc):
+    ip = str(ap.get("ip") or "").strip()
+    site = str(site_desc or "").strip().upper()
+    nome = str(ap.get("name") or "").strip().upper()
+
+    if site == "V060_CONTROL_MACEIO" and (
+        ip in {"10.182.4.30", "10.182.4.31"} or nome in {"V060_AP_MCO_RH", "V060_AP_MCO_SESMT"}
+    ):
+        return "U7 Pro Max"
+
+    return modelo_amigavel(ap.get("model", ""))
 
 # === CONFIGURAÇÕES ===
 controller_host = UNIFI_CONFIG["host"]
@@ -162,7 +175,8 @@ for site in sites:
                 "nome": ap.get("name", ""),
                 "ip": ap.get("ip", ""),
                 "mac": ap.get("mac", ""),
-                "modelo": modelo_amigavel(ap.get("model", "")),
+                "modelo_codigo": ap.get("model", ""),
+                "modelo": modelo_ap(ap, site_desc),
                 "firmware": ap.get("version", ""),
                 "status": status_ap,
                 "clientes": ap.get("num_sta", 0),
@@ -178,7 +192,7 @@ for site in sites:
                 <td>{ap.get("name", "")}</td>
                 <td>{ap.get("ip", "")}</td>
                 <td>{ap.get("mac", "")}</td>
-                <td>{modelo_amigavel(ap.get("model", ""))}</td>
+                <td>{modelo_ap(ap, site_desc)}</td>
                 <td>{ap.get("version", "")}</td>
                 <td class="{status_class}">{status}</td>
                 <td>{ap.get("num_sta", 0)}</td>
