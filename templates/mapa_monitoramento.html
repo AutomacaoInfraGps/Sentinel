@@ -476,14 +476,14 @@
         .alert-panel {
             position: absolute;
             top: clamp(92px, 7.2vw, 110px);
-            right: clamp(18px, 1.35vw, 24px);
-            bottom: clamp(18px, 1.35vw, 24px);
+            right: clamp(14px, 1vw, 18px);
+            bottom: clamp(14px, 1vw, 18px);
             z-index: 25;
-            width: clamp(285px, 18vw, 350px);
+            width: clamp(230px, 14vw, 280px);
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            padding: 0 6px 0 0;
+            gap: 10px;
+            padding: 0 4px 0 0;
             border: 0;
             border-radius: 0;
             background: transparent;
@@ -519,24 +519,24 @@
 
         .panel-kicker {
             display: inline-flex;
-            padding: 4px 9px;
+            padding: 3px 7px;
             border-radius: 999px;
             background: rgba(245, 158, 11, .18);
             color: #fde68a;
-            font-size: clamp(10px, .58vw, 11px);
-            font-weight: 700;
+            font-size: clamp(9px, .52vw, 10px);
+            font-weight: 500;
             text-transform: uppercase;
         }
 
         .panel-title {
-            margin: 8px 0 3px;
-            font-size: clamp(17px, 1.05vw, 21px);
-            font-weight: 700;
+            margin: 6px 0 2px;
+            font-size: clamp(14px, .88vw, 17px);
+            font-weight: 600;
         }
 
         .panel-subtitle {
             color: var(--muted);
-            font-size: clamp(12px, .68vw, 13px);
+            font-size: clamp(11px, .6vw, 12px);
         }
 
         .alert-tabs {
@@ -549,11 +549,11 @@
         .alert-tab {
             border: 1px solid rgba(148, 163, 184, .28);
             border-radius: 7px;
-            padding: clamp(7px, .48vw, 9px);
+            padding: clamp(5px, .38vw, 7px);
             color: var(--text);
             background: rgba(15, 23, 42, .42);
-            font-size: clamp(10px, .58vw, 12px);
-            font-weight: 700;
+            font-size: clamp(9px, .52vw, 11px);
+            font-weight: 500;
             cursor: pointer;
         }
 
@@ -589,8 +589,8 @@
         .timeline-title {
             margin: 0 0 8px;
             color: #bae6fd;
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 10px;
+            font-weight: 500;
             text-transform: uppercase;
             letter-spacing: .04em;
         }
@@ -624,7 +624,8 @@
 
         .timeline-time {
             color: #e0f2fe;
-            font-weight: 700;
+            font-weight: 500;
+            font-size: 11px;
         }
 
         .timeline-text {
@@ -663,7 +664,7 @@
 
         .timeline-regional {
             color: var(--text);
-            font-weight: 700;
+            font-weight: 500;
         }
 
         .alert-card {
@@ -725,8 +726,9 @@
             display: flex;
             justify-content: space-between;
             gap: 10px;
-            font-weight: 700;
-            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: clamp(11px, .62vw, 13px);
+            margin-bottom: 6px;
         }
 
         .alert-count {
@@ -768,13 +770,13 @@
 
         .chip {
             display: inline-flex;
-            padding: 4px 8px;
+            padding: 3px 7px;
             border-radius: 999px;
             background: rgba(248, 113, 113, .18);
             border: 1px solid rgba(248, 113, 113, .4);
             color: #fecaca;
-            font-size: clamp(10px, .62vw, 12px);
-            font-weight: 700;
+            font-size: clamp(9px, .55vw, 11px);
+            font-weight: 500;
         }
 
         .chip.alto {
@@ -850,14 +852,14 @@
             border-top: 1px solid rgba(148, 163, 184, .16);
         }
 
-        .device-name { font-weight: 700; }
+        .device-name { font-weight: 500; font-size: 12px; }
         .device-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
         .device-status {
-            height: 24px;
-            padding: 5px 8px;
+            height: 22px;
+            padding: 4px 7px;
             border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 10px;
+            font-weight: 500;
             background: rgba(248, 113, 113, .18);
             color: #fecaca;
             white-space: nowrap;
@@ -903,7 +905,7 @@
             }
 
             .alert-panel {
-                width: clamp(340px, 18vw, 380px);
+                width: clamp(260px, 13vw, 310px);
                 top: 96px;
             }
 
@@ -1192,12 +1194,27 @@
                         const nextValue = Number(snapshot[key] || 0);
                         if (previousValue === nextValue) return;
 
-                        changed.add(codigo);
+
+
+
+
+
+
+
+
+
+                                                changed.add(codigo);
                         const alerta = currentAlerts[key] || alertFromKey(key);
                         const delta = nextValue - previousValue;
+                        
+                        // Lógica de cor para o Histórico:
+                        // Se normalizou ou diminuiu o erro = 'ok' (Verde)
+                        // Se aumentou o erro = usa a severidade do alerta (Vermelho/Laranja)
+                        const eventSeverity = (nextValue <= 0 || delta < 0) ? 'ok' : (alerta.severidade || 'atencao');
+
                         addTimelineEvent({
                             regional: codigo,
-                            severity: alerta.severidade || 'atencao',
+                            severity: eventSeverity,
                             text: nextValue <= 0
                                 ? `${alerta.descricao} normalizado`
                                 : `${alerta.descricao} ${delta > 0 ? '+' : ''}${delta}`
