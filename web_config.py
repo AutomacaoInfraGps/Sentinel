@@ -4070,10 +4070,29 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
     total_alertas = 0
     total_expirados = 0
     total_sem_sinal = 0
+    total_fw_online = 0
+    total_fw_offline = 0
+    total_fw_inativo = 0
 
     for firewalls in (firewalls_por_regional or {}).values():
         for firewall in firewalls or []:
             total_firewalls += 1
+            status_fw = str(
+                firewall.get("status_operacional")
+                or firewall.get("status")
+                or firewall.get("conn_status")
+                or ""
+            ).strip().lower()
+            if status_fw in {"ready", "online", "up", "connected", "1", "2"}:
+                firewall["status_operacional"] = "online"
+                total_fw_online += 1
+            elif status_fw in {"offline", "down", "disconnected", "0"}:
+                firewall["status_operacional"] = "offline"
+                total_fw_offline += 1
+            else:
+                firewall["status_operacional"] = "inativo"
+                total_fw_inativo += 1
+
             licencas = firewall.get("licencas") or []
             tem_sem_sinal = any(
                 str(lic.get("status") or "").lower() == "offline"
@@ -4099,12 +4118,21 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
 
             if tem_expirada:
                 total_expirados += 1
-            elif tem_sem_sinal:
+            if tem_sem_sinal:
                 total_sem_sinal += 1
-            elif criticas:
+            if criticas:
                 total_alertas += criticas
 
-    return total_firewalls, total_alertas, total_expirados, total_sem_sinal
+    return {
+        "total_firewalls": total_firewalls,
+        "total_alertas": total_alertas,
+        "total_expirados": total_expirados,
+        "total_sem_sinal": total_sem_sinal,
+        "total_fw_online": total_fw_online,
+        "total_fw_offline": total_fw_offline,
+        "total_fw_inativo": total_fw_inativo,
+        "total_licencas_ok": max(total_firewalls - total_alertas - total_expirados, 0),
+    }
 
 
 def _obter_firewalls_regionais_live(codigo_regional):
@@ -4129,7 +4157,8 @@ def _obter_firewalls_regionais_live(codigo_regional):
                 'nome': device_name,
                 'hostname': device_data.get('hostname', ''),
                 'ip': device_data.get('ip', ''),
-                'status': device_data.get('status', 'unknown'),
+                'status': device_data.get('status') or device_data.get('conn_status') or 'unknown',
+                'status_operacional': device_data.get('conn_status') or device_data.get('status') or 'unknown',
                 'model': device_data.get('platform_str') or device_data.get('model') or 'N/A',
                 'serial': device_data.get('sn') or device_data.get('serialnumber') or 'N/A',
                 'firmware': _formatar_firmware_firewall(device_data),
@@ -5411,21 +5440,15 @@ def listar_firewalls(return_data=False):
             if cached:
                 cached_firewalls = cached.get("firewalls_por_regional", {})
                 _preparar_datas_firewalls(cached_firewalls)
-                total_firewalls_cache, total_alertas_cache, total_expirados_cache, total_sem_sinal_cache = _recalcular_totais_firewalls(cached_firewalls)
+                resumo_firewalls_cache = _recalcular_totais_firewalls(cached_firewalls)
                 if return_data:
                     cached["firewalls_por_regional"] = cached_firewalls
-                    cached["total_firewalls"] = total_firewalls_cache
-                    cached["total_alertas"] = total_alertas_cache
-                    cached["total_expirados"] = total_expirados_cache
-                    cached["total_sem_sinal"] = total_sem_sinal_cache
+                    cached.update(resumo_firewalls_cache)
                     return cached
                 return render_template(
                     'firewalls.html',
                     firewalls_por_regional=cached_firewalls,
-                    total_firewalls=total_firewalls_cache,
-                    total_alertas=total_alertas_cache,
-                    total_expirados=total_expirados_cache,
-                    total_sem_sinal=total_sem_sinal_cache,
+                    **resumo_firewalls_cache,
                     cache_atualizado_em=cached.get("atualizado_em"),
                     usando_cache=True,
                 )
@@ -5521,7 +5544,7 @@ def listar_firewalls(return_data=False):
                 device_hostname = device_data.get('hostname', '')
                 device_model = device_data.get('platform_str', 'N/A')
                 device_serial = device_data.get('sn', 'N/A')
-                device_status = device_data.get('status', 'unknown')
+                device_status = device_data.get('status') or device_data.get('conn_status') or 'unknown'
                 device_firmware = _formatar_firmware_firewall(device_data)
                 
                 if not device_name:
@@ -5546,6 +5569,7 @@ def listar_firewalls(return_data=False):
                             'hostname': device_hostname,
                             'ip': device_ip,
                             'status': device_status,
+                            'status_operacional': device_data.get('conn_status') or device_status or 'unknown',
                             'model': device_model,
                             'serial': device_serial,
                             'firmware': device_firmware,
@@ -5657,18 +5681,15 @@ def listar_firewalls(return_data=False):
             print(f"⚠️ Erro ao conectar FortiManager: {str(e)}")
             current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
         
-        total_firewalls, total_alertas, total_expirados, total_sem_sinal = _recalcular_totais_firewalls(firewalls_por_regional)
+        resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
         _preparar_datas_firewalls(firewalls_por_regional)
 
         firewall_snapshot = {
                 "atualizado_em": datetime.now().isoformat(),
                 "firewalls_por_regional": firewalls_por_regional,
-                "total_firewalls": total_firewalls,
-                "total_alertas": total_alertas,
-                "total_expirados": total_expirados,
-                "total_sem_sinal": total_sem_sinal,
         }
-        if total_firewalls:
+        firewall_snapshot.update(resumo_firewalls)
+        if resumo_firewalls.get("total_firewalls"):
             _salvar_cache_dashboard("firewalls", firewall_snapshot)
         if return_data:
             return firewall_snapshot
@@ -5676,10 +5697,7 @@ def listar_firewalls(return_data=False):
         return render_template(
             'firewalls.html',
             firewalls_por_regional=firewalls_por_regional,
-            total_firewalls=total_firewalls,
-            total_alertas=total_alertas,
-            total_expirados=total_expirados,
-            total_sem_sinal=total_sem_sinal,
+            **resumo_firewalls,
             cache_atualizado_em=firewall_snapshot.get("atualizado_em"),
             usando_cache=False,
         )
@@ -5693,6 +5711,10 @@ def listar_firewalls(return_data=False):
             total_alertas=0,
             total_expirados=0,
             total_sem_sinal=0,
+            total_fw_online=0,
+            total_fw_offline=0,
+            total_fw_inativo=0,
+            total_licencas_ok=0,
             cache_atualizado_em=None,
             usando_cache=False,
         )
