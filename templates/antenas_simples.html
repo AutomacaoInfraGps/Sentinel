@@ -80,7 +80,7 @@
 {% endblock %}
 
     {% block content %}
-        {% set ns = namespace(critico=0, atencao=0, ok=0, sites_com_issue=0) %}
+        {% set ns = namespace(critico=0, atencao=0, sites_com_issue=0) %}
 
         {% for site_nome, canais in (unifi_data.interferencia_5ghz_por_site or {}).items() %}
             {% set site_ns = namespace(pior='OK') %}
@@ -97,8 +97,6 @@
             {% elif site_ns.pior == 'ATENCAO' %}
                 {% set ns.atencao = ns.atencao + 1 %}
                 {% set ns.sites_com_issue = ns.sites_com_issue + 1 %}
-            {% else %}
-                {% set ns.ok = ns.ok + 1 %}
             {% endif %}
         {% endfor %}
 
@@ -116,7 +114,7 @@
             </div>
         </div>
         <div class="row mb-4">
-            <div class="col-md-3 mb-3">
+            <div class="col-md-4 mb-3">
                 <div class="card text-white shadow-sm h-100 stats-card-filter active-filter" data-filter-canal="issues" onclick="filtrarCanais('issues')"
                     style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
                     <div class="card-body text-center">
@@ -127,7 +125,7 @@
                 </div>
             </div>
 
-            <div class="col-md-3 mb-3">
+            <div class="col-md-4 mb-3">
                 <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-canal="CRITICO" onclick="filtrarCanais('CRITICO')"
                     style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
                     <div class="card-body text-center">
@@ -138,7 +136,7 @@
                 </div>
             </div>
 
-            <div class="col-md-3 mb-3">
+            <div class="col-md-4 mb-3">
                 <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-canal="ATENCAO" onclick="filtrarCanais('ATENCAO')"
                     style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
                     <div class="card-body text-center">
@@ -149,7 +147,7 @@
                 </div>
             </div>
 
-            <div class="col-md-3 mb-3">
+            <div class="col-md-3 mb-3 d-none">
                 <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-canal="OK" onclick="filtrarCanais('OK')"
                     style="background: linear-gradient(135deg, #20c997, #28a745);">
                     <div class="card-body text-center">
@@ -192,7 +190,7 @@
                         <strong>Como funciona:</strong> Status combinado de <strong>Channel Utilization</strong> e <strong>Retransmissão</strong> — o pior dos dois define o status.
                         <br><strong>Channel:</strong> <span class="badge bg-danger">Crítico</span> &gt;90% &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Atenção</span> 80–90% &nbsp;|&nbsp; <span class="badge bg-success">OK</span> &lt;80%
                         <br><strong>Retransmissão:</strong> <span class="badge bg-danger">Crítico</span> ≥20% &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Atenção</span> 13–19% &nbsp;|&nbsp; <span class="badge bg-success">OK</span> &lt;13%
-                        <br><strong>Observacao:</strong> esta tabela mostra a analise por canal 5GHz. O inventario completo das antenas fica na secao "Lista de Antenas" abaixo.
+                        <br><strong>Observacao:</strong> esta tabela mostra somente antenas com risco de atencao ou critico. O inventario completo fica na secao "Lista de Antenas" abaixo.
                     </div>
 
                     {% if unifi_data.interferencia_5ghz_por_site %}
@@ -237,17 +235,25 @@
                                             {% for ap in canal.aps %}
                                                 {% set ap_status = ap.risco | default('OK') %}
                                                 {# cu_status e retry_status para colorir as barras #}
-                                                {% if ap.cu_total > 90 %}{% set cu_status = 'CRITICO' %}
+                                                {% if ap_status == 'SEM_DADOS' %}
+                                                    {% set cu_status = 'SEM_DADOS' %}
+                                                    {% set retry_status = 'SEM_DADOS' %}
+                                                {% elif ap.cu_total > 90 %}{% set cu_status = 'CRITICO' %}
                                                 {% elif ap.cu_total >= 80 %}{% set cu_status = 'ATENCAO' %}
                                                 {% else %}{% set cu_status = 'OK' %}{% endif %}
-                                                {% if ap.tx_retry >= 20 %}{% set retry_status = 'CRITICO' %}
-                                                {% elif ap.tx_retry >= 13 %}{% set retry_status = 'ATENCAO' %}
-                                                {% else %}{% set retry_status = 'OK' %}{% endif %}
+                                                {% if ap_status != 'SEM_DADOS' %}
+                                                    {% if ap.tx_retry >= 20 %}{% set retry_status = 'CRITICO' %}
+                                                    {% elif ap.tx_retry >= 13 %}{% set retry_status = 'ATENCAO' %}
+                                                    {% else %}{% set retry_status = 'OK' %}{% endif %}
+                                                {% endif %}
                                                 <tr data-canal-risco="{{ ap_status }}">
                                                     <td><strong>{{ canal.canal }}</strong></td>
                                                     <td class="text-center text-muted small">{{ canal.qtd_aps }}</td>
                                                     <td class="small fw-semibold">{{ ap.nome }}</td>
                                                     <td>
+                                                        {% if ap_status == 'SEM_DADOS' %}
+                                                            <span class="text-muted small">Sem dados</span>
+                                                        {% else %}
                                                         <div class="d-flex align-items-center gap-1">
                                                             <div class="progress flex-grow-1" style="height:8px; min-width:50px;">
                                                                 <div class="progress-bar
@@ -258,17 +264,25 @@
                                                             </div>
                                                             <span class="small fw-bold">{{ ap.cu_total }}%</span>
                                                         </div>
+                                                        {% endif %}
                                                     </td>
-                                                    {% set cu_interf = [ap.cu_total - ap.cu_self_tx - ap.cu_self_rx, 0] | max %}
                                                     <td>
+                                                        {% if ap_status == 'SEM_DADOS' %}
+                                                            <span class="text-muted small">Sem dados</span>
+                                                        {% else %}
+                                                        {% set cu_interf = [ap.cu_total - ap.cu_self_tx - ap.cu_self_rx, 0] | max %}
                                                         <div class="d-flex align-items-center gap-1">
                                                             <div class="progress flex-grow-1" style="height:8px; min-width:50px; background:#eee;">
                                                                 <div class="progress-bar" style="width:{{ cu_interf }}%; background:#ffc107;"></div>
                                                             </div>
                                                             <span class="small fw-bold {% if cu_interf > 20 %}text-warning{% else %}text-muted{% endif %}">{{ cu_interf }}%</span>
                                                         </div>
+                                                        {% endif %}
                                                     </td>
                                                     <td>
+                                                        {% if ap_status == 'SEM_DADOS' %}
+                                                            <span class="text-muted small">Sem dados</span>
+                                                        {% else %}
                                                         <div class="d-flex align-items-center gap-1">
                                                             <div class="progress flex-grow-1" style="height:8px; min-width:50px;">
                                                                 <div class="progress-bar
@@ -281,6 +295,7 @@
                                                                 {{ ap.tx_retry }}%
                                                             </span>
                                                         </div>
+                                                        {% endif %}
                                                     </td>
                                                     <td class="text-center">
                                                         <span class="badge bg-info">{{ ap.clientes | default(0) }}</span>
@@ -290,6 +305,8 @@
                                                             <span class="badge bg-danger">Crítico</span>
                                                         {% elif ap_status == 'ATENCAO' %}
                                                             <span class="badge bg-warning text-dark">Atenção</span>
+                                                        {% elif ap_status == 'SEM_DADOS' %}
+                                                            <span class="badge bg-secondary">Sem dados</span>
                                                         {% else %}
                                                             <span class="badge bg-success">OK</span>
                                                         {% endif %}
@@ -376,7 +393,14 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Lista de Antenas</h5>
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <h5 class="mb-0">Lista de Antenas</h5>
+                        <form action="/executar_unifi_direto" method="post" class="mb-0">
+                            <button type="submit" class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Atualizar Antenas
+                            </button>
+                        </form>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="card page-search-card mb-4">
