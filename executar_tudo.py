@@ -655,7 +655,46 @@ def _carregar_indice_regionais():
 
 
 _VPN_REGIONAL_ALIAS = {
+    "T001": "REG_PARANA",
+    "PR": "REG_PARANA",
+    "PARANA": "REG_PARANA",
+    "T018": "REG_CEARA",
+    "CEARA01": "REG_CEARA",
+    "CEARA1": "REG_CEARA",
+    "T019": "REG_SAO_LEOPOLDO",
+    "SLEOPOLDO": "REG_SAO_LEOPOLDO",
+    "LEOPOLDO": "REG_SAO_LEOPOLDO",
+    "T024": "REG_CEARA_2",
+    "CEARA02": "REG_CEARA_2",
+    "CEARA2": "REG_CEARA_2",
+    "T026": "REG_CAMPINAS",
+    "CAMP1": "REG_CAMPINAS",
+    "CMP1": "REG_CAMPINAS",
+    "T028": "REG_CAMPINAS_02",
+    "CAMPB2": "REG_CAMPINAS_02",
+    "CAMB2": "REG_CAMPINAS_02",
+    "T032": "REG_MARANHAO",
+    "MARANHAO": "REG_MARANHAO",
     "SLUIS": "REG_MARANHAO",
+    "T039": "REG_NUTRICAR",
+    "NUTRICAR": "REG_NUTRICAR",
+    "T043": "REG_PERNAMBUCO",
+    "PERNAMB": "REG_PERNAMBUCO",
+    "PERNAMBUCO": "REG_PERNAMBUCO",
+    "T046": "REG_RIO_GRANDE_DO_NORTE",
+    "RN": "REG_RIO_GRANDE_DO_NORTE",
+    "T048": "REG_PRAIA_GRANDE",
+    "PRAIA": "REG_PRAIA_GRANDE",
+    "PRAIAGRANDE": "REG_PRAIA_GRANDE",
+    "T060": "REG_CONTROL_MCO",
+    "MCO": "REG_CONTROL_MCO",
+    "CONTMCO": "REG_CONTROL_MCO",
+    "CONTROLMCO": "REG_CONTROL_MCO",
+}
+
+_VPN_REGIONAL_BLOCKLIST = {
+    "T062",
+    "NANUQUE",
 }
 
 
@@ -669,6 +708,9 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     candidatos = [c for c in candidatos if c]
 
     indice_por_chave = {str(reg.get("chave") or "").strip().upper(): reg for reg in indice_regionais}
+    if any(candidato in _VPN_REGIONAL_BLOCKLIST for candidato in candidatos):
+        return None
+
     for cand in candidatos:
         regional_alias = _VPN_REGIONAL_ALIAS.get(cand)
         if regional_alias and regional_alias in indice_por_chave:
