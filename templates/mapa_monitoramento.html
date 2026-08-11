@@ -950,7 +950,7 @@
     </main>
 
     <script>
-        const DATA_URL = "/api/mapa/dados";
+        const DATA_URL = "{{ data_url|default('/api/mapa/dados') }}";
         const STATES_URL = "/static/maps/br_states_paths.json";
         const SURROUNDING_URL = "/static/maps/south_america_paths.json";
         const REFRESH_MS = 5 * 60 * 1000;
