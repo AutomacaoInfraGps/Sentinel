@@ -4755,11 +4755,11 @@ dashboard_html = f"""
                     class="checklist-map-frame"
                     title="Mapa Brasil - VisÃ£o por regional"
                     loading="lazy"
-                    data-map-src="/mapa">
+                    data-map-src="/mapa/checklist">
                 </iframe>
                 <p class="checklist-map-fallback">
                     Se o mapa nÃ£o carregar automaticamente, abra a tela dedicada em
-                    <a href="/mapa" target="_blank" rel="noopener">/mapa</a>.
+                    <a href="/mapa/checklist" target="_blank" rel="noopener">/mapa/checklist</a>.
                 </p>
             </div>
         </section>
@@ -5187,9 +5187,9 @@ function dashboardViewForDetail(detailId) {{
 function carregarMapaChecklist() {{
     const frame = document.getElementById('checklistMapFrame');
     if (!frame || frame.getAttribute('src')) return;
-    let mapaUrl = frame.dataset.mapSrc || '/mapa';
+    let mapaUrl = frame.dataset.mapSrc || '/mapa/checklist';
     if (window.location.protocol === 'file:') {{
-        mapaUrl = 'http://localhost:5000/mapa';
+        mapaUrl = 'http://localhost:5000/mapa/checklist';
     }}
     frame.setAttribute('src', mapaUrl);
 }}

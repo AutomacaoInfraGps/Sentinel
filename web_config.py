@@ -2455,6 +2455,15 @@ def mapa_monitoramento():
     return render_template('mapa_monitoramento.html')
 
 
+@app.route('/mapa/checklist')
+def mapa_monitoramento_checklist():
+    """Mapa embutido no checklist gerado, sem depender da sessão do Sentinel."""
+    return render_template(
+        'mapa_monitoramento.html',
+        data_url='/api/mapa/checklist/dados',
+    )
+
+
 _MAPA_CACHE_TTL_SECONDS = int(os.environ.get("MAPA_MONITORAMENTO_TTL_SECONDS", "300"))
 _MAPA_CACHE_FILE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
 _mapa_cache_refresh_lock = Lock()
@@ -3001,10 +3010,7 @@ def _montar_dados_mapa_monitoramento():
     }
 
 
-@app.route('/api/mapa/dados')
-@login_required
-def api_mapa_dados():
-    """Dados consolidados para o mapa de monitoramento."""
+def _api_mapa_dados_response():
     try:
         force_refresh = str(request.args.get("refresh") or "").strip().lower() in {"1", "true", "yes", "on"}
         cached, idade = _mapa_carregar_cache()
@@ -3035,6 +3041,19 @@ def api_mapa_dados():
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
             return jsonify(cached)
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route('/api/mapa/dados')
+@login_required
+def api_mapa_dados():
+    """Dados consolidados para o mapa de monitoramento."""
+    return _api_mapa_dados_response()
+
+
+@app.route('/api/mapa/checklist/dados')
+def api_mapa_checklist_dados():
+    """Dados do mapa para checklist/preview gerado sem sessão ativa."""
+    return _api_mapa_dados_response()
 
 
 @app.route('/api/mapa/estados')
