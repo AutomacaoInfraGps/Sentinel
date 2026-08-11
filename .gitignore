@@ -104,5 +104,14 @@ MIGRATION_PLAN.md
 *.temp
 audit_*.json
 
+# Documentos locais de instrucoes/backlog que nao devem subir
+docs/archive/
+docs/*SMARTVC*.md
+docs/*SmartVC*.md
+docs/*smartvc*.md
+*SMARTVC*.md
+*SmartVC*.md
+*smartvc*.md
+
 # Variáveis de ambiente
 .env

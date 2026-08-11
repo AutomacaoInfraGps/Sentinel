@@ -1001,12 +1001,14 @@ class GerenciadorSwitches:
                 lote = trigger_ids[i:i + 500]
                 triggers_resp = self._call_api("trigger.get", {
                     "triggerids": lote,
-                    "output": ["triggerid", "description", "priority"],
+                    "output": ["triggerid", "description", "priority", "status"],
                     "selectHosts": ["hostid", "name"],
                 })
 
                 for trigger in triggers_resp.get("result", []) or []:
                     trigger_id = str(trigger.get("triggerid") or "").strip()
+                    if str(trigger.get("status") or "0") != "0":
+                        continue
                     trigger_hosts[trigger_id] = [
                         str(host.get("hostid") or "").strip()
                         for host in trigger.get("hosts", []) or []
@@ -1169,17 +1171,8 @@ class GerenciadorSwitches:
 
             # Busca problemas (API retorna todos, filtraremos no código)
             print(f"🔍 Buscando problemas para o switch: {host_name}")
-            janela_inicio = self._janela_problemas_zabbix_inicio()
-            problems_resp = self._call_api("problem.get", {
-                "hostids": [host_id],
-                "output": "extend",
-                "time_from": janela_inicio,
-                "sortfield": ["eventid"],
-                "sortorder": "DESC",
-                "limit": 5
-            })
-
-            problemas = problems_resp.get("result", [])
+            problemas_por_host = self._carregar_problemas_ativos_por_host([host_id])
+            problemas = problemas_por_host.get(str(host_id), [])
             print(f"✅ Encontrados {len(problemas)} problemas para o switch: {host_name}")
 
             problemas_filtrados, nomes_problemas = self._filtrar_problemas_por_estado_atual(

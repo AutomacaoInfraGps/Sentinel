@@ -2498,6 +2498,7 @@ _MAPA_REGIONAL_ESTADOS = {
     "REG_LC": "RJ",
     "REG_GRSASP": "SP",
     "REG_CONTROL_MCO": "AL",
+    "REG_REGIONAL BELO HORIZONTE": "MG",
     "REG_REGIONAL_BELO_HORIZONTE": "MG",
     "REG_MOTUS": "SP",
     "REG_PERNAMBUCO": "PE",
@@ -7402,6 +7403,8 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
         ap for ap in (dados.get("aps") or [])
         if not _deve_ocultar_ap_unifi(ap)
     ]
+    for ap in aps_visiveis:
+        _normalizar_modelo_ap_unifi(ap)
     dados["aps"] = aps_visiveis
     dados["total_aps"] = len(aps_visiveis)
     dados["aps_online"] = sum(1 for ap in aps_visiveis if (ap.get("status") or "").lower() == "online")
@@ -7416,7 +7419,95 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
         for site, canais in (dados.get("interferencia_5ghz_por_site") or {}).items()
         if str(site or "").strip().upper() != "API_TESTE"
     }
+    _manter_apenas_interferencia_5ghz_com_risco(dados)
     return dados
+
+
+def _normalizar_modelo_ap_unifi(ap):
+    site = str(ap.get("site") or "").strip().upper()
+    ip = str(ap.get("ip") or "").strip()
+    nome = str(ap.get("nome") or ap.get("name") or "").strip().upper()
+
+    if site == "V060_CONTROL_MACEIO" and (
+        ip in {"10.182.4.30", "10.182.4.31"} or nome in {"V060_AP_MCO_RH", "V060_AP_MCO_SESMT"}
+    ):
+        ap["modelo"] = "U7 Pro Max"
+
+
+def _manter_apenas_interferencia_5ghz_com_risco(unifi_data):
+    """Mantem na tabela 5GHz somente APs com atencao ou critico."""
+    riscos_exibidos = {"ATENCAO", "CRITICO"}
+    interferencia_filtrada = {}
+
+    for site, canais in (unifi_data.get("interferencia_5ghz_por_site") or {}).items():
+        canais_com_risco = []
+
+        for canal in canais or []:
+            aps_com_risco = [
+                ap for ap in (canal.get("aps") or [])
+                if str(ap.get("risco") or "OK").strip().upper() in riscos_exibidos
+            ]
+            if not aps_com_risco:
+                continue
+
+            canal_filtrado = dict(canal)
+            canal_filtrado["aps"] = aps_com_risco
+            canal_filtrado["qtd_aps"] = len(aps_com_risco)
+            canal_filtrado["risco"] = (
+                "CRITICO"
+                if any(str(ap.get("risco") or "").strip().upper() == "CRITICO" for ap in aps_com_risco)
+                else "ATENCAO"
+            )
+            canais_com_risco.append(canal_filtrado)
+
+        if canais_com_risco:
+            interferencia_filtrada[site] = canais_com_risco
+
+    unifi_data["interferencia_5ghz_por_site"] = interferencia_filtrada
+
+
+def _incluir_aps_sem_analise_5ghz(unifi_data):
+    """Mostra o inventario completo na tabela 5GHz sem marcar AP sem metrica como OK."""
+    interferencia = unifi_data.setdefault("interferencia_5ghz_por_site", {})
+    aps_por_site = {}
+    for ap in unifi_data.get("aps") or []:
+        site = ap.get("site") or "Sem Regional"
+        aps_por_site.setdefault(site, []).append(ap)
+
+    for site, aps in aps_por_site.items():
+        canais = interferencia.setdefault(site, [])
+        aps_analisados = {
+            str(ap.get("nome") or "").strip().upper()
+            for canal in canais
+            for ap in (canal.get("aps") or [])
+        }
+        aps_sem_analise = [
+            ap for ap in aps
+            if str(ap.get("nome") or "").strip().upper() not in aps_analisados
+        ]
+        if not aps_sem_analise:
+            continue
+
+        canais.append({
+            "canal": "-",
+            "qtd_aps": len(aps_sem_analise),
+            "max_cu": None,
+            "avg_cu": None,
+            "avg_retry": None,
+            "risco": "SEM_DADOS",
+            "aps": [
+                {
+                    "nome": ap.get("nome"),
+                    "cu_total": None,
+                    "cu_self_tx": None,
+                    "cu_self_rx": None,
+                    "tx_retry": None,
+                    "clientes": ap.get("clientes", 0),
+                    "risco": "SEM_DADOS",
+                }
+                for ap in aps_sem_analise
+            ],
+        })
 
 
 @app.route('/antenas')
