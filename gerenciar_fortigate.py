@@ -1029,11 +1029,21 @@ class GerenciadorFortigate:
                     return "inactive"
                 return "unknown"
 
+            def _texto_interface(valor):
+                if isinstance(valor, str):
+                    return valor.strip()
+                if isinstance(valor, dict):
+                    for chave in ("name", "interface", "ifname", "q_origin_key", "member", "link"):
+                        texto = valor.get(chave)
+                        if isinstance(texto, str) and texto.strip():
+                            return texto.strip()
+                return ""
+
             def extrair_interface(item):
                 for chave in ["interface", "ifname", "member", "member_name", "name", "link", "link_name"]:
-                    valor = item.get(chave)
-                    if isinstance(valor, str) and valor.strip():
-                        return valor.strip().upper()
+                    valor = _texto_interface(item.get(chave))
+                    if valor:
+                        return valor.upper()
                 return None
 
             def processar_itens(itens, mapping, data_map):
@@ -1046,7 +1056,15 @@ class GerenciadorFortigate:
                             if not isinstance(membro, dict):
                                 continue
                             iface = extrair_interface(membro)
-                            status_valor = membro.get("status") or membro.get("state") or membro.get("health") or membro.get("link")
+                            status_valor = (
+                                membro.get("sla_status")
+                                or membro.get("health_status")
+                                or membro.get("health-check-status")
+                                or membro.get("status")
+                                or membro.get("state")
+                                or membro.get("health")
+                                or membro.get("link")
+                            )
                             status = normalizar_status(status_valor)
                             if iface:
                                 mapping[iface] = status
@@ -1057,14 +1075,30 @@ class GerenciadorFortigate:
                             if not isinstance(iface_item, dict):
                                 continue
                             iface = extrair_interface(iface_item)
-                            status_valor = iface_item.get("status") or iface_item.get("state") or iface_item.get("health") or iface_item.get("link")
+                            status_valor = (
+                                iface_item.get("sla_status")
+                                or iface_item.get("health_status")
+                                or iface_item.get("health-check-status")
+                                or iface_item.get("status")
+                                or iface_item.get("state")
+                                or iface_item.get("health")
+                                or iface_item.get("link")
+                            )
                             status = normalizar_status(status_valor)
                             if iface:
                                 mapping[iface] = status
                                 data_map[iface] = iface_item
 
                     iface = extrair_interface(item)
-                    status_valor = item.get("status") or item.get("state") or item.get("health") or item.get("link")
+                    status_valor = (
+                        item.get("sla_status")
+                        or item.get("health_status")
+                        or item.get("health-check-status")
+                        or item.get("status")
+                        or item.get("state")
+                        or item.get("health")
+                        or item.get("link")
+                    )
                     status = normalizar_status(status_valor)
                     if iface:
                         mapping[iface] = status
@@ -1142,8 +1176,8 @@ class GerenciadorFortigate:
                     members = sd_wan_config.get("members", [])
                     
                     for member in members:
-                        interface_nome = member.get("interface", "")
-                        interface_key = interface_nome.strip().upper() if isinstance(interface_nome, str) else ""
+                        interface_nome = _texto_interface(member.get("interface"))
+                        interface_key = interface_nome.strip().upper()
                         sla_status = sla_por_interface.get(interface_key, "unknown")
                         sla_data = sla_dados_por_interface.get(interface_key, {})
 
