@@ -111,7 +111,7 @@ def _build_regional_matchers(root, firewalls_by_regional):
     return regional_codes, matchers
 
 
-def _kpi(title, icon, target, items, group_title="Monitoramento"):
+def _kpi(title, icon, target, items):
     cells = "".join(
         f'<div class="kpi-combo-item {css} nav-detail-trigger" data-detail-target="{target}-{action}" '
         f'role="button" tabindex="0"><span>{_escape(label)}</span><strong>{value}</strong></div>'
@@ -120,7 +120,7 @@ def _kpi(title, icon, target, items, group_title="Monitoramento"):
     return f"""
     <div class="kpi nav-detail-trigger" data-detail-target="{target}" role="button" tabindex="0">
         <div class="kpi-header"><div class="kpi-icon info"><i class="fas {icon}"></i></div><h3>{_escape(title)}</h3></div>
-        <div class="kpi-groups"><div class="kpi-group"><div class="kpi-group-title">{_escape(group_title)}</div>
+        <div class="kpi-groups"><div class="kpi-group"><div class="kpi-group-title">Monitoramento</div>
         <div class="kpi-group-grid">{cells}</div></div></div>
     </div>"""
 
@@ -134,20 +134,6 @@ def _firewall_status(firewall):
     if int(firewall.get("licencas_criticas") or 0) > 0:
         return "warning"
     return "ok"
-
-
-def _firewall_device_status(firewall):
-    status = str(
-        firewall.get("status_operacional")
-        or firewall.get("status")
-        or firewall.get("conn_status")
-        or ""
-    ).strip().lower()
-    if status in {"ready", "online", "up", "connected", "1", "2"}:
-        return "online"
-    if status in {"offline", "down", "disconnected", "0"}:
-        return "offline"
-    return "inativo"
 
 
 def _admin_status(device):
@@ -212,15 +198,11 @@ def build_security_dashboard(project_root):
             item = dict(firewall)
             item["regional"] = regional
             item["dashboard_status"] = _firewall_status(item)
-            item["firewall_status"] = _firewall_device_status(item)
             firewalls.append(item)
 
     fw_counts = {status: sum(1 for item in firewalls if item["dashboard_status"] == status)
                  for status in ("ok", "warning", "expirado", "sem-sinal")}
-    fw_device_counts = {status: sum(1 for item in firewalls if item["firewall_status"] == status)
-                        for status in ("online", "offline", "inativo")}
     fw_total = len(firewalls)
-    fw_counts["ok"] = max(fw_total - fw_counts["warning"] - fw_counts["expirado"], 0)
 
     regional_fw = []
     for regional, entries in firewalls_by_regional.items():
@@ -229,14 +211,6 @@ def build_security_dashboard(project_root):
         regional_fw.append((regional, len(entries or []), status))
     fw_reg_counts = {status: sum(1 for _, _, item_status in regional_fw if item_status == status)
                      for status in ("ok", "warning", "expirado", "sem-sinal")}
-    fw_reg_counts["ok"] = max(len(regional_fw) - fw_reg_counts["warning"] - fw_reg_counts["expirado"], 0)
-    regional_fw_device = []
-    for regional, entries in firewalls_by_regional.items():
-        statuses = [_firewall_device_status(item) for item in entries or []]
-        status = "offline" if "offline" in statuses else "inativo" if statuses and all(item == "inativo" for item in statuses) else "online"
-        regional_fw_device.append((regional, len(entries or []), status))
-    fw_device_reg_counts = {status: sum(1 for _, _, item_status in regional_fw_device if item_status == status)
-                            for status in ("online", "offline", "inativo")}
 
     admin_devices = admin_cache.get("dispositivos") or {}
     admins = []
@@ -273,30 +247,20 @@ def build_security_dashboard(project_root):
     admin_reg_counts = {status: sum(1 for _, _, item_status in regional_admin if item_status == status)
                         for status in ("ok", "alerta", "offline", "sem-permissao")}
 
-    firewall_device_kpi = _kpi("Firewalls", "fa-shield-alt", "firewalls", [
-        ("Total", fw_total, "status-neutral", "total"),
-        ("Online", fw_device_counts["online"], "status-online", "fw-online"),
-        ("Offline", fw_device_counts["offline"], "status-offline", "fw-offline"),
-        ("Inativo", fw_device_counts["inativo"], "status-inactive", "fw-inativo"),
-    ], group_title="Dispositivos") + _kpi("Licenças de Firewalls", "fa-shield-alt", "firewalls", [
+    firewall_device_kpi = _kpi("Firewalls e Licenças", "fa-shield-alt", "firewalls", [
         ("Total", fw_total, "status-neutral", "total"),
         ("Licenças OK", fw_counts["ok"], "status-online", "ok"),
         ("A vencer", fw_counts["warning"], "status-warning", "warning"),
         ("Expiradas", fw_counts["expirado"], "status-inactive", "expirado"),
-    ], group_title="Licenças")
-
+        ("Offline", fw_counts["sem-sinal"], "status-offline", "sem-sinal"),
+    ])
     firewall_regional_kpi = _kpi("Firewalls por Regional", "fa-shield-alt", "firewalls", [
-        ("Total", len(regional_fw_device), "status-neutral", "regional-total"),
-        ("Com online", fw_device_reg_counts["online"], "status-online", "regional-fw-online"),
-        ("Com offline", fw_device_reg_counts["offline"], "status-offline", "regional-fw-offline"),
-        ("Inativas", fw_device_reg_counts["inativo"], "status-inactive", "regional-fw-inativo"),
-    ], group_title="Dispositivos") + _kpi("Licenças por Regional", "fa-shield-alt", "firewalls", [
         ("Total", len(regional_fw), "status-neutral", "regional-total"),
         ("Sem alerta", fw_reg_counts["ok"], "status-online", "regional-ok"),
         ("A vencer", fw_reg_counts["warning"], "status-warning", "regional-warning"),
         ("Com expirada", fw_reg_counts["expirado"], "status-inactive", "regional-expirado"),
-    ], group_title="Licenças")
-
+        ("Com offline", fw_reg_counts["sem-sinal"], "status-offline", "regional-sem-sinal"),
+    ])
     admin_device_kpi = _kpi("Monitor de Admins", "fa-user-shield", "admin-monitor", [
         ("Total", len(admins), "status-neutral", "total"),
         ("OK", admin_counts["ok"], "status-online", "ok"),
@@ -315,7 +279,7 @@ def build_security_dashboard(project_root):
         license_info = next(iter(item.get("licencas") or []), {})
         days = license_info.get("dias_restantes", "N/A")
         fw_rows.append(
-            f'<tr class="security-row" data-status="{item["dashboard_status"]}" data-fw-status="{item["firewall_status"]}" data-regional="{_escape(item["regional"])}">'
+            f'<tr class="security-row" data-status="{item["dashboard_status"]}" data-regional="{_escape(item["regional"])}">'
             f'<td>{_escape(item["regional"])}</td><td><strong>{_escape(item.get("nome"))}</strong></td>'
             f'<td>{_escape(item.get("ip"))}</td><td>{_escape(item.get("model"))}</td><td>{_escape(item.get("serial"))}</td>'
             f'<td>{_escape(license_info.get("status"))}</td><td>{_escape(days)}</td><td>{_status_badge(item["dashboard_status"])}</td></tr>'
