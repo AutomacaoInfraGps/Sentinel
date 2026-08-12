@@ -1480,7 +1480,7 @@ function verificarTodosLinks() {
 function sincronizarLinksRegional(button = null) {
     const btn = button ? $(button) : $(`.btn[onclick*="sincronizarLinksRegional"]`);
     showLoading(btn);
-    mostrarOverlayAcaoRegional('Atualizando links', 'Buscando os links da regional no FortiManager/FortiGate.');
+    mostrarOverlayAcaoRegional('Atualizando links', 'Buscando os links da regional no FortiManager.');
 
     showToast("Atualizando links da regional...", "info");
 
@@ -1503,12 +1503,12 @@ function sincronizarLinksRegional(button = null) {
                 return;
             }
 
-            // FortiGate offline: exibe links cacheados com aviso em vez de erro bloqueante
+            // FortiManager indisponivel: exibe links cacheados com aviso em vez de erro bloqueante
             if (data.warning) {
                 const links = data.links || [];
                 try { atualizarLinksRegionalTempoReal(links); } catch (_) {}
-                finalizarOverlayAcaoRegional('FortiGate indisponível', data.message || 'Exibindo último estado dos links.');
-                showToast(data.message || 'FortiGate indisponível; exibindo último estado.', 'warning', { delay: 9000 });
+                finalizarOverlayAcaoRegional('FortiManager indisponível', data.message || 'Exibindo último estado dos links.');
+                showToast(data.message || 'FortiManager indisponível; exibindo último estado.', 'warning', { delay: 9000 });
                 return;
             }
 
@@ -1560,10 +1560,10 @@ function testarLink(codigoRegional, linkId, nomeLink) {
                 aplicarResultadoTesteLink(linkId, response);
                 atualizarLinksRegionalTempoReal(regionalLinksAtuais);
 
-                // FortiGate indisponível: mostra aviso em vez de "Link online"
+                // FortiManager indisponivel: mostra aviso em vez de "Link online"
                 if (response.warning) {
-                    finalizarOverlayAcaoRegional('FortiGate indisponível', message || `${nomeLink}: FortiGate inacessível, link marcado como offline.`);
-                    showToast(message || 'FortiGate indisponível; link marcado como offline.', 'warning', { delay: 9000 });
+                    finalizarOverlayAcaoRegional('FortiManager indisponível', message || `${nomeLink}: FortiManager nao retornou o link, marcado como offline.`);
+                    showToast(message || 'FortiManager indisponível; link marcado como offline.', 'warning', { delay: 9000 });
                 } else if (status === 'online') {
                     finalizarOverlayAcaoRegional('Link online', message || `${nomeLink} esta online.`);
                     showToast(message, 'success', { delay: 9000 });

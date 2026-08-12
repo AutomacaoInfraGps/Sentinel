@@ -195,7 +195,206 @@ class FortiManagerClient:
         return result
 
     def get_device_sdwan(self, device_name):
-        return self._request("get", f"/pm/config/device/{device_name}/global/router/sdwan", {})
+        for path in (
+            f"/pm/config/device/{device_name}/global/router/sdwan",
+            f"/pm/config/device/{device_name}/global/system/sdwan",
+        ):
+            try:
+                return self._request("get", path, {})
+            except FortiManagerClientError:
+                continue
+        return {}
+
+    @staticmethod
+    def _normalize_sdwan_status(value):
+        if value is None:
+            return "unknown"
+        text = str(value).strip().lower()
+        if text in {"up", "alive", "active", "ok", "good", "excellent", "pass", "reachable", "healthy", "health", "1", "true"}:
+            return "active"
+        if text in {"down", "dead", "inactive", "fail", "failed", "timeout", "unreachable", "poor", "bad", "0", "false"}:
+            return "inactive"
+        return "unknown"
+
+    @staticmethod
+    def _walk_dicts(value):
+        if isinstance(value, dict):
+            yield value
+            for child in value.values():
+                yield from FortiManagerClient._walk_dicts(child)
+        elif isinstance(value, list):
+            for item in value:
+                yield from FortiManagerClient._walk_dicts(item)
+
+    @staticmethod
+    def _proxy_response_body(payload):
+        result_list = payload.get("result", []) if isinstance(payload, dict) else []
+        if not result_list:
+            return {}
+        outer = result_list[0] if isinstance(result_list[0], dict) else {}
+        proxy_data_list = outer.get("data", [])
+        proxy_entry = proxy_data_list[0] if proxy_data_list and isinstance(proxy_data_list[0], dict) else {}
+        entry_status = proxy_entry.get("status", {})
+        if isinstance(entry_status, dict) and entry_status.get("code", 0) not in (0, None):
+            raise FortiManagerClientError(entry_status.get("message") or "erro_proxy")
+        return proxy_entry.get("response", proxy_entry)
+
+    def proxy_monitor_sdwan(self, adom: str, device_name: str) -> dict:
+        """Consulta status SD-WAN/SLA no FortiGate usando o proxy do FortiManager."""
+        endpoints = (
+            "/api/v2/monitor/virtual-wan/health-check",
+            "/api/v2/monitor/sdwan/health-check",
+            "/api/v2/monitor/sdwan/service",
+            "/api/v2/monitor/sdwan/status",
+            "/api/v2/monitor/virtual-wan-link/health-check",
+            "/api/v2/monitor/virtual-wan-link/service",
+            "/api/v2/monitor/virtual-wan-link/status",
+        )
+
+        mapping = {}
+        data_map = {}
+        last_error = None
+
+        for resource in endpoints:
+            payload = {
+                "id": 1,
+                "method": "exec",
+                "params": [{
+                    "url": "/sys/proxy/json",
+                    "data": {
+                        "target": [f"adom/{adom}/device/{device_name}"],
+                        "action": "get",
+                        "resource": resource,
+                    },
+                }],
+                "session": self.sessionid,
+            }
+            try:
+                response = self.session.post(self.base_url, json=payload, timeout=20)
+                response.raise_for_status()
+                body = self._proxy_response_body(response.json())
+            except Exception as exc:
+                last_error = str(exc)
+                continue
+
+            results = body.get("results") if isinstance(body, dict) else body
+            if isinstance(results, dict):
+                aggregated = {}
+                aggregated_data = {}
+                for health_name, iface_map in results.items():
+                    if not isinstance(iface_map, dict):
+                        continue
+                    for iface_name, iface_data in iface_map.items():
+                        if not isinstance(iface_data, dict):
+                            continue
+                        status = self._normalize_sdwan_status(
+                            iface_data.get("status")
+                            or iface_data.get("state")
+                            or iface_data.get("health")
+                        )
+                        if status == "unknown":
+                            continue
+                        iface_key = str(iface_name).strip().upper()
+                        if not iface_key:
+                            continue
+                        aggregated.setdefault(iface_key, []).append(status)
+                        aggregated_data.setdefault(iface_key, {})[str(health_name)] = iface_data
+
+                for iface_key, statuses in aggregated.items():
+                    if any(status == "active" for status in statuses):
+                        mapping[iface_key] = "active"
+                    elif statuses and all(status == "inactive" for status in statuses):
+                        mapping[iface_key] = "inactive"
+                    data_map[iface_key] = aggregated_data.get(iface_key, {})
+
+            for item in self._walk_dicts(results):
+                iface = (
+                    item.get("interface")
+                    or item.get("ifname")
+                    or item.get("member")
+                    or item.get("member_name")
+                    or item.get("name")
+                    or item.get("link")
+                    or item.get("link_name")
+                )
+                if not iface:
+                    continue
+                status_value = (
+                    item.get("sla_status")
+                    or item.get("health_status")
+                    or item.get("health-check-status")
+                    or item.get("status")
+                    or item.get("state")
+                    or item.get("health")
+                    or item.get("link")
+                )
+                status = self._normalize_sdwan_status(status_value)
+                iface_key = str(iface).strip().upper()
+                if iface_key and status != "unknown":
+                    mapping[iface_key] = status
+                    data_map[iface_key] = item
+
+            if mapping:
+                return {"success": True, "mapping": mapping, "data": data_map, "source": resource}
+
+        return {"success": False, "mapping": {}, "data": {}, "source": None, "message": last_error}
+
+    def proxy_sdwan_members_with_sla(self, adom: str, device_name: str) -> dict:
+        """Monta membros SD-WAN com status SLA usando apenas FortiManager/proxy."""
+        sdwan_monitor = self.proxy_monitor_sdwan(adom, device_name)
+        sla_by_interface = sdwan_monitor.get("mapping", {})
+        sla_data_by_interface = sdwan_monitor.get("data", {})
+
+        members = []
+        try:
+            config = self.get_device_sdwan(device_name)
+        except Exception:
+            config = {}
+
+        for item in self._walk_dicts(config):
+            raw_members = item.get("members")
+            if not isinstance(raw_members, list):
+                continue
+            for member in raw_members:
+                if not isinstance(member, dict):
+                    continue
+                iface = member.get("interface") or member.get("name")
+                if isinstance(iface, dict):
+                    iface = iface.get("name") or iface.get("interface") or iface.get("q_origin_key")
+                iface_text = str(iface or "").strip()
+                if not iface_text:
+                    continue
+                iface_key = iface_text.upper()
+                members.append({
+                    "member_id": member.get("_id", member.get("id", member.get("seq-num", "unknown"))),
+                    "interface": iface_text,
+                    "priority": member.get("priority", 0),
+                    "sla_status": sla_by_interface.get(iface_key, "unknown"),
+                    "status": sla_by_interface.get(iface_key, "unknown"),
+                    "sla_data": sla_data_by_interface.get(iface_key, {}),
+                    "source": sdwan_monitor.get("source"),
+                })
+            if members:
+                break
+
+        if not members and sla_by_interface:
+            for iface_key, sla_status in sla_by_interface.items():
+                members.append({
+                    "member_id": "unknown",
+                    "interface": iface_key,
+                    "priority": 0,
+                    "sla_status": sla_status,
+                    "status": sla_status,
+                    "sla_data": sla_data_by_interface.get(iface_key, {}),
+                    "source": sdwan_monitor.get("source"),
+                })
+
+        return {
+            "success": bool(members),
+            "membros": members,
+            "source": sdwan_monitor.get("source"),
+            "message": sdwan_monitor.get("message"),
+        }
 
     def proxy_monitor_traffic(self, adom: str, device_name: str, interval_s: float = 2.0) -> dict:
         """Retorna download/upload em bps para cada interface, calculado via duas amostras.
