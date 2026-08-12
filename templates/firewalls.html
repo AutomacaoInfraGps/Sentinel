@@ -206,10 +206,10 @@
                 <div>
                     <h1 class="mb-2">
                         <i class="bi bi-shield-check" style="color: #FF6B6B;"></i>
-                        Firewalls &amp; Licenças
+                        Firewalls
                     </h1>
                     <p class="text-muted mb-0">
-                        Monitoramento centralizado de FortiGates e status de licenças por regional
+                        Monitoramento centralizado de FortiGates, disponibilidade e licenças por regional
                         {% if cache_atualizado_em %}
                             <span class="ms-2 small">Última consulta Forti: {{ cache_atualizado_em[:19].replace('T', ' ') }}</span>
                         {% endif %}
@@ -243,26 +243,43 @@
     </div>
 
     <!-- Estatísticas -->
-    <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
+    <h5 class="fw-bold mb-3">Firewalls</h5>
+    <div class="stats-grid mb-4" style="grid-template-columns: repeat(4, 1fr);">
         <div class="stat-card active" id="card-all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('all')">
             <div class="number">{{ total_firewalls }}</div>
-            <div class="label"><i class="bi bi-shield-fill me-1"></i>Firewalls Total</div>
+            <div class="label"><i class="bi bi-shield-fill me-1"></i>Total</div>
+        </div>
+        <div class="stat-card" id="card-fw-online" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('fw-online')">
+            <div class="number">{{ total_firewalls_online|default(0) }}</div>
+            <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Online</div>
+        </div>
+        <div class="stat-card" id="card-fw-offline" style="background: linear-gradient(135deg, #e53935, #ff6b1a);" onclick="aplicarFiltroFirewall('fw-offline')">
+            <div class="number">{{ total_firewalls_offline|default(0) }}</div>
+            <div class="label"><i class="bi bi-x-circle-fill me-1"></i>Offline</div>
+        </div>
+        <div class="stat-card" id="card-fw-inativo" style="background: linear-gradient(135deg, #5c6770, #343a40);" onclick="aplicarFiltroFirewall('fw-inativo')">
+            <div class="number">{{ total_firewalls_inativos|default(0) }}</div>
+            <div class="label"><i class="bi bi-pause-circle-fill me-1"></i>Inativo</div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold mb-3">Licenças de Firewalls</h5>
+    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="stat-card" id="card-lic-total" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('lic-total')">
+            <div class="number">{{ total_firewalls }}</div>
+            <div class="label"><i class="bi bi-award-fill me-1"></i>Total</div>
+        </div>
+        <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
+            <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) }}</div>
+            <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Licenças OK</div>
         </div>
         <div class="stat-card" id="card-vencer" style="background: linear-gradient(135deg, #e67e22, #d35400);" onclick="aplicarFiltroFirewall('vencer')">
             <div class="number">{{ total_alertas }}</div>
             <div class="label"><i class="bi bi-exclamation-triangle-fill me-1"></i>Licenças a Vencer</div>
         </div>
-        <div class="stat-card" id="card-expirado" style="background: linear-gradient(135deg, #5c6770, #343a40);" onclick="aplicarFiltroFirewall('expirado')">
+        <div class="stat-card" id="card-expirado" style="background: linear-gradient(135deg, #8f1d24, #c0392b);" onclick="aplicarFiltroFirewall('expirado')">
             <div class="number">{{ total_expirados|default(0) }}</div>
             <div class="label"><i class="bi bi-x-circle-fill me-1"></i>Licenças Expiradas</div>
-        </div>
-        <div class="stat-card" id="card-semsinal" style="background: linear-gradient(135deg, #721c24, #c0392b);" onclick="aplicarFiltroFirewall('semsinal')">
-            <div class="number">{{ total_sem_sinal|default(0) }}</div>
-            <div class="label"><i class="bi bi-slash-circle-fill me-1"></i>Offline</div>
-        </div>
-        <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
-            <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) - (total_sem_sinal|default(0)) }}</div>
-            <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Licenças OK</div>
         </div>
     </div>
 
@@ -291,7 +308,7 @@
         <div class="firewall-card-wrapper visible" data-regional="{{ regional_code }}" data-search-text="{{ regional_code }} {% for fw in firewalls %}{{ fw.nome }} {{ fw.hostname }} {{ fw.ip }} {{ fw.model }} {% endfor %}">
 
             {% for firewall in firewalls %}
-            <div class="card mb-2 border-0 shadow-sm">
+            <div class="card mb-2 border-0 shadow-sm firewall-device-card" data-fw-status="{{ firewall.status_disponibilidade|default('inativo') }}">
                 <!-- Header unificado: regional + device name + IP + status -->
                 <div class="fw-card-header d-flex justify-content-between align-items-start">
                     <div>
@@ -304,10 +321,12 @@
                             {%- if firewall.ip %}<span class="fw-device-ip">&#183; {{ firewall.ip }}</span>{%- endif %}
                         </div>
                     </div>
-                    {%- if firewall.status == 'ready' %}
+                    {%- if firewall.status_disponibilidade == 'online' %}
                     <span class="badge bg-success mt-1">Online</span>
-                    {%- elif firewall.status == 'offline' or firewall.status == 'down' %}
+                    {%- elif firewall.status_disponibilidade == 'offline' %}
                     <span class="badge bg-danger mt-1">Offline</span>
+                    {%- else %}
+                    <span class="badge bg-secondary mt-1">Inativo</span>
                     {%- endif %}
                 </div>
 
@@ -414,7 +433,7 @@ function recarregarFirewalls() {
 
 function aplicarFiltroFirewall(filtro) {
     filtroAtivo = filtro;
-    ['all', 'vencer', 'expirado', 'semsinal', 'ok'].forEach(f => {
+    ['all', 'fw-online', 'fw-offline', 'fw-inativo', 'lic-total', 'vencer', 'expirado', 'ok'].forEach(f => {
         const card = document.getElementById('card-' + f);
         if (card) card.classList.toggle('active', f === filtro);
     });
@@ -434,16 +453,19 @@ function _reaplicarFiltros() {
     cards.forEach(card => {
         let mostrar = true;
 
-        if (filtroAtivo === 'vencer') {
+        if (filtroAtivo === 'fw-online') {
+            mostrar = card.querySelectorAll('.firewall-device-card[data-fw-status="online"]').length > 0;
+        } else if (filtroAtivo === 'fw-offline') {
+            mostrar = card.querySelectorAll('.firewall-device-card[data-fw-status="offline"]').length > 0;
+        } else if (filtroAtivo === 'fw-inativo') {
+            mostrar = card.querySelectorAll('.firewall-device-card[data-fw-status="inativo"]').length > 0;
+        } else if (filtroAtivo === 'vencer') {
             mostrar = card.querySelectorAll('.license-critical').length > 0;
         } else if (filtroAtivo === 'expirado') {
             mostrar = card.querySelectorAll('.license-expired').length > 0;
-        } else if (filtroAtivo === 'semsinal') {
-            mostrar = card.querySelectorAll('.license-unknown').length > 0;
         } else if (filtroAtivo === 'ok') {
             mostrar = card.querySelectorAll('.license-critical').length === 0 &&
-                      card.querySelectorAll('.license-expired').length === 0 &&
-                      card.querySelectorAll('.license-unknown').length === 0;
+                      card.querySelectorAll('.license-expired').length === 0;
         }
 
         if (mostrar && filtroBuscaAtivo) {
@@ -458,9 +480,13 @@ function _reaplicarFiltros() {
     const countElement = document.getElementById('firewallSearchCount');
     if (countElement) {
         const labels = {
-            'vencer': `${totalVisivel} regional(is) com licenças a vencer`,
-            'expirado': `${totalVisivel} regional(is) com licenças expiradas`,
-            'ok': `${totalVisivel} regional(is) com licenças OK`,
+            'fw-online': `${totalVisivel} regional(is) com firewall online`,
+            'fw-offline': `${totalVisivel} regional(is) com firewall offline`,
+            'fw-inativo': `${totalVisivel} regional(is) com firewall inativo`,
+            'lic-total': `${totalVisivel} regional(is) com licencas`,
+            'vencer': `${totalVisivel} regional(is) com licencas a vencer`,
+            'expirado': `${totalVisivel} regional(is) com licencas expiradas`,
+            'ok': `${totalVisivel} regional(is) com licencas OK`,
             'all': `${totalVisivel} firewall(s)`
         };
         countElement.textContent = labels[filtroAtivo] || `${totalVisivel} firewall(s)`;
