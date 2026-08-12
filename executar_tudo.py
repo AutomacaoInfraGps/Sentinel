@@ -79,6 +79,50 @@ def render_bloco_gps():
     """
 
 
+def _carregar_mapa_checklist_embutido():
+    """Reaproveita o mapa estatico do preview para o HTML abrir sem depender do Flask."""
+    fallback_html = """
+        <section id="map-view" class="dashboard-view" data-dashboard-view="map">
+            <div class="infra-map-fallback">
+                Mapa por regional indisponivel neste arquivo. Gere o preview/checklist novamente.
+            </div>
+        </section>
+    """
+    fallback_css = """
+        .infra-map-fallback {
+            padding: 32px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.92);
+            color: #0A4A63;
+            font-weight: 700;
+            text-align: center;
+        }
+    """
+    base = Path(__file__).resolve().parent
+    preview_path = base / "output" / "dashboard_preview.html"
+    try:
+        texto = preview_path.read_text(encoding="utf-8", errors="replace")
+
+        css_inicio = texto.find("        .regional-inventory-toolbar {")
+        css_fim = texto.find("        .kpi-container {", css_inicio)
+        css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+
+        html_inicio = texto.find('        <section id="map-view" class="dashboard-view" data-dashboard-view="map">')
+        html_fim = texto.find("\n        </section>", html_inicio)
+        if html_fim > html_inicio:
+            html_fim += len("\n        </section>")
+        mapa_html = texto[html_inicio:html_fim].rstrip() if html_inicio >= 0 and html_fim > html_inicio else fallback_html
+
+        js_inicio = texto.find("let infraMapSelectedRegional = '';")
+        js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
+        js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
+
+        return {"css": css, "html": mapa_html, "js": js}
+    except Exception as exc:
+        print(f"[AVISO] Nao foi possivel embutir o mapa do checklist: {exc}")
+        return {"css": fallback_css, "html": fallback_html, "js": ""}
+
+
 def _month_abbr_pt_local(month: int) -> str:
     months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
     return months[month - 1]
@@ -3229,6 +3273,7 @@ try:
 except Exception as exc:
     print(f"[AVISO] Nao foi possivel atualizar o cache de seguranca: {exc}")
 security_dashboard = build_security_dashboard(PROJECT_ROOT)
+mapa_checklist_embutido = _carregar_mapa_checklist_embutido()
 dashboard_html = f"""
 <!DOCTYPE html>
 <html>
@@ -3374,34 +3419,7 @@ dashboard_html = f"""
             display: block;
         }}
 
-        .checklist-map-shell {{
-            background: linear-gradient(135deg, rgba(8, 74, 97, 0.16), rgba(15, 23, 42, 0.10));
-            border: 1px solid rgba(8, 74, 97, 0.20);
-            border-radius: 18px;
-            padding: 14px;
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
-        }}
-
-        .checklist-map-frame {{
-            width: 100%;
-            min-height: 780px;
-            border: 0;
-            border-radius: 14px;
-            background: #062837;
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
-        }}
-
-        .checklist-map-fallback {{
-            margin: 12px 4px 0;
-            color: #e2e8f0;
-            font-size: 0.86rem;
-        }}
-
-        .checklist-map-fallback a {{
-            color: #7dd3fc;
-            font-weight: 700;
-            text-decoration: none;
-        }}
+{mapa_checklist_embutido['css']}
         
         .kpi-container {{
             display: grid;
@@ -4748,21 +4766,7 @@ dashboard_html = f"""
             </div>
         </div>
 
-        <section id="map-view" class="dashboard-view" data-dashboard-view="map">
-            <div class="checklist-map-shell">
-                <iframe
-                    id="checklistMapFrame"
-                    class="checklist-map-frame"
-                    title="Mapa Brasil - VisÃ£o por regional"
-                    loading="lazy"
-                    data-map-src="/mapa/checklist">
-                </iframe>
-                <p class="checklist-map-fallback">
-                    Se o mapa nÃ£o carregar automaticamente, abra a tela dedicada em
-                    <a href="/mapa/checklist" target="_blank" rel="noopener">/mapa/checklist</a>.
-                </p>
-            </div>
-        </section>
+{mapa_checklist_embutido['html']}
 
         <section id="regional-view" class="dashboard-view" data-dashboard-view="regional">
         
@@ -5172,9 +5176,6 @@ function setDashboardView(viewId) {{
         tab.classList.toggle('active', active);
         tab.setAttribute('aria-selected', active ? 'true' : 'false');
     }});
-    if (targetId === 'map-view') {{
-        carregarMapaChecklist();
-    }}
     setTimeout(() => {{
         Object.values(Chart.instances || {{}}).forEach((chart) => chart.resize());
     }}, 0);
@@ -5184,15 +5185,7 @@ function dashboardViewForDetail(detailId) {{
     return detailId === 'regionais' ? 'regional-view' : 'device-view';
 }}
 
-function carregarMapaChecklist() {{
-    const frame = document.getElementById('checklistMapFrame');
-    if (!frame || frame.getAttribute('src')) return;
-    let mapaUrl = frame.dataset.mapSrc || '/mapa/checklist';
-    if (window.location.protocol === 'file:') {{
-        mapaUrl = 'http://localhost:5000/mapa/checklist';
-    }}
-    frame.setAttribute('src', mapaUrl);
-}}
+{mapa_checklist_embutido['js']}
 
 function resetUnifiSections(detail) {{
     const content = detail.querySelector('.details-content');
