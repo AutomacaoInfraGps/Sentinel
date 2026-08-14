@@ -139,10 +139,13 @@ def _firewall_status(firewall):
 def _admin_status(device):
     if device.get("novos") or device.get("removidos"):
         return "alerta"
-    if device.get("offline"):
-        return "offline"
     if device.get("sem_permissao"):
         return "sem-permissao"
+    # No checklist, o Monitor de Admins deve refletir divergencias de baseline.
+    # Falha temporaria ao consultar admins de um FortiGate nao deve aparecer como
+    # disponibilidade da regional; isso pertence ao bloco de Firewalls.
+    if device.get("offline") and _normalize(device.get("tipo")).lower() in _CENTRAL_ADMIN_TYPES:
+        return "offline"
     return "ok"
 
 
