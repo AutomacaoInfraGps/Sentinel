@@ -2653,6 +2653,43 @@ def _mapa_carregar_cache():
         return None, None
 
 
+def _mapa_resposta_fallback_erro(mensagem):
+    """Mantem a tela do mapa carregavel mesmo quando a coleta falhar."""
+    return {
+        "success": True,
+        "resumo": {
+            "total_regionais": 0,
+            "regionais_com_alerta": 0,
+            "servidores_online": 0,
+            "servidores_offline": 0,
+            "servidores_warning": 0,
+            "switches_online": 0,
+            "switches_offline": 0,
+            "switches_warning": 0,
+            "links_online": 0,
+            "links_offline": 0,
+            "aps_online": 0,
+            "aps_offline": 0,
+            "vpns_online": 0,
+            "vpns_offline": 0,
+            "firewalls_online": 0,
+            "firewalls_offline": 0,
+            "firewalls_warning": 0,
+            "admins_ok": 0,
+            "admins_alerta": 0,
+        },
+        "regionais": [],
+        "fontes": {
+            "modo": "fallback_erro",
+            "atualizado_em": datetime.now().isoformat(),
+            "proxima_atualizacao_sugerida_segundos": _MAPA_CACHE_TTL_SECONDS,
+        },
+        "cache_status": "error_empty",
+        "cache_idade_segundos": None,
+        "message": mensagem,
+    }
+
+
 def _mapa_cache_esta_fresco(idade):
     return idade is not None and idade <= _MAPA_CACHE_TTL_SECONDS
 
@@ -3135,7 +3172,7 @@ def api_mapa_dados():
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
             return jsonify(cached)
-        return jsonify({"success": False, "message": str(exc)}), 500
+        return jsonify(_mapa_resposta_fallback_erro(f"Falha ao montar dados do mapa: {exc}")), 200
 
 
 @app.route('/api/mapa/estados')
