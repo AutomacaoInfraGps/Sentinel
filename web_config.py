@@ -2576,6 +2576,7 @@ _MAPA_REGIONAL_ESTADOS = {
     "REG_PARANA": "PR",
     "REG_MACAE": "RJ",
     "REG_GRSA_MACAE": "RJ",
+    "REG_MARFOOD": "RJ",
     "REG_RHMED": "RJ",
     "REG_SULZER": "RS",
     "REG_TLSV_POA": "RS",
@@ -2825,7 +2826,7 @@ _MAPA_UNIFI_SITE_ALIAS = {
     "TAGG": None,
     "CONTROL_MACEIO": "REG_CONTROL_MCO",
     "CEARA1": "REG_CEARA",
-    "MACAE_MARFOOD": "REG_MACAE",
+    "MACAE_MARFOOD": ("REG_MARFOOD", "REG_MACAE"),
 }
 
 
@@ -2841,7 +2842,10 @@ def _mapa_encontrar_regional_unifi(regionais, nome):
         return None
 
     if alvo in _MAPA_UNIFI_SITE_ALIAS:
-        return _MAPA_UNIFI_SITE_ALIAS[alvo]
+        codigo_alias = _MAPA_UNIFI_SITE_ALIAS[alvo]
+        if isinstance(codigo_alias, (list, tuple)):
+            return next((codigo for codigo in codigo_alias if codigo in regionais), None)
+        return codigo_alias if codigo_alias in regionais else None
 
     for codigo, dados in regionais.items():
         candidatos = {
@@ -3060,7 +3064,7 @@ def _montar_dados_mapa_monitoramento():
     unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
     for ap in (unifi_data.get("aps") or []):
         codigo = _mapa_encontrar_regional_unifi(regionais, ap.get("site") or ap.get("regional") or ap.get("nome"))
-        if not codigo:
+        if not codigo or codigo not in regionais:
             continue
         regionais[codigo]["aps"].append({
             "nome": ap.get("nome") or ap.get("name") or "AP",
