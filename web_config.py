@@ -3036,7 +3036,10 @@ def _montar_dados_mapa_monitoramento():
             codigo = _mapa_encontrar_regional_por_nome(regionais, device.get("nome"))
         if not codigo:
             continue
-        tem_alerta = bool(device.get("novos") or device.get("removidos") or device.get("offline") or device.get("sem_permissao"))
+        # No mapa, Monitor de Admins deve sinalizar divergencia/permissao.
+        # Falha ao consultar admins de um FortiGate offline pertence ao bloco de
+        # disponibilidade do firewall, nao deve virar alerta de admin regional.
+        tem_alerta = bool(device.get("novos") or device.get("removidos") or device.get("sem_permissao"))
         regionais[codigo]["admins"].append({
             "nome": device.get("nome") or device_key,
             "ip": "",
@@ -4206,6 +4209,23 @@ def _status_firewall_disponibilidade(firewall):
     dev_norm = str(dev_status or "").strip().lower()
     if dev_norm in {"15", "up", "online", "connected"}:
         return "online"
+
+    # Fallback adicional: se houver informação de licenças e pelo menos
+    # uma licença não estiver em 'offline' ou claramente ausente, considerar
+    # o equipamento como online. Isso evita mostrar 'Inativo' quando o
+    # FortiManager retorna 'unknown' mas as licenças indicam funcionamento.
+    try:
+        if isinstance(firewall, dict):
+            licencas = firewall.get('licencas') or []
+            if isinstance(licencas, list) and len(licencas) > 0:
+                for lic in licencas:
+                    if not isinstance(lic, dict):
+                        continue
+                    lic_status = str(lic.get('status') or '').strip().lower()
+                    if lic_status and lic_status not in {'offline', 'no_license', 'unknown'}:
+                        return 'online'
+    except Exception:
+        pass
 
     return "inativo"
 
@@ -5758,6 +5778,30 @@ def listar_firewalls(return_data=False):
         
         resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
         _preparar_datas_firewalls(firewalls_por_regional)
+
+        if not resumo_firewalls.get("total_firewalls"):
+            cached = _carregar_cache_dashboard("firewalls", ttl_seconds=None)
+            cached_firewalls = (cached or {}).get("firewalls_por_regional", {})
+            if cached_firewalls:
+                _preparar_datas_firewalls(cached_firewalls)
+                resumo_cache = _recalcular_totais_firewalls(cached_firewalls)
+                if return_data:
+                    cached["firewalls_por_regional"] = cached_firewalls
+                    cached.update(resumo_cache)
+                    cached["usando_cache"] = True
+                    cached["erro_atualizacao"] = "FortiManager nao retornou firewalls nesta consulta."
+                    return cached
+                flash(
+                    "FortiManager nao retornou firewalls nesta consulta. Mantendo o ultimo cache valido.",
+                    "warning",
+                )
+                return render_template(
+                    'firewalls.html',
+                    firewalls_por_regional=cached_firewalls,
+                    **resumo_cache,
+                    cache_atualizado_em=cached.get("atualizado_em"),
+                    usando_cache=True,
+                )
 
         firewall_snapshot = {
                 "atualizado_em": datetime.now().isoformat(),

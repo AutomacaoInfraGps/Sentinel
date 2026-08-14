@@ -969,6 +969,7 @@
         const monitor = document.querySelector('.monitor');
         const ALERT_ROTATION_MS = 3 * 60 * 1000;
         const ALERT_HOME_MS = 12 * 1000;
+        const TIMELINE_TTL_MS = 10 * 60 * 1000;
 
         let appData = null;
         let geoData = null;
@@ -1129,11 +1130,19 @@
                 time: new Date(),
                 ...event
             });
-            timelineEvents = timelineEvents.slice(0, 8);
+            pruneTimelineEvents();
+        }
+
+        function pruneTimelineEvents() {
+            const cutoff = Date.now() - TIMELINE_TTL_MS;
+            timelineEvents = timelineEvents
+                .filter((event) => event.time && event.time.getTime() >= cutoff)
+                .slice(0, 8);
         }
 
         function renderTimeline() {
             if (!timeline) return;
+            pruneTimelineEvents();
             if (!timelineEvents.length) {
                 timeline.classList.remove('has-events');
                 timeline.innerHTML = '';
@@ -1154,6 +1163,8 @@
                 `).join('')}
             `;
         }
+
+        setInterval(renderTimeline, 30 * 1000);
 
         function triggerSyncSweep() {
             if (!monitor) return;
