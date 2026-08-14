@@ -17,6 +17,7 @@ import socket
 import platform
 import unicodedata
 import zipfile
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -2654,9 +2655,9 @@ def _mapa_carregar_cache():
 
 
 def _mapa_resposta_fallback_erro(mensagem):
-    """Mantem a tela do mapa carregavel mesmo quando a coleta falhar."""
+    """Retorna erro controlado quando nao ha cache valido para exibir."""
     return {
-        "success": True,
+        "success": False,
         "resumo": {
             "total_regionais": 0,
             "regionais_com_alerta": 0,
@@ -2688,6 +2689,23 @@ def _mapa_resposta_fallback_erro(mensagem):
         "cache_idade_segundos": None,
         "message": mensagem,
     }
+
+
+def _mapa_salvar_erro(exc):
+    try:
+        erro_path = PROJECT_ROOT / "output" / "mapa_monitoramento_erro.json"
+        erro_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "timestamp": datetime.now().isoformat(),
+            "erro": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+        erro_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    except Exception as log_exc:
+        current_app.logger.warning("Falha ao salvar erro do mapa: %s", log_exc)
 
 
 def _mapa_cache_esta_fresco(idade):
@@ -3166,6 +3184,7 @@ def api_mapa_dados():
         return jsonify(dados)
     except Exception as exc:
         current_app.logger.exception("Falha ao montar dados do mapa")
+        _mapa_salvar_erro(exc)
         cached, idade = _mapa_carregar_cache()
         if cached:
             cached["cache_status"] = "stale_error"
