@@ -1037,7 +1037,7 @@ def _coletar_links_multiregional():
             link_normalizado["regional"] = nome_regional
             link_normalizado["codigo_regional"] = codigo_regional
             link_normalizado["nome"] = _formatar_nome_link_dashboard(link_normalizado)
-            link_normalizado["status"] = str(link_normalizado.get("status") or "unknown").strip().lower()
+            link_normalizado["status"] = _normalizar_status_link_internet(link_normalizado)
             links_regional.append(link_normalizado)
             links.append(link_normalizado)
 
@@ -1077,6 +1077,7 @@ _REGIONAL_ALIAS = {
 }
 
 _REGIONAL_DEVICE_OVERRIDE = {
+    "REG_CONTROL_MCO": ["FGT_CONTROL_MCO"],
     "REG_GLOBAL_SEGURANCA": ["FTG_GLOBALSEG", "FTG_GLX_100F_MATRIZ"],
     "REG_ALAGOAS": ["FTG_REGALAGOAS"],
     "REG_PARA": ["FGT_REGPARA"],
@@ -1770,6 +1771,7 @@ def _persistir_links_internet_exibicao(codigo_regional: str, links: list):
         for link in _filtrar_links_internet(links or [])
     ]
     gerenciador_regionais.salvar_regionais()
+    _invalidar_cache_mapa_monitoramento()
 
 
 def _atualizar_link_internet_exibicao(codigo_regional: str, id_link: str, novos_dados: dict):
@@ -1788,6 +1790,7 @@ def _atualizar_link_internet_exibicao(codigo_regional: str, id_link: str, novos_
             links_auto[index].update(dict(novos_dados))
             regional["links_internet_auto"] = links_auto
             gerenciador_regionais.salvar_regionais()
+            _invalidar_cache_mapa_monitoramento()
             return True
 
     return False
@@ -2167,6 +2170,7 @@ def _preparar_link_para_template(link: dict) -> dict:
     link_completo["ip_exibicao"] = _format_link_ip_exibicao(link_completo)
     link_completo["interface_local"] = _normalize_interface_local_value(link_completo.get("interface_local"))
     link_completo.setdefault("ativo", True)
+    link_completo["status"] = _normalizar_status_link_internet(link_completo)
     return link_completo
 
 
@@ -2229,6 +2233,27 @@ def _buscar_sdwan_member(mapping: dict, *values):
         if member:
             return member
     return None
+
+
+def _normalizar_status_link_internet(link: dict) -> str:
+    if not isinstance(link, dict):
+        return "unknown"
+
+    sla_status = str(link.get("sla_status") or "").strip().lower()
+    if sla_status in {"active", "up", "online", "ok"}:
+        return "online"
+    if sla_status in {"inactive", "down", "offline", "dead", "fail", "failed"}:
+        return "offline"
+
+    status = str(link.get("status") or "").strip().lower()
+    if status in {"online", "up", "active", "ok"}:
+        return "online"
+    if status in {"offline", "down", "inactive", "indisponivel", "indisponível", "erro", "error", "fail", "failed"}:
+        return "offline"
+    if status in {"inativo", "disabled", "desabilitado"}:
+        return "inativo"
+
+    return status or "unknown"
 
 
 def _coletar_links_regional(
@@ -2523,6 +2548,16 @@ _MAPA_CACHE_TTL_SECONDS = int(os.environ.get("MAPA_MONITORAMENTO_TTL_SECONDS", "
 _MAPA_CACHE_FILE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
 _mapa_cache_refresh_lock = Lock()
 _mapa_cache_refresh_em_andamento = False
+
+
+def _invalidar_cache_mapa_monitoramento():
+    """Forca o mapa a recalcular os dados na proxima consulta."""
+    try:
+        if _MAPA_CACHE_FILE.exists():
+            _MAPA_CACHE_FILE.unlink()
+    except Exception as exc:
+        logger = current_app.logger if has_app_context() else app.logger
+        logger.warning("Falha ao invalidar cache do mapa: %s", exc)
 
 _MAPA_REGIONAL_ESTADOS = {
     "REG_BAHIA": "BA",
@@ -2936,7 +2971,7 @@ def _montar_dados_mapa_monitoramento():
                 "nome": link_completo.get("nome") or link_completo.get("interface_monitorada") or link_completo.get("interface") or "Link",
                 "ip": link_completo.get("ip") or link_completo.get("ip_exibicao") or link_completo.get("url") or "",
                 "descricao": link_completo.get("provedor") or link_completo.get("tipo") or "",
-                "status": _mapa_status(link_completo.get("status") or ("online" if link_completo.get("ativo", True) else "offline")),
+                "status": _mapa_status(_normalizar_status_link_internet(link_completo)),
             })
 
     dashboard = _mapa_ler_json_output("dados_dashboard.json")
@@ -7063,7 +7098,9 @@ def api_verificar_links():
 
     """API para verificar status dos links de internet"""
     try:
+        sincronizacao = _executar_sincronizacao_links_todas_regionais()
         resultado = _coletar_links_multiregional()
+        resultado["sincronizacao"] = sincronizacao
         return jsonify(resultado)
 
     except Exception as e:
