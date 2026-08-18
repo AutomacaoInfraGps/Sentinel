@@ -114,6 +114,7 @@ def _extrair_section_por_id(texto, section_id):
 
 def _carregar_mapa_checklist_embutido():
     """Reaproveita o mapa estatico do preview para o HTML abrir sem depender do Flask."""
+    fallback_msg = "Mapa por regional indisponivel neste arquivo. Gere o preview/checklist novamente."
     fallback_html = """
         <section id="map-view" class="dashboard-view" data-dashboard-view="map">
             <div class="infra-map-fallback">
@@ -132,42 +133,70 @@ def _carregar_mapa_checklist_embutido():
         }
     """
     base = Path(__file__).resolve().parent
-    preview_path = base / "output" / "dashboard_preview.html"
+    output_dir = base / "output"
+    candidatos = [
+        output_dir / "dashboard_preview.html",
+        output_dir / "dashboard_final.html",
+    ]
     try:
-        texto = preview_path.read_text(encoding="utf-8", errors="replace")
+        final_atual = globals().get("DASHBOARD_FINAL")
+        if final_atual:
+            candidatos.append(Path(final_atual))
+    except Exception:
+        pass
 
-        css = _extrair_bloco_marcado(
-            texto,
-            "/* CHECKLIST_MAP_CSS_START */",
-            "/* CHECKLIST_MAP_CSS_END */",
-        )
-        if not css:
-            css_inicio = texto.find("        .regional-inventory-toolbar {")
-            css_fim = texto.find("        .kpi-container {", css_inicio)
-            css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+    for preview_path in candidatos:
+        try:
+            if not preview_path.exists():
+                continue
 
-        mapa_html = _extrair_bloco_marcado(
-            texto,
-            "<!-- CHECKLIST_MAP_HTML_START -->",
-            "<!-- CHECKLIST_MAP_HTML_END -->",
-        )
-        if not mapa_html:
-            mapa_html = _extrair_section_por_id(texto, "map-view") or fallback_html
+            texto = preview_path.read_text(encoding="utf-8", errors="replace")
 
-        js = _extrair_bloco_marcado(
-            texto,
-            "// CHECKLIST_MAP_JS_START",
-            "// CHECKLIST_MAP_JS_END",
-        )
-        if not js:
-            js_inicio = texto.find("let infraMapSelectedRegional = '';")
-            js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
-            js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
+            css = _extrair_bloco_marcado(
+                texto,
+                "/* CHECKLIST_MAP_CSS_START */",
+                "/* CHECKLIST_MAP_CSS_END */",
+            )
+            if not css:
+                css_inicio = texto.find("        .infra-map-shell {")
+                if css_inicio < 0:
+                    css_inicio = texto.find("        .regional-inventory-toolbar {")
+                css_fim = texto.find("        .kpi-container {", css_inicio)
+                css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
 
-        return {"css": css, "html": mapa_html, "js": js}
-    except Exception as exc:
-        print(f"[AVISO] Nao foi possivel embutir o mapa do checklist: {exc}")
-        return {"css": fallback_css, "html": fallback_html, "js": ""}
+            mapa_html = _extrair_bloco_marcado(
+                texto,
+                "<!-- CHECKLIST_MAP_HTML_START -->",
+                "<!-- CHECKLIST_MAP_HTML_END -->",
+            )
+            if not mapa_html:
+                mapa_html = _extrair_section_por_id(texto, "map-view")
+
+            if not mapa_html or fallback_msg in mapa_html:
+                print(f"[AVISO] Mapa do checklist ausente/invalido em: {preview_path}")
+                continue
+
+            js = _extrair_bloco_marcado(
+                texto,
+                "// CHECKLIST_MAP_JS_START",
+                "// CHECKLIST_MAP_JS_END",
+            )
+            if not js:
+                js_inicio = texto.find("let infraMapSelectedRegional = '';")
+                js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
+                js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
+
+            if not js:
+                print(f"[AVISO] JS do mapa do checklist nao encontrado em: {preview_path}")
+                continue
+
+            print(f"[OK] Mapa do checklist embutido a partir de: {preview_path}")
+            return {"css": css, "html": mapa_html, "js": js}
+        except Exception as exc:
+            print(f"[AVISO] Nao foi possivel ler mapa do checklist em {preview_path}: {exc}")
+
+    print("[AVISO] Nenhum preview/checklist com mapa valido foi encontrado.")
+    return {"css": fallback_css, "html": fallback_html, "js": ""}
 
 
 def _month_abbr_pt_local(month: int) -> str:
@@ -2367,7 +2396,9 @@ try:
 
         for link in links_processados:
             sla_status = str(link.get("sla_status") or "").strip().lower()
-            status = "inativo" if sla_status == "inactive" else str(link.get("status") or "offline").strip().lower()
+            status = str(link.get("status") or "offline").strip().lower()
+            if sla_status == "inactive" or status in {"inactive", "inativo"}:
+                status = "offline"
             if status == "online":
                 links_online += 1
             elif status == "inativo":
@@ -2435,9 +2466,9 @@ try:
                     provedor_link = str(link.get("provedor") or "").strip()
                     status_link = str(link.get("status") or "offline").strip().lower()
                     sla_status_link = str(link.get("sla_status") or "").strip().lower()
-                    if sla_status_link == "inactive":
-                        status_link = "inativo"
-                    elif status_link not in {"online", "offline", "inativo"}:
+                    if sla_status_link == "inactive" or status_link in {"inactive", "inativo"}:
+                        status_link = "offline"
+                    elif status_link not in {"online", "offline"}:
                         status_link = "offline"
                     ultima_verif = link.get("ultima_verificacao") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     nome_exibicao = f"{nome_link} - {provedor_link}" if provedor_link and provedor_link.upper() != nome_link.upper() else nome_link
@@ -5935,6 +5966,9 @@ print(f"[OK] Relatório salvo em: {DASHBOARD_FINAL}")
 
 # Também salva no local original para compatibilidade
 DASHBOARD_FINAL_ORIGINAL.write_text(dashboard_html, encoding="utf-8")
+dashboard_preview_path = PROJECT_ROOT / "output" / "dashboard_preview.html"
+dashboard_preview_path.write_text(dashboard_html, encoding="utf-8")
+print(f"[OK] Preview do checklist atualizado em: {dashboard_preview_path}")
 print(f"[OK] Cópia de compatibilidade salva em: {DASHBOARD_FINAL_ORIGINAL}")
 
 
