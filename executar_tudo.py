@@ -3,7 +3,13 @@ import sys
 from pathlib import Path
 # garante que importações peguem C:\Automacao primeiro
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
-from web_config import gerenciador_fortigate, coletar_hardware_vm, atualizar_cache_seguranca_dashboard
+from web_config import (
+    app as sentinel_app,
+    gerenciador_fortigate,
+    coletar_hardware_vm,
+    atualizar_cache_seguranca_dashboard,
+    _montar_dados_mapa_monitoramento,
+)
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG, UNIFI_CLIENTS_HTML, UNIFI_CLIENTS_IMG, UNIFI_CLIENTS_DASHBOARD, UNIFI_CONFIG
 
@@ -135,6 +141,7 @@ def _carregar_mapa_checklist_embutido():
     base = Path(__file__).resolve().parent
     output_dir = base / "output"
     candidatos = [
+        base / "templates" / "mapa_monitoramento.html",
         output_dir / "dashboard_preview.html",
         output_dir / "dashboard_final.html",
     ]
@@ -200,6 +207,55 @@ def _carregar_mapa_checklist_embutido():
 
     print("[AVISO] Nenhum preview/checklist com mapa valido foi encontrado.")
     return {"css": fallback_css, "html": fallback_html, "js": ""}
+
+
+def _json_para_script(valor):
+    return json.dumps(valor, ensure_ascii=False, default=str).replace("</", "<\\/")
+
+
+def _ler_json_mapa_checklist(caminho, padrao):
+    try:
+        if caminho.exists():
+            return json.loads(caminho.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"[AVISO] Nao foi possivel ler {caminho}: {exc}")
+    return padrao
+
+
+def _montar_mapa_checklist_static_script():
+    """Congela os dados do mapa dentro do HTML do checklist para abrir sem Flask/API."""
+    states_path = PROJECT_ROOT / "static" / "maps" / "br_states_paths.json"
+    surrounding_path = PROJECT_ROOT / "static" / "maps" / "south_america_paths.json"
+
+    try:
+        with sentinel_app.app_context():
+            payload = _montar_dados_mapa_monitoramento()
+        if not isinstance(payload, dict):
+            raise ValueError("Dados do mapa retornaram em formato invalido.")
+        payload = dict(payload)
+        payload["modo"] = "checklist"
+        payload["static"] = True
+    except Exception as exc:
+        print(f"[AVISO] Nao foi possivel montar dados estaticos do mapa do checklist: {exc}")
+        payload = {
+            "success": False,
+            "message": f"Falha ao montar dados do mapa do checklist: {exc}",
+            "regionais": [],
+            "resumo": {},
+            "timestamp": datetime.now().isoformat(),
+            "modo": "checklist",
+            "static": True,
+        }
+
+    states = _ler_json_mapa_checklist(states_path, {})
+    surrounding = _ler_json_mapa_checklist(surrounding_path, {})
+
+    return "\n".join([
+        "window.SENTINEL_MAPA_CHECKLIST_STATIC = true;",
+        f"window.SENTINEL_MAPA_CHECKLIST_DATA = {_json_para_script(payload)};",
+        f"window.SENTINEL_MAPA_STATES = {_json_para_script(states)};",
+        f"window.SENTINEL_MAPA_SURROUNDING = {_json_para_script(surrounding)};",
+    ])
 
 
 def _month_abbr_pt_local(month: int) -> str:
@@ -3355,6 +3411,7 @@ except Exception as exc:
     print(f"[AVISO] Nao foi possivel atualizar o cache de seguranca: {exc}")
 security_dashboard = build_security_dashboard(PROJECT_ROOT)
 mapa_checklist_embutido = _carregar_mapa_checklist_embutido()
+mapa_checklist_static_script = _montar_mapa_checklist_static_script()
 dashboard_html = f"""
 <!DOCTYPE html>
 <html>
@@ -5276,6 +5333,7 @@ function dashboardViewForDetail(detailId) {{
     return 'device-view';
 }}
 
+{mapa_checklist_static_script}
 // CHECKLIST_MAP_JS_START
 {mapa_checklist_embutido['js']}
 // CHECKLIST_MAP_JS_END
