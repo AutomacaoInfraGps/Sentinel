@@ -102,9 +102,11 @@ class GerenciadorRegionais:
             # Garante que as chaves existam para compatibilidade
             regional.setdefault("servidores", [])
             regional.setdefault("links", [])
+            regional.setdefault("estado", regional.get("uf", ""))
+            regional.setdefault("uf", regional.get("estado", ""))
         return regional
     
-    def adicionar_regional(self, codigo: str, nome: str, descricao: str = ""):
+    def adicionar_regional(self, codigo: str, nome: str, descricao: str = "", estado: str = ""):
         """Adiciona uma nova regional"""
         if "regionais" not in self.regionais:
             self.regionais["regionais"] = {}
@@ -112,21 +114,26 @@ class GerenciadorRegionais:
         self.regionais["regionais"][codigo] = {
             "nome": nome,
             "descricao": descricao,
+            "estado": estado or "",
+            "uf": estado or "",
             "servidores": [],
             "links": []
         }
         self.salvar_regionais()
 
-    def editar_regional(self, codigo: str, nome: str, descricao: str = ""):
+    def editar_regional(self, codigo: str, nome: str, descricao: str = "", estado: str = None):
         """Edita nome e descricao de uma regional, preservando servidores e links"""
         codigo = codigo.upper()
         if codigo not in self.regionais.get("regionais", {}):
             raise ValueError(f"Regional {codigo} não encontrada")
         self.regionais["regionais"][codigo]["nome"] = nome
         self.regionais["regionais"][codigo]["descricao"] = descricao
+        if estado is not None:
+            self.regionais["regionais"][codigo]["estado"] = estado or ""
+            self.regionais["regionais"][codigo]["uf"] = estado or ""
         self.salvar_regionais()
 
-    def atualizar_regional(self, codigo_atual: str, novo_codigo: str, nome: str, descricao: str = ""):
+    def atualizar_regional(self, codigo_atual: str, novo_codigo: str, nome: str, descricao: str = "", estado: str = None):
         """Atualiza uma regional preservando servidores e links, com suporte a renomear o código."""
         codigo_atual = codigo_atual.upper()
         novo_codigo = (novo_codigo or codigo_atual).upper()
@@ -143,6 +150,12 @@ class GerenciadorRegionais:
         regional["descricao"] = descricao
         regional.setdefault("servidores", [])
         regional.setdefault("links", [])
+        if estado is not None:
+            regional["estado"] = estado or ""
+            regional["uf"] = estado or ""
+        else:
+            regional.setdefault("estado", regional.get("uf", ""))
+            regional.setdefault("uf", regional.get("estado", ""))
         regionais[novo_codigo] = regional
         self.salvar_regionais()
         return novo_codigo

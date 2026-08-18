@@ -996,7 +996,7 @@
             CE: 'Ceara', DF: 'Distrito Federal', ES: 'Espirito Santo', GO: 'Goias',
             MA: 'Maranhao', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul',
             MG: 'Minas Gerais', PA: 'Para', PB: 'Paraiba', PR: 'Parana',
-            PE: 'Pernambuco', PI: 'Piaui', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
+            PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
             RS: 'Rio Grande do Sul', RO: 'Rondonia', RR: 'Roraima', SC: 'Santa Catarina',
             SP: 'Sao Paulo', SE: 'Sergipe', TO: 'Tocantins'
         };
@@ -1021,7 +1021,7 @@
             }
             if (!contentType.includes('application/json')) {
                 const text = await response.text();
-                throw new Error(`${url} nao retornou JSON (${contentType || 'sem content-type'}): ${text.slice(0, 80)}`);
+                throw new Error(`${url} não retornou JSON (${contentType || 'sem content-type'}): ${text.slice(0, 80)}`);
             }
             const payload = await response.json();
             if (payload && payload.success === false) {
@@ -1037,7 +1037,7 @@
             panelSubtitle.textContent = message;
             alertList.hidden = false;
             problemDetail.hidden = true;
-            alertList.innerHTML = `<div class="empty-state">Nao foi possivel montar o mapa. ${message}</div>`;
+            alertList.innerHTML = `<div class="empty-state">Não foi possível montar o mapa. ${message}</div>`;
             animatePanel();
         }
 

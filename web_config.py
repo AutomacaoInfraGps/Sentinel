@@ -2596,6 +2596,8 @@ _MAPA_REGIONAL_ESTADOS = {
     "REG_CAMPINAS_02": "SP",
     "REG_ORMEC_PARA": "PA",
     "REG_PIAU": "PI",
+    "REG_PIAUI": "PI",
+    "REG_PIAUÍ": "PI",
     "REG_LC": "RJ",
     "REG_GRSASP": "SP",
     "REG_CONTROL_MCO": "AL",
@@ -2608,6 +2610,57 @@ _MAPA_REGIONAL_ESTADOS = {
     "REG_CTRLBP": "AL",
     "REG_ALAGOAS": "AL",
 }
+
+
+_MAPA_UF_NOMES = {
+    "AC": "Acre",
+    "AL": "Alagoas",
+    "AP": "Amapa",
+    "AM": "Amazonas",
+    "BA": "Bahia",
+    "CE": "Ceara",
+    "DF": "Distrito Federal",
+    "ES": "Espirito Santo",
+    "GO": "Goias",
+    "MA": "Maranhao",
+    "MT": "Mato Grosso",
+    "MS": "Mato Grosso do Sul",
+    "MG": "Minas Gerais",
+    "PA": "Para",
+    "PB": "Paraiba",
+    "PR": "Parana",
+    "PE": "Pernambuco",
+    "PI": "Piauí",
+    "RJ": "Rio de Janeiro",
+    "RN": "Rio Grande do Norte",
+    "RS": "Rio Grande do Sul",
+    "RO": "Rondonia",
+    "RR": "Roraima",
+    "SC": "Santa Catarina",
+    "SP": "Sao Paulo",
+    "SE": "Sergipe",
+    "TO": "Tocantins",
+}
+
+
+_MAPA_UF_POR_NOME = {
+    re.sub(r"[^A-Z0-9]+", "_", unicodedata.normalize("NFKD", nome.upper()).encode("ascii", "ignore").decode("ascii")).strip("_"): uf
+    for uf, nome in _MAPA_UF_NOMES.items()
+}
+
+
+def _mapa_normalizar_uf(valor):
+    texto = str(valor or "").strip()
+    if not texto:
+        return ""
+
+    uf = texto.upper()
+    if uf in _MAPA_UF_NOMES:
+        return uf
+
+    token = unicodedata.normalize("NFKD", uf).encode("ascii", "ignore").decode("ascii")
+    token = re.sub(r"[^A-Z0-9]+", "_", token).strip("_")
+    return _MAPA_UF_POR_NOME.get(token, "")
 
 
 def _mapa_ler_json_output(nome_arquivo):
@@ -2778,11 +2831,17 @@ def _mapa_status(valor):
 
 def _mapa_criar_regional(codigo, info=None):
     info = info or {}
+    uf = (
+        _mapa_normalizar_uf(info.get("uf"))
+        or _mapa_normalizar_uf(info.get("estado"))
+        or _MAPA_REGIONAL_ESTADOS.get(codigo, "")
+    )
     return {
         "codigo": codigo,
         "nome": info.get("nome") or codigo,
         "descricao": info.get("descricao") or "",
-        "uf": _MAPA_REGIONAL_ESTADOS.get(codigo, ""),
+        "uf": uf,
+        "estado": uf,
         "servidores": [],
         "switches": [],
         "links": [],
@@ -4942,7 +5001,11 @@ def editar_regional(codigo_regional):
         regional_dados = {
             'codigo': codigo_regional,
             'nome': regional_info.get('nome', ''),
-            'descricao': regional_info.get('descricao', '')
+            'descricao': regional_info.get('descricao', ''),
+            'estado': (
+                _mapa_normalizar_uf(regional_info.get('estado') or regional_info.get('uf'))
+                or _MAPA_REGIONAL_ESTADOS.get(codigo_regional, '')
+            )
         }
         
         return render_template('regional_form.html', regional=regional_dados, acao='Editar')
@@ -4983,6 +5046,7 @@ def api_excluir_regional(codigo_regional):
         if not ok:
             return jsonify({"success": False, "message": msg}), 404
 
+        _invalidar_cache_mapa_monitoramento()
         return jsonify({"success": True, "message": msg})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -8496,6 +8560,7 @@ def api_salvar_regional():
         codigo_original = (data.get('codigo_original') or codigo).upper()
         nome = data['nome']
         descricao = data.get('descricao', '')
+        estado = _mapa_normalizar_uf(data.get('estado') or data.get('uf'))
         
         # Se não tem código, gera um baseado no nome
         if not codigo:
@@ -8507,6 +8572,13 @@ def api_salvar_regional():
         # Verifica se é edição ou nova
         regional_existente = gerenciador_regionais.obter_regional(codigo)
         regional_original = gerenciador_regionais.obter_regional(codigo_original) if data.get('editando') else None
+        if data.get('editando') and not estado and regional_original:
+            estado = (
+                _mapa_normalizar_uf(regional_original.get('estado') or regional_original.get('uf'))
+                or _MAPA_REGIONAL_ESTADOS.get(codigo_original, '')
+            )
+        if not estado:
+            estado = _MAPA_REGIONAL_ESTADOS.get(codigo, '')
 
         if regional_existente and not data.get('editando'):
             return jsonify({'success': False, 'message': 'Regional com este código já existe'})
@@ -8516,10 +8588,11 @@ def api_salvar_regional():
                 return jsonify({'success': False, 'message': 'Regional original não encontrada'})
             if codigo != codigo_original and regional_existente:
                 return jsonify({'success': False, 'message': 'Já existe outra regional com este código'})
-            codigo = gerenciador_regionais.atualizar_regional(codigo_original, codigo, nome, descricao)
+            codigo = gerenciador_regionais.atualizar_regional(codigo_original, codigo, nome, descricao, estado)
         else:
-            gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
+            gerenciador_regionais.adicionar_regional(codigo, nome, descricao, estado)
         
+        _invalidar_cache_mapa_monitoramento()
         return jsonify({'success': True, 'message': 'Regional salva com sucesso!', 'codigo': codigo})
         
     except Exception as e:

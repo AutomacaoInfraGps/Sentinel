@@ -79,6 +79,39 @@ def render_bloco_gps():
     """
 
 
+def _extrair_bloco_marcado(texto, marcador_inicio, marcador_fim):
+    inicio = texto.find(marcador_inicio)
+    if inicio < 0:
+        return ""
+    inicio += len(marcador_inicio)
+    fim = texto.find(marcador_fim, inicio)
+    if fim <= inicio:
+        return ""
+    return texto[inicio:fim].strip()
+
+
+def _extrair_section_por_id(texto, section_id):
+    padrao_inicio = re.compile(
+        rf"<section\b[^>]*\bid=[\"']{re.escape(section_id)}[\"'][^>]*>",
+        re.IGNORECASE,
+    )
+    match = padrao_inicio.search(texto)
+    if not match:
+        return ""
+
+    profundidade = 1
+    padrao_section = re.compile(r"</?section\b[^>]*>", re.IGNORECASE)
+    for tag in padrao_section.finditer(texto, match.end()):
+        if tag.group(0).lower().startswith("</section"):
+            profundidade -= 1
+            if profundidade == 0:
+                return texto[match.start():tag.end()].rstrip()
+        else:
+            profundidade += 1
+
+    return ""
+
+
 def _carregar_mapa_checklist_embutido():
     """Reaproveita o mapa estatico do preview para o HTML abrir sem depender do Flask."""
     fallback_html = """
@@ -103,19 +136,33 @@ def _carregar_mapa_checklist_embutido():
     try:
         texto = preview_path.read_text(encoding="utf-8", errors="replace")
 
-        css_inicio = texto.find("        .regional-inventory-toolbar {")
-        css_fim = texto.find("        .kpi-container {", css_inicio)
-        css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+        css = _extrair_bloco_marcado(
+            texto,
+            "/* CHECKLIST_MAP_CSS_START */",
+            "/* CHECKLIST_MAP_CSS_END */",
+        )
+        if not css:
+            css_inicio = texto.find("        .regional-inventory-toolbar {")
+            css_fim = texto.find("        .kpi-container {", css_inicio)
+            css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
 
-        html_inicio = texto.find('        <section id="map-view" class="dashboard-view" data-dashboard-view="map">')
-        html_fim = texto.find("\n        </section>", html_inicio)
-        if html_fim > html_inicio:
-            html_fim += len("\n        </section>")
-        mapa_html = texto[html_inicio:html_fim].rstrip() if html_inicio >= 0 and html_fim > html_inicio else fallback_html
+        mapa_html = _extrair_bloco_marcado(
+            texto,
+            "<!-- CHECKLIST_MAP_HTML_START -->",
+            "<!-- CHECKLIST_MAP_HTML_END -->",
+        )
+        if not mapa_html:
+            mapa_html = _extrair_section_por_id(texto, "map-view") or fallback_html
 
-        js_inicio = texto.find("let infraMapSelectedRegional = '';")
-        js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
-        js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
+        js = _extrair_bloco_marcado(
+            texto,
+            "// CHECKLIST_MAP_JS_START",
+            "// CHECKLIST_MAP_JS_END",
+        )
+        if not js:
+            js_inicio = texto.find("let infraMapSelectedRegional = '';")
+            js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
+            js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
 
         return {"css": css, "html": mapa_html, "js": js}
     except Exception as exc:
@@ -3419,7 +3466,9 @@ dashboard_html = f"""
             display: block;
         }}
 
+/* CHECKLIST_MAP_CSS_START */
 {mapa_checklist_embutido['css']}
+/* CHECKLIST_MAP_CSS_END */
         
         .kpi-container {{
             display: grid;
@@ -4766,7 +4815,9 @@ dashboard_html = f"""
             </div>
         </div>
 
+<!-- CHECKLIST_MAP_HTML_START -->
 {mapa_checklist_embutido['html']}
+<!-- CHECKLIST_MAP_HTML_END -->
 
         <section id="regional-view" class="dashboard-view" data-dashboard-view="regional">
         
@@ -5185,7 +5236,9 @@ function dashboardViewForDetail(detailId) {{
     return detailId === 'regionais' ? 'regional-view' : 'device-view';
 }}
 
+// CHECKLIST_MAP_JS_START
 {mapa_checklist_embutido['js']}
+// CHECKLIST_MAP_JS_END
 
 function resetUnifiSections(detail) {{
     const content = detail.querySelector('.details-content');
