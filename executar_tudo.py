@@ -163,6 +163,9 @@ def _carregar_mapa_checklist_embutido():
                     css_inicio = texto.find("        .regional-inventory-toolbar {")
                 css_fim = texto.find("        .kpi-container {", css_inicio)
                 css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+            css_aberto = css.count("{") - css.count("}")
+            if css_aberto > 0:
+                css = css.rstrip() + "\n" + ("\n}" * css_aberto)
 
             mapa_html = _extrair_bloco_marcado(
                 texto,
@@ -3497,6 +3500,11 @@ dashboard_html = f"""
             display: block;
         }}
 
+        body.dashboard-map-active .main-container > .divider,
+        body.dashboard-map-active .main-container > details {{
+            display: none !important;
+        }}
+
 /* CHECKLIST_MAP_CSS_START */
 {mapa_checklist_embutido['css']}
 /* CHECKLIST_MAP_CSS_END */
@@ -5250,6 +5258,7 @@ Chart.defaults.maintainAspectRatio = false; // Important to allow the container 
 
 function setDashboardView(viewId) {{
     const targetId = viewId || 'device-view';
+    document.body.classList.toggle('dashboard-map-active', targetId === 'map-view');
     document.querySelectorAll('.dashboard-view').forEach((view) => {{
         view.classList.toggle('active', view.id === targetId);
     }});
@@ -5264,7 +5273,7 @@ function setDashboardView(viewId) {{
 }}
 
 function dashboardViewForDetail(detailId) {{
-    return detailId === 'regionais' ? 'regional-view' : 'device-view';
+    return 'device-view';
 }}
 
 // CHECKLIST_MAP_JS_START
