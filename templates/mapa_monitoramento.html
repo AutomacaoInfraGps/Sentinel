@@ -1575,6 +1575,9 @@
                 return acc;
             }, {});
 
+            const placedBoxes = [];
+            const queued = [];
+
             Object.entries(grouped).forEach(([uf, regionals]) => {
                 const stateLayout = {
                     RJ: { side: 'right', shiftX: 18, shiftY: -8 },
@@ -1584,26 +1587,68 @@
                     AL: { side: 'right', shiftX: 18, shiftY: -8 },
                     CE: { side: 'right', shiftX: 18, shiftY: -8 },
                     PA: { side: 'right', shiftX: 18, shiftY: -8 },
+                    PI: { side: 'left', shiftX: -18, shiftY: -18 },
+                    SE: { side: 'right', shiftX: 16, shiftY: -8 },
+                    GO: { side: 'right', shiftX: 16, shiftY: -12 },
                     AM: { side: 'right', shiftX: 18, shiftY: -8 },
+                    MG: { side: 'left', shiftX: -20, shiftY: 0 },
                 }[uf] || { side: 'right', shiftX: 18, shiftY: -8 };
 
                 regionals.forEach((regional, index) => {
-                const pos = dotPositions[regional.codigo];
-                const visualStatus = regionalVisualStatus(regional);
-                const title = fitTooltipText(`${regional.codigo.replace(/^REG_/, '')} - ${severityLabel(visualStatus)}`, 28);
-                const detail = fitTooltipText(tooltipDetail(regional), 38);
-                const width = Math.min(290, Math.max(150, title.length * 8.4 + 20, detail.length * 5.8 + 20));
-                const height = 39;
-                const stackOffset = (index - ((regionals.length - 1) / 2)) * (height + 5);
-                const tooltipScale = Math.max(.42, Math.min(1, 1.55 / currentMapScale));
-                const x = stateLayout.side === 'left'
-                    ? pos.x + stateLayout.shiftX - (width * tooltipScale)
-                    : pos.x + stateLayout.shiftX;
-                const y = pos.y - (20 * tooltipScale) + stateLayout.shiftY + (stackOffset * tooltipScale);
+                    const pos = dotPositions[regional.codigo];
+                    const visualStatus = regionalVisualStatus(regional);
+                    const title = fitTooltipText(`${regional.codigo.replace(/^REG_/, '')} - ${severityLabel(visualStatus)}`, 28);
+                    const detail = fitTooltipText(tooltipDetail(regional), 38);
+                    const width = Math.min(290, Math.max(150, title.length * 8.4 + 20, detail.length * 5.8 + 20));
+                    const height = 39;
+                    const stackOffset = (index - ((regionals.length - 1) / 2)) * (height + 5);
+                    const tooltipScale = Math.max(.42, Math.min(1, 1.55 / currentMapScale));
+                    const baseX = stateLayout.side === 'left'
+                        ? pos.x + stateLayout.shiftX - (width * tooltipScale)
+                        : pos.x + stateLayout.shiftX;
+                    const baseY = pos.y - (20 * tooltipScale) + stateLayout.shiftY + (stackOffset * tooltipScale);
+
+                    queued.push({
+                        regional,
+                        visualStatus,
+                        title,
+                        detail,
+                        width,
+                        height,
+                        tooltipScale,
+                        stateLayout,
+                        pos,
+                        baseX,
+                        baseY,
+                    });
+                });
+            });
+
+            queued.forEach(({ regional, visualStatus, title, detail, width, height, tooltipScale, stateLayout, pos, baseX, baseY }) => {
+                let x = baseX;
+                let y = baseY;
+                const boxWidth = width * tooltipScale;
+                const boxHeight = height * tooltipScale;
+                const overlapPadding = 12;
+
+                for (let attempt = 0; attempt < 10; attempt += 1) {
+                    const overlaps = placedBoxes.some((box) => (
+                        x < box.x + box.width + overlapPadding
+                        && x + boxWidth > box.x - overlapPadding
+                        && y < box.y + box.height + overlapPadding
+                        && y + boxHeight > box.y - overlapPadding
+                    ));
+                    if (!overlaps) break;
+                    const driftX = stateLayout.side === 'left' ? -(boxWidth + 18) : (boxWidth + 18);
+                    const driftY = attempt % 2 === 0 ? 16 : -16;
+                    x += driftX;
+                    y += driftY;
+                }
+
                 const guideStartX = pos.x + (stateLayout.side === 'left' ? -7 : 7);
                 const guideStartY = pos.y;
-                const guideEndX = stateLayout.side === 'left' ? x + (width * tooltipScale) : x;
-                const guideEndY = y + ((height * tooltipScale) / 2);
+                const guideEndX = stateLayout.side === 'left' ? x + boxWidth : x;
+                const guideEndY = y + (boxHeight / 2);
 
                 const guide = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 guide.setAttribute('class', `tooltip-guide ${statusClass(visualStatus)}`);
@@ -1640,7 +1685,7 @@
                 group.appendChild(textDetail);
 
                 viewport.appendChild(group);
-                });
+                placedBoxes.push({ x, y, width: boxWidth, height: boxHeight });
             });
         }
 
