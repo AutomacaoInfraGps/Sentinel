@@ -3,8 +3,10 @@ environment.json
 Conexoes.txt
 
 # Arquivos de saída
-output/
-*.html
+output/*
+!output/
+!output/dashboard_preview.html
+
 # Mas os templates do projeto são commitados
 !templates/*.html
 !templates/**/*.html
