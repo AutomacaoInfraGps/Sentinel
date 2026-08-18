@@ -158,6 +158,31 @@
                         </div>
                     </div>
                     
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="estado" class="form-label">
+                                <i class="bi bi-geo-alt me-1"></i>
+                                Estado / UF
+                            </label>
+                            <select class="form-select" id="estado" name="estado">
+                                <option value="">Selecione o estado</option>
+                                {% set estado_atual = regional.estado if regional and regional.estado is defined else '' %}
+                                {% for uf, nome_estado in [
+                                    ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
+                                    ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
+                                    ('GO', 'Goiás'), ('MA', 'Maranhão'), ('MT', 'Mato Grosso'), ('MS', 'Mato Grosso do Sul'),
+                                    ('MG', 'Minas Gerais'), ('PA', 'Pará'), ('PB', 'Paraíba'), ('PR', 'Paraná'),
+                                    ('PE', 'Pernambuco'), ('PI', 'Piauí'), ('RJ', 'Rio de Janeiro'), ('RN', 'Rio Grande do Norte'),
+                                    ('RS', 'Rio Grande do Sul'), ('RO', 'Rondônia'), ('RR', 'Roraima'), ('SC', 'Santa Catarina'),
+                                    ('SP', 'São Paulo'), ('SE', 'Sergipe'), ('TO', 'Tocantins')
+                                ] %}
+                                <option value="{{ uf }}" {% if estado_atual == uf %}selected{% endif %}>{{ uf }} - {{ nome_estado }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Usado para posicionar e agrupar a regional no mapa.</div>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="descricao" class="form-label">
                             <i class="bi bi-text-paragraph me-1"></i>
@@ -255,6 +280,7 @@ $('#formRegional').on('submit', function(e) {
     const formData = {
         nome: $('#nome').val().trim(),
         codigo: $('#codigo').val().trim(),
+        estado: $('#estado').val(),
         descricao: $('#descricao').val().trim(),
         codigo_original: $('#codigo_original').val() || null,
         editando: {{ 'true' if regional else 'false' }}
