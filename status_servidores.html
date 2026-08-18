@@ -1,0 +1,1124 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status dos Servidores - Regionais</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .regional { background: white; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+        .regional-header { background: #f8f9fa; padding: 15px; border-bottom: 1px solid #dee2e6; }
+        .servidor { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .servidor:last-child { border-bottom: none; }
+        .status-online { color: #28a745; }
+        .status-offline { color: #dc3545; }
+        .status-warning { color: #ffc107; }
+        .tempo-resposta { font-size: 0.9em; color: #6c757d; }
+        .refresh-time { text-align: center; color: #6c757d; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>[SERVER] Status dos Servidores - Regionais</h1>
+            <p>Monitoramento em tempo real dos servidores iDRAC/ILO</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Total</h3>
+                <h2>77</h2>
+                <p>Servidores</p>
+            </div>
+            <div class="stat-card">
+                <h3 class="status-online">Online</h3>
+                <h2>0</h2>
+                <p>0.0%</p>
+            </div>
+            <div class="stat-card">
+                <h3 class="status-offline">Offline</h3>
+                <h2>76</h2>
+                <p>98.7%</p>
+            </div>
+            <div class="stat-card">
+                <h3 class="status-warning">Warning</h3>
+                <h2>1</h2>
+                <p>1.3%</p>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_BAHIA</h3>
+                <small>Código: REG_BAHIA | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Denebola</strong>
+                    <small>(10.171.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Saiph</strong>
+                    <small>(10.171.0.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_GOIAS</h3>
+                <small>Código: REG_GOIAS | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Caph</strong>
+                    <small>(10.162.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Izar</strong>
+                    <small>(10.162.0.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_AMAZONAS</h3>
+                <small>Código: REG_AMAZONAS | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Nunki</strong>
+                    <small>(10.192.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Menkent</strong>
+                    <small>(10.192.0.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_ESPIRITO SANTO</h3>
+                <small>Código: REG_ESPIRITO_SANTO | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alkaid</strong>
+                    <small>(10.127.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Avior</strong>
+                    <small>(10.127.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CEARA</h3>
+                <small>Código: REG_CEARA | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Mirach</strong>
+                    <small>(192.168.85.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Centauri</strong>
+                    <small>(192.168.85.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_RIO DE JANEIRO</h3>
+                <small>Código: REG_RIO_DE_JANEIRO | Servidores: 6</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Shedar</strong>
+                    <small>(192.168.21.28)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Algieba</strong>
+                    <small>(192.168.21.25)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Naos</strong>
+                    <small>(192.168.21.27)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Lesath</strong>
+                    <small>(192.168.21.50)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Hamal</strong>
+                    <small>(192.168.21.24)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Mintaka</strong>
+                    <small>(192.168.21.29)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_MARANHAO</h3>
+                <small>Código: REG_MARANHAO | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alnilan</strong>
+                    <small>(10.198.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Miaplacidus</strong>
+                    <small>(10.198.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_ABC</h3>
+                <small>Código: REG_ABC | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Dschubba</strong>
+                    <small>(10.111.10.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Larawag</strong>
+                    <small>(10.111.10.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_RUDDER</h3>
+                <small>Código: REG_RUDDER | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Vega</strong>
+                    <small>(172.16.112.11)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Capella</strong>
+                    <small>(172.16.112.10)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_SAO LEOPOLDO</h3>
+                <small>Código: REG_SAO_LEOPOLDO | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Acrux</strong>
+                    <small>(192.168.52.15)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Altair</strong>
+                    <small>(192.168.52.14)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_UBERLANDIA</h3>
+                <small>Código: REG_UBERLANDIA | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Suhail</strong>
+                    <small>(10.134.0.14)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Mirfak</strong>
+                    <small>(10.134.0.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_PARA</h3>
+                <small>Código: REG_PARA | Servidores: 1</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alphecca</strong>
+                    <small>(10.191.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_PARANA</h3>
+                <small>Código: REG_PARANA | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_MACAE</h3>
+                <small>Código: REG_MACAE | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alpheratz</strong>
+                    <small>(10.121.4.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Rasalhague</strong>
+                    <small>(10.121.4.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_RHMED</h3>
+                <small>Código: REG_RHMED | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Menkalinan</strong>
+                    <small>(10.121.8.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Eltanin</strong>
+                    <small>(10.121.8.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_SULZER</h3>
+                <small>Código: REG_SULZER | Servidores: 1</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Arcturo</strong>
+                    <small>(10.133.72.14)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_TLSV POA</h3>
+                <small>Código: REG_TLSV_POA | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_ARARAS</h3>
+                <small>Código: REG_ARARAS | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Girtab</strong>
+                    <small>(10.119.14.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Merak</strong>
+                    <small>(10.119.14.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_LOGHIS</h3>
+                <small>Código: REG_LOGHIS | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_PRAIA GRANDE</h3>
+                <small>Código: REG_PRAIA_GRANDE | Servidores: 1</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Sadr</strong>
+                    <small>(10.113.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CAMPINAS</h3>
+                <small>Código: REG_CAMPINAS | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alnath</strong>
+                    <small>(10.119.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Bellatrix</strong>
+                    <small>(10.119.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_SJC</h3>
+                <small>Código: REG_SJC | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Aludra</strong>
+                    <small>(10.112.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Phecda</strong>
+                    <small>(10.112.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_SOROCABA</h3>
+                <small>Código: REG_SOROCABA | Servidores: 1</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alsephina</strong>
+                    <small>(10.115.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_TRADE&TALENTOS</h3>
+                <small>Código: REG_TRADETALENTOS | Servidores: 1</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Sabik</strong>
+                    <small>(10.111.24.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_LEOPOLDO B2</h3>
+                <small>Código: REG_LEOPOLDO_B2 | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Scheat</strong>
+                    <small>(10.151.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Castor</strong>
+                    <small>(10.151.0.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CEARA 2</h3>
+                <small>Código: REG_CEARA_2 | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_RIO GRANDE DO NORTE</h3>
+                <small>Código: REG_RIO_GRANDE_DO_NORTE | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CAXIAS</h3>
+                <small>Código: REG_CAXIAS | Servidores: 3</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Gacrux</strong>
+                    <small>(10.154.0.11)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Dubhe</strong>
+                    <small>(10.154.0.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alnitak</strong>
+                    <small>(10.154.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_NUTRICAR</h3>
+                <small>Código: REG_NUTRICAR | Servidores: 3</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Kaus</strong>
+                    <small>(10.111.14.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Sargas</strong>
+                    <small>(10.111.14.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Adhara</strong>
+                    <small>(10.111.14.11)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CAMPINAS 02</h3>
+                <small>Código: REG_CAMPINAS_02 | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_ORMEC_PARA</h3>
+                <small>Código: REG_ORMEC_PARA | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_PIAU</h3>
+                <small>Código: REG_PIAU | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_GRSASP</h3>
+                <small>Código: REG_GRSASP | Servidores: 1</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Mira</strong>
+                    <small>(10.111.36.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CONTROL_MCO</h3>
+                <small>Código: REG_CONTROL_MCO | Servidores: 3</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Ogma</strong>
+                    <small>(10.182.4.12)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Gomeisa</strong>
+                    <small>(10.182.4.11)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Rana</strong>
+                    <small>(10.182.4.14)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_REGIONAL BELO HORIZONTE</h3>
+                <small>Código: REG_REGIONAL BELO HORIZONTE | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Hadar</strong>
+                    <small>(10.31.0.10)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Betelgeuse</strong>
+                    <small>(10.31.0.14)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_MOTUS</h3>
+                <small>Código: REG_MOTUS | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alhena</strong>
+                    <small>(10.111.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Markeb</strong>
+                    <small>(10.111.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_PERNAMBUCO</h3>
+                <small>Código: REG_PERNAMBUCO | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alioth</strong>
+                    <small>(10.181.0.13)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alnair</strong>
+                    <small>(10.181.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_GALAXIA</h3>
+                <small>Código: REG_GALAXIA | Servidores: 16</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Mirzam</strong>
+                    <small>(10.254.12.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Almach</strong>
+                    <small>(10.254.12.26)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Regulus</strong>
+                    <small>(10.254.12.16)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Acrab</strong>
+                    <small>(10.254.13.10)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Polaris</strong>
+                    <small>(10.254.12.21)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Regor</strong>
+                    <small>(10.254.12.24)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Sirius</strong>
+                    <small>(10.254.12.11)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Diphda</strong>
+                    <small>(10.254.12.42)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Rigel</strong>
+                    <small>(10.254.12.63)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Alcione</strong>
+                    <small>(10.254.12.36)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-warning">🟡 </span>
+                    <strong>Observador</strong>
+                    <small>(10.254.12.15)</small>
+                    <small style="color: #dc3545;"> - HTTP 404</small>
+                </div>
+                <div><span class="tempo-resposta">(0.13s)</span></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Navi</strong>
+                    <small>(10.254.12.22)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Shaula</strong>
+                    <small>(10.254.12.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>FOMALHAUT</strong>
+                    <small>(10.254.12.35)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Aljanah</strong>
+                    <small>(10.254.12.33)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Atria</strong>
+                    <small>(10.254.12.38)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_GLOBAL SEGURANÇA</h3>
+                <small>Código: REG_GLOBAL_SEGURANCA | Servidores: 2</small>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Tiaki</strong>
+                    <small>(10.161.0.13)</small>
+                    <small style="color: #dc3545;"> - Conexão recusada</small>
+                </div>
+                <div></div>
+            </div>
+
+            <div class="servidor">
+                <div>
+                    <span class="status-offline"> </span>
+                    <strong>Algol</strong>
+                    <small>(10.161.0.12)</small>
+                    <small style="color: #dc3545;"> - Timeout</small>
+                </div>
+                <div></div>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_CTRLBP</h3>
+                <small>Código: REG_CTRLBP | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_ALAGOAS</h3>
+                <small>Código: REG_ALAGOAS | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="regional">
+            <div class="regional-header">
+                <h3> REG_GRSA_MACAE</h3>
+                <small>Código: REG_GRSA_MACAE | Servidores: 0</small>
+            </div>
+        </div>
+
+        <div class="refresh-time">
+            <p> Última atualização: 31/07/2026 08:40:37</p>
+        </div>
+    </div>
+</body>
+</html>
