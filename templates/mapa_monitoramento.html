@@ -954,6 +954,10 @@
         const STATES_URL = "/static/maps/br_states_paths.json";
         const SURROUNDING_URL = "/static/maps/south_america_paths.json";
         const REFRESH_MS = 5 * 60 * 1000;
+        const STATIC_MAP_DATA = window.SENTINEL_MAPA_CHECKLIST_DATA || null;
+        const STATIC_STATES_DATA = window.SENTINEL_MAPA_STATES || null;
+        const STATIC_SURROUNDING_DATA = window.SENTINEL_MAPA_SURROUNDING || null;
+        const IS_STATIC_MAP = Boolean(window.SENTINEL_MAPA_CHECKLIST_STATIC && STATIC_MAP_DATA);
         const svg = document.getElementById('mapSvg');
         const stage = document.getElementById('mapStage');
         const updatedAt = document.getElementById('updatedAt');
@@ -1889,6 +1893,20 @@
 
         async function loadData() {
             try {
+                if (IS_STATIC_MAP) {
+                    geoData = STATIC_STATES_DATA || await fetchJson(STATES_URL);
+                    surroundingData = STATIC_SURROUNDING_DATA || {};
+                    markRegionalChanges(STATIC_MAP_DATA.regionais || []);
+                    appData = STATIC_MAP_DATA;
+                    updateLiveClock();
+                    renderAlertList();
+                    drawMap();
+                    pendingVisualUpdateRegionals = new Set();
+                    triggerSyncSweep();
+                    if (!rotationTimer) scheduleAlertRotation();
+                    return;
+                }
+
                 const results = await Promise.all([
                     fetchJson(STATES_URL),
                     fetchJson(SURROUNDING_URL),
@@ -1941,7 +1959,9 @@
         updateLiveClock();
         loadData();
         setInterval(updateLiveClock, 1000);
-        setInterval(loadData, REFRESH_MS);
+        if (!IS_STATIC_MAP) {
+            setInterval(loadData, REFRESH_MS);
+        }
     </script>
 </body>
 </html>
