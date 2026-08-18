@@ -1562,6 +1562,12 @@
             return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
         }
 
+        function tooltipTitle(regional, visualStatus) {
+            const baseName = regional.codigo.replace(/^REG_/, '');
+            const severity = severityLabel(visualStatus);
+            return `${baseName} - ${severity}`;
+        }
+
         function drawFixedTooltips(viewport) {
             const problematic = (appData.regionais || []).filter((regional) => (
                 regionalAlerts(regional).length
@@ -1597,9 +1603,9 @@
                 regionals.forEach((regional, index) => {
                     const pos = dotPositions[regional.codigo];
                     const visualStatus = regionalVisualStatus(regional);
-                    const title = fitTooltipText(`${regional.codigo.replace(/^REG_/, '')} - ${severityLabel(visualStatus)}`, 22);
+                    const title = tooltipTitle(regional, visualStatus);
                     const detail = fitTooltipText(tooltipDetail(regional), 34);
-                    const width = Math.min(290, Math.max(150, title.length * 8.1 + 18, detail.length * 5.1 + 18));
+                    const width = Math.min(330, Math.max(170, title.length * 7.2 + 22, detail.length * 5.1 + 18));
                     const height = 39;
                     const stackOffset = (index - ((regionals.length - 1) / 2)) * (height + 5);
                     const tooltipScale = Math.max(.42, Math.min(1, 1.55 / currentMapScale));
