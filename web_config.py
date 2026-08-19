@@ -2993,8 +2993,24 @@ def _montar_dados_mapa_monitoramento():
     unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
     for ap in (unifi_data.get("aps") or []):
         codigo = _mapa_encontrar_regional_unifi(regionais, ap.get("site") or ap.get("regional") or ap.get("nome"))
-        if not codigo:
-            continue
+        # Se a função retornar um código que não está presente em `regionais`,
+        # tentar um mapeamento alternativo por nome antes de pular o AP.
+        if not codigo or codigo not in regionais:
+            alt = _mapa_encontrar_regional_por_nome(regionais, ap.get("site") or ap.get("regional") or ap.get("nome") or "")
+            if alt and alt in regionais:
+                codigo = alt
+            else:
+                try:
+                    nome_ap = ap.get("nome") or ap.get("name") or "AP"
+                    ip_ap = ap.get("ip") or ""
+                    # Preferir logger do Flask quando disponível
+                    if 'current_app' in globals():
+                        current_app.logger.warning("[mapa] Pulando AP '%s' (%s): regional mapeada='%s' não encontrada.", nome_ap, ip_ap, codigo)
+                    else:
+                        print(f"[mapa] Pulando AP '{nome_ap}' ({ip_ap}): regional mapeada='{codigo}' não encontrada.")
+                except Exception:
+                    pass
+                continue
         regionais[codigo]["aps"].append({
             "nome": ap.get("nome") or ap.get("name") or "AP",
             "ip": ap.get("ip") or "",
