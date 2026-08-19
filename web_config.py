@@ -3083,6 +3083,13 @@ def _montar_dados_mapa_monitoramento():
         if not codigo:
             continue
         tem_alerta = bool(device.get("novos") or device.get("removidos") or device.get("offline") or device.get("sem_permissao"))
+        # Se existir firewall offline/inativo na regional, suprimir alerta de admins
+        firewall_offline = any(
+            (f.get("status_disponibilidade") in {"offline", "inativo"})
+            for f in regionais.get(codigo, {}).get("firewalls", [])
+        )
+        if firewall_offline:
+            tem_alerta = False
         regionais[codigo]["admins"].append({
             "nome": device.get("nome") or device_key,
             "ip": "",
