@@ -17,7 +17,6 @@ import socket
 import platform
 import unicodedata
 import zipfile
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -1038,7 +1037,7 @@ def _coletar_links_multiregional():
             link_normalizado["regional"] = nome_regional
             link_normalizado["codigo_regional"] = codigo_regional
             link_normalizado["nome"] = _formatar_nome_link_dashboard(link_normalizado)
-            link_normalizado["status"] = _normalizar_status_link_internet(link_normalizado)
+            link_normalizado["status"] = str(link_normalizado.get("status") or "unknown").strip().lower()
             links_regional.append(link_normalizado)
             links.append(link_normalizado)
 
@@ -1078,7 +1077,6 @@ _REGIONAL_ALIAS = {
 }
 
 _REGIONAL_DEVICE_OVERRIDE = {
-    "REG_CONTROL_MCO": ["FGT_CONTROL_MCO"],
     "REG_GLOBAL_SEGURANCA": ["FTG_GLOBALSEG", "FTG_GLX_100F_MATRIZ"],
     "REG_ALAGOAS": ["FTG_REGALAGOAS"],
     "REG_PARA": ["FGT_REGPARA"],
@@ -1772,7 +1770,6 @@ def _persistir_links_internet_exibicao(codigo_regional: str, links: list):
         for link in _filtrar_links_internet(links or [])
     ]
     gerenciador_regionais.salvar_regionais()
-    _invalidar_cache_mapa_monitoramento()
 
 
 def _atualizar_link_internet_exibicao(codigo_regional: str, id_link: str, novos_dados: dict):
@@ -1791,7 +1788,6 @@ def _atualizar_link_internet_exibicao(codigo_regional: str, id_link: str, novos_
             links_auto[index].update(dict(novos_dados))
             regional["links_internet_auto"] = links_auto
             gerenciador_regionais.salvar_regionais()
-            _invalidar_cache_mapa_monitoramento()
             return True
 
     return False
@@ -2171,7 +2167,6 @@ def _preparar_link_para_template(link: dict) -> dict:
     link_completo["ip_exibicao"] = _format_link_ip_exibicao(link_completo)
     link_completo["interface_local"] = _normalize_interface_local_value(link_completo.get("interface_local"))
     link_completo.setdefault("ativo", True)
-    link_completo["status"] = _normalizar_status_link_internet(link_completo)
     return link_completo
 
 
@@ -2234,27 +2229,6 @@ def _buscar_sdwan_member(mapping: dict, *values):
         if member:
             return member
     return None
-
-
-def _normalizar_status_link_internet(link: dict) -> str:
-    if not isinstance(link, dict):
-        return "unknown"
-
-    sla_status = str(link.get("sla_status") or "").strip().lower()
-    if sla_status in {"active", "up", "online", "ok"}:
-        return "online"
-    if sla_status in {"inactive", "down", "offline", "dead", "fail", "failed"}:
-        return "offline"
-
-    status = str(link.get("status") or "").strip().lower()
-    if status in {"online", "up", "active", "ok"}:
-        return "online"
-    if status in {"offline", "down", "inactive", "indisponivel", "indisponível", "erro", "error", "fail", "failed"}:
-        return "offline"
-    if status in {"inativo", "disabled", "desabilitado"}:
-        return "inativo"
-
-    return status or "unknown"
 
 
 def _coletar_links_regional(
@@ -2550,16 +2524,6 @@ _MAPA_CACHE_FILE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
 _mapa_cache_refresh_lock = Lock()
 _mapa_cache_refresh_em_andamento = False
 
-
-def _invalidar_cache_mapa_monitoramento():
-    """Forca o mapa a recalcular os dados na proxima consulta."""
-    try:
-        if _MAPA_CACHE_FILE.exists():
-            _MAPA_CACHE_FILE.unlink()
-    except Exception as exc:
-        logger = current_app.logger if has_app_context() else app.logger
-        logger.warning("Falha ao invalidar cache do mapa: %s", exc)
-
 _MAPA_REGIONAL_ESTADOS = {
     "REG_BAHIA": "BA",
     "REG_GOIAS": "GO",
@@ -2576,7 +2540,6 @@ _MAPA_REGIONAL_ESTADOS = {
     "REG_PARANA": "PR",
     "REG_MACAE": "RJ",
     "REG_GRSA_MACAE": "RJ",
-    "REG_MARFOOD": "RJ",
     "REG_RHMED": "RJ",
     "REG_SULZER": "RS",
     "REG_TLSV_POA": "RS",
@@ -2610,57 +2573,6 @@ _MAPA_REGIONAL_ESTADOS = {
     "REG_CTRLBP": "AL",
     "REG_ALAGOAS": "AL",
 }
-
-
-_MAPA_UF_NOMES = {
-    "AC": "Acre",
-    "AL": "Alagoas",
-    "AP": "Amapa",
-    "AM": "Amazonas",
-    "BA": "Bahia",
-    "CE": "Ceara",
-    "DF": "Distrito Federal",
-    "ES": "Espirito Santo",
-    "GO": "Goias",
-    "MA": "Maranhao",
-    "MT": "Mato Grosso",
-    "MS": "Mato Grosso do Sul",
-    "MG": "Minas Gerais",
-    "PA": "Para",
-    "PB": "Paraiba",
-    "PR": "Parana",
-    "PE": "Pernambuco",
-    "PI": "Piauí",
-    "RJ": "Rio de Janeiro",
-    "RN": "Rio Grande do Norte",
-    "RS": "Rio Grande do Sul",
-    "RO": "Rondonia",
-    "RR": "Roraima",
-    "SC": "Santa Catarina",
-    "SP": "Sao Paulo",
-    "SE": "Sergipe",
-    "TO": "Tocantins",
-}
-
-
-_MAPA_UF_POR_NOME = {
-    re.sub(r"[^A-Z0-9]+", "_", unicodedata.normalize("NFKD", nome.upper()).encode("ascii", "ignore").decode("ascii")).strip("_"): uf
-    for uf, nome in _MAPA_UF_NOMES.items()
-}
-
-
-def _mapa_normalizar_uf(valor):
-    texto = str(valor or "").strip()
-    if not texto:
-        return ""
-
-    uf = texto.upper()
-    if uf in _MAPA_UF_NOMES:
-        return uf
-
-    token = unicodedata.normalize("NFKD", uf).encode("ascii", "ignore").decode("ascii")
-    token = re.sub(r"[^A-Z0-9]+", "_", token).strip("_")
-    return _MAPA_UF_POR_NOME.get(token, "")
 
 
 def _mapa_ler_json_output(nome_arquivo):
@@ -2706,60 +2618,6 @@ def _mapa_carregar_cache():
     except Exception as exc:
         current_app.logger.warning("Falha ao carregar cache do mapa: %s", exc)
         return None, None
-
-
-def _mapa_resposta_fallback_erro(mensagem):
-    """Retorna erro controlado quando nao ha cache valido para exibir."""
-    return {
-        "success": False,
-        "resumo": {
-            "total_regionais": 0,
-            "regionais_com_alerta": 0,
-            "servidores_online": 0,
-            "servidores_offline": 0,
-            "servidores_warning": 0,
-            "switches_online": 0,
-            "switches_offline": 0,
-            "switches_warning": 0,
-            "links_online": 0,
-            "links_offline": 0,
-            "aps_online": 0,
-            "aps_offline": 0,
-            "vpns_online": 0,
-            "vpns_offline": 0,
-            "firewalls_online": 0,
-            "firewalls_offline": 0,
-            "firewalls_warning": 0,
-            "admins_ok": 0,
-            "admins_alerta": 0,
-        },
-        "regionais": [],
-        "fontes": {
-            "modo": "fallback_erro",
-            "atualizado_em": datetime.now().isoformat(),
-            "proxima_atualizacao_sugerida_segundos": _MAPA_CACHE_TTL_SECONDS,
-        },
-        "cache_status": "error_empty",
-        "cache_idade_segundos": None,
-        "message": mensagem,
-    }
-
-
-def _mapa_salvar_erro(exc):
-    try:
-        erro_path = PROJECT_ROOT / "output" / "mapa_monitoramento_erro.json"
-        erro_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "timestamp": datetime.now().isoformat(),
-            "erro": str(exc),
-            "traceback": traceback.format_exc(),
-        }
-        erro_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
-    except Exception as log_exc:
-        current_app.logger.warning("Falha ao salvar erro do mapa: %s", log_exc)
 
 
 def _mapa_cache_esta_fresco(idade):
@@ -2831,17 +2689,11 @@ def _mapa_status(valor):
 
 def _mapa_criar_regional(codigo, info=None):
     info = info or {}
-    uf = (
-        _mapa_normalizar_uf(info.get("uf"))
-        or _mapa_normalizar_uf(info.get("estado"))
-        or _MAPA_REGIONAL_ESTADOS.get(codigo, "")
-    )
     return {
         "codigo": codigo,
         "nome": info.get("nome") or codigo,
         "descricao": info.get("descricao") or "",
-        "uf": uf,
-        "estado": uf,
+        "uf": _MAPA_REGIONAL_ESTADOS.get(codigo, ""),
         "servidores": [],
         "switches": [],
         "links": [],
@@ -2860,6 +2712,16 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
     if not alvo:
         return None
 
+    aliases = {
+        "REG_PIAUI": "REG_PIAUÍ",
+        "REG_PIAUI_": "REG_PIAUÍ",
+        "REG_PIAU": "REG_PIAUÍ",
+        "REG_PIAU_": "REG_PIAUÍ",
+        "PIAUI": "REG_PIAUÍ",
+    }
+    if alvo in aliases:
+        alvo = aliases[alvo]
+
     for codigo, dados in regionais.items():
         candidatos = {
             _mapa_normalizar_token(codigo),
@@ -2867,6 +2729,10 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
             _mapa_normalizar_token(dados.get("descricao")),
         }
         if alvo in candidatos or any(alvo and (alvo in c or c in alvo) for c in candidatos if c):
+            return codigo
+
+    for codigo in regionais:
+        if _mapa_normalizar_token(codigo) in {"REG_PIAU", "REG_PIAUI", "REG_PIAUÍ"} and alvo in {"REG_PIAU", "REG_PIAUI", "REG_PIAUÍ"}:
             return codigo
     return None
 
@@ -2885,7 +2751,7 @@ _MAPA_UNIFI_SITE_ALIAS = {
     "TAGG": None,
     "CONTROL_MACEIO": "REG_CONTROL_MCO",
     "CEARA1": "REG_CEARA",
-    "MACAE_MARFOOD": ("REG_MARFOOD", "REG_MACAE"),
+    "MACAE_MARFOOD": "REG_MACAE",
 }
 
 
@@ -2901,10 +2767,7 @@ def _mapa_encontrar_regional_unifi(regionais, nome):
         return None
 
     if alvo in _MAPA_UNIFI_SITE_ALIAS:
-        codigo_alias = _MAPA_UNIFI_SITE_ALIAS[alvo]
-        if isinstance(codigo_alias, (list, tuple)):
-            return next((codigo for codigo in codigo_alias if codigo in regionais), None)
-        return codigo_alias if codigo_alias in regionais else None
+        return _MAPA_UNIFI_SITE_ALIAS[alvo]
 
     for codigo, dados in regionais.items():
         candidatos = {
@@ -3026,8 +2889,15 @@ def _mapa_recalcular_regionais(regionais):
             _mapa_adicionar_alerta(regional, grupo, offline, severidade_offline, f"{grupo} offline")
             _mapa_adicionar_alerta(regional, grupo, warning, "atencao", f"{grupo} em atenção")
 
-        fw_expirado = sum(1 for item in regional["firewalls"] if item.get("status") == "offline")
-        fw_warning = sum(1 for item in regional["firewalls"] if item.get("status") == "warning")
+        fw_expirado = sum(
+            1 for item in regional["firewalls"]
+            if item.get("status") in {"offline", "inativo"}
+            or item.get("status_disponibilidade") in {"offline", "inativo"}
+        )
+        fw_warning = sum(
+            1 for item in regional["firewalls"]
+            if item.get("status") == "warning" and item.get("status_disponibilidade") not in {"offline", "inativo"}
+        )
         fw_alerta = fw_expirado + fw_warning
         fw_ok = len(regional["firewalls"]) - fw_alerta
         adm_alerta = sum(1 for item in regional["admins"] if item.get("status") != "online")
@@ -3089,7 +2959,7 @@ def _montar_dados_mapa_monitoramento():
                 "nome": link_completo.get("nome") or link_completo.get("interface_monitorada") or link_completo.get("interface") or "Link",
                 "ip": link_completo.get("ip") or link_completo.get("ip_exibicao") or link_completo.get("url") or "",
                 "descricao": link_completo.get("provedor") or link_completo.get("tipo") or "",
-                "status": _mapa_status(_normalizar_status_link_internet(link_completo)),
+                "status": _mapa_status(link_completo.get("status") or ("online" if link_completo.get("ativo", True) else "offline")),
             })
 
     dashboard = _mapa_ler_json_output("dados_dashboard.json")
@@ -3123,7 +2993,7 @@ def _montar_dados_mapa_monitoramento():
     unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
     for ap in (unifi_data.get("aps") or []):
         codigo = _mapa_encontrar_regional_unifi(regionais, ap.get("site") or ap.get("regional") or ap.get("nome"))
-        if not codigo or codigo not in regionais:
+        if not codigo:
             continue
         regionais[codigo]["aps"].append({
             "nome": ap.get("nome") or ap.get("name") or "AP",
@@ -3162,6 +3032,7 @@ def _montar_dados_mapa_monitoramento():
             continue
         for firewall in firewalls or []:
             licencas = [lic for lic in (firewall.get("licencas") or []) if isinstance(lic, dict)]
+            status_disponibilidade = _status_firewall_disponibilidade(firewall)
             tem_expirada = any(
                 bool(lic.get("notificacao_expirada"))
                 and str(lic.get("status") or "").lower() != "offline"
@@ -3173,11 +3044,17 @@ def _montar_dados_mapa_monitoramento():
                 and str(lic.get("status") or "").lower() != "offline"
                 for lic in licencas
             )
+            status_final = (
+                "offline"
+                if status_disponibilidade in {"offline", "inativo"}
+                else "warning" if tem_critica or tem_expirada else "online"
+            )
             regionais[codigo]["firewalls"].append({
                 "nome": firewall.get("nome") or firewall.get("hostname") or "Firewall",
                 "ip": firewall.get("ip") or "",
                 "descricao": firewall.get("model") or firewall.get("modelo") or "",
-                "status": "offline" if tem_expirada else "warning" if tem_critica else "online",
+                "status": status_final,
+                "status_disponibilidade": status_disponibilidade,
             })
 
     admins_cache = _mapa_ler_json_output("dashboard_admins_cache.json")
@@ -3189,10 +3066,7 @@ def _montar_dados_mapa_monitoramento():
             codigo = _mapa_encontrar_regional_por_nome(regionais, device.get("nome"))
         if not codigo:
             continue
-        # No mapa, Monitor de Admins deve sinalizar divergencia/permissao.
-        # Falha ao consultar admins de um FortiGate offline pertence ao bloco de
-        # disponibilidade do firewall, nao deve virar alerta de admin regional.
-        tem_alerta = bool(device.get("novos") or device.get("removidos") or device.get("sem_permissao"))
+        tem_alerta = bool(device.get("novos") or device.get("removidos") or device.get("offline") or device.get("sem_permissao"))
         regionais[codigo]["admins"].append({
             "nome": device.get("nome") or device_key,
             "ip": "",
@@ -3247,14 +3121,13 @@ def api_mapa_dados():
         return jsonify(dados)
     except Exception as exc:
         current_app.logger.exception("Falha ao montar dados do mapa")
-        _mapa_salvar_erro(exc)
         cached, idade = _mapa_carregar_cache()
         if cached:
             cached["cache_status"] = "stale_error"
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
             return jsonify(cached)
-        return jsonify(_mapa_resposta_fallback_erro(f"Falha ao montar dados do mapa: {exc}")), 200
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route('/api/mapa/estados')
@@ -4351,13 +4224,13 @@ def _status_firewall_disponibilidade(firewall):
     status_norm = str(status or "").strip().lower()
     if status_norm in {"ready", "online", "ok", "active", "up"}:
         return "online"
-    if status_norm in {"offline", "down", "error", "erro", "unreachable"}:
+    if status_norm in {"offline", "down", "error", "erro", "unreachable", "inactive", "inativo", "disabled", "desabilitado"}:
         return "offline"
 
     conn_norm = str(conn_status or "").strip().lower()
     if conn_norm in {"2", "up", "online", "connected"}:
         return "online"
-    if conn_norm in {"0", "1", "down", "offline", "disconnected"}:
+    if conn_norm in {"0", "1", "down", "offline", "disconnected", "inactive", "inativo", "disabled", "desabilitado"}:
         return "offline"
 
     dev_norm = str(dev_status or "").strip().lower()
@@ -5001,11 +4874,7 @@ def editar_regional(codigo_regional):
         regional_dados = {
             'codigo': codigo_regional,
             'nome': regional_info.get('nome', ''),
-            'descricao': regional_info.get('descricao', ''),
-            'estado': (
-                _mapa_normalizar_uf(regional_info.get('estado') or regional_info.get('uf'))
-                or _MAPA_REGIONAL_ESTADOS.get(codigo_regional, '')
-            )
+            'descricao': regional_info.get('descricao', '')
         }
         
         return render_template('regional_form.html', regional=regional_dados, acao='Editar')
@@ -5046,7 +4915,6 @@ def api_excluir_regional(codigo_regional):
         if not ok:
             return jsonify({"success": False, "message": msg}), 404
 
-        _invalidar_cache_mapa_monitoramento()
         return jsonify({"success": True, "message": msg})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -5937,30 +5805,6 @@ def listar_firewalls(return_data=False):
         
         resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
         _preparar_datas_firewalls(firewalls_por_regional)
-
-        if not resumo_firewalls.get("total_firewalls"):
-            cached = _carregar_cache_dashboard("firewalls", ttl_seconds=None)
-            cached_firewalls = (cached or {}).get("firewalls_por_regional", {})
-            if cached_firewalls:
-                _preparar_datas_firewalls(cached_firewalls)
-                resumo_cache = _recalcular_totais_firewalls(cached_firewalls)
-                if return_data:
-                    cached["firewalls_por_regional"] = cached_firewalls
-                    cached.update(resumo_cache)
-                    cached["usando_cache"] = True
-                    cached["erro_atualizacao"] = "FortiManager nao retornou firewalls nesta consulta."
-                    return cached
-                flash(
-                    "FortiManager nao retornou firewalls nesta consulta. Mantendo o ultimo cache valido.",
-                    "warning",
-                )
-                return render_template(
-                    'firewalls.html',
-                    firewalls_por_regional=cached_firewalls,
-                    **resumo_cache,
-                    cache_atualizado_em=cached.get("atualizado_em"),
-                    usando_cache=True,
-                )
 
         firewall_snapshot = {
                 "atualizado_em": datetime.now().isoformat(),
@@ -7222,9 +7066,7 @@ def api_verificar_links():
 
     """API para verificar status dos links de internet"""
     try:
-        sincronizacao = _executar_sincronizacao_links_todas_regionais()
         resultado = _coletar_links_multiregional()
-        resultado["sincronizacao"] = sincronizacao
         return jsonify(resultado)
 
     except Exception as e:
@@ -8560,7 +8402,6 @@ def api_salvar_regional():
         codigo_original = (data.get('codigo_original') or codigo).upper()
         nome = data['nome']
         descricao = data.get('descricao', '')
-        estado = _mapa_normalizar_uf(data.get('estado') or data.get('uf'))
         
         # Se não tem código, gera um baseado no nome
         if not codigo:
@@ -8572,13 +8413,6 @@ def api_salvar_regional():
         # Verifica se é edição ou nova
         regional_existente = gerenciador_regionais.obter_regional(codigo)
         regional_original = gerenciador_regionais.obter_regional(codigo_original) if data.get('editando') else None
-        if data.get('editando') and not estado and regional_original:
-            estado = (
-                _mapa_normalizar_uf(regional_original.get('estado') or regional_original.get('uf'))
-                or _MAPA_REGIONAL_ESTADOS.get(codigo_original, '')
-            )
-        if not estado:
-            estado = _MAPA_REGIONAL_ESTADOS.get(codigo, '')
 
         if regional_existente and not data.get('editando'):
             return jsonify({'success': False, 'message': 'Regional com este código já existe'})
@@ -8588,11 +8422,10 @@ def api_salvar_regional():
                 return jsonify({'success': False, 'message': 'Regional original não encontrada'})
             if codigo != codigo_original and regional_existente:
                 return jsonify({'success': False, 'message': 'Já existe outra regional com este código'})
-            codigo = gerenciador_regionais.atualizar_regional(codigo_original, codigo, nome, descricao, estado)
+            codigo = gerenciador_regionais.atualizar_regional(codigo_original, codigo, nome, descricao)
         else:
-            gerenciador_regionais.adicionar_regional(codigo, nome, descricao, estado)
+            gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
         
-        _invalidar_cache_mapa_monitoramento()
         return jsonify({'success': True, 'message': 'Regional salva com sucesso!', 'codigo': codigo})
         
     except Exception as e:
