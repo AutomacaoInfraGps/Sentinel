@@ -1082,10 +1082,18 @@
             return text.includes('inativo') || text.includes('inactive') || text.includes('desabilitado');
         }
 
+        function sortAlertsBySeverity(alerts) {
+            return [...alerts].sort((a, b) => {
+                const severityDelta = severityRank(b.severidade || 'ok') - severityRank(a.severidade || 'ok');
+                if (severityDelta !== 0) return severityDelta;
+                return Number(b.quantidade || 0) - Number(a.quantidade || 0);
+            });
+        }
+
         function visibleRegionalAlerts(regional) {
-            return (regional.alertas || []).filter((alerta) => (
+            return sortAlertsBySeverity((regional.alertas || []).filter((alerta) => (
                 Number(alerta.quantidade || 0) > 0 && !isInactiveAlert(alerta)
-            ));
+            )));
         }
 
         function regionalSignature(regional) {
@@ -1555,9 +1563,9 @@
         }
 
         function tooltipDetail(regional) {
-            const alerts = regionalAlerts(regional);
+            const alerts = sortAlertsBySeverity(regionalAlerts(regional));
             if (!alerts.length) return '';
-            return alerts.slice(0, 2).map((a) => `${a.descricao}: ${a.quantidade}`).join(' | ');
+            return alerts.map((a) => `${a.descricao}: ${a.quantidade}`).join(' | ');
         }
 
         function fitTooltipText(value, maxChars) {
@@ -1608,8 +1616,8 @@
                     const pos = dotPositions[regional.codigo];
                     const visualStatus = regionalVisualStatus(regional);
                     const title = tooltipTitle(regional, visualStatus);
-                    const detail = fitTooltipText(tooltipDetail(regional), 34);
-                    const width = Math.min(330, Math.max(170, title.length * 7.2 + 22, detail.length * 5.1 + 18));
+                    const detail = fitTooltipText(tooltipDetail(regional), 120);
+                    const width = Math.min(420, Math.max(200, title.length * 7.2 + 22, detail.length * 5.1 + 18));
                     const height = 39;
                     const stackOffset = (index - ((regionals.length - 1) / 2)) * (height + 5);
                     const tooltipScale = Math.max(.42, Math.min(1, 1.55 / currentMapScale));
@@ -1700,7 +1708,7 @@
         }
 
         function chips(regional) {
-            return regionalAlerts(regional)
+            return sortAlertsBySeverity(regionalAlerts(regional))
                 .map((alerta) => {
                     const chipClass = ['alto', 'medio', 'atencao', 'warning'].includes(alerta.severidade)
                         ? (alerta.severidade === 'warning' ? 'atencao' : alerta.severidade)

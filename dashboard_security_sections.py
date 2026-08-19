@@ -125,15 +125,42 @@ def _kpi(title, icon, target, items):
     </div>"""
 
 
-def _firewall_status(firewall):
+def _firewall_availability_status(firewall):
+    if str(firewall.get("status_disponibilidade") or "").lower() in {"offline", "inativo", "sem-sinal", "down", "error", "erro"}:
+        return "offline"
+    if str(firewall.get("status_disponibilidade") or "").lower() in {"online", "ok", "ready", "active", "up"}:
+        return "online"
+
     licencas = firewall.get("licencas") or []
     if any(str(lic.get("status") or "").lower() == "offline" for lic in licencas if isinstance(lic, dict)):
-        return "sem-sinal"
+        return "offline"
+    return "online"
+
+
+def _firewall_licence_status(firewall):
+    licencas = firewall.get("licencas") or []
+    if any(isinstance(lic, dict) and bool(lic.get("notificacao_expirada")) and str(lic.get("status") or "").lower() != "offline" for lic in licencas):
+        return "expirado"
+    if any(
+        isinstance(lic, dict)
+        and bool(lic.get("notificacao_critica"))
+        and not bool(lic.get("notificacao_expirada"))
+        and str(lic.get("status") or "").lower() != "offline"
+        for lic in licencas
+    ):
+        return "warning"
     if int(firewall.get("licencas_expiradas") or 0) > 0:
         return "expirado"
     if int(firewall.get("licencas_criticas") or 0) > 0:
         return "warning"
     return "ok"
+
+
+def _firewall_status(firewall):
+    availability_status = _firewall_availability_status(firewall)
+    if availability_status == "offline":
+        return "sem-sinal"
+    return _firewall_licence_status(firewall)
 
 
 def _admin_status(device):
@@ -201,19 +228,26 @@ def build_security_dashboard(project_root):
             item = dict(firewall)
             item["regional"] = regional
             item["dashboard_status"] = _firewall_status(item)
+            item["dashboard_availability_status"] = _firewall_availability_status(item)
+            item["dashboard_licence_status"] = _firewall_licence_status(item)
             firewalls.append(item)
 
-    fw_counts = {status: sum(1 for item in firewalls if item["dashboard_status"] == status)
-                 for status in ("ok", "warning", "expirado", "sem-sinal")}
+    fw_counts = {status: sum(1 for item in firewalls if item["dashboard_licence_status"] == status)
+                 for status in ("ok", "warning", "expirado")}
+    fw_availability_counts = {status: sum(1 for item in firewalls if item["dashboard_availability_status"] == status)
+                             for status in ("online", "offline")}
     fw_total = len(firewalls)
 
     regional_fw = []
     for regional, entries in firewalls_by_regional.items():
-        statuses = [_firewall_status(item) for item in entries or []]
-        status = "expirado" if "expirado" in statuses else "warning" if "warning" in statuses else "sem-sinal" if "sem-sinal" in statuses else "ok"
-        regional_fw.append((regional, len(entries or []), status))
-    fw_reg_counts = {status: sum(1 for _, _, item_status in regional_fw if item_status == status)
-                     for status in ("ok", "warning", "expirado", "sem-sinal")}
+        availability_statuses = [_firewall_availability_status(item) for item in entries or []]
+        licence_statuses = [_firewall_licence_status(item) for item in entries or []]
+        status = "expirado" if "expirado" in licence_statuses else "warning" if "warning" in licence_statuses else "ok"
+        regional_fw.append((regional, len(entries or []), status, "offline" if "offline" in availability_statuses else "online"))
+    fw_reg_counts = {status: sum(1 for _, _, item_status, _ in regional_fw if item_status == status)
+                     for status in ("ok", "warning", "expirado")}
+    fw_reg_availability_counts = {status: sum(1 for _, _, _, item_status in regional_fw if item_status == status)
+                                 for status in ("online", "offline")}
 
     admin_devices = admin_cache.get("dispositivos") or {}
     admins = []
@@ -250,19 +284,23 @@ def build_security_dashboard(project_root):
     admin_reg_counts = {status: sum(1 for _, _, item_status in regional_admin if item_status == status)
                         for status in ("ok", "alerta", "offline", "sem-permissao")}
 
-    firewall_device_kpi = _kpi("Firewalls e Licenças", "fa-shield-alt", "firewalls", [
+    firewall_device_kpi = _kpi("Firewalls", "fa-shield-alt", "firewalls", [
         ("Total", fw_total, "status-neutral", "total"),
-        ("Licenças OK", fw_counts["ok"], "status-online", "ok"),
-        ("A vencer", fw_counts["warning"], "status-warning", "warning"),
-        ("Expiradas", fw_counts["expirado"], "status-inactive", "expirado"),
-        ("Offline", fw_counts["sem-sinal"], "status-offline", "sem-sinal"),
+        ("Online", fw_availability_counts.get("online", 0), "status-online", "online"),
+        ("Offline", fw_availability_counts.get("offline", 0), "status-offline", "offline"),
+    ])
+    firewall_licence_kpi = _kpi("Licenças de Firewalls", "fa-shield-alt", "firewalls", [
+        ("Total", fw_total, "status-neutral", "licence-total"),
+        ("OK", fw_counts.get("ok", 0), "status-online", "licence-ok"),
+        ("A vencer", fw_counts.get("warning", 0), "status-warning", "licence-warning"),
+        ("Expiradas", fw_counts.get("expirado", 0), "status-inactive", "licence-expirado"),
     ])
     firewall_regional_kpi = _kpi("Firewalls por Regional", "fa-shield-alt", "firewalls", [
         ("Total", len(regional_fw), "status-neutral", "regional-total"),
         ("Sem alerta", fw_reg_counts["ok"], "status-online", "regional-ok"),
         ("A vencer", fw_reg_counts["warning"], "status-warning", "regional-warning"),
         ("Com expirada", fw_reg_counts["expirado"], "status-inactive", "regional-expirado"),
-        ("Com offline", fw_reg_counts["sem-sinal"], "status-offline", "regional-sem-sinal"),
+        ("Com offline", fw_reg_availability_counts.get("offline", 0), "status-offline", "regional-offline"),
     ])
     admin_device_kpi = _kpi("Monitor de Admins", "fa-user-shield", "admin-monitor", [
         ("Total", len(admins), "status-neutral", "total"),
@@ -307,18 +345,21 @@ def build_security_dashboard(project_root):
 
     return {
         "firewall_device_kpi": firewall_device_kpi,
+        "firewall_licence_kpi": firewall_licence_kpi,
         "firewall_regional_kpi": firewall_regional_kpi,
         "admin_device_kpi": admin_device_kpi,
         "admin_regional_kpi": admin_regional_kpi,
         "firewall_detail": firewall_detail,
         "admin_detail": admin_detail,
         "firewall_counts": fw_counts,
+        "firewall_availability_counts": fw_availability_counts,
         "firewall_regional_counts": fw_reg_counts,
+        "firewall_regional_availability_counts": fw_reg_availability_counts,
         "admin_counts": admin_counts,
         "admin_regional_counts": admin_reg_counts,
         "firewall_regional_summary": {
-            regional: {"total": total, "status": status}
-            for regional, total, status in regional_fw
+            regional: {"total": total, "status": status, "availability": availability_status}
+            for regional, total, status, availability_status in regional_fw
         },
         "admin_regional_summary": {
             regional: {"total": total, "status": status}
