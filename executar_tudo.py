@@ -5195,6 +5195,7 @@ dashboard_html = f"""
                 </div>
             </div>
             {security_dashboard['firewall_device_kpi']}
+            {security_dashboard['firewall_licence_kpi']}
             {security_dashboard['admin_device_kpi']}
             
         </div>
