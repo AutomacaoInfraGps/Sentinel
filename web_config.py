@@ -1,6 +1,7 @@
 """
 Interface Web para Sistema de Automação - Versão Hierárquica
-Sistema organizado por Regionais → Servidores
+Sistema organizado por Regionais → Servidores -> Switches → Fortigates → Links de Internet
+Este módulo contém a configuração principal do Flask, rotas, autenticação e integração com os módulos
 """
 
 import os
