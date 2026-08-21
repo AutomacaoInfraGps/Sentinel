@@ -1766,8 +1766,9 @@ def _persistir_links_internet_exibicao(codigo_regional: str, links: list):
     if not regional:
         return
 
+    timestamp_sync = datetime.now().isoformat()
     regional["links_internet_auto"] = [
-        dict(link)
+        {**dict(link), "ultima_verificacao": timestamp_sync}
         for link in _filtrar_links_internet(links or [])
     ]
     gerenciador_regionais.salvar_regionais()
