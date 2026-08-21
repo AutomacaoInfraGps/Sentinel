@@ -1660,8 +1660,9 @@
                         && y + boxHeight > box.y - overlapPadding
                     ));
                     if (!overlaps) break;
-                    const driftX = stateLayout.side === 'left' ? -(boxWidth + 18) : (boxWidth + 18);
-                    const driftY = attempt % 2 === 0 ? 16 : -16;
+                    // Ajustado para empurrar bem menos horizontalmente (ex: 20 pixels) e tentar espalhar mais verticalmente
+                    const driftX = stateLayout.side === 'left' ? -20 : 20; 
+                    const driftY = attempt % 2 === 0 ? (20 + (attempt * 5)) : -(20 + (attempt * 5));
                     x += driftX;
                     y += driftY;
                 }
