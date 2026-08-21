@@ -561,6 +561,46 @@ def formatar_data_amigavel(valor):
 
     return texto.replace("T", " ")[:19]
 
+
+def _imprimir_linhas(prefixo, texto):
+    for linha in (texto or "").splitlines():
+        linha = linha.strip()
+        if linha:
+            print(f"{prefixo} {linha}")
+
+
+def sincronizar_links_regionais_checklist():
+    script_path = PROJECT_ROOT / "tools" / "manual" / "sincronizar_links_checklist.py"
+    if not script_path.exists():
+        print(f"[WARN] Sincronizador de links nao encontrado: {script_path}")
+        return False
+
+    print("[EXEC] Sincronizando links de internet das regionais...")
+    try:
+        resultado = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+    except Exception as exc:
+        print(f"[WARN] Nao foi possivel sincronizar links antes do checklist: {exc}")
+        return False
+
+    _imprimir_linhas("[LINKS]", resultado.stdout)
+    _imprimir_linhas("[LINKS-ERR]", resultado.stderr)
+
+    if resultado.returncode != 0:
+        print(
+            f"[WARN] Sincronizacao de links retornou codigo {resultado.returncode}; "
+            "checklist seguira com o ultimo cache."
+        )
+        return False
+
+    print("[OK] Links de internet sincronizados antes do checklist.")
+    return True
+
 # === 1. EXECUTA CHEKLISTS DAS REGIONAIS ===
 def _carregar_servidores_do_txt_legado():
     conteudo = CONEXOES_FILE.read_text(encoding="utf-8")
@@ -2397,6 +2437,7 @@ if switches_data:
         print(f"     {i+1}. {switch['name']} - Status: {switch['status']} (Zabbix: {switch.get('zabbix_status', 'N/A')})")
 
 # === 7. EXECUTA VERIFICAÇÃO DOS LINKS DE INTERNET ===
+sincronizar_links_regionais_checklist()
 print("[EXEC] Verificando Links de Internet...")
 
 links_data = []
