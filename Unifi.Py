@@ -22,8 +22,11 @@ UNIFI_MODEL_NAMES = {
     "UAL6":      "AP Lite 6",
     "UALR6v2":   "AP Long-Range 6 v2",
     "UAP6MP":    "U6 Mesh Pro",
-    "UAPA693":   "UAP AC Pro",
+    "UAPA693":   "U7 Pro Max",
     "UKPW":      "UniFi Swiss Wall",
+    "U7SHD":     "U7 SHD",
+    "BZ2":       "UAP",
+    "BZ2LR":     "UAP Long-Range",
     # modelos legados comuns
     "UAP":       "AP Classic",
     "UAPLR":     "AP Long-Range",
@@ -39,19 +42,43 @@ UNIFI_MODEL_NAMES = {
     "ULTE":      "LTE",
 }
 
+UNIFI_MODEL_OVERRIDES = {
+    ("V060_CONTROL_MACEIO", "V060_AP_MCO_RH"): "U7 Pro Max",
+    ("V060_CONTROL_MACEIO", "V060_AP_MCO_SESMT"): "U7 Pro Max",
+    ("V060_CONTROL_MACEIO", "10.182.4.30"): "U7 Pro Max",
+    ("V060_CONTROL_MACEIO", "10.182.4.31"): "U7 Pro Max",
+}
+
+UNIFI_MODEL_DISPLAY_FIELDS = (
+    "model_display",
+    "display_model",
+    "model_name",
+    "device_model",
+    "model_name_short",
+)
+
+
+def texto_limpo(valor):
+    return str(valor or "").strip()
+
 def modelo_amigavel(codigo):
+    codigo = texto_limpo(codigo)
     return UNIFI_MODEL_NAMES.get(codigo, codigo)
 
 
 def modelo_ap(ap, site_desc):
-    ip = str(ap.get("ip") or "").strip()
-    site = str(site_desc or "").strip().upper()
-    nome = str(ap.get("name") or "").strip().upper()
+    ip = texto_limpo(ap.get("ip"))
+    site = texto_limpo(site_desc).upper()
+    nome = texto_limpo(ap.get("name")).upper()
 
-    if site == "V060_CONTROL_MACEIO" and (
-        ip in {"10.182.4.30", "10.182.4.31"} or nome in {"V060_AP_MCO_RH", "V060_AP_MCO_SESMT"}
-    ):
-        return "U7 Pro Max"
+    override = UNIFI_MODEL_OVERRIDES.get((site, nome)) or UNIFI_MODEL_OVERRIDES.get((site, ip))
+    if override:
+        return override
+
+    for campo in UNIFI_MODEL_DISPLAY_FIELDS:
+        nome_api = texto_limpo(ap.get(campo))
+        if nome_api:
+            return nome_api
 
     return modelo_amigavel(ap.get("model", ""))
 
