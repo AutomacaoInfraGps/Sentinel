@@ -2641,9 +2641,17 @@ def _mapa_marcar_refresh_finalizado():
         _mapa_cache_refresh_em_andamento = False
 
 
+def _mapa_atualizar_fontes_operacionais():
+    """Atualiza fontes externas que precisam refletir no cache do mapa."""
+    return {
+        "links": _executar_sincronizacao_links_todas_regionais(),
+    }
+
+
 def _mapa_atualizar_cache_background():
     with app.app_context():
         try:
+            _mapa_atualizar_fontes_operacionais()
             dados = _montar_dados_mapa_monitoramento()
             _mapa_salvar_cache(dados)
         except Exception as exc:
@@ -3139,6 +3147,7 @@ def api_mapa_dados():
             cached["message"] = "Cache antigo entregue enquanto o mapa atualiza em segundo plano."
             return jsonify(cached)
 
+        _mapa_atualizar_fontes_operacionais()
         dados = _montar_dados_mapa_monitoramento()
         dados = _mapa_salvar_cache(dados)
         dados["cache_status"] = "fresh"
