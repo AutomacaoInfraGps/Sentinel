@@ -8,79 +8,8 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 
-# Mapeamento de código interno → nome amigável do modelo
-UNIFI_MODEL_NAMES = {
-    "U6MP":      "U6 Mesh Pro",
-    "U7HD":      "U7 HD",
-    "U7LR":      "U7 Long-Range",
-    "U7LT":      "U7 Lite",
-    "U7MP":      "U7 Mesh Pro",
-    "U7NHD":     "U7 nanoHD",
-    "U7PG2":     "U7 Pro Gen2",
-    "U7PRO":     "U7 Pro",
-    "U7PROMAX":  "U7 Pro Max",
-    "UAL6":      "AP Lite 6",
-    "UALR6v2":   "AP Long-Range 6 v2",
-    "UAP6MP":    "U6 Mesh Pro",
-    "UAPA693":   "U7 Pro Max",
-    "UKPW":      "UniFi Swiss Wall",
-    "U7SHD":     "U7 SHD",
-    "BZ2":       "UAP",
-    "BZ2LR":     "UAP Long-Range",
-    # modelos legados comuns
-    "UAP":       "AP Classic",
-    "UAPLR":     "AP Long-Range",
-    "UAPOUTDOOR":"AP Outdoor",
-    "UAPPRO":    "AP Pro",
-    "UAPMESH":   "AP Mesh",
-    "UAPMESPH":  "AP Mesh Pro",
-    "UAP6LR":    "U6 Long-Range",
-    "UAP6":      "U6 Lite",
-    "U6LR":      "U6 Long-Range",
-    "U6LITE":    "U6 Lite",
-    "U6EXTD":    "U6 Extender",
-    "ULTE":      "LTE",
-}
-
-UNIFI_MODEL_OVERRIDES = {
-    ("V060_CONTROL_MACEIO", "V060_AP_MCO_RH"): "U7 Pro Max",
-    ("V060_CONTROL_MACEIO", "V060_AP_MCO_SESMT"): "U7 Pro Max",
-    ("V060_CONTROL_MACEIO", "10.182.4.30"): "U7 Pro Max",
-    ("V060_CONTROL_MACEIO", "10.182.4.31"): "U7 Pro Max",
-}
-
-UNIFI_MODEL_DISPLAY_FIELDS = (
-    "model_display",
-    "display_model",
-    "model_name",
-    "device_model",
-    "model_name_short",
-)
-
-
 def texto_limpo(valor):
     return str(valor or "").strip()
-
-def modelo_amigavel(codigo):
-    codigo = texto_limpo(codigo)
-    return UNIFI_MODEL_NAMES.get(codigo, codigo)
-
-
-def modelo_ap(ap, site_desc):
-    ip = texto_limpo(ap.get("ip"))
-    site = texto_limpo(site_desc).upper()
-    nome = texto_limpo(ap.get("name")).upper()
-
-    override = UNIFI_MODEL_OVERRIDES.get((site, nome)) or UNIFI_MODEL_OVERRIDES.get((site, ip))
-    if override:
-        return override
-
-    for campo in UNIFI_MODEL_DISPLAY_FIELDS:
-        nome_api = texto_limpo(ap.get(campo))
-        if nome_api:
-            return nome_api
-
-    return modelo_amigavel(ap.get("model", ""))
 
 # === CONFIGURAÇÕES ===
 controller_host = UNIFI_CONFIG["host"]
@@ -203,7 +132,7 @@ for site in sites:
                 "ip": ap.get("ip", ""),
                 "mac": ap.get("mac", ""),
                 "modelo_codigo": ap.get("model", ""),
-                "modelo": modelo_ap(ap, site_desc),
+                "modelo": texto_limpo(ap.get("model")),
                 "firmware": ap.get("version", ""),
                 "status": status_ap,
                 "clientes": ap.get("num_sta", 0),
@@ -219,7 +148,7 @@ for site in sites:
                 <td>{ap.get("name", "")}</td>
                 <td>{ap.get("ip", "")}</td>
                 <td>{ap.get("mac", "")}</td>
-                <td>{modelo_ap(ap, site_desc)}</td>
+                <td>{texto_limpo(ap.get("model"))}</td>
                 <td>{ap.get("version", "")}</td>
                 <td class="{status_class}">{status}</td>
                 <td>{ap.get("num_sta", 0)}</td>
