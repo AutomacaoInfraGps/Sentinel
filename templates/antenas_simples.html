@@ -367,7 +367,7 @@
                 style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
                 <div class="card-body text-center">
                     <h2 class="fw-bold mb-1">
-                        {{ unifi_data.aps_offline | default('-', true) }}
+                        {{ unifi_data.aps_offline | default(0) }}
                     </h2>
                     <div>Antenas Offline</div>
                 </div>
