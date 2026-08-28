@@ -7942,11 +7942,12 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
 @login_required
 def antenas_unifi():
     """Página de antenas UniFi"""
-    # Carrega os dados do UniFi
-    unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
+    # O estado operacional e a controladora usam a mesma conciliacao atual do Zabbix.
+    unifi_data = load_data("unifi") or {}
     aps_operacionais = records_for("aps")
     if aps_operacionais:
         unifi_data["aps"] = aps_operacionais
+    unifi_data = _filtrar_antenas_unifi_ocultas(unifi_data)
 
     # Agrupa APs por site para o template
     from collections import defaultdict
