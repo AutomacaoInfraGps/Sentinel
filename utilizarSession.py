@@ -2,12 +2,19 @@
 # Salva HTML com imagem embutida em C:\Users\Public\Automacao\output\print_temp.html
 
 import os
+import sys
 import base64
 import webbrowser
 from pathlib import Path
 import asyncio
 import argparse
-from playwright.async_api import async_playwright
+try:
+    from playwright.async_api import async_playwright
+except ModuleNotFoundError as exc:
+    raise SystemExit(
+        "Playwright nao esta instalado neste Python. Execute: "
+        f'"{sys.executable}" -m pip install playwright'
+    ) from exc
 
 # --- Ambiente / Pastas públicas ---
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", r"C:\Users\Public\Automacao\pw_browsers")
