@@ -67,6 +67,8 @@ from gerenciar_fortigate import GerenciadorFortigate
 from gerenciar_vms import GerenciadorVMs
 from gerenciar_contatos_email import GerenciadorContatosEmail
 from switches_backup_utils import create_switch_backup
+from maintenance_status import apply_zabbix_maintenance, normalize_ip
+from operational_state import load_operational_state, publish_map_snapshot, records_for
 from sofia import init_sofia
 from sofia.tools_sentinel import configurar_ferramentas_sentinel
 
@@ -442,10 +444,7 @@ def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
 
                 links_resultado = resultado.get('links', [])
                 if resultado.get('success'):
-                    _persistir_links_internet_exibicao(
-                        codigo_regional,
-                        links_resultado,
-                    )
+                    links_para_persistir[codigo_regional] = links_resultado
 
                 resultados[codigo_regional] = {
                     'success': bool(resultado.get('success')),
@@ -473,9 +472,11 @@ def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
                 if callable(progress_callback):
                     progress_callback(concluidas, total_regionais, codigo_regional, resultados.get(codigo_regional, {}))
 
+    regionais_alteradas = _persistir_links_internet_exibicao_lote(links_para_persistir)
     return {
         'success': True,
-        'regionais': resultados
+        'regionais': resultados,
+        'regionais_alteradas': regionais_alteradas,
     }
 
 
@@ -1774,6 +1775,50 @@ def _persistir_links_internet_exibicao(codigo_regional: str, links: list):
     gerenciador_regionais.salvar_regionais()
 
 
+def _persistir_links_internet_exibicao_lote(links_por_regional: dict):
+    if not links_por_regional:
+        return []
+
+    gerenciador_regionais.recarregar_regionais()
+    regionais_config = gerenciador_regionais.regionais.get("regionais", {})
+    timestamp_sync = datetime.now().isoformat()
+    alteradas = []
+    campos_temporais = {
+        "ultima_verificacao",
+        "ultima_atualizacao_mapa",
+        "updated_at",
+        "changed_at",
+    }
+
+    def assinatura(links):
+        normalizados = [
+            {
+                chave: valor
+                for chave, valor in dict(link).items()
+                if chave not in campos_temporais
+            }
+            for link in _filtrar_links_internet(links or [])
+        ]
+        return json.dumps(normalizados, ensure_ascii=False, sort_keys=True, default=str)
+
+    for codigo_regional, links in links_por_regional.items():
+        regional = regionais_config.get(codigo_regional)
+        if not regional:
+            continue
+        links_novos = _filtrar_links_internet(links or [])
+        if assinatura(regional.get("links_internet_auto") or []) == assinatura(links_novos):
+            continue
+        regional["links_internet_auto"] = [
+            {**dict(link), "ultima_verificacao": timestamp_sync}
+            for link in links_novos
+        ]
+        alteradas.append(codigo_regional)
+
+    if alteradas:
+        gerenciador_regionais.salvar_regionais()
+    return alteradas
+
+
 def _atualizar_link_internet_exibicao(codigo_regional: str, id_link: str, novos_dados: dict):
     gerenciador_regionais.recarregar_regionais()
     regional = gerenciador_regionais.regionais.get("regionais", {}).get(codigo_regional)
@@ -2453,11 +2498,19 @@ def servidores():
         # Inicializa contadores para estatísticas gerais
         servidores_online_total = 0
         servidores_offline_total = 0
+        servidores_operacionais = records_for("servidores")
+        servidores_operacionais_por_regional = {}
+        for servidor in servidores_operacionais:
+            codigo = str(servidor.get("regional") or "")
+            servidores_operacionais_por_regional.setdefault(codigo, []).append(servidor)
         
         for codigo_regional in regionais:
             regional_info = gerenciador_regionais.obter_regional(codigo_regional)
             if regional_info:
-                servidores = regional_info.get('servidores', [])
+                servidores = (
+                    servidores_operacionais_por_regional.get(codigo_regional)
+                    or regional_info.get('servidores', [])
+                )
                 total_servidores += len(servidores)
 
                 # Usa o último status persistido no JSON para evitar verificar todas as regionais
@@ -2587,16 +2640,102 @@ def _mapa_ler_json_output(nome_arquivo):
     return {}
 
 
+_MAPA_DEVICE_GROUPS = ("servidores", "switches", "links", "aps", "vpns", "firewalls", "admins")
+_MAPA_TEMPORAL_FIELDS = {
+    "ultima_atualizacao_mapa",
+    "cache_atualizado_em",
+}
+
+
+def _mapa_device_key(item):
+    ip = str(item.get("ip") or "").strip().lower()
+    nome = str(item.get("nome") or "").strip().lower()
+    return ip or nome
+
+
+def _mapa_device_snapshot(item):
+    """Remove apenas metadados gerados pelo mapa antes de comparar mudancas."""
+    return {
+        key: value
+        for key, value in (item or {}).items()
+        if key not in _MAPA_TEMPORAL_FIELDS
+    }
+
+
+def _mapa_aplicar_timestamps_dispositivos(dados, anterior=None, atualizado_em=None):
+    """Mantem o horario anterior ou marca a alteracao no dispositivo regional."""
+    atualizado_em = atualizado_em or datetime.now().isoformat()
+    anteriores = {}
+    for regional in (anterior or {}).get("regionais") or []:
+        codigo = str(regional.get("codigo") or "").strip()
+        for grupo in _MAPA_DEVICE_GROUPS:
+            for item in regional.get(grupo) or []:
+                key = _mapa_device_key(item)
+                if key:
+                    anteriores[(codigo, grupo, key)] = item
+
+    for regional in (dados or {}).get("regionais") or []:
+        codigo = str(regional.get("codigo") or "").strip()
+        regional_alterada_em = None
+        for grupo in _MAPA_DEVICE_GROUPS:
+            for item in regional.get(grupo) or []:
+                key = _mapa_device_key(item)
+                item_anterior = anteriores.get((codigo, grupo, key))
+                mudou = (
+                    item_anterior is None
+                    or _mapa_device_snapshot(item) != _mapa_device_snapshot(item_anterior)
+                )
+                item["ultima_atualizacao_mapa"] = (
+                    atualizado_em
+                    if mudou
+                    else item_anterior.get("ultima_atualizacao_mapa") or atualizado_em
+                )
+                if mudou:
+                    regional_alterada_em = atualizado_em
+
+        if regional_alterada_em:
+            regional["ultima_atualizacao_mapa"] = regional_alterada_em
+        else:
+            regional_anterior = next(
+                (
+                    item for item in (anterior or {}).get("regionais") or []
+                    if str(item.get("codigo") or "").strip() == codigo
+                ),
+                {},
+            )
+            regional["ultima_atualizacao_mapa"] = regional_anterior.get("ultima_atualizacao_mapa") or atualizado_em
+    return dados
+
+
 def _mapa_salvar_cache(dados):
     try:
         payload = dict(dados or {})
-        payload["cache_atualizado_em"] = datetime.now().isoformat()
+        atualizado_em = datetime.now().isoformat()
+        anterior = None
+        if _MAPA_CACHE_FILE.exists():
+            try:
+                anterior = json.loads(_MAPA_CACHE_FILE.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                anterior = None
+        _mapa_aplicar_timestamps_dispositivos(payload, anterior, atualizado_em)
+        payload["cache_atualizado_em"] = atualizado_em
         payload["cache_ttl_segundos"] = _MAPA_CACHE_TTL_SECONDS
         _MAPA_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _MAPA_CACHE_FILE.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{_MAPA_CACHE_FILE.stem}-",
+            suffix=".tmp",
+            dir=str(_MAPA_CACHE_FILE.parent),
         )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, indent=2, default=str)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary_name, _MAPA_CACHE_FILE)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
+        publish_map_snapshot(payload, source="mapa", collected_at=atualizado_em)
         return payload
     except Exception as exc:
         current_app.logger.warning("Falha ao salvar cache do mapa: %s", exc)
@@ -2642,10 +2781,61 @@ def _mapa_marcar_refresh_finalizado():
 
 
 def _mapa_atualizar_fontes_operacionais():
-    """Atualiza fontes externas que precisam refletir no cache do mapa."""
-    return {
-        "links": _executar_sincronizacao_links_todas_regionais(),
-    }
+    """Atualiza os coletores compartilhados antes de publicar o snapshot comum."""
+    resultados = {}
+    links_para_persistir = {}
+
+    try:
+        resultados["links"] = _executar_sincronizacao_links_todas_regionais()
+    except Exception as exc:
+        current_app.logger.exception("Falha ao atualizar links para o estado operacional: %s", exc)
+        resultados["links"] = {"success": False, "message": str(exc)}
+
+    try:
+        resultados["switches"] = {"success": bool(gerenciador_switches._carregar_switches_api())}
+    except Exception as exc:
+        current_app.logger.exception("Falha ao atualizar switches para o estado operacional: %s", exc)
+        resultados["switches"] = {"success": False, "message": str(exc)}
+
+    try:
+        unifi_script = PROJECT_ROOT / "Unifi.py"
+        processo_unifi = subprocess.run(
+            [sys.executable, str(unifi_script)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=240,
+            check=False,
+        )
+        resultados["aps"] = {
+            "success": processo_unifi.returncode == 0,
+            "returncode": processo_unifi.returncode,
+        }
+        if processo_unifi.returncode != 0:
+            current_app.logger.warning(
+                "Coletor UniFi retornou codigo %s: %s",
+                processo_unifi.returncode,
+                (processo_unifi.stderr or processo_unifi.stdout or "")[-500:],
+            )
+    except Exception as exc:
+        current_app.logger.exception("Falha ao atualizar APs para o estado operacional: %s", exc)
+        resultados["aps"] = {"success": False, "message": str(exc)}
+
+    try:
+        coletor_firewalls = getattr(listar_firewalls, "__wrapped__", listar_firewalls)
+        with app.test_request_context("/firewalls?refresh=1"):
+            firewall_snapshot = coletor_firewalls(return_data=True)
+        if not isinstance(firewall_snapshot, dict):
+            raise RuntimeError("Coletor de firewalls nao retornou um snapshot valido.")
+        resultados["firewalls"] = {
+            "success": bool((firewall_snapshot or {}).get("total_firewalls")),
+            "total": (firewall_snapshot or {}).get("total_firewalls", 0),
+        }
+    except Exception as exc:
+        current_app.logger.exception("Falha ao atualizar firewalls para o estado operacional: %s", exc)
+        resultados["firewalls"] = {"success": False, "message": str(exc)}
+
+    return resultados
 
 
 def _mapa_atualizar_cache_background():
@@ -2692,6 +2882,8 @@ def _mapa_status(valor):
         return "warning"
     if texto in {"inactive", "inativo", "disabled", "desabilitado"}:
         return "inativo"
+    if texto in {"maintenance", "manutencao", "manutenÃ§Ã£o"}:
+        return "maintenance"
     if texto in {"offline", "down", "erro", "falha"}:
         return "offline"
     return "desconhecido"
@@ -2723,11 +2915,11 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
         return None
 
     aliases = {
-        "REG_PIAUI": "REG_PIAUÍ",
-        "REG_PIAUI_": "REG_PIAUÍ",
-        "REG_PIAU": "REG_PIAUÍ",
-        "REG_PIAU_": "REG_PIAUÍ",
-        "PIAUI": "REG_PIAUÍ",
+        "REG_PIAUI": "PIAUI",
+        "REG_PIAUI_": "PIAUI",
+        "REG_PIAU": "PIAUI",
+        "REG_PIAU_": "PIAUI",
+        "PIAUI": "PIAUI",
     }
     if alvo in aliases:
         alvo = aliases[alvo]
@@ -2748,6 +2940,7 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
 
 
 _MAPA_UNIFI_SITE_ALIAS = {
+    "BH": "REG_REGIONAL BELO HORIZONTE",
     "REGIONAL_BH": "REG_REGIONAL BELO HORIZONTE",
     "SAO_JOSE_DOS_CAMPOS": "REG_SJC",
     "SANTO_ANDRE": "REG_ABC",
@@ -2768,7 +2961,7 @@ _MAPA_UNIFI_SITE_ALIAS = {
 def _mapa_normalizar_site_unifi(nome):
     token = _mapa_normalizar_token(nome)
     token = re.sub(r"^V\d+_", "", token)
-    return token
+    return _mapa_normalizar_token(token)
 
 
 def _mapa_encontrar_regional_unifi(regionais, nome):
@@ -2848,6 +3041,7 @@ def _mapa_recalcular_regionais(regionais):
         "switches_offline": 0,
         "switches_warning": 0,
         "switches_inativo": 0,
+        "switches_maintenance": 0,
         "links_online": 0,
         "links_offline": 0,
         "links_warning": 0,
@@ -2856,12 +3050,14 @@ def _mapa_recalcular_regionais(regionais):
         "aps_offline": 0,
         "aps_warning": 0,
         "aps_inativo": 0,
+        "aps_maintenance": 0,
         "vpns_online": 0,
         "vpns_offline": 0,
         "vpns_warning": 0,
         "vpns_inativo": 0,
         "firewalls_ok": 0,
         "firewalls_alerta": 0,
+        "firewalls_inativo": 0,
         "admins_ok": 0,
         "admins_alerta": 0,
     }
@@ -2881,14 +3077,18 @@ def _mapa_recalcular_regionais(regionais):
             warning = sum(1 for item in regional[grupo] if item.get("status") == "warning")
             offline = sum(1 for item in regional[grupo] if item.get("status") == "offline")
             inativo = sum(1 for item in regional[grupo] if item.get("status") == "inativo")
+            maintenance = sum(1 for item in regional[grupo] if item.get("status") == "maintenance")
             regional["totais"][f"{prefixo}_online"] = online
             regional["totais"][f"{prefixo}_warning"] = warning
             regional["totais"][f"{prefixo}_offline"] = offline
             regional["totais"][f"{prefixo}_inativo"] = inativo
+            regional["totais"][f"{prefixo}_maintenance"] = maintenance
             resumo[f"{prefixo}_online"] += online
             resumo[f"{prefixo}_warning"] += warning
             resumo[f"{prefixo}_offline"] += offline
             resumo[f"{prefixo}_inativo"] += inativo
+            if f"{prefixo}_maintenance" in resumo:
+                resumo[f"{prefixo}_maintenance"] += maintenance
             severidade_offline = {
                 "servidores": "alto",
                 "switches": "alto",
@@ -2899,30 +3099,37 @@ def _mapa_recalcular_regionais(regionais):
             _mapa_adicionar_alerta(regional, grupo, offline, severidade_offline, f"{grupo} offline")
             _mapa_adicionar_alerta(regional, grupo, warning, "atencao", f"{grupo} em atenção")
 
-        fw_expirado = sum(
+        fw_offline = sum(
             1 for item in regional["firewalls"]
-            if item.get("status") in {"offline", "inativo"}
-            or item.get("status_disponibilidade") in {"offline", "inativo"}
+            if item.get("status") == "offline"
+            or item.get("status_disponibilidade") == "offline"
         )
         fw_warning = sum(
             1 for item in regional["firewalls"]
             if item.get("status") == "warning" and item.get("status_disponibilidade") not in {"offline", "inativo"}
         )
-        fw_alerta = fw_expirado + fw_warning
-        fw_ok = len(regional["firewalls"]) - fw_alerta
+        fw_inativo = sum(
+            1 for item in regional["firewalls"]
+            if item.get("status_disponibilidade") == "inativo"
+            or item.get("status") == "inativo"
+        )
+        fw_alerta = fw_offline + fw_warning
+        fw_ok = len(regional["firewalls"]) - fw_alerta - fw_inativo
         adm_alerta = sum(1 for item in regional["admins"] if item.get("status") != "online")
         adm_ok = len(regional["admins"]) - adm_alerta
         regional["totais"]["firewalls_ok"] = fw_ok
         regional["totais"]["firewalls_alerta"] = fw_alerta
-        regional["totais"]["firewalls_expirados"] = fw_expirado
+        regional["totais"]["firewalls_expirados"] = fw_offline
         regional["totais"]["firewalls_warning"] = fw_warning
+        regional["totais"]["firewalls_inativo"] = fw_inativo
         regional["totais"]["admins_ok"] = adm_ok
         regional["totais"]["admins_alerta"] = adm_alerta
         resumo["firewalls_ok"] += fw_ok
         resumo["firewalls_alerta"] += fw_alerta
+        resumo["firewalls_inativo"] += fw_inativo
         resumo["admins_ok"] += adm_ok
         resumo["admins_alerta"] += adm_alerta
-        _mapa_adicionar_alerta(regional, "firewalls", fw_expirado, "critico", "firewall offline")
+        _mapa_adicionar_alerta(regional, "firewalls", fw_offline, "critico", "firewall offline")
         _mapa_adicionar_alerta(regional, "firewalls", fw_warning, "atencao", "licencas a vencer")
         _mapa_adicionar_alerta(regional, "admins", adm_alerta, "atencao", "admins com alerta")
 
@@ -2948,29 +3155,36 @@ def _mapa_recalcular_regionais(regionais):
 def _montar_dados_mapa_monitoramento():
     gerenciador_regionais.recarregar_regionais()
     regionais = {}
+    unmapped = {grupo: [] for grupo in _MAPA_DEVICE_GROUPS}
     for codigo in gerenciador_regionais.listar_regionais():
         info = gerenciador_regionais.obter_regional(codigo) or {}
         regionais[codigo] = _mapa_criar_regional(codigo, info)
 
         for servidor in info.get("servidores", []) or []:
             status_servidor, tempo_resposta, erro_servidor = _mapa_status_servidor_tempo_real(servidor)
-            regionais[codigo]["servidores"].append({
+            servidor_mapa = dict(servidor)
+            servidor_mapa.update({
                 "nome": servidor.get("nome") or servidor.get("id") or "Servidor",
                 "ip": servidor.get("ip") or "",
                 "descricao": servidor.get("funcao") or servidor.get("tipo") or "",
                 "status": status_servidor,
                 "tempo_resposta": tempo_resposta,
                 "erro": erro_servidor,
+                "ultima_verificacao": servidor.get("ultima_verificacao"),
             })
+            regionais[codigo]["servidores"].append(servidor_mapa)
 
         for link in _obter_links_internet_exibicao(info):
             link_completo = _preparar_link_para_template(link)
-            regionais[codigo]["links"].append({
+            link_mapa = dict(link_completo)
+            link_mapa.update({
                 "nome": link_completo.get("nome") or link_completo.get("interface_monitorada") or link_completo.get("interface") or "Link",
                 "ip": link_completo.get("ip") or link_completo.get("ip_exibicao") or link_completo.get("url") or "",
                 "descricao": link_completo.get("provedor") or link_completo.get("tipo") or "",
                 "status": _mapa_status(link_completo.get("status") or ("online" if link_completo.get("ativo", True) else "offline")),
+                "ultima_verificacao": link_completo.get("ultima_verificacao"),
             })
+            regionais[codigo]["links"].append(link_mapa)
 
     dashboard = _mapa_ler_json_output("dados_dashboard.json")
     for codigo, dados in (dashboard.get("regionais") or {}).items():
@@ -2988,17 +3202,29 @@ def _montar_dados_mapa_monitoramento():
                 })
 
     switches_cache = _mapa_ler_json_output("switches_status_cache.json")
-    for nome_switch, switch in switches_cache.items():
-        regional_nome = str(nome_switch).split(" - SWITCH - ")[0]
+    switches_fonte = gerenciador_switches.switches or [
+        {"host": nome_switch, **switch}
+        for nome_switch, switch in switches_cache.items()
+    ]
+    for switch in switches_fonte:
+        nome_switch = switch.get("host") or switch.get("nome") or "Switch"
+        regional_nome = switch.get("regional") or str(nome_switch).split(" - SWITCH - ")[0]
         codigo = _mapa_encontrar_regional_por_nome(regionais, regional_nome)
         if not codigo:
+            switch_sem_regional = dict(switch)
+            switch_sem_regional.setdefault("nome", nome_switch)
+            switch_sem_regional.setdefault("regional", regional_nome or "SEM_REGIONAL")
+            unmapped["switches"].append(switch_sem_regional)
             continue
-        regionais[codigo]["switches"].append({
+        switch_mapa = dict(switch)
+        switch_mapa.update({
             "nome": nome_switch,
             "ip": switch.get("ip") or "",
             "descricao": switch.get("warning_resumo") or switch.get("status_reason") or "",
             "status": _mapa_status(switch.get("status")),
+            "ultima_verificacao": switch.get("ultima_verificacao"),
         })
+        regionais[codigo]["switches"].append(switch_mapa)
 
     unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
     for ap in (unifi_data.get("aps") or []):
@@ -3020,13 +3246,19 @@ def _montar_dados_mapa_monitoramento():
                         print(f"[mapa] Pulando AP '{nome_ap}' ({ip_ap}): regional mapeada='{codigo}' não encontrada.")
                 except Exception:
                     pass
+                ap_sem_regional = dict(ap)
+                ap_sem_regional.setdefault("regional", ap.get("site") or "SEM_REGIONAL")
+                unmapped["aps"].append(ap_sem_regional)
                 continue
-        regionais[codigo]["aps"].append({
+        ap_mapa = dict(ap)
+        ap_mapa.update({
             "nome": ap.get("nome") or ap.get("name") or "AP",
             "ip": ap.get("ip") or "",
             "descricao": ap.get("modelo") or ap.get("model") or "",
             "status": _mapa_status(ap.get("status")),
+            "ultima_verificacao": ap.get("ultima_verificacao") or unifi_data.get("timestamp"),
         })
+        regionais[codigo]["aps"].append(ap_mapa)
 
     try:
         if gerenciador_fortigate.autenticar():
@@ -3043,12 +3275,15 @@ def _montar_dados_mapa_monitoramento():
                 regionais[codigo]["vpns"] = []
                 for vpn in dados_vpn.get("tunels") or []:
                     status = "online" if str(vpn.get("status") or "").strip().lower() == "up" else "offline"
-                    regionais[codigo]["vpns"].append({
+                    vpn_mapa = dict(vpn)
+                    vpn_mapa.update({
                         "nome": vpn.get("tunel") or "VPN",
                         "ip": vpn.get("remote_ip") or vpn.get("gateway") or "",
                         "descricao": vpn.get("interface") if vpn.get("interface") not in (None, "", "N/A") else "",
                         "status": status,
+                        "ultima_verificacao": vpn.get("ultima_verificacao") or vpn.get("updated_at"),
                     })
+                    regionais[codigo]["vpns"].append(vpn_mapa)
     except Exception as exc:
         current_app.logger.warning("Falha ao consultar VPNs para o mapa: %s", exc)
 
@@ -3072,16 +3307,20 @@ def _montar_dados_mapa_monitoramento():
             )
             status_final = (
                 "offline"
-                if status_disponibilidade in {"offline", "inativo"}
+                if status_disponibilidade == "offline"
+                else "inativo" if status_disponibilidade == "inativo"
                 else "warning" if tem_critica or tem_expirada else "online"
             )
-            regionais[codigo]["firewalls"].append({
+            firewall_mapa = dict(firewall)
+            firewall_mapa.update({
                 "nome": firewall.get("nome") or firewall.get("hostname") or "Firewall",
                 "ip": firewall.get("ip") or "",
                 "descricao": firewall.get("model") or firewall.get("modelo") or "",
                 "status": status_final,
                 "status_disponibilidade": status_disponibilidade,
+                "ultima_verificacao": firewall.get("ultima_verificacao") or firewall.get("atualizado_em"),
             })
+            regionais[codigo]["firewalls"].append(firewall_mapa)
 
     admins_cache = _mapa_ler_json_output("dashboard_admins_cache.json")
     for device_key, device in (admins_cache.get("dispositivos") or {}).items():
@@ -3105,6 +3344,7 @@ def _montar_dados_mapa_monitoramento():
             "ip": "",
             "descricao": f'{len(device.get("admins") or [])} admin(s)',
             "status": "offline" if tem_alerta else "online",
+            "ultima_verificacao": device.get("ultima_verificacao") or admins_cache.get("atualizado_em"),
         })
 
     resumo = _mapa_recalcular_regionais(regionais)
@@ -3112,6 +3352,7 @@ def _montar_dados_mapa_monitoramento():
         "success": True,
         "resumo": resumo,
         "regionais": list(regionais.values()),
+        "unmapped": unmapped,
         "fontes": {
             "modo": "hibrido",
             "servidores": "estrutura_regionais.json/status_persistido",
@@ -3134,6 +3375,13 @@ def api_mapa_dados():
     try:
         force_refresh = str(request.args.get("refresh") or "").strip().lower() in {"1", "true", "yes", "on"}
         cached, idade = _mapa_carregar_cache()
+
+        if cached and force_refresh:
+            refresh_started = _mapa_iniciar_refresh_background()
+            cached["cache_status"] = "refreshing" if refresh_started else "stale_refreshing"
+            cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
+            cached["message"] = "Atualizacao iniciada em segundo plano."
+            return jsonify(cached)
 
         if cached and not force_refresh:
             if _mapa_cache_esta_fresco(idade):
@@ -3162,6 +3410,17 @@ def api_mapa_dados():
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
             return jsonify(cached)
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route('/api/operational-state')
+@login_required
+def api_operational_state():
+    """Estado operacional comum consumido pelas visoes do Sentinel."""
+    payload = load_operational_state()
+    if not payload:
+        return jsonify({"success": False, "message": "Estado operacional ainda nao inicializado."}), 404
+    payload["success"] = True
+    return jsonify(payload)
 
 
 @app.route('/api/mapa/estados')
@@ -3527,6 +3786,16 @@ def _formatar_ultima_verificacao_switch(valor):
 
 
 def _obter_switches_detalhe_regional(codigo_regional, regional_info):
+    switches_operacionais = records_for("switches", codigo_regional)
+    if switches_operacionais:
+        switches = [dict(switch) for switch in switches_operacionais]
+        for switch in switches:
+            switch.setdefault("host", switch.get("nome") or "Switch")
+            switch["ultima_verificacao_formatada"] = _formatar_ultima_verificacao_switch(
+                switch.get("ultima_verificacao")
+            )
+        return codigo_regional, switches
+
     regional_switch = _resolver_regional_switches(codigo_regional, regional_info)
     if not regional_switch:
         return "", []
@@ -3573,7 +3842,9 @@ def detalhar_regional(codigo_regional):
         # NÃO verifica automaticamente aqui
         servidores_completos = []
 
-        for servidor in regional_info.get('servidores', []):
+        servidores_operacionais = records_for("servidores", codigo_regional)
+        servidores_fonte = servidores_operacionais or regional_info.get('servidores', [])
+        for servidor in servidores_fonte:
             servidor_completo = servidor.copy()
 
             # garante campos pra não quebrar o template
@@ -3588,7 +3859,9 @@ def detalhar_regional(codigo_regional):
             servidores_completos.append(servidor_completo)
 
         links_completos = []
-        for link in _obter_links_internet_exibicao(regional_info):
+        links_operacionais = records_for("links", codigo_regional)
+        links_fonte = links_operacionais or _obter_links_internet_exibicao(regional_info)
+        for link in links_fonte:
             link_completo = _preparar_link_para_template(link)
             link_completo["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
                 link_completo.get("ultima_verificacao")
@@ -3753,6 +4026,10 @@ def detalhar_regional(codigo_regional):
             regional_info,
         )
 
+        firewalls_operacionais = records_for("firewalls", codigo_regional)
+        if firewalls_operacionais:
+            firewalls_completos = firewalls_operacionais
+
         for firewall in firewalls_completos:
             firewall["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
                 firewall.get("ultima_verificacao")
@@ -3857,6 +4134,10 @@ def _formatar_preventiva_data(valor):
 
 
 def _obter_firewalls_regionais_cache(codigo_regional):
+    firewalls_operacionais = records_for("firewalls", codigo_regional)
+    if firewalls_operacionais:
+        return firewalls_operacionais
+
     cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}  # 24h
     firewalls_por_regional = cached.get("firewalls_por_regional") or {}
     codigo_norm = str(codigo_regional or "").strip().upper()
@@ -4222,7 +4503,13 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
             criticas = sum(
                 1 for lic in licencas
                 if isinstance(lic, dict)
-                and bool(lic.get("notificacao_critica"))
+                and (
+                    bool(lic.get("notificacao_critica"))
+                    or (
+                        isinstance(lic.get("dias_restantes"), (int, float))
+                        and 0 < lic["dias_restantes"] <= _FIREWALL_ALERTA_DIAS
+                    )
+                )
                 and not bool(lic.get("notificacao_expirada"))
                 and str(lic.get("status") or "").lower() != "offline"
             )
@@ -4258,14 +4545,18 @@ def _status_firewall_disponibilidade(firewall):
     status_norm = str(status or "").strip().lower()
     if status_norm in {"ready", "online", "ok", "active", "up"}:
         return "online"
-    if status_norm in {"offline", "down", "error", "erro", "unreachable", "inactive", "inativo", "disabled", "desabilitado"}:
+    if status_norm in {"offline", "down", "error", "erro", "unreachable"}:
         return "offline"
+    if status_norm in {"inactive", "inativo", "disabled", "desabilitado"}:
+        return "inativo"
 
     conn_norm = str(conn_status or "").strip().lower()
     if conn_norm in {"2", "up", "online", "connected"}:
         return "online"
-    if conn_norm in {"0", "1", "down", "offline", "disconnected", "inactive", "inativo", "disabled", "desabilitado"}:
+    if conn_norm in {"0", "1", "down", "offline", "disconnected"}:
         return "offline"
+    if conn_norm in {"inactive", "inativo", "disabled", "desabilitado"}:
+        return "inativo"
 
     dev_norm = str(dev_status or "").strip().lower()
     if dev_norm in {"15", "up", "online", "connected"}:
@@ -5266,13 +5557,20 @@ def listar_switches():
             except Exception:
                 return str(valor)
 
-        # Sempre recarrega os switches via API (com fallback para XLSX)
-        sucesso_api = gerenciador_switches._carregar_switches_api()
-        if not sucesso_api:
-            gerenciador_switches._carregar_switches()
+        switches_operacionais = records_for("switches")
+        switches_por_regional_operacional = {}
+        for switch in switches_operacionais:
+            regional = str(switch.get("regional") or "SEM_REGIONAL")
+            switches_por_regional_operacional.setdefault(regional, []).append(dict(switch))
 
-        # Obtém as regionais com switches
-        regionais = gerenciador_switches.listar_regionais()
+        if switches_por_regional_operacional:
+            regionais = sorted(switches_por_regional_operacional)
+        else:
+            # Compatibilidade para a primeira execucao, antes do cache comum existir.
+            sucesso_api = gerenciador_switches._carregar_switches_api()
+            if not sucesso_api:
+                gerenciador_switches._carregar_switches()
+            regionais = gerenciador_switches.listar_regionais()
 
         # Prepara dados para a view
         regionais_dados = []
@@ -5281,7 +5579,20 @@ def listar_switches():
 
         # Agora processa os dados para a view
         for regional in regionais:
-            switches = gerenciador_switches.obter_switches_regional(regional)
+            switches = (
+                switches_por_regional_operacional.get(regional, [])
+                if switches_por_regional_operacional
+                else gerenciador_switches.obter_switches_regional(regional)
+            )
+            switches_unicos = {}
+            for switch in switches:
+                switch.setdefault("host", switch.get("nome") or "Switch")
+                chave = (
+                    str(switch.get("hostid") or "").strip()
+                    or f'{str(switch.get("host") or "").strip()}|{str(switch.get("ip") or "").strip()}'
+                )
+                switches_unicos[chave] = switch
+            switches = list(switches_unicos.values())
 
             # Garante que todos os IPs estão convertidos corretamente
             for switch in switches:
@@ -5298,6 +5609,7 @@ def listar_switches():
             online = sum(1 for s in switches if s.get('status') == 'online')
             warning = sum(1 for s in switches if s.get('status') == 'warning')
             inativo = sum(1 for s in switches if s.get('status') == 'inativo')
+            maintenance = sum(1 for s in switches if s.get('status') == 'maintenance')
             offline = sum(1 for s in switches if _status_offline(s.get('status')))
             desconhecidos = sum(1 for s in switches if (s.get('status') or '').strip().lower() in {'', 'desconhecido', 'não encontrado', 'nao encontrado', 'erro'})
 
@@ -5311,6 +5623,7 @@ def listar_switches():
                 'offline': offline,
                 'warning': warning,
                 'inativo': inativo,
+                'maintenance': maintenance,
                 'desconhecidos': desconhecidos,
                 'percentual_online': percentual_online,
                 'switches': switches
@@ -5593,7 +5906,22 @@ def listar_firewalls(return_data=False):
 
         force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
         if not force_refresh:
-            cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
+            firewalls_operacionais = records_for("firewalls")
+            cached = None
+            if firewalls_operacionais:
+                firewalls_por_regional = {}
+                for firewall in firewalls_operacionais:
+                    codigo = str(firewall.get("regional") or "SEM_REGIONAL")
+                    firewalls_por_regional.setdefault(codigo, []).append(dict(firewall))
+                cached = {
+                    "atualizado_em": max(
+                        (str(item.get("updated_at") or "") for item in firewalls_operacionais),
+                        default="",
+                    ),
+                    "firewalls_por_regional": firewalls_por_regional,
+                }
+            if not cached:
+                cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
             if cached:
                 cached_firewalls = cached.get("firewalls_por_regional", {})
                 _preparar_datas_firewalls(cached_firewalls)
@@ -5610,32 +5938,31 @@ def listar_firewalls(return_data=False):
                     usando_cache=True,
                 )
 
-        print("🔴 DEBUG listar_firewalls(): INICIANDO")
-        current_app.logger.info("🔴 DEBUG listar_firewalls(): INICIANDO")
+        print("[FIREWALL] Coleta iniciada")
+        current_app.logger.info("[FIREWALL] Coleta iniciada")
         firewalls_por_regional = {}
         total_firewalls = 0
         total_alertas = 0
         total_expirados = 0
         adom = _get_fortimanager_adom()
-        print(f"🔴 DEBUG: ADOM = {adom}")
-        current_app.logger.info(f"🔴 DEBUG: ADOM = {adom}")
+        print(f"[FIREWALL] ADOM = {adom}")
+        current_app.logger.info("[FIREWALL] ADOM = %s", adom)
         
         try:
-            print("🔴 DEBUG: Conectando ao FortiManager...")
-            current_app.logger.info("🔴 DEBUG: Conectando ao FortiManager...")
+            print("[FIREWALL] Conectando ao FortiManager...")
+            current_app.logger.info("[FIREWALL] Conectando ao FortiManager...")
             fm_client = FortiManagerClient()
             fm_client.login()
-            print("🔴 DEBUG: Login bem-sucedido")
-            current_app.logger.info("🔴 DEBUG: Login bem-sucedido")
+            print("[FIREWALL] Login bem-sucedido")
+            current_app.logger.info("[FIREWALL] Login bem-sucedido")
             
             fm_devices = fm_client.list_devices(adom)
-            print(f"🔴 DEBUG: fm_devices keys = {fm_devices.keys() if isinstance(fm_devices, dict) else type(fm_devices)}")
-            current_app.logger.info(f"🔴 DEBUG: fm_devices keys = {fm_devices.keys() if isinstance(fm_devices, dict) else type(fm_devices)}")
+            print(f"[FIREWALL] fm_devices keys = {fm_devices.keys() if isinstance(fm_devices, dict) else type(fm_devices)}")
             
             fm_devices_list = fm_devices.get('result', [{}])[0] if isinstance(fm_devices.get('result', []), list) and fm_devices.get('result') else {}
             devices_data = fm_devices_list.get('data', []) if isinstance(fm_devices_list, dict) else []
-            print(f"🔴 DEBUG: Total de devices = {len(devices_data)}")
-            current_app.logger.info(f"🔴 DEBUG: Total de devices = {len(devices_data)}")
+            print(f"[FIREWALL] Total de devices = {len(devices_data)}")
+            current_app.logger.info("[FIREWALL] Total de devices = %s", len(devices_data))
             
             # Mapear regionais para facilitar busca
             regionais_map = {}
@@ -5824,17 +6151,17 @@ def listar_firewalls(return_data=False):
                             total_alertas += firewall_info['licencas_criticas']
                     
                     except Exception as e:
-                        print(f"⚠️ Erro ao buscar licenças de {device_name}: {str(e)}")
+                        print(f"[AVISO] Erro ao buscar licencas de {device_name}: {str(e)}")
                         current_app.logger.warning(f"Erro ao buscar licenças de {device_name}: {str(e)}")
             
-            print(f"🔴 DEBUG: Total de firewalls encontrados = {total_firewalls}")
-            current_app.logger.info(f"🔴 DEBUG: Total de firewalls encontrados = {total_firewalls}")
-            print(f"🔴 DEBUG: Total de alertas = {total_alertas}")
-            current_app.logger.info(f"🔴 DEBUG: Total de alertas = {total_alertas}")
+            print(f"[FIREWALL] Total encontrados = {total_firewalls}")
+            current_app.logger.info("[FIREWALL] Total encontrados = %s", total_firewalls)
+            print(f"[FIREWALL] Total de alertas = {total_alertas}")
+            current_app.logger.info("[FIREWALL] Total de alertas = %s", total_alertas)
             fm_client.logout()
         
         except Exception as e:
-            print(f"⚠️ Erro ao conectar FortiManager: {str(e)}")
+            print(f"[AVISO] Erro ao conectar FortiManager: {str(e)}")
             current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
         
         resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
@@ -5859,6 +6186,15 @@ def listar_firewalls(return_data=False):
         )
 
     except Exception as e:
+        current_app.logger.exception("Erro ao coletar firewalls")
+        if return_data:
+            return {
+                "success": False,
+                "message": str(e),
+                "atualizado_em": datetime.now().isoformat(),
+                "firewalls_por_regional": {},
+                "total_firewalls": 0,
+            }
         flash(f'Erro ao carregar firewalls: {str(e)}', 'error')
         return render_template(
             'firewalls.html',
@@ -6296,23 +6632,21 @@ def vm_relatorio(vm_id):
 @login_required
 def vpn_ipsec():
     try:
-        # Garante autenticação no Fortigate
-        if not gerenciador_fortigate.autenticar():
-            flash("Falha na autenticação com o Fortigate", "error")
-            return render_template("vpn_ipsec.html", vpns=[])
-
-        # Obtém VPNs
-        resultado = gerenciador_fortigate.obter_vpn_ipsec()
-
-        # Validação defensiva
-        if not resultado or not isinstance(resultado, dict):
-            raise ValueError("Resposta inválida do Fortigate")
-
-        if not resultado.get("success", False):
-            flash(resultado.get("message", "Erro ao consultar VPN IPsec"), "error")
-            return render_template("vpn_ipsec.html", vpns=[])
-
-        vpns = resultado.get("vpns", [])
+        vpns = records_for("vpns")
+        if vpns:
+            for vpn in vpns:
+                vpn["status"] = "up" if str(vpn.get("status") or "").lower() in {"up", "online"} else "down"
+        else:
+            if not gerenciador_fortigate.autenticar():
+                flash("Falha na autenticação com o Fortigate", "error")
+                return render_template("vpn_ipsec.html", vpns=[])
+            resultado = gerenciador_fortigate.obter_vpn_ipsec()
+            if not resultado or not isinstance(resultado, dict):
+                raise ValueError("Resposta inválida do Fortigate")
+            if not resultado.get("success", False):
+                flash(resultado.get("message", "Erro ao consultar VPN IPsec"), "error")
+                return render_template("vpn_ipsec.html", vpns=[])
+            vpns = resultado.get("vpns", [])
 
         # Normaliza campos esperados pelo template
         for vpn in vpns:
@@ -7575,6 +7909,13 @@ def _deve_ocultar_ap_unifi(ap):
 
 def _filtrar_antenas_unifi_ocultas(unifi_data):
     dados = dict(unifi_data or {})
+    try:
+        dados = apply_zabbix_maintenance(
+            dados,
+            gerenciador_switches.obter_hosts_em_manutencao(cache_seconds=0),
+        )
+    except Exception as exc:
+        current_app.logger.warning("Falha ao conciliar manutencao UniFi/Zabbix: %s", exc)
     aps_visiveis = [
         ap for ap in (dados.get("aps") or [])
         if not _deve_ocultar_ap_unifi(ap)
@@ -7582,7 +7923,8 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
     dados["aps"] = aps_visiveis
     dados["total_aps"] = len(aps_visiveis)
     dados["aps_online"] = sum(1 for ap in aps_visiveis if (ap.get("status") or "").lower() == "online")
-    dados["aps_offline"] = dados["total_aps"] - dados["aps_online"]
+    dados["aps_offline"] = sum(1 for ap in aps_visiveis if (ap.get("status") or "").lower() == "offline")
+    dados["aps_maintenance"] = sum(1 for ap in aps_visiveis if ap.get("em_manutencao"))
     dados["clientes_conectados"] = sum(int(ap.get("clientes") or 0) for ap in aps_visiveis)
     dados["sites"] = [
         site for site in (dados.get("sites") or [])
@@ -7602,6 +7944,9 @@ def antenas_unifi():
     """Página de antenas UniFi"""
     # Carrega os dados do UniFi
     unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
+    aps_operacionais = records_for("aps")
+    if aps_operacionais:
+        unifi_data["aps"] = aps_operacionais
 
     # Agrupa APs por site para o template
     from collections import defaultdict
@@ -7615,12 +7960,47 @@ def antenas_unifi():
             "nome":    site,
             "aps":     aps,
             "online":  sum(1 for a in aps if (a.get("status") or "").lower() == "online"),
-            "offline": sum(1 for a in aps if (a.get("status") or "").lower() != "online"),
+            "offline": sum(1 for a in aps if (a.get("status") or "").lower() == "offline"),
+            "maintenance": sum(1 for a in aps if a.get("em_manutencao")),
         }
         for site, aps in grupos.items()
     ], key=lambda s: s["nome"])
 
     return render_template('antenas_simples.html', unifi_data=unifi_data, sites_agrupados=sites_agrupados)
+
+
+@app.route('/api/maintenance/devices')
+@login_required
+def api_maintenance_devices():
+    """Retorna os hosts que o Sentinel reconhece em manutencao no Zabbix."""
+    try:
+        hosts = gerenciador_switches.obter_hosts_em_manutencao(cache_seconds=0)
+        switch_ips = {
+            normalize_ip(item.get("ip"))
+            for item in gerenciador_switches.switches
+            if normalize_ip(item.get("ip"))
+        }
+        unifi_data = load_data("unifi") or {}
+        ap_ips = {
+            normalize_ip(item.get("ip"))
+            for item in unifi_data.get("aps") or []
+            if normalize_ip(item.get("ip"))
+        }
+        totals = {"ap": 0, "switch": 0, "other": 0}
+        for host in hosts:
+            host_ip = normalize_ip(host.get("ip"))
+            if host_ip in ap_ips:
+                device_type = "ap"
+            elif host_ip in switch_ips or "SWITCH" in str(host.get("name") or host.get("host") or "").upper():
+                device_type = "switch"
+            else:
+                device_type = "other"
+            host["device_type"] = device_type
+            totals[device_type] += 1
+        return jsonify({"success": True, "total": len(hosts), "totals": totals, "devices": hosts})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao consultar manutencoes do Zabbix")
+        return jsonify({"success": False, "message": str(exc), "devices": []}), 502
 
 @app.route('/executar_unifi_direto', methods=['POST'])
 def executar_unifi_direto():
@@ -7965,7 +8345,7 @@ def status_unifi():
                 pass
         
         # Verifica se os dados do UniFi estão disponíveis e atualizados
-        unifi_data = load_data("unifi")
+        unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
         
         if unifi_data:
             # Verifica se os dados foram atualizados recentemente
@@ -8089,7 +8469,7 @@ def api_public_status_unifi():
     try:
         # Tenta carregar dados do armazenamento centralizado
         print("API: Tentando carregar dados do UniFi...")
-        unifi_data = load_data("unifi")
+        unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
         
         if unifi_data:
             print(f"API: Dados do UniFi carregados com sucesso. Total de APs: {unifi_data.get('total_aps', 0)}")
@@ -8122,6 +8502,7 @@ def api_public_status_unifi():
                 'total_aps': unifi_data.get('total_aps', 0),
                 'aps_online': unifi_data.get('aps_online', 0),
                 'aps_offline': unifi_data.get('aps_offline', 0),
+                'aps_maintenance': unifi_data.get('aps_maintenance', 0),
                 'clientes_conectados': unifi_data.get('clientes_conectados', 0),
                 'ultima_verificacao': timestamp.strftime('%H:%M'),
                 'controller_online': unifi_data.get('controller', {}).get('online', False),

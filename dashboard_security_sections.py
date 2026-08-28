@@ -24,6 +24,7 @@ def _load(root, name):
 
 
 _CENTRAL_ADMIN_TYPES = {"fortimanager", "fortianalyzer"}
+_LICENSE_WARNING_DAYS = 60
 
 _REGIONAL_DEVICE_OVERRIDE = {
     "REG_GLOBAL_SEGURANCA": ["FTG_GLOBALSEG"],
@@ -139,7 +140,15 @@ def _firewall_availability_status(firewall):
 
 def _firewall_licence_status(firewall):
     licencas = firewall.get("licencas") or []
-    if any(isinstance(lic, dict) and bool(lic.get("notificacao_expirada")) and str(lic.get("status") or "").lower() != "offline" for lic in licencas):
+    if any(
+        isinstance(lic, dict)
+        and (
+            bool(lic.get("notificacao_expirada"))
+            or str(lic.get("status") or "").lower() in {"expired", "no_license"}
+        )
+        and str(lic.get("status") or "").lower() != "offline"
+        for lic in licencas
+    ):
         return "expirado"
     if any(
         isinstance(lic, dict)
@@ -152,6 +161,30 @@ def _firewall_licence_status(firewall):
     if int(firewall.get("licencas_expiradas") or 0) > 0:
         return "expirado"
     if int(firewall.get("licencas_criticas") or 0) > 0:
+        return "warning"
+    if any(
+        isinstance(lic, dict)
+        and isinstance(lic.get("dias_restantes"), (int, float))
+        and 0 < lic["dias_restantes"] <= _LICENSE_WARNING_DAYS
+        and str(lic.get("status") or "").lower() != "offline"
+        for lic in licencas
+    ):
+        return "warning"
+    return "ok"
+
+
+def _licence_status(licence):
+    if not isinstance(licence, dict):
+        return "ok"
+    if str(licence.get("status") or "").lower() == "offline":
+        return "indisponivel"
+    status = str(licence.get("status") or "").lower()
+    if licence.get("notificacao_expirada") or status in {"expired", "no_license"}:
+        return "expirado"
+    days = licence.get("dias_restantes")
+    if licence.get("notificacao_critica") or (
+        isinstance(days, (int, float)) and 0 < days <= _LICENSE_WARNING_DAYS
+    ):
         return "warning"
     return "ok"
 
@@ -286,8 +319,8 @@ def build_security_dashboard(project_root):
 
     firewall_device_kpi = _kpi("Firewalls", "fa-shield-alt", "firewalls", [
         ("Total", fw_total, "status-neutral", "total"),
-        ("Online", fw_availability_counts.get("online", 0), "status-online", "online"),
-        ("Offline", fw_availability_counts.get("offline", 0), "status-offline", "offline"),
+        ("Online", fw_availability_counts.get("online", 0), "status-online", "fw-online"),
+        ("Offline", fw_availability_counts.get("offline", 0), "status-offline", "fw-offline"),
     ])
     firewall_licence_kpi = _kpi("Licenças de Firewalls", "fa-shield-alt", "firewalls", [
         ("Total", fw_total, "status-neutral", "licence-total"),
@@ -300,7 +333,7 @@ def build_security_dashboard(project_root):
         ("Sem alerta", fw_reg_counts["ok"], "status-online", "regional-ok"),
         ("A vencer", fw_reg_counts["warning"], "status-warning", "regional-warning"),
         ("Com expirada", fw_reg_counts["expirado"], "status-inactive", "regional-expirado"),
-        ("Com offline", fw_reg_availability_counts.get("offline", 0), "status-offline", "regional-offline"),
+        ("Com offline", fw_reg_availability_counts.get("offline", 0), "status-offline", "regional-fw-offline"),
     ])
     admin_device_kpi = _kpi("Monitor de Admins", "fa-user-shield", "admin-monitor", [
         ("Total", len(admins), "status-neutral", "total"),
@@ -317,14 +350,25 @@ def build_security_dashboard(project_root):
 
     fw_rows = []
     for item in sorted(firewalls, key=lambda row: (row["regional"], row.get("nome", ""))):
-        license_info = next(iter(item.get("licencas") or []), {})
-        days = license_info.get("dias_restantes", "N/A")
-        fw_rows.append(
-            f'<tr class="security-row" data-status="{item["dashboard_status"]}" data-regional="{_escape(item["regional"])}">'
-            f'<td>{_escape(item["regional"])}</td><td><strong>{_escape(item.get("nome"))}</strong></td>'
-            f'<td>{_escape(item.get("ip"))}</td><td>{_escape(item.get("model"))}</td><td>{_escape(item.get("serial"))}</td>'
-            f'<td>{_escape(license_info.get("status"))}</td><td>{_escape(days)}</td><td>{_status_badge(item["dashboard_status"])}</td></tr>'
-        )
+        licenses = item.get("licencas") or [{}]
+        for license_info in licenses:
+            licence_status = _licence_status(license_info)
+            display_status = (
+                "sem-sinal"
+                if item["dashboard_availability_status"] == "offline"
+                else item["dashboard_licence_status"] if not license_info else licence_status
+            )
+            days = license_info.get("dias_restantes", "N/A")
+            license_name = license_info.get("nome") or license_info.get("tipo") or "N/A"
+            license_value = license_info.get("status") or "N/A"
+            fw_rows.append(
+                f'<tr class="security-row" data-status="{display_status}" '
+                f'data-fw-status="{item["dashboard_availability_status"]}" data-regional="{_escape(item["regional"])}">'
+                f'<td>{_escape(item["regional"])}</td><td><strong>{_escape(item.get("nome"))}</strong></td>'
+                f'<td>{_escape(item.get("ip"))}</td><td>{_escape(item.get("model"))}</td><td>{_escape(item.get("serial"))}</td>'
+                f'<td>{_escape(license_name)}: {_escape(license_value)}</td><td>{_escape(days)}</td>'
+                f'<td>{_status_badge(display_status)}</td></tr>'
+            )
     firewall_detail = _table("Firewalls e Licenças", "Regional|Firewall|IP|Modelo|Serial|Licença|Dias restantes|Status", fw_rows, firewall_cache)
 
     admin_rows = []

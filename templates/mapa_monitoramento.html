@@ -662,6 +662,16 @@
             box-shadow: 0 0 0 5px rgba(250, 204, 21, .12);
         }
 
+        .timeline-item.event-problem .timeline-text::before {
+            background: #ef4444;
+            box-shadow: 0 0 0 5px rgba(239, 68, 68, .14);
+        }
+
+        .timeline-item.event-normalized .timeline-text::before {
+            background: #22c55e;
+            box-shadow: 0 0 0 5px rgba(34, 197, 94, .14);
+        }
+
         .timeline-regional {
             color: var(--text);
             font-weight: 500;
@@ -953,7 +963,7 @@
         const DATA_URL = "/api/mapa/dados";
         const STATES_URL = "/static/maps/br_states_paths.json";
         const SURROUNDING_URL = "/static/maps/south_america_paths.json";
-        const REFRESH_MS = 5 * 60 * 1000;
+        const REFRESH_MS = 3 * 60 * 1000;
         const STATIC_MAP_DATA = window.SENTINEL_MAPA_CHECKLIST_DATA || null;
         const STATIC_STATES_DATA = window.SENTINEL_MAPA_STATES || null;
         const STATIC_SURROUNDING_DATA = window.SENTINEL_MAPA_SURROUNDING || null;
@@ -1136,6 +1146,43 @@
             return snapshot;
         }
 
+        function timelineEntity(tipo, quantidade) {
+            const entities = {
+                servidores: ['servidor', 'servidores', 'normalizado', 'normalizados'],
+                switches: ['switch', 'switches', 'normalizado', 'normalizados'],
+                links: ['link', 'links', 'normalizado', 'normalizados'],
+                aps: ['AP', 'APs', 'normalizado', 'normalizados'],
+                vpns: ['VPN', 'VPNs', 'normalizada', 'normalizadas'],
+                firewalls: ['firewall', 'firewalls', 'normalizado', 'normalizados'],
+                licencas: ['licença', 'licenças', 'normalizada', 'normalizadas'],
+                admins: ['admin', 'admins', 'normalizado', 'normalizados']
+            };
+            const labels = entities[tipo] || ['item', 'itens', 'normalizado', 'normalizados'];
+            return {
+                name: quantidade === 1 ? labels[0] : labels[1],
+                normalized: quantidade === 1 ? labels[2] : labels[3]
+            };
+        }
+
+        function timelineEventText(alerta, delta) {
+            const quantidade = Math.abs(delta);
+            let tipo = alerta.tipo || '';
+            const descricao = String(alerta.descricao || '').toLowerCase();
+
+            if (descricao.includes('licen') && descricao.includes('vencer')) {
+                tipo = 'licencas';
+            }
+
+            const entity = timelineEntity(tipo, quantidade);
+            if (delta < 0) return `${quantidade} ${entity.name} ${entity.normalized}`;
+            if (descricao.includes('offline')) return `${quantidade} ${entity.name} offline`;
+            if (descricao.includes('atenção') || descricao.includes('atencao')) {
+                return `${quantidade} ${entity.name} em atenção`;
+            }
+            if (descricao.includes('vencer')) return `${quantidade} ${entity.name} a vencer`;
+            return `${quantidade} ${entity.name} com alerta`;
+        }
+
         function addTimelineEvent(event) {
             timelineEvents.unshift({
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -1165,7 +1212,7 @@
             timeline.innerHTML = `
                 <div class="timeline-title">Últimos alertas</div>
                 ${timelineEvents.map((event) => `
-                    <div class="timeline-item ${statusClass(event.severity)}">
+                    <div class="timeline-item ${event.kind === 'normalized' ? 'event-normalized' : 'event-problem'}">
                         <div class="timeline-time">${event.time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                         <div class="timeline-text">
                             <span class="timeline-regional">${event.regional}</span>
@@ -1226,21 +1273,14 @@
 
 
 
-                                                changed.add(codigo);
+                        changed.add(codigo);
                         const alerta = currentAlerts[key] || alertFromKey(key);
                         const delta = nextValue - previousValue;
-                        
-                        // Lógica de cor para o Histórico:
-                        // Se normalizou ou diminuiu o erro = 'ok' (Verde)
-                        // Se aumentou o erro = usa a severidade do alerta (Vermelho/Laranja)
-                        const eventSeverity = (nextValue <= 0 || delta < 0) ? 'ok' : (alerta.severidade || 'atencao');
 
                         addTimelineEvent({
                             regional: codigo,
-                            severity: eventSeverity,
-                            text: nextValue <= 0
-                                ? `${alerta.descricao} normalizado`
-                                : `${alerta.descricao} ${delta > 0 ? '+' : ''}${delta}`
+                            kind: delta < 0 ? 'normalized' : 'problem',
+                            text: timelineEventText(alerta, delta)
                         });
                     });
                 }
@@ -1903,7 +1943,9 @@
             drawMap();
         }
 
-        async function loadData() {
+        let refreshPollTimer = null;
+
+        async function loadData(forceRefresh = false) {
             try {
                 if (IS_STATIC_MAP) {
                     geoData = STATIC_STATES_DATA || await fetchJson(STATES_URL);
@@ -1922,7 +1964,7 @@
                 const results = await Promise.all([
                     fetchJson(STATES_URL),
                     fetchJson(SURROUNDING_URL),
-                    fetchJson(`${DATA_URL}?refresh=1`),
+                    fetchJson(forceRefresh ? `${DATA_URL}?refresh=1` : DATA_URL),
                 ]);
                 geoData = results[0];
                 surroundingData = results[1];
@@ -1934,6 +1976,10 @@
                 pendingVisualUpdateRegionals = new Set();
                 triggerSyncSweep();
                 if (!rotationTimer) scheduleAlertRotation();
+                if (String(appData.cache_status || '').includes('refreshing')) {
+                    clearTimeout(refreshPollTimer);
+                    refreshPollTimer = setTimeout(() => loadData(false), 15 * 1000);
+                }
             } catch (error) {
                 console.error(error);
                 showLoadError(error);
@@ -1969,10 +2015,10 @@
         }, { passive: false });
 
         updateLiveClock();
-        loadData();
+        loadData(false);
         setInterval(updateLiveClock, 1000);
         if (!IS_STATIC_MAP) {
-            setInterval(loadData, REFRESH_MS);
+            setInterval(() => loadData(true), REFRESH_MS);
         }
     </script>
 </body>

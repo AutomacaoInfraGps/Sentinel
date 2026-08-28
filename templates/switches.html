@@ -135,6 +135,10 @@
     .status-inativo {
         background-color: #6c757d;
     }
+
+    .status-maintenance {
+        background: #d97706;
+    }
     
     .status-unknown {
         background-color: #6c757d;
@@ -329,7 +333,7 @@
             </div>
             <div class="stats-label">
                 <i class="bi bi-exclamation-triangle me-1"></i>
-                Warning
+                Atenção
             </div>
         </div>
     </div>
@@ -342,6 +346,18 @@
             <div class="stats-label">
                 <i class="bi bi-pause-circle me-1"></i>
                 Inativos
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
+        <div class="stats-card stats-card-filter" data-filter-status="maintenance" style="background: #d97706;" onclick="aplicarFiltroStatus('maintenance')">
+            <div class="stats-number" id="stats-maintenance">
+                {{ regionais|map(attribute='maintenance')|sum }}
+            </div>
+            <div class="stats-label">
+                <i class="bi bi-tools me-1"></i>
+                Em Manutencao
             </div>
         </div>
     </div>
@@ -470,7 +486,7 @@
                 <div class="card bg-warning text-dark">
                     <div class="card-body text-center">
                         <h5 class="mb-0 regional-warning">{{ regional.warning }}</h5>
-                        <small>Warning</small>
+                        <small>Atenção</small>
                     </div>
                 </div>
             </div>
@@ -497,10 +513,12 @@
                             <span class="status-badge status-online" title="Online"></span>
                             {% elif switch.status == 'inativo' %}
                             <span class="status-badge status-inativo" title="Inativo"></span>
+                            {% elif switch.status == 'maintenance' %}
+                            <span class="status-badge status-maintenance" title="Em manutencao"></span>
                             {% elif switch.status in ['offline', 'não encontrado', 'erro', 'desconhecido'] %}
                             <span class="status-badge status-offline" title="Offline"></span>
                             {% elif switch.status == 'warning' %}
-                            <span class="status-badge status-warning" title="Warning"></span>
+                            <span class="status-badge status-warning" title="Atenção"></span>
                             {% else %}
                             <span class="status-badge status-unknown" title="Status desconhecido"></span>
                             {% endif %}
@@ -515,7 +533,7 @@
                             <span class="verification-value">{{ switch.ultima_verificacao_formatada or 'Ainda não verificado' }}</span>
                         </div>
                         <div class="warning-cause{% if switch.status != 'warning' or not switch.warning_problemas %} d-none{% endif %}">
-                            <span class="warning-cause-label">Motivo do warning</span>
+                            <span class="warning-cause-label">Motivo da atenção</span>
                             <span class="warning-cause-value">{{ switch.warning_resumo or 'Alerta identificado no Zabbix' }}</span>
                             <ul class="warning-cause-list{% if not switch.warning_problemas or (switch.warning_problemas|length <= 1) %} d-none{% endif %}">
                                 {% for problema in switch.warning_problemas[1:] %}
@@ -537,9 +555,11 @@
                                 {% elif switch.status == 'offline' %}
                                 <span class="text-danger">Offline</span>
                                 {% elif switch.status == 'warning' %}
-                                <span class="text-warning">Warning</span>
+                                <span class="text-warning">Atenção</span>
                                 {% elif switch.status == 'inativo' %}
                                 <span class="text-secondary">Inativo</span>
+                                {% elif switch.status == 'maintenance' %}
+                                <span class="text-warning">Em manutencao</span>
                                 {% elif switch.status == 'não encontrado' %}
                                 <span class="text-danger">Não encontrado</span>
                                 {% elif switch.status == 'erro' %}
@@ -611,7 +631,7 @@ $(document).ready(function() {
     });
 
     const totalSwitches = lerNumero('#stats-total-switches');
-    const totalConhecidos = lerNumero('#stats-online') + lerNumero('#stats-offline') + lerNumero('#stats-warning') + lerNumero('#stats-inativo');
+    const totalConhecidos = lerNumero('#stats-online') + lerNumero('#stats-offline') + lerNumero('#stats-warning') + lerNumero('#stats-inativo') + lerNumero('#stats-maintenance');
 
     if (totalSwitches > 0 && totalConhecidos === 0) {
         showLoadingOverlay(
@@ -823,6 +843,7 @@ function formatarUltimaVerificacao(valor) {
 function obterClasseBadge(status) {
     if (status === 'online') return 'status-online';
     if (status === 'inativo') return 'status-inativo';
+    if (status === 'maintenance') return 'status-maintenance';
     if (['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status)) return 'status-offline';
     if (status === 'warning') return 'status-warning';
     return 'status-unknown';
@@ -831,6 +852,7 @@ function obterClasseBadge(status) {
 function obterClasseTextoStatus(status) {
     if (status === 'online') return 'text-success';
     if (status === 'inativo') return 'text-secondary';
+    if (status === 'maintenance') return 'text-warning';
     if (['offline', 'não encontrado', 'erro'].includes(status)) return 'text-danger';
     if (status === 'warning') return 'text-warning';
     return 'text-muted';
@@ -839,8 +861,9 @@ function obterClasseTextoStatus(status) {
 function obterTextoStatus(status) {
     if (status === 'online') return 'Online';
     if (status === 'offline') return 'Offline';
-    if (status === 'warning') return 'Warning';
+    if (status === 'warning') return 'Atenção';
     if (status === 'inativo') return 'Inativo';
+    if (status === 'maintenance') return 'Em manutencao';
     if (status === 'não encontrado') return 'Não encontrado';
     if (status === 'erro') return 'Erro';
     return 'Desconhecido';
@@ -941,12 +964,14 @@ function atualizarContadoresGlobais() {
     let offline = 0;
     let warning = 0;
     let inativo = 0;
+    let maintenance = 0;
 
     cards.each(function() {
         const status = $(this).attr('data-status');
         if (status === 'online') online += 1;
         else if (status === 'warning') warning += 1;
         else if (status === 'inativo') inativo += 1;
+        else if (status === 'maintenance') maintenance += 1;
         else if (['offline', 'não encontrado', 'erro', 'desconhecido'].includes(status)) offline += 1;
     });
 
@@ -955,6 +980,7 @@ function atualizarContadoresGlobais() {
     $('#stats-offline').text(offline);
     $('#stats-warning').text(warning);
     $('#stats-inativo').text(inativo);
+    $('#stats-maintenance').text(maintenance);
 }
 
 function atualizarContadoresRegionais() {
@@ -991,8 +1017,9 @@ function recalcularContadores() {
 function obterTextoFiltroStatus(status) {
     if (status === 'online') return 'Somente switches online';
     if (status === 'offline') return 'Somente switches indisponíveis';
-    if (status === 'warning') return 'Somente switches com warning';
+    if (status === 'warning') return 'Somente switches em atenção';
     if (status === 'inativo') return 'Somente switches inativos';
+    if (status === 'maintenance') return 'Somente switches em manutencao';
     return 'Todos os switches';
 }
 
@@ -1090,7 +1117,7 @@ function atualizarStatusSwitch(host, status, ultimaVerificacao = null, recalcula
 
     const badge = card.find('.status-badge');
     if (badge.length) {
-        badge.removeClass('status-online status-offline status-warning status-inativo status-unknown');
+        badge.removeClass('status-online status-offline status-warning status-inativo status-maintenance status-unknown');
         badge.addClass(obterClasseBadge(status));
         badge.attr('title', obterTextoStatus(status));
     }
@@ -1294,7 +1321,7 @@ function verificarSwitch(host, regional) {
                         result.status_details || null
                     );
                     setSwitchesSyncProgress(100);
-                    showToast(`${host}: ${result.status}`,
+                    showToast(`${host}: ${obterTextoStatus(result.status)}`,
                         result.status === 'online' ? 'success' :
                         ['offline', 'não encontrado', 'erro'].includes(result.status) ? 'danger' :
                         result.status === 'inativo' ? 'secondary' : 'warning');

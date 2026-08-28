@@ -44,6 +44,7 @@
     .antena-card-header { padding: .5rem .75rem; font-weight: 600; font-size: .9rem; display: flex; align-items: center; gap: .5rem; }
     .antena-card-header.online { background: #28a745; color: #fff; }
     .antena-card-header.offline { background: #dc3545; color: #fff; }
+    .antena-card-header.maintenance { background: #d97706; color: #fff; }
     .antena-card-body { padding: .65rem .75rem; font-size: .85rem; }
     .antena-card-body .row-item { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .3rem; }
     .antena-card-body .label { color: #6c757d; min-width: 72px; flex-shrink: 0; }
@@ -334,7 +335,7 @@
     <div class="row mb-4">
 
         <!-- TOTAL DE ANTENAS -->
-        <div class="col-md-3 mb-3">
+        <div class="col-sm-6 col-xl mb-3">
             <div class="card text-white shadow-sm h-100 stats-card-filter active-filter" data-filter-antena="all" onclick="aplicarFiltroAntena('all')"
                 style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
                 <div class="card-body text-center">
@@ -347,7 +348,7 @@
         </div>
 
         <!-- ANTENAS ONLINE -->
-        <div class="col-md-3 mb-3">
+        <div class="col-sm-6 col-xl mb-3">
             <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-antena="online" onclick="aplicarFiltroAntena('online')"
                 style="background: linear-gradient(135deg, #20c997, #28a745);">
                 <div class="card-body text-center">
@@ -361,7 +362,7 @@
 
 
         <!-- ANTENAS OFFLINE -->
-        <div class="col-md-3 mb-3">
+        <div class="col-sm-6 col-xl mb-3">
             <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-antena="offline" onclick="aplicarFiltroAntena('offline')"
                 style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
                 <div class="card-body text-center">
@@ -373,8 +374,21 @@
             </div>
         </div>
 
+        <!-- ANTENAS EM MANUTENCAO -->
+        <div class="col-sm-6 col-xl mb-3">
+            <div class="card text-white shadow-sm h-100 stats-card-filter" data-filter-antena="maintenance" onclick="aplicarFiltroAntena('maintenance')"
+                style="background: #d97706;">
+                <div class="card-body text-center">
+                    <h2 class="fw-bold mb-1">
+                        {{ unifi_data.aps_maintenance | default(0) }}
+                    </h2>
+                    <div>Em Manutencao</div>
+                </div>
+            </div>
+        </div>
+
         <!-- USUARIOS CONECTADOS -->
-        <div class="col-md-3 mb-3">
+        <div class="col-sm-6 col-xl mb-3">
             <div class="card text-white shadow-sm h-100"
                 style="background: linear-gradient(135deg, #0A4A63, #0F6C8C);">
                 <div class="card-body text-center">
@@ -455,6 +469,9 @@
                                         {% if site.offline > 0 %}
                                         <span class="alert-text"><i class="bi bi-x-circle me-1"></i>Offline: {{ site.offline }}</span>
                                         {% endif %}
+                                        {% if site.maintenance > 0 %}
+                                        <span class="text-warning"><i class="bi bi-tools me-1"></i>Manutencao: {{ site.maintenance }}</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 <div class="antena-region-body">
@@ -463,7 +480,7 @@
                                         data-status="{{ ap.status | default('offline') | lower }}"
                                         data-search-text="{{ site.nome }} {{ ap.nome }} {{ ap.modelo }} {{ ap.ip }} {{ ap.status }}">
                                         <div class="antena-card-header {{ ap.status | default('offline') | lower }}">
-                                            <i class="bi bi-{{ 'wifi' if ap.status == 'online' else 'wifi-off' }}"></i>
+                                            <i class="bi bi-{{ 'tools' if ap.em_manutencao else ('wifi' if ap.status == 'online' else 'wifi-off') }}"></i>
                                             <span class="text-truncate">{{ ap.nome }}</span>
                                         </div>
                                         <div class="antena-card-body">
@@ -481,7 +498,7 @@
                                             </div>
                                             <div class="row-item">
                                                 <span class="label">Status:</span>
-                                                <span class="badge bg-{{ 'success' if ap.status == 'online' else 'danger' }}">{{ ap.status | upper }}</span>
+                                                <span class="badge bg-{{ 'warning text-dark' if ap.em_manutencao else ('success' if ap.status == 'online' else 'danger') }}">{{ 'MANUTENCAO' if ap.em_manutencao else ap.status | upper }}</span>
                                             </div>
                                             <div class="row-item">
                                                 <span class="label">Usuários:</span>
@@ -604,6 +621,7 @@ function atualizarFiltroAntenaAtivo() {
         const partes = [];
         if (filtroAntenaAtual === 'online') partes.push('Somente antenas online');
         else if (filtroAntenaAtual === 'offline') partes.push('Somente antenas offline');
+        else if (filtroAntenaAtual === 'maintenance') partes.push('Somente antenas em manutencao');
         if (antenaBuscaAtual) partes.push(`Busca: "${$('#antenasSearchInput').val()}"`);
         $('#antenasFilterSummaryText').text(partes.join(' | '));
         summary.css('display', 'flex');
