@@ -984,6 +984,7 @@
         const ALERT_ROTATION_MS = 3 * 60 * 1000;
         const ALERT_HOME_MS = 12 * 1000;
         const TIMELINE_TTL_MS = 10 * 60 * 1000;
+        const TIMELINE_STORAGE_KEY = 'sentinelMapaTimelineV1';
 
         let appData = null;
         let geoData = null;
@@ -1190,6 +1191,7 @@
                 ...event
             });
             pruneTimelineEvents();
+            saveTimelineState();
         }
 
         function pruneTimelineEvents() {
@@ -1197,6 +1199,36 @@
             timelineEvents = timelineEvents
                 .filter((event) => event.time && event.time.getTime() >= cutoff)
                 .slice(0, 8);
+        }
+
+        function saveTimelineState() {
+            try {
+                localStorage.setItem(TIMELINE_STORAGE_KEY, JSON.stringify({
+                    timelineEvents: timelineEvents.map((event) => ({
+                        ...event,
+                        time: event.time.toISOString()
+                    })),
+                    previousRegionalSignature,
+                    previousRegionalAlerts
+                }));
+            } catch (error) {
+                console.debug('Historico do mapa nao pode ser persistido.', error);
+            }
+        }
+
+        function restoreTimelineState() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(TIMELINE_STORAGE_KEY) || '{}');
+                timelineEvents = (saved.timelineEvents || []).map((event) => ({
+                    ...event,
+                    time: new Date(event.time)
+                }));
+                previousRegionalSignature = saved.previousRegionalSignature || {};
+                previousRegionalAlerts = saved.previousRegionalAlerts || {};
+                pruneTimelineEvents();
+            } catch (error) {
+                localStorage.removeItem(TIMELINE_STORAGE_KEY);
+            }
         }
 
         function renderTimeline() {
@@ -1289,6 +1321,7 @@
             previousRegionalAlerts = nextAlerts;
             recentlyUpdatedRegionals = changed;
             pendingVisualUpdateRegionals = new Set(changed);
+            saveTimelineState();
             renderTimeline();
         }
 
@@ -2014,6 +2047,8 @@
             drawMap();
         }, { passive: false });
 
+        restoreTimelineState();
+        renderTimeline();
         updateLiveClock();
         loadData(false);
         setInterval(updateLiveClock, 1000);

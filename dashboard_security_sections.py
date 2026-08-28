@@ -127,6 +127,8 @@ def _kpi(title, icon, target, items):
 
 
 def _firewall_availability_status(firewall):
+    if str(firewall.get("status_disponibilidade") or firewall.get("status") or "").lower() == "maintenance":
+        return "maintenance"
     if str(firewall.get("status_disponibilidade") or "").lower() in {"offline", "inativo", "sem-sinal", "down", "error", "erro"}:
         return "offline"
     if str(firewall.get("status_disponibilidade") or "").lower() in {"online", "ok", "ready", "active", "up"}:
@@ -268,7 +270,7 @@ def build_security_dashboard(project_root):
     fw_counts = {status: sum(1 for item in firewalls if item["dashboard_licence_status"] == status)
                  for status in ("ok", "warning", "expirado")}
     fw_availability_counts = {status: sum(1 for item in firewalls if item["dashboard_availability_status"] == status)
-                             for status in ("online", "offline")}
+                             for status in ("online", "offline", "maintenance")}
     fw_total = len(firewalls)
 
     regional_fw = []
@@ -321,6 +323,7 @@ def build_security_dashboard(project_root):
         ("Total", fw_total, "status-neutral", "total"),
         ("Online", fw_availability_counts.get("online", 0), "status-online", "fw-online"),
         ("Offline", fw_availability_counts.get("offline", 0), "status-offline", "fw-offline"),
+        ("Manutencao", fw_availability_counts.get("maintenance", 0), "status-warning", "fw-maintenance"),
     ])
     firewall_licence_kpi = _kpi("Licenças de Firewalls", "fa-shield-alt", "firewalls", [
         ("Total", fw_total, "status-neutral", "licence-total"),
@@ -356,6 +359,8 @@ def build_security_dashboard(project_root):
             display_status = (
                 "sem-sinal"
                 if item["dashboard_availability_status"] == "offline"
+                else "maintenance"
+                if item["dashboard_availability_status"] == "maintenance"
                 else item["dashboard_licence_status"] if not license_info else licence_status
             )
             days = license_info.get("dias_restantes", "N/A")

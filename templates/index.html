@@ -25,7 +25,7 @@
 
 <!-- Estatísticas Hierárquicas -->
 <div class="row mb-4">
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
             <div class="stats-number">{{ stats.get('total_regionais', 0) }}</div>
             <div class="stats-label">
@@ -35,7 +35,7 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <div class="stats-card">
             <div class="stats-number" id="stats-total-servidores">{{ stats.get('total_servidores', 0) }}</div>
             <div class="stats-label">
@@ -45,7 +45,7 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
             <div class="stats-number" id="stats-online">{{ stats.get('servidores_online', 0) }}</div>
             <div class="stats-label">
@@ -55,13 +55,19 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <div class="stats-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
             <div class="stats-number" id="stats-offline">{{ stats.get('servidores_offline', 0) }}</div>
             <div class="stats-label">
                 <i class="bi bi-wifi-off me-1"></i>
                 Servidores Offline
             </div>
+        </div>
+    </div>
+    <div class="col-md col-sm-6 mb-3">
+        <div class="stats-card" style="background: #d97706;">
+            <div class="stats-number" id="stats-maintenance">{{ stats.get('servidores_maintenance', 0) }}</div>
+            <div class="stats-label"><i class="bi bi-tools me-1"></i>Em manutencao</div>
         </div>
     </div>
 </div>

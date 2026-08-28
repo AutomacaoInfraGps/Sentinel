@@ -607,6 +607,18 @@ class GerenciadorSwitches:
             for host in item.get("hosts") or []
             if item.get("maintenanceid") and host.get("hostid")
         }
+
+    def obter_hosts_em_manutencao_direta(self, cache_seconds=60):
+        """Lista somente hosts associados diretamente a uma manutencao."""
+        hosts = self.obter_hosts_em_manutencao(cache_seconds=cache_seconds)
+        direct = self._obter_hosts_com_manutencao_direta(
+            host.get("maintenanceid") for host in hosts
+        )
+        return [
+            dict(host)
+            for host in hosts
+            if (str(host.get("maintenanceid") or ""), str(host.get("hostid") or "")) in direct
+        ]
     
     def _carregar_switches(self):
         """Carrega dados dos switches do Excel"""
