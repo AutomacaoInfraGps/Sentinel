@@ -451,28 +451,31 @@ function _reaplicarFiltros() {
     let totalVisivel = 0;
 
     cards.forEach(card => {
-        let mostrar = true;
-
-        if (filtroAtivo === 'fw-online') {
-            mostrar = card.querySelectorAll('.firewall-device-card[data-fw-status="online"]').length > 0;
-        } else if (filtroAtivo === 'fw-offline') {
-            mostrar = card.querySelectorAll('.firewall-device-card[data-fw-status="offline"]').length > 0;
-        } else if (filtroAtivo === 'fw-inativo') {
-            mostrar = card.querySelectorAll('.firewall-device-card[data-fw-status="inativo"]').length > 0;
-        } else if (filtroAtivo === 'vencer') {
-            mostrar = card.querySelectorAll('.license-critical').length > 0;
-        } else if (filtroAtivo === 'expirado') {
-            mostrar = card.querySelectorAll('.license-expired').length > 0;
-        } else if (filtroAtivo === 'ok') {
-            mostrar = card.querySelectorAll('.license-critical').length === 0 &&
-                      card.querySelectorAll('.license-expired').length === 0;
-        }
-
-        if (mostrar && filtroBuscaAtivo) {
+        const devices = Array.from(card.querySelectorAll('.firewall-device-card'));
+        let correspondeBusca = true;
+        if (filtroBuscaAtivo) {
             const searchText = (card.getAttribute('data-search-text') || '').toLowerCase();
-            mostrar = searchText.includes(filtroBuscaAtual);
+            correspondeBusca = searchText.includes(filtroBuscaAtual);
         }
 
+        let dispositivosVisiveis = 0;
+        devices.forEach(device => {
+            const status = device.dataset.fwStatus || 'inativo';
+            let mostrarDevice = filtroAtivo === 'all';
+            if (filtroAtivo === 'fw-online') mostrarDevice = status === 'online';
+            else if (filtroAtivo === 'fw-offline') mostrarDevice = status === 'offline';
+            else if (filtroAtivo === 'fw-inativo') mostrarDevice = status === 'inativo';
+            else if (filtroAtivo === 'lic-total') mostrarDevice = device.querySelector('.license-ok, .license-warning, .license-critical, .license-expired, .license-unknown') !== null;
+            else if (filtroAtivo === 'vencer') mostrarDevice = device.querySelector('.license-warning, .license-critical') !== null;
+            else if (filtroAtivo === 'expirado') mostrarDevice = device.querySelector('.license-expired') !== null;
+            else if (filtroAtivo === 'ok') mostrarDevice = device.querySelector('.license-warning, .license-critical, .license-expired') === null;
+
+            mostrarDevice = mostrarDevice && correspondeBusca;
+            device.style.display = mostrarDevice ? '' : 'none';
+            if (mostrarDevice) dispositivosVisiveis++;
+        });
+
+        const mostrar = dispositivosVisiveis > 0;
         card.classList.toggle('visible', mostrar);
         if (mostrar) totalVisivel++;
     });

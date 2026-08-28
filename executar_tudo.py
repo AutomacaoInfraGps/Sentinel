@@ -9,6 +9,7 @@ from web_config import (
     coletar_hardware_vm,
     atualizar_cache_seguranca_dashboard,
     _montar_dados_mapa_monitoramento,
+    _mapa_salvar_cache,
 )
 from gps_print import ensure_gps_placeholder, gerar_print_gps_amigo
 from config import GPS_HTML, GPS_CONFIG, APPGATE_HTML, APPGATE_IMG, APPGATE_CONFIG, UNIFI_CLIENTS_HTML, UNIFI_CLIENTS_IMG, UNIFI_CLIENTS_DASHBOARD, UNIFI_CONFIG
@@ -233,6 +234,7 @@ def _montar_mapa_checklist_static_script():
         if not isinstance(payload, dict):
             raise ValueError("Dados do mapa retornaram em formato invalido.")
         payload = dict(payload)
+        payload = _mapa_salvar_cache(payload)
         payload["modo"] = "checklist"
         payload["static"] = True
     except Exception as exc:
@@ -1984,6 +1986,7 @@ switches_online = 0
 switches_offline = 0
 switches_warning = 0
 switches_inativo = 0
+switches_maintenance = 0
 switches_html_content = ""
 try:
     from gerenciar_switches import GerenciadorSwitches
@@ -2015,6 +2018,8 @@ try:
                     switches_warning += 1
                 elif status == 'inativo':
                     switches_inativo += 1
+                elif status == 'maintenance':
+                    switches_maintenance += 1
                 else:
                     switches_offline += 1
 
@@ -2045,6 +2050,7 @@ try:
                     <div><strong>Switches Offline:</strong> {switches_offline}</div>
                     <div><strong>Switches Warning:</strong> {switches_warning}</div>
                     <div><strong>Switches Inativos:</strong> {switches_inativo}</div>
+                    <div><strong>Switches em manutencao:</strong> {switches_maintenance}</div>
                     <div><strong>Cobertura da coleta:</strong> {len(switches_data)}/{total_switches}</div>
                 </div>
             </div>
@@ -2269,6 +2275,8 @@ try:
                         <span class="counter-warning">{switches_warning} warning</span>
                         <span class="sep">&nbsp;|&nbsp;</span>
                         <span class="counter-neutral">{switches_inativo} inativos</span>
+                        <span class="sep">&nbsp;|&nbsp;</span>
+                        <span class="counter-warning">{switches_maintenance} em manutencao</span>
                     </span>
                 </div>
                 <div class="links-region-table-body" id="switches-offline-regionais">
@@ -2986,13 +2994,20 @@ gps_status_display = (
 # Conta APs online/offline pelo unifi.json (mesma fonte da aba de infraestrutura)
 aps_online = 0
 aps_offline = 0
+aps_maintenance = 0
 try:
     unifi_json_path = PROJECT_ROOT / "data" / "unifi.json"
     if unifi_json_path.exists():
         _unifi_json = json.loads(unifi_json_path.read_text(encoding="utf-8"))
+        from maintenance_status import apply_zabbix_maintenance
+        _unifi_json = apply_zabbix_maintenance(
+            _unifi_json,
+            gerenciador_switches.obter_hosts_em_manutencao(),
+        )
         _aps_visiveis = [ap for ap in (_unifi_json.get("aps") or []) if not ap.get("oculto")]
         aps_online = sum(1 for ap in _aps_visiveis if str(ap.get("status") or "").lower() == "online")
-        aps_offline = len(_aps_visiveis) - aps_online
+        aps_offline = sum(1 for ap in _aps_visiveis if str(ap.get("status") or "").lower() == "offline")
+        aps_maintenance = sum(1 for ap in _aps_visiveis if ap.get("em_manutencao"))
     elif "[ERROR]" not in unifi_html:
         # fallback: conta pelo HTML se o JSON não existir
         aps_online = unifi_html.count('"status-online"') or unifi_html.count('status-online')
@@ -3008,15 +3023,21 @@ try:
     unifi_json_path = PROJECT_ROOT / "data" / "unifi.json"
     if unifi_json_path.exists():
         unifi_json_data = json.loads(unifi_json_path.read_text(encoding="utf-8"))
+        unifi_json_data = apply_zabbix_maintenance(
+            unifi_json_data,
+            gerenciador_switches.obter_hosts_em_manutencao(),
+        )
         for ap in unifi_json_data.get("aps", []):
             regional_ap = _extrair_chave_regional(ap.get("site"))
             if regional_ap == "N/A":
                 continue
 
             status_ap = str(ap.get("status") or "offline").strip().lower()
-            dados_regional = aps_regionais_status.setdefault(regional_ap, {"online": 0, "offline": 0})
+            dados_regional = aps_regionais_status.setdefault(regional_ap, {"online": 0, "offline": 0, "maintenance": 0})
             if status_ap == "online":
                 dados_regional["online"] += 1
+            elif status_ap == "maintenance":
+                dados_regional["maintenance"] += 1
             else:
                 dados_regional["offline"] += 1
 except Exception as e:
@@ -3030,6 +3051,7 @@ aps_regionais_sem_offline = max(aps_regionais_total - aps_regionais_com_offline,
 print(f"[CHECK] Debug UniFi:")
 print(f"   - APs Online: {aps_online}")
 print(f"   - APs Offline: {aps_offline}")
+print(f"   - APs em manutencao: {aps_maintenance}")
 print(f"   - Regionais com AP offline: {aps_regionais_com_offline}")
 print(f"   - Regionais sem AP offline: {aps_regionais_sem_offline}")
 print(f"   - HTML UniFi existe: {UNIFI_HTML.exists()}")
@@ -5194,6 +5216,7 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Switches Offline</span><strong>{switches_offline}</strong></div>
                             <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Switches Warning</span><strong>{switches_warning}</strong></div>
                             <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Switches Inativos</span><strong>{switches_inativo}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-maintenance" role="button" tabindex="0"><span>Em manutencao</span><strong>{switches_maintenance}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5482,21 +5505,22 @@ function resetSecuritySection(detail) {{
 
 function filterSecuritySection(detail, action) {{
     const rows = Array.from(detail.querySelectorAll('.security-row'));
-    if (!action || action === 'total' || action === 'regional-total') {{
+    const normalizedAction = String(action || '').replace(/^licence-/, '');
+    if (!normalizedAction || normalizedAction === 'total' || normalizedAction === 'regional-total') {{
         resetSecuritySection(detail);
         return;
     }}
 
     let visible = 0;
-    if (action.startsWith('fw-')) {{
-        const expected = action.replace('fw-', '');
+    if (normalizedAction.startsWith('fw-')) {{
+        const expected = normalizedAction.replace('fw-', '');
         rows.forEach((row) => {{
             const show = row.dataset.fwStatus === expected;
             row.style.display = show ? '' : 'none';
             if (show) visible += 1;
         }});
-    }} else if (action.startsWith('regional-fw-')) {{
-        const expected = action.replace('regional-fw-', '');
+    }} else if (normalizedAction.startsWith('regional-fw-')) {{
+        const expected = normalizedAction.replace('regional-fw-', '');
         const grouped = {{}};
         rows.forEach((row) => {{
             const regional = row.dataset.regional || 'CENTRAL';
@@ -5510,8 +5534,8 @@ function filterSecuritySection(detail, action) {{
             regionalRows.forEach((row) => {{ row.style.display = show ? '' : 'none'; }});
             if (show) visible += regionalRows.length;
         }});
-    }} else if (action.startsWith('regional-')) {{
-        const expected = action.replace('regional-', '');
+    }} else if (normalizedAction.startsWith('regional-')) {{
+        const expected = normalizedAction.replace('regional-', '');
         const grouped = {{}};
         rows.forEach((row) => {{
             const regional = row.dataset.regional || 'CENTRAL';
@@ -5530,7 +5554,7 @@ function filterSecuritySection(detail, action) {{
         }});
     }} else {{
         rows.forEach((row) => {{
-            const show = row.dataset.status === action;
+            const show = row.dataset.status === normalizedAction;
             row.style.display = show ? '' : 'none';
             if (show) visible += 1;
         }});

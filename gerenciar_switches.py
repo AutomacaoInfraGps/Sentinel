@@ -17,6 +17,8 @@ import sys
 import builtins
 import unicodedata
 import time
+import tempfile
+from threading import Lock
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -110,6 +112,9 @@ class GerenciadorSwitches:
         self.username = None
         self.password = None
         self.auth_token = None
+        self._maintenance_cache = []
+        self._maintenance_cache_time = 0
+        self._switches_load_lock = Lock()
         self.switches = []
         self.regionais = {}
         self.zabbix_url_env = zabbix_url_env
@@ -143,27 +148,58 @@ class GerenciadorSwitches:
         return {}
 
     def _salvar_status_cache(self, cache):
+        descriptor = None
+        temporary_file = None
         try:
-            with open(self.status_cache_file, 'w', encoding='utf-8') as f:
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{self.status_cache_file.stem}-",
+                suffix=".tmp",
+                dir=str(self.status_cache_file.parent),
+            )
+            temporary_file = Path(temporary_name)
+            with os.fdopen(descriptor, 'w', encoding='utf-8') as f:
+                descriptor = None
                 json.dump(cache, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary_file, self.status_cache_file)
         except Exception as e:
             print(f"⚠️ Erro ao salvar cache de status dos switches: {e}")
+            try:
+                if descriptor is not None:
+                    os.close(descriptor)
+                if temporary_file is not None:
+                    temporary_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _status_cache_entry(self, switch_info):
+        return {
+            "status": switch_info.get("status", "desconhecido"),
+            "ultima_verificacao": switch_info.get("ultima_verificacao"),
+            "regional": switch_info.get("regional"),
+            "ip": switch_info.get("ip"),
+            "hostid": switch_info.get("hostid"),
+            "modelo": switch_info.get("modelo"),
+            "local": switch_info.get("local"),
+            "zabbix_host": switch_info.get("zabbix_host"),
+            "zabbix_name": switch_info.get("zabbix_name"),
+            "status_reason": switch_info.get("status_reason"),
+            "status_details": switch_info.get("status_details"),
+            "warning_problemas": switch_info.get("warning_problemas") or [],
+            "warning_resumo": switch_info.get("warning_resumo"),
+            "em_manutencao": switch_info.get("em_manutencao", False),
+            "maintenance_status": switch_info.get("maintenance_status"),
+            "maintenance_type": switch_info.get("maintenance_type"),
+            "maintenanceid": switch_info.get("maintenanceid"),
+        }
 
     def _persistir_status_switch(self, switch_info):
         if not switch_info or not switch_info.get("host"):
             return
 
         cache = self._carregar_status_cache()
-        cache[switch_info["host"]] = {
-            "status": switch_info.get("status", "desconhecido"),
-            "ultima_verificacao": switch_info.get("ultima_verificacao"),
-            "ip": switch_info.get("ip"),
-            "zabbix_name": switch_info.get("zabbix_name"),
-            "status_reason": switch_info.get("status_reason"),
-            "status_details": switch_info.get("status_details"),
-            "warning_problemas": switch_info.get("warning_problemas") or [],
-            "warning_resumo": switch_info.get("warning_resumo")
-        }
+        cache[switch_info["host"]] = self._status_cache_entry(switch_info)
         self._salvar_status_cache(cache)
         
     def _converter_ip_numerico(self, ip_numerico):
@@ -517,6 +553,40 @@ class GerenciadorSwitches:
         except Exception as e:
             print(f"❌ Erro ao chamar {method}: {str(e)}")
             return {"error": str(e)}
+
+    def obter_hosts_em_manutencao(self, cache_seconds=60):
+        """Lista hosts em manutencao, expandindo uma entrada por IP de interface."""
+        now = time.monotonic()
+        if self._maintenance_cache_time and now - self._maintenance_cache_time < cache_seconds:
+            return [dict(host) for host in self._maintenance_cache]
+
+        response = self._call_api("host.get", {
+            "output": [
+                "hostid", "host", "name", "maintenance_status",
+                "maintenance_type", "maintenanceid",
+            ],
+            "selectInterfaces": ["ip", "dns", "main", "type", "useip"],
+            "filter": {"maintenance_status": "1"},
+        })
+        if not isinstance(response, dict) or "result" not in response:
+            raise RuntimeError("Falha ao consultar hosts em manutencao no Zabbix")
+
+        hosts_by_ip = {}
+        for host in response.get("result") or []:
+            if str(host.get("maintenance_status") or "0") != "1":
+                continue
+            for interface in host.get("interfaces") or []:
+                ip = str(interface.get("ip") or "").strip()
+                if not ip:
+                    continue
+                item = dict(host)
+                item.pop("interfaces", None)
+                item["ip"] = ip
+                hosts_by_ip[ip] = item
+
+        self._maintenance_cache = list(hosts_by_ip.values())
+        self._maintenance_cache_time = now
+        return [dict(host) for host in self._maintenance_cache]
     
     def _carregar_switches(self):
         """Carrega dados dos switches do Excel"""
@@ -675,6 +745,11 @@ class GerenciadorSwitches:
             print(f"Erro ao carregar switches: {str(e)}")
 
     def _carregar_switches_api(self):
+        """Serializa recargas para evitar duplicacao na instancia compartilhada."""
+        with self._switches_load_lock:
+            return self._carregar_switches_api_unlocked()
+
+    def _carregar_switches_api_unlocked(self):
         """Carrega switches diretamente da API Zabbix (sem XLSX)"""
         try:
             print("📡 Carregando switches da API Zabbix...")
@@ -684,8 +759,8 @@ class GerenciadorSwitches:
                     print("❌ Falha ao autenticar. Retornando para fallback XLSX...")
                     return False
 
-            self.switches = []
-            self.regionais = {}
+            switches_novos = []
+            regionais_novas = {}
 
             hostgroup_resp = self._call_api("hostgroup.get", {
                 "output": ["groupid", "name"],
@@ -759,6 +834,10 @@ class GerenciadorSwitches:
                     status = "inativo"
                     status_reason = "Host encontrado no Zabbix, mas está marcado como inativo/desabilitado."
                     status_details = f"Host Zabbix: {nome_host} | Status do host: inativo"
+                elif em_manutencao:
+                    status = "maintenance"
+                    status_reason = "Switch em manutencao no Zabbix."
+                    status_details = f"Host Zabbix: {nome_host} | Manutencao: {host.get('maintenanceid') or 'ativa'}"
                 elif nomes_problemas:
                     status = "warning"
 
@@ -785,10 +864,15 @@ class GerenciadorSwitches:
                     "warning_resumo": nomes_problemas[0] if status == "warning" and nomes_problemas else None,
                 }
 
-                self.switches.append(switch)
-                self.regionais.setdefault(regional_name, []).append(switch)
-                self._persistir_status_switch(switch)
-
+                switches_novos.append(switch)
+                regionais_novas.setdefault(regional_name, []).append(switch)
+            self.switches = switches_novos
+            self.regionais = regionais_novas
+            self._salvar_status_cache({
+                switch["host"]: self._status_cache_entry(switch)
+                for switch in switches_novos
+                if switch.get("host")
+            })
             print(f"✅ Carregados {len(self.switches)} switches de {len(self.regionais)} regionais (via API)")
             return True
 
@@ -1059,14 +1143,20 @@ class GerenciadorSwitches:
             if switch_info.get("hostid"):
                 host_resp = self._call_api("host.get", {
                     "hostids": [switch_info["hostid"]],
-                    "output": ["hostid", "host", "name", "status"],
+                    "output": [
+                        "hostid", "host", "name", "status",
+                        "maintenance_status", "maintenance_type", "maintenanceid",
+                    ],
                     "selectInterfaces": ["ip", "type", "main", "useip", "dns"]
                 })
             else:
                 # Tenta buscar o host no Zabbix pelo nome
                 host_resp = self._call_api("host.get", {
                     "filter": {"name": host_name},
-                    "output": ["hostid", "host", "name", "status"]
+                    "output": [
+                        "hostid", "host", "name", "status",
+                        "maintenance_status", "maintenance_type", "maintenanceid",
+                    ]
                 })
 
             # Se não encontrou pelo nome exato, tenta usar um identificador técnico único do switch
@@ -1154,6 +1244,7 @@ class GerenciadorSwitches:
             host_id = host_resp["result"][0]["hostid"]
             host_status = "ativo" if host_resp["result"][0]["status"] == "0" else "inativo"
             zabbix_name = host_resp["result"][0]["name"]
+            em_manutencao = str(host_resp["result"][0].get("maintenance_status") or "0") == "1"
             
             print(f"✅ Switch encontrado no Zabbix: {zabbix_name} (ID: {host_id}, Status: {host_status})")
             
@@ -1278,6 +1369,8 @@ class GerenciadorSwitches:
             status = "online"
             if host_status == "inativo":
                 status = "inativo"
+            elif em_manutencao:
+                status = "maintenance"
             elif problemas_filtrados:
                 status = "warning"
             
@@ -1288,12 +1381,19 @@ class GerenciadorSwitches:
             if status == "inativo":
                 switch_info["status_reason"] = "Host encontrado no Zabbix, mas está marcado como inativo/desabilitado."
                 switch_info["status_details"] = f"Host Zabbix: {zabbix_name} | Status do host: {host_status}"
+            elif status == "maintenance":
+                switch_info["status_reason"] = "Switch em manutencao no Zabbix."
+                switch_info["status_details"] = f"Host Zabbix: {zabbix_name} | Manutencao ativa"
             else:
                 switch_info["status_reason"] = None
                 switch_info["status_details"] = None
             
             # Atualiza o switch na lista
             switch_info["status"] = status
+            switch_info["em_manutencao"] = em_manutencao
+            switch_info["maintenance_status"] = host_resp["result"][0].get("maintenance_status")
+            switch_info["maintenance_type"] = host_resp["result"][0].get("maintenance_type")
+            switch_info["maintenanceid"] = host_resp["result"][0].get("maintenanceid")
             switch_info["ultima_verificacao"] = datetime.now().isoformat()
             
             # Se o nome no Zabbix for diferente, armazena para referência
