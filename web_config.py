@@ -398,6 +398,7 @@ def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
     adom = _get_fortimanager_adom()
     fortimanager_devices = _list_fortimanager_devices(adom)
     resultados = {}
+    links_para_persistir = {}
 
     total_regionais = len(regionais)
     concluidas = 0
@@ -2789,7 +2790,6 @@ def _mapa_marcar_refresh_finalizado():
 def _mapa_atualizar_fontes_operacionais():
     """Atualiza os coletores compartilhados antes de publicar o snapshot comum."""
     resultados = {}
-    links_para_persistir = {}
 
     try:
         resultados["links"] = _executar_sincronizacao_links_todas_regionais()
@@ -2810,6 +2810,8 @@ def _mapa_atualizar_fontes_operacionais():
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=240,
             check=False,
         )
