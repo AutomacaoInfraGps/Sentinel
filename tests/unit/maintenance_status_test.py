@@ -26,6 +26,28 @@ class MaintenanceStatusTests(unittest.TestCase):
         self.assertFalse(result["aps"][0]["em_manutencao"])
         self.assertEqual(result["aps_offline"], 1)
 
+    def test_does_not_override_online_ap_in_group_maintenance(self):
+        data = {"aps": [{"ip": "10.0.0.13", "status": "online"}]}
+        result = apply_zabbix_maintenance(data, [{"ip": "10.0.0.13", "maintenanceid": "444"}])
+
+        self.assertEqual(result["aps"][0]["status"], "online")
+        self.assertFalse(result["aps"][0]["em_manutencao"])
+        self.assertEqual(result["aps_maintenance"], 0)
+
+    def test_clears_stale_maintenance_from_online_ap(self):
+        data = {"aps": [{
+            "ip": "10.0.0.14",
+            "status": "maintenance",
+            "status_controladora": "online",
+            "em_manutencao": True,
+            "maintenanceid": "444",
+        }]}
+        result = apply_zabbix_maintenance(data, [{"ip": "10.0.0.14", "maintenanceid": "444"}])
+
+        self.assertEqual(result["aps"][0]["status"], "online")
+        self.assertFalse(result["aps"][0]["em_manutencao"])
+        self.assertNotIn("maintenanceid", result["aps"][0])
+
     def test_normalize_ip_rejects_non_ip_values(self):
         self.assertEqual(normalize_ip(" 10.0.0.1 "), "10.0.0.1")
         self.assertEqual(normalize_ip("ap.example.local"), "")
