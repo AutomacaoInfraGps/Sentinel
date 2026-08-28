@@ -67,7 +67,7 @@ from gerenciar_fortigate import GerenciadorFortigate
 from gerenciar_vms import GerenciadorVMs
 from gerenciar_contatos_email import GerenciadorContatosEmail
 from switches_backup_utils import create_switch_backup
-from maintenance_status import apply_zabbix_maintenance, normalize_ip
+from maintenance_status import apply_device_maintenance, apply_zabbix_maintenance, normalize_ip
 from operational_state import load_operational_state, publish_map_snapshot, records_for
 from sofia import init_sofia
 from sofia.tools_sentinel import configurar_ferramentas_sentinel
@@ -2498,6 +2498,7 @@ def servidores():
         # Inicializa contadores para estatísticas gerais
         servidores_online_total = 0
         servidores_offline_total = 0
+        servidores_maintenance_total = 0
         servidores_operacionais = records_for("servidores")
         servidores_operacionais_por_regional = {}
         for servidor in servidores_operacionais:
@@ -2518,14 +2519,16 @@ def servidores():
                 servidores_online = len([s for s in servidores if (s.get('status') or '').lower() == 'online'])
                 servidores_offline = len([s for s in servidores if (s.get('status') or '').lower() == 'offline'])
                 servidores_warning = len([s for s in servidores if (s.get('status') or '').lower() == 'warning'])
+                servidores_maintenance = len([s for s in servidores if (s.get('status') or '').lower() == 'maintenance'])
 
                 # Trata status ausente/desconhecido como warning para não mascarar falta de coleta.
-                status_conhecidos = servidores_online + servidores_offline + servidores_warning
+                status_conhecidos = servidores_online + servidores_offline + servidores_warning + servidores_maintenance
                 servidores_warning += max(len(servidores) - status_conhecidos, 0)
 
                 # Atualiza contadores totais
                 servidores_online_total += servidores_online
                 servidores_offline_total += servidores_offline
+                servidores_maintenance_total += servidores_maintenance
                 
                 # Calcula percentual
                 percentual_online = 0 if len(servidores) == 0 else (servidores_online / len(servidores)) * 100
@@ -2537,6 +2540,7 @@ def servidores():
                     'total_servidores': len(servidores),
                     'servidores_online': servidores_online,
                     'servidores_offline': servidores_offline,
+                    'servidores_maintenance': servidores_maintenance,
                     'percentual_online': percentual_online
                 })
         
@@ -2545,7 +2549,8 @@ def servidores():
             'total_servidores': total_servidores,
             'servidores_online': servidores_online_total,
             'servidores_offline': servidores_offline_total,
-            'servidores_warning': max(total_servidores - servidores_online_total - servidores_offline_total, 0),
+            'servidores_maintenance': servidores_maintenance_total,
+            'servidores_warning': max(total_servidores - servidores_online_total - servidores_offline_total - servidores_maintenance_total, 0),
             'config_completa': (PROJECT_ROOT / "environment.json").exists(),
             'estrutura_hierarquica': True
         }
@@ -2560,6 +2565,7 @@ def servidores():
             'total_servidores': 0,
             'servidores_online': 0,
             'servidores_offline': 0,
+            'servidores_maintenance': 0,
             'servidores_warning': 0,
             'config_completa': False,
             'estrutura_hierarquica': True
@@ -3037,6 +3043,7 @@ def _mapa_recalcular_regionais(regionais):
         "servidores_offline": 0,
         "servidores_warning": 0,
         "servidores_inativo": 0,
+        "servidores_maintenance": 0,
         "switches_online": 0,
         "switches_offline": 0,
         "switches_warning": 0,
@@ -3058,6 +3065,7 @@ def _mapa_recalcular_regionais(regionais):
         "firewalls_ok": 0,
         "firewalls_alerta": 0,
         "firewalls_inativo": 0,
+        "firewalls_maintenance": 0,
         "admins_ok": 0,
         "admins_alerta": 0,
     }
@@ -3113,8 +3121,13 @@ def _mapa_recalcular_regionais(regionais):
             if item.get("status_disponibilidade") == "inativo"
             or item.get("status") == "inativo"
         )
+        fw_maintenance = sum(
+            1 for item in regional["firewalls"]
+            if item.get("status") == "maintenance"
+            or item.get("status_disponibilidade") == "maintenance"
+        )
         fw_alerta = fw_offline + fw_warning
-        fw_ok = len(regional["firewalls"]) - fw_alerta - fw_inativo
+        fw_ok = len(regional["firewalls"]) - fw_alerta - fw_inativo - fw_maintenance
         adm_alerta = sum(1 for item in regional["admins"] if item.get("status") != "online")
         adm_ok = len(regional["admins"]) - adm_alerta
         regional["totais"]["firewalls_ok"] = fw_ok
@@ -3122,11 +3135,13 @@ def _mapa_recalcular_regionais(regionais):
         regional["totais"]["firewalls_expirados"] = fw_offline
         regional["totais"]["firewalls_warning"] = fw_warning
         regional["totais"]["firewalls_inativo"] = fw_inativo
+        regional["totais"]["firewalls_maintenance"] = fw_maintenance
         regional["totais"]["admins_ok"] = adm_ok
         regional["totais"]["admins_alerta"] = adm_alerta
         resumo["firewalls_ok"] += fw_ok
         resumo["firewalls_alerta"] += fw_alerta
         resumo["firewalls_inativo"] += fw_inativo
+        resumo["firewalls_maintenance"] += fw_maintenance
         resumo["admins_ok"] += adm_ok
         resumo["admins_alerta"] += adm_alerta
         _mapa_adicionar_alerta(regional, "firewalls", fw_offline, "critico", "firewall offline")
@@ -3346,6 +3361,16 @@ def _montar_dados_mapa_monitoramento():
             "status": "offline" if tem_alerta else "online",
             "ultima_verificacao": device.get("ultima_verificacao") or admins_cache.get("atualizado_em"),
         })
+
+    try:
+        maintenance_hosts = gerenciador_switches.obter_hosts_em_manutencao_direta(cache_seconds=0)
+        for regional in regionais.values():
+            regional["servidores"] = apply_device_maintenance(regional["servidores"], maintenance_hosts)
+            regional["firewalls"] = apply_device_maintenance(
+                regional["firewalls"], maintenance_hosts, status_field="status_disponibilidade"
+            )
+    except Exception as exc:
+        current_app.logger.warning("Falha ao conciliar manutencao de servidores/firewalls: %s", exc)
 
     resumo = _mapa_recalcular_regionais(regionais)
     return {
@@ -4478,6 +4503,7 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
     total_firewalls_online = 0
     total_firewalls_offline = 0
     total_firewalls_inativos = 0
+    total_firewalls_maintenance = 0
     total_alertas = 0
     total_expirados = 0
 
@@ -4490,6 +4516,8 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
                 total_firewalls_online += 1
             elif status_firewall == "offline":
                 total_firewalls_offline += 1
+            elif status_firewall == "maintenance":
+                total_firewalls_maintenance += 1
             else:
                 total_firewalls_inativos += 1
 
@@ -4527,6 +4555,7 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
         "total_firewalls_online": total_firewalls_online,
         "total_firewalls_offline": total_firewalls_offline,
         "total_firewalls_inativos": total_firewalls_inativos,
+        "total_firewalls_maintenance": total_firewalls_maintenance,
         "total_alertas": total_alertas,
         "total_expirados": total_expirados,
     }
@@ -4543,6 +4572,8 @@ def _status_firewall_disponibilidade(firewall):
         dev_status = None
 
     status_norm = str(status or "").strip().lower()
+    if status_norm in {"maintenance", "manutencao", "manutenção"}:
+        return "maintenance"
     if status_norm in {"ready", "online", "ok", "active", "up"}:
         return "online"
     if status_norm in {"offline", "down", "error", "erro", "unreachable"}:
@@ -5904,6 +5935,14 @@ def listar_firewalls(return_data=False):
                     )
             return firewalls_por_regional
 
+        def _conciliar_manutencao_firewalls(firewalls_por_regional):
+            hosts = gerenciador_switches.obter_hosts_em_manutencao_direta(cache_seconds=0)
+            for codigo, firewalls in list((firewalls_por_regional or {}).items()):
+                firewalls_por_regional[codigo] = apply_device_maintenance(
+                    firewalls, hosts, status_field="status_disponibilidade"
+                )
+            return firewalls_por_regional
+
         force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
         if not force_refresh:
             firewalls_operacionais = records_for("firewalls")
@@ -5924,6 +5963,7 @@ def listar_firewalls(return_data=False):
                 cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
             if cached:
                 cached_firewalls = cached.get("firewalls_por_regional", {})
+                _conciliar_manutencao_firewalls(cached_firewalls)
                 _preparar_datas_firewalls(cached_firewalls)
                 resumo_firewalls_cache = _recalcular_totais_firewalls(cached_firewalls)
                 if return_data:
@@ -6164,6 +6204,7 @@ def listar_firewalls(return_data=False):
             print(f"[AVISO] Erro ao conectar FortiManager: {str(e)}")
             current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
         
+        _conciliar_manutencao_firewalls(firewalls_por_regional)
         resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
         _preparar_datas_firewalls(firewalls_por_regional)
 
@@ -6203,6 +6244,7 @@ def listar_firewalls(return_data=False):
             total_firewalls_online=0,
             total_firewalls_offline=0,
             total_firewalls_inativos=0,
+            total_firewalls_maintenance=0,
             total_alertas=0,
             total_expirados=0,
             cache_atualizado_em=None,
@@ -7912,7 +7954,7 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
     try:
         dados = apply_zabbix_maintenance(
             dados,
-            gerenciador_switches.obter_hosts_em_manutencao(cache_seconds=0),
+            gerenciador_switches.obter_hosts_em_manutencao_direta(cache_seconds=0),
         )
     except Exception as exc:
         current_app.logger.warning("Falha ao conciliar manutencao UniFi/Zabbix: %s", exc)

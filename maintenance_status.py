@@ -18,6 +18,39 @@ def normalize_ip(value):
         return ""
 
 
+def apply_device_maintenance(devices, maintenance_hosts, status_field="status"):
+    """Marca dispositivos offline quando o IP esta em manutencao direta."""
+    result = deepcopy(devices or [])
+    hosts_by_ip = {
+        normalize_ip(host.get("ip")): host
+        for host in maintenance_hosts or []
+        if normalize_ip(host.get("ip"))
+    }
+    for device in result:
+        current = str(device.get(status_field) or device.get("status") or "").strip().lower()
+        controller = str(
+            device.get("status_controladora") if current == MAINTENANCE_STATUS else current
+        ).strip().lower()
+        host = hosts_by_ip.get(normalize_ip(device.get("ip")))
+        if not host or controller != "offline":
+            device[status_field] = controller or current
+            if status_field != "status" and str(device.get("status") or "").lower() == MAINTENANCE_STATUS:
+                device["status"] = controller or current
+            device["em_manutencao"] = False
+            for field in ("status_controladora", "maintenance_source", "zabbix_hostid", "zabbix_host", "maintenanceid"):
+                device.pop(field, None)
+            continue
+        device["status_controladora"] = controller
+        device[status_field] = MAINTENANCE_STATUS
+        device["status"] = MAINTENANCE_STATUS
+        device["em_manutencao"] = True
+        device["maintenance_source"] = "zabbix"
+        device["zabbix_hostid"] = host.get("hostid")
+        device["zabbix_host"] = host.get("name") or host.get("host")
+        device["maintenanceid"] = host.get("maintenanceid")
+    return result
+
+
 def apply_zabbix_maintenance(unifi_data, maintenance_hosts):
     """Sobrepoe o status UniFi quando o IP esta em manutencao no Zabbix."""
     result = deepcopy(unifi_data or {})
@@ -27,31 +60,7 @@ def apply_zabbix_maintenance(unifi_data, maintenance_hosts):
         if host_ip:
             hosts_by_ip[host_ip] = host
 
-    aps = result.get("aps") or []
-    for ap in aps:
-        current_status = str(ap.get("status") or "").strip().lower()
-        controller_status = str(
-            ap.get("status_controladora") if current_status == MAINTENANCE_STATUS else current_status
-        ).strip().lower()
-        ap_ip = normalize_ip(ap.get("ip"))
-        zabbix_host = hosts_by_ip.get(ap_ip)
-        if not zabbix_host or controller_status != "offline":
-            ap["status"] = controller_status or current_status
-            ap["em_manutencao"] = False
-            for field in (
-                "status_controladora", "maintenance_source", "zabbix_hostid",
-                "zabbix_host", "maintenanceid",
-            ):
-                ap.pop(field, None)
-            continue
-
-        ap["status_controladora"] = controller_status
-        ap["status"] = MAINTENANCE_STATUS
-        ap["em_manutencao"] = True
-        ap["maintenance_source"] = "zabbix"
-        ap["zabbix_hostid"] = zabbix_host.get("hostid")
-        ap["zabbix_host"] = zabbix_host.get("name") or zabbix_host.get("host")
-        ap["maintenanceid"] = zabbix_host.get("maintenanceid")
+    aps = apply_device_maintenance(result.get("aps") or [], hosts_by_ip.values())
 
     result["aps"] = aps
     result["total_aps"] = len(aps)

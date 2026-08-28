@@ -3002,7 +3002,7 @@ try:
         from maintenance_status import apply_zabbix_maintenance
         _unifi_json = apply_zabbix_maintenance(
             _unifi_json,
-            gerenciador_switches.obter_hosts_em_manutencao(),
+            gerenciador_switches.obter_hosts_em_manutencao_direta(),
         )
         _aps_visiveis = [ap for ap in (_unifi_json.get("aps") or []) if not ap.get("oculto")]
         aps_online = sum(1 for ap in _aps_visiveis if str(ap.get("status") or "").lower() == "online")
@@ -3025,7 +3025,7 @@ try:
         unifi_json_data = json.loads(unifi_json_path.read_text(encoding="utf-8"))
         unifi_json_data = apply_zabbix_maintenance(
             unifi_json_data,
-            gerenciador_switches.obter_hosts_em_manutencao(),
+            gerenciador_switches.obter_hosts_em_manutencao_direta(),
         )
         for ap in unifi_json_data.get("aps", []):
             regional_ap = _extrair_chave_regional(ap.get("site"))
