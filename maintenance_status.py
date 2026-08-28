@@ -29,13 +29,23 @@ def apply_zabbix_maintenance(unifi_data, maintenance_hosts):
 
     aps = result.get("aps") or []
     for ap in aps:
+        current_status = str(ap.get("status") or "").strip().lower()
+        controller_status = str(
+            ap.get("status_controladora") if current_status == MAINTENANCE_STATUS else current_status
+        ).strip().lower()
         ap_ip = normalize_ip(ap.get("ip"))
         zabbix_host = hosts_by_ip.get(ap_ip)
-        if not zabbix_host:
+        if not zabbix_host or controller_status != "offline":
+            ap["status"] = controller_status or current_status
             ap["em_manutencao"] = False
+            for field in (
+                "status_controladora", "maintenance_source", "zabbix_hostid",
+                "zabbix_host", "maintenanceid",
+            ):
+                ap.pop(field, None)
             continue
 
-        ap["status_controladora"] = ap.get("status")
+        ap["status_controladora"] = controller_status
         ap["status"] = MAINTENANCE_STATUS
         ap["em_manutencao"] = True
         ap["maintenance_source"] = "zabbix"
