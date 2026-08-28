@@ -192,6 +192,7 @@ class GerenciadorSwitches:
             "maintenance_status": switch_info.get("maintenance_status"),
             "maintenance_type": switch_info.get("maintenance_type"),
             "maintenanceid": switch_info.get("maintenanceid"),
+            "maintenance_scope": switch_info.get("maintenance_scope"),
         }
 
     def _persistir_status_switch(self, switch_info):
@@ -587,6 +588,25 @@ class GerenciadorSwitches:
         self._maintenance_cache = list(hosts_by_ip.values())
         self._maintenance_cache_time = now
         return [dict(host) for host in self._maintenance_cache]
+
+    def _obter_hosts_com_manutencao_direta(self, maintenance_ids):
+        """Retorna pares (maintenanceid, hostid) associados diretamente."""
+        ids = sorted({str(value) for value in maintenance_ids or [] if value})
+        if not ids:
+            return set()
+        response = self._call_api("maintenance.get", {
+            "output": ["maintenanceid"],
+            "maintenanceids": ids,
+            "selectHosts": ["hostid"],
+        })
+        if not isinstance(response, dict) or "result" not in response:
+            return set()
+        return {
+            (str(item.get("maintenanceid")), str(host.get("hostid")))
+            for item in response.get("result") or []
+            for host in item.get("hosts") or []
+            if item.get("maintenanceid") and host.get("hostid")
+        }
     
     def _carregar_switches(self):
         """Carrega dados dos switches do Excel"""
@@ -803,6 +823,9 @@ class GerenciadorSwitches:
                 return False
 
             hostids = [host["hostid"] for host in hosts]
+            manutencoes_diretas = self._obter_hosts_com_manutencao_direta(
+                host.get("maintenanceid") for host in hosts
+            )
             problemas_por_host = self._carregar_problemas_ativos_por_host(hostids)
             hostids_com_alerta_uplink = [
                 str(hostid)
@@ -825,7 +848,11 @@ class GerenciadorSwitches:
                     problemas,
                     itens_uplink_por_host.get(host_id, [])
                 )
-                em_manutencao = str(host.get("maintenance_status") or "0") == "1"
+                maintenance_id = str(host.get("maintenanceid") or "")
+                em_manutencao = (
+                    str(host.get("maintenance_status") or "0") == "1"
+                    and (maintenance_id, host_id) in manutencoes_diretas
+                )
 
                 status = "online"
                 status_reason = None
@@ -857,6 +884,7 @@ class GerenciadorSwitches:
                     "maintenance_status": host.get("maintenance_status"),
                     "maintenance_type": host.get("maintenance_type"),
                     "maintenanceid": host.get("maintenanceid"),
+                    "maintenance_scope": "direct" if em_manutencao else "group" if maintenance_id else None,
                     "em_manutencao": em_manutencao,
                     "status_reason": status_reason,
                     "status_details": status_details,
@@ -1244,7 +1272,12 @@ class GerenciadorSwitches:
             host_id = host_resp["result"][0]["hostid"]
             host_status = "ativo" if host_resp["result"][0]["status"] == "0" else "inativo"
             zabbix_name = host_resp["result"][0]["name"]
-            em_manutencao = str(host_resp["result"][0].get("maintenance_status") or "0") == "1"
+            maintenance_id = str(host_resp["result"][0].get("maintenanceid") or "")
+            manutencoes_diretas = self._obter_hosts_com_manutencao_direta([maintenance_id])
+            em_manutencao = (
+                str(host_resp["result"][0].get("maintenance_status") or "0") == "1"
+                and (maintenance_id, str(host_id)) in manutencoes_diretas
+            )
             
             print(f"✅ Switch encontrado no Zabbix: {zabbix_name} (ID: {host_id}, Status: {host_status})")
             
@@ -1394,6 +1427,7 @@ class GerenciadorSwitches:
             switch_info["maintenance_status"] = host_resp["result"][0].get("maintenance_status")
             switch_info["maintenance_type"] = host_resp["result"][0].get("maintenance_type")
             switch_info["maintenanceid"] = host_resp["result"][0].get("maintenanceid")
+            switch_info["maintenance_scope"] = "direct" if em_manutencao else "group" if maintenance_id else None
             switch_info["ultima_verificacao"] = datetime.now().isoformat()
             
             # Se o nome no Zabbix for diferente, armazena para referência
