@@ -725,7 +725,7 @@
                                     {% elif switch.status == 'warning' %}
                                     <span class="badge bg-warning text-dark">
                                         <i class="bi bi-exclamation-triangle me-1"></i>
-                                        Warning
+                                        Atenção
                                     </span>
                                     {% elif switch.status == 'inativo' %}
                                     <span class="badge bg-secondary">
@@ -746,7 +746,7 @@
                                 </div>
                                 {% if switch.warning_resumo and switch.status == 'warning' %}
                                 <div class="alert alert-warning py-2 mt-2 mb-0">
-                                    <small><strong>Warning:</strong> {{ switch.warning_resumo }}</small>
+                                    <small><strong>Atenção:</strong> {{ switch.warning_resumo }}</small>
                                 </div>
                                 {% endif %}
                                 {% if switch.status_reason and switch.status != 'online' %}
@@ -1734,7 +1734,7 @@ function aplicarResultadoTesteServidor(resultado) {
     if (badge && texto && icone) {
         badge.classList.remove('bg-success', 'bg-danger', 'bg-warning');
         badge.classList.add(`bg-${tone}`);
-        texto.innerText = status === 'online' ? 'Online' : (status === 'offline' ? 'Offline' : 'Warning');
+        texto.innerText = status === 'online' ? 'Online' : (status === 'offline' ? 'Offline' : 'Atenção');
         icone.className = `bi bi-${status === 'online' ? 'wifi' : (status === 'offline' ? 'wifi-off' : 'exclamation-triangle')} me-1`;
     }
 

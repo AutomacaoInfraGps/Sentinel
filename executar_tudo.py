@@ -574,7 +574,7 @@ def _imprimir_linhas(prefixo, texto):
 def sincronizar_links_regionais_checklist():
     script_path = PROJECT_ROOT / "tools" / "manual" / "sincronizar_links_checklist.py"
     if not script_path.exists():
-        print(f"[WARN] Sincronizador de links nao encontrado: {script_path}")
+        print(f"[ATENCAO] Sincronizador de links nao encontrado: {script_path}")
         return False
 
     print("[EXEC] Sincronizando links de internet das regionais...")
@@ -587,7 +587,7 @@ def sincronizar_links_regionais_checklist():
             timeout=900,
         )
     except Exception as exc:
-        print(f"[WARN] Nao foi possivel sincronizar links antes do checklist: {exc}")
+        print(f"[ATENCAO] Nao foi possivel sincronizar links antes do checklist: {exc}")
         return False
 
     _imprimir_linhas("[LINKS]", resultado.stdout)
@@ -595,7 +595,7 @@ def sincronizar_links_regionais_checklist():
 
     if resultado.returncode != 0:
         print(
-            f"[WARN] Sincronizacao de links retornou codigo {resultado.returncode}; "
+            f"[ATENCAO] Sincronizacao de links retornou codigo {resultado.returncode}; "
             "checklist seguira com o ultimo cache."
         )
         return False
@@ -1341,7 +1341,7 @@ def _montar_vm_regional_card(servidor, tempo_resposta=None, details=None, error_
 
     observacao_html = ""
     if error_message:
-        alert_prefix = "[ERROR]" if resolved_status_class == "danger" else "[WARN]"
+        alert_prefix = "[ERRO]" if resolved_status_class == "danger" else "[ATENCAO]"
         observacao_html = f"<div class=\"regional-server-alert\">{alert_prefix} {_dashboard_safe_text(error_message)}</div>"
 
     return f"""
@@ -1635,7 +1635,7 @@ try:
                     print(f"[OK] Relatório detalhado gerado para VM {vm['name']}")
                     vm_info['relatorio_detalhado'] = relatorio
                 else:
-                    print(f"[WARN] Falha ao gerar relatório detalhado: {relatorio.get('message', 'Erro desconhecido')}")
+                    print(f"[ATENCAO] Falha ao gerar relatório detalhado: {relatorio.get('message', 'Erro desconhecido')}")
                     vm_info['relatorio_erro'] = relatorio.get('message', 'Erro desconhecido')
             else:
                 vms_offline += 1
@@ -1678,7 +1678,7 @@ try:
                             <p><strong>Usuário:</strong> {vm.get('username', 'N/A')}</p>
                             <p><strong>Última verificação:</strong> {vm['last_check']}</p>
                             {f"<p><strong>[ERROR] Erro:</strong> {vm['error']}</p>" if vm.get('error') else ""}
-                            {f"<p><strong>[WARN] Erro no relatório:</strong> {vm['relatorio_erro']}</p>" if vm.get('relatorio_erro') else ""}
+                            {f"<p><strong>[ATENCAO] Erro no relatório:</strong> {vm['relatorio_erro']}</p>" if vm.get('relatorio_erro') else ""}
         """
         
         # Se tem relatório detalhado, inclui as informações
@@ -1778,7 +1778,7 @@ try:
                     relatorio_vms += f"""
                         </div>
                         <div class="col-md-6">
-                            <h6>[WARN] Serviços Parados ({len(servicos_parados)})</h6>
+                            <h6>[ATENCAO] Serviços Parados ({len(servicos_parados)})</h6>
                     """
                     if servicos_parados:
                         relatorio_vms += "<ul class='list-group list-group-flush' style='max-height: 200px; overflow-y: auto;'>"
@@ -1911,7 +1911,7 @@ try:
                                 tipo_icon = '[ERROR]'
                             elif entry_type == 'Warning':
                                 tipo_badge = 'warning'
-                                tipo_icon = '[WARN]'
+                                tipo_icon = '[ATENCAO]'
                             else:
                                 tipo_badge = 'info'
                                 tipo_icon = 'ℹ'
@@ -1986,7 +1986,6 @@ switches_online = 0
 switches_offline = 0
 switches_warning = 0
 switches_inativo = 0
-switches_maintenance = 0
 switches_html_content = ""
 try:
     from gerenciar_switches import GerenciadorSwitches
@@ -2019,7 +2018,9 @@ try:
                 elif status == 'inativo':
                     switches_inativo += 1
                 elif status == 'maintenance':
-                    switches_maintenance += 1
+                    # No checklist, manutencao e silenciosa e nao vira alerta.
+                    status = 'online'
+                    switches_online += 1
                 else:
                     switches_offline += 1
 
@@ -2046,11 +2047,10 @@ try:
                 <div class='switches-metrics'>
                     <div><strong>Total de switches cadastrados:</strong> {total_switches}</div>
                     <div><strong>Switches verificados nesta execução:</strong> {len(switches_data)}</div>
-                    <div><strong>Switches Online:</strong> {switches_online}</div>
-                    <div><strong>Switches Offline:</strong> {switches_offline}</div>
-                    <div><strong>Switches Warning:</strong> {switches_warning}</div>
-                    <div><strong>Switches Inativos:</strong> {switches_inativo}</div>
-                    <div><strong>Switches em manutencao:</strong> {switches_maintenance}</div>
+                    <div><strong>Online:</strong> {switches_online}</div>
+                    <div><strong>Offline:</strong> {switches_offline}</div>
+                    <div><strong>Atenção:</strong> {switches_warning}</div>
+                    <div><strong>Inativos:</strong> {switches_inativo}</div>
                     <div><strong>Cobertura da coleta:</strong> {len(switches_data)}/{total_switches}</div>
                 </div>
             </div>
@@ -2082,7 +2082,7 @@ try:
                     <div class="regional-badge {status_class}">
                         <strong>{regional}</strong><br>
                         {dados['online']}/{dados['total']} online ({taxa:.0f}%)<br>
-                        <span class="small">Off: {dados['offline']} | Warn: {dados['warning']} | Inat: {dados['inativo']}</span>
+                        <span class="small">Offline: {dados['offline']} | Atenção: {dados['warning']} | Inativos: {dados['inativo']}</span>
                     </div>
             """
 
@@ -2101,7 +2101,7 @@ try:
                 [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['offline']} offline)</li>" for regional in regionais_com_switch_offline]
             )
             itens_regionais_warning = "".join(
-                [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['warning']} warning)</li>" for regional in regionais_com_switch_warning]
+                [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['warning']} em atenção)</li>" for regional in regionais_com_switch_warning]
             )
             itens_regionais_inativo = "".join(
                 [f"<li><strong>{regional}</strong> ({regionais_resumo[regional]['inativo']} inativo)</li>" for regional in regionais_com_switch_inativo]
@@ -2109,7 +2109,7 @@ try:
             switches_html_content += f"""
                 </div>
                 <div id="switches-offline-regionais" class="regional-badge" style="grid-column: 1 / -1; border-left: 6px solid #dd6b20;">
-                    <strong>[WARN] Regionais com atenção em switches:</strong>
+                    <strong>[ATENCAO] Regionais com atenção em switches:</strong>
                     <ul style="margin:10px 0 0 18px;">
                         {itens_regionais_offline}
                         {itens_regionais_warning}
@@ -2144,7 +2144,7 @@ try:
             if problemas:
                 problemas_html = f"""
                 <div class="mt-2">
-                    <strong>[WARN] Problemas encontrados ({len(problemas)}):</strong>
+                    <strong>[ATENCAO] Problemas encontrados ({len(problemas)}):</strong>
                     <ul class="small">
                         {''.join([f"<li>{problema.get('name', 'Problema desconhecido')}</li>" for problema in problemas[:3]])}
                         {f"<li><em>... e mais {len(problemas)-3} problemas</em></li>" if len(problemas) > 3 else ""}
@@ -2154,7 +2154,7 @@ try:
             elif status == 'warning' and switch.get('warning_problemas'):
                 problemas_html = f"""
                 <div class="mt-2">
-                    <strong>[WARN] Problemas encontrados ({len(switch.get('warning_problemas', []))}):</strong>
+                    <strong>[ATENCAO] Problemas encontrados ({len(switch.get('warning_problemas', []))}):</strong>
                     <ul class="small">
                         {''.join([f"<li>{problema}</li>" for problema in switch.get('warning_problemas', [])[:3]])}
                     </ul>
@@ -2206,7 +2206,7 @@ try:
         for regional, dados in sorted(regionais_resumo.items()):
             taxa = (dados['online'] / dados['total'] * 100) if dados['total'] > 0 else 0
             regional_status = "offline" if dados['offline'] else "warning" if dados['warning'] else "inativo" if dados['inativo'] else "online"
-            regional_label = "Com offline" if dados['offline'] else "Com warning" if dados['warning'] else "Com inativo" if dados['inativo'] else "Sem alerta"
+            regional_label = "Com offline" if dados['offline'] else "Com atenção" if dados['warning'] else "Com inativo" if dados['inativo'] else "Sem alerta"
             regional_pill_class = {
                 "online": "success",
                 "warning": "warning",
@@ -2272,11 +2272,9 @@ try:
                         <span class="sep">&nbsp;|&nbsp;</span>
                         <span class="counter-offline">{switches_offline} offline</span>
                         <span class="sep">&nbsp;|&nbsp;</span>
-                        <span class="counter-warning">{switches_warning} warning</span>
+                        <span class="counter-warning">{switches_warning} em atenção</span>
                         <span class="sep">&nbsp;|&nbsp;</span>
                         <span class="counter-neutral">{switches_inativo} inativos</span>
-                        <span class="sep">&nbsp;|&nbsp;</span>
-                        <span class="counter-warning">{switches_maintenance} em manutencao</span>
                     </span>
                 </div>
                 <div class="links-region-table-body" id="switches-offline-regionais">
@@ -2287,7 +2285,7 @@ try:
                                 <th>Total</th>
                                 <th>Online</th>
                                 <th>Offline</th>
-                                <th>Warning</th>
+                                <th>Atenção</th>
                                 <th>Inativos</th>
                                 <th>Disponibilidade</th>
                                 <th>Status</th>
@@ -2326,7 +2324,7 @@ try:
         if not switches_data:
             switches_html_content = """
             <div class="alert alert-warning">
-                <div class="alert-icon">[WARN]</div>
+                <div class="alert-icon">[ATENCAO]</div>
                 <div class="alert-title">Nenhum switch encontrado</div>
                 <div class="alert-message">Verifique a configuração do Zabbix</div>
             </div>
@@ -2437,7 +2435,7 @@ print(f"[CHECK] Debug Switches (após processamento):")
 print(f"   - Switches processados: {len(switches_data)}")
 print(f"   - Switches Online: {switches_online}")
 print(f"   - Switches Offline: {switches_offline}")
-print(f"   - Switches Warning: {switches_warning}")
+print(f"   - Switches em atencao: {switches_warning}")
 print(f"   - Switches Inativos: {switches_inativo}")
 if switches_data:
     print(f"   - Primeiros 5 switches:")
@@ -3051,7 +3049,6 @@ aps_regionais_sem_offline = max(aps_regionais_total - aps_regionais_com_offline,
 print(f"[CHECK] Debug UniFi:")
 print(f"   - APs Online: {aps_online}")
 print(f"   - APs Offline: {aps_offline}")
-print(f"   - APs em manutencao: {aps_maintenance}")
 print(f"   - Regionais com AP offline: {aps_regionais_com_offline}")
 print(f"   - Regionais sem AP offline: {aps_regionais_sem_offline}")
 print(f"   - HTML UniFi existe: {UNIFI_HTML.exists()}")
@@ -3138,7 +3135,7 @@ vms_regionais_sem_offline = max(vms_regionais_total - vms_regionais_com_offline,
 print(f"[CHECK] Debug Switches:")
 print(f"   - Switches Online: {switches_online}")
 print(f"   - Switches Offline: {switches_offline}")
-print(f"   - Switches Warning: {switches_warning}")
+print(f"   - Switches em atencao: {switches_warning}")
 print(f"   - Switches Inativos: {switches_inativo}")
 print(f"   - Total de Switches: {len(switches_data)}")
 
@@ -3351,7 +3348,7 @@ try:
             ])
             regionais_offline_html = f"""
             <div id="vpn-offline-regionais" class="vpn-offline-box">
-                <strong>[WARN] Regionais com túnel VPN offline:</strong>
+                <strong>[ATENCAO] Regionais com túnel VPN offline:</strong>
                 <ul>{itens}</ul>
             </div>
             """
@@ -5005,7 +5002,7 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0"><span>Total</span><strong>{len(regionais_servidor_status)}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{regionais_servidor_sem_alerta}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Com offline</span><strong>{regionais_servidor_com_offline}</strong></div>
-                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="regionais-warning" role="button" tabindex="0"><span>Com warning</span><strong>{regionais_servidor_com_warning}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="regionais-warning" role="button" tabindex="0"><span>Com atenção</span><strong>{regionais_servidor_com_warning}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5063,7 +5060,7 @@ dashboard_html = f"""
                         <div class="kpi-group-grid">
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{switches_regionais_sem_alerta}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Com offline</span><strong>{switches_regionais_com_offline}</strong></div>
-                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Com warning</span><strong>{switches_regionais_com_warning}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Com atenção</span><strong>{switches_regionais_com_warning}</strong></div>
                             <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Com inativo</span><strong>{switches_regionais_com_inativo}</strong></div>
                         </div>
                     </div>
@@ -5145,7 +5142,7 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="regionais" role="button" tabindex="0"><span>Total</span><strong>{servidores_online_total + servidores_offline_total + servidores_warning_total}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="regionais-online" role="button" tabindex="0"><span>Online</span><strong>{servidores_online_total}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="regionais-offline" role="button" tabindex="0"><span>Offline</span><strong>{servidores_offline_total}</strong></div>
-                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="regionais-warning" role="button" tabindex="0"><span>Warning</span><strong>{servidores_warning_total}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="regionais-warning" role="button" tabindex="0"><span>Atenção</span><strong>{servidores_warning_total}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5212,11 +5209,10 @@ dashboard_html = f"""
                     <div class="kpi-group">
                         <div class="kpi-group-title">Dispositivos</div>
                         <div class="kpi-group-grid">
-                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Switches Online</span><strong>{switches_online}</strong></div>
-                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Switches Offline</span><strong>{switches_offline}</strong></div>
-                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Switches Warning</span><strong>{switches_warning}</strong></div>
-                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Switches Inativos</span><strong>{switches_inativo}</strong></div>
-                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-maintenance" role="button" tabindex="0"><span>Em manutencao</span><strong>{switches_maintenance}</strong></div>
+                            <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Online</span><strong>{switches_online}</strong></div>
+                            <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Offline</span><strong>{switches_offline}</strong></div>
+                            <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Atenção</span><strong>{switches_warning}</strong></div>
+                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Inativos</span><strong>{switches_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5796,7 +5792,7 @@ document.querySelectorAll('details.details-section').forEach((detail) => {{
 new Chart(document.getElementById('chartDeviceServers'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline', 'Warning'],
+        labels: ['Online', 'Offline', 'Atenção'],
         datasets: [{{
             data: [{servidores_online_total}, {servidores_offline_total}, {servidores_warning_total}],
             backgroundColor: ['#2f855a', '#e53e3e', '#d69e2e'],
@@ -5915,7 +5911,7 @@ new Chart(document.getElementById('chartDeviceReplicacao'), {{
 new Chart(document.getElementById('chartDeviceSwitches'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline', 'Warning', 'Inativos'],
+        labels: ['Online', 'Offline', 'Atenção', 'Inativos'],
         datasets: [{{
             data: [{switches_online}, {switches_offline}, {switches_warning}, {switches_inativo}],
             backgroundColor: ['#2f855a', '#e53e3e', '#d69e2e', '#718096'],
@@ -6055,10 +6051,10 @@ function criarGraficoRegional(canvasId, titulo, labels, data, cores, detalhePadr
     }});
 }}
 
-criarGraficoRegional('chartRegionalServers', 'Servidores por Regional', ['Sem alerta', 'Com offline', 'Com warning'], [{regionais_servidor_sem_alerta}, {regionais_servidor_com_offline}, {regionais_servidor_com_warning}], ['#2f855a', '#e53e3e', '#d69e2e'], 'regionais');
+criarGraficoRegional('chartRegionalServers', 'Servidores por Regional', ['Sem alerta', 'Com offline', 'Com atenção'], [{regionais_servidor_sem_alerta}, {regionais_servidor_com_offline}, {regionais_servidor_com_warning}], ['#2f855a', '#e53e3e', '#d69e2e'], 'regionais');
 criarGraficoRegional('chartRegionalUnifi', 'APs por Regional', ['Sem AP offline', 'Com AP offline'], [{aps_regionais_sem_offline}, {aps_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'unifi');
 criarGraficoRegional('chartRegionalReplicacao', 'Replicação AD por Regional', ['Sem falha', 'Com falha'], [{rep_ok}, {rep_fail}], ['#2f855a', '#e53e3e'], 'replicacao');
-criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com warning', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
+criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com atenção', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
 criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline', 'Com inativo'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}, {links_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#718096'], 'links');
 criarGraficoRegional('chartRegionalVpn', 'VPNs por Regional', ['Sem offline', 'Com offline'], [{vpn_regionais_sem_offline}, {vpn_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'vpn-details');
 criarGraficoRegional('chartRegionalFirewalls', 'Licenças por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
