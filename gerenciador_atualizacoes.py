@@ -267,15 +267,20 @@ def check_gps():
             # Executa o script Python
             script_path = PROJECT_ROOT / "utilizarSession.py"
             success = run_script(script_path)
-            
-            # Atualiza o status
-            update_status('gps_amigo', interval)
+
+            if success:
+                update_status('gps_amigo', interval)
+            else:
+                log_message(
+                    "GPS Amigo nao foi atualizado. Verifique o Playwright no Python em uso: "
+                    f"{sys.executable}"
+                )
             
             # Verifica se o arquivo foi gerado
             gps_html = PROJECT_ROOT / "output" / "print_temp.html"
-            if gps_html.exists():
+            if success and gps_html.exists():
                 log_message(f"Arquivo GPS gerado: {gps_html}")
-            else:
+            elif success:
                 log_message("Arquivo GPS não foi gerado")
         
         except Exception as e:

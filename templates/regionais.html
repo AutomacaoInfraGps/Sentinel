@@ -928,7 +928,7 @@ function atualizarIndicadoresStatus(codigo, resultados) {
                 indicador.attr('title', resultado.erro || 'Offline');
             } else {
                 indicador.find('i').addClass('bi-exclamation-circle text-warning');
-                indicador.attr('title', resultado.erro || 'Warning');
+                indicador.attr('title', resultado.erro || 'Atenção');
             }
         }
     });

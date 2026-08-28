@@ -4854,12 +4854,12 @@ def _render_preventiva_switches(switches):
     offline = sum(1 for item in switches if str(item.get("status") or "").lower() == "offline")
     warning = sum(1 for item in switches if str(item.get("status") or "").lower() == "warning")
     inativos = sum(1 for item in switches if str(item.get("status") or "").lower() == "inativo")
-    resumo_status = "COM WARNING" if warning else "COM OFFLINE" if offline else "OK"
+    resumo_status = "COM ATENÇÃO" if warning else "COM OFFLINE" if offline else "OK"
 
     resumo = f"""
     <div class="table-block">
-        <div class="table-title"><strong>Resumo geral dos switches</strong><span>{online} online | {offline} offline | {warning} warning | {inativos} inativos</span></div>
-        <table><thead><tr><th>Regional</th><th>Total</th><th>Online</th><th>Offline</th><th>Warning</th><th>Inativos</th><th>Disponibilidade</th><th>Status</th></tr></thead>
+        <div class="table-title"><strong>Resumo geral dos switches</strong><span>{online} online | {offline} offline | {warning} em atenção | {inativos} inativos</span></div>
+        <table><thead><tr><th>Regional</th><th>Total</th><th>Online</th><th>Offline</th><th>Atenção</th><th>Inativos</th><th>Disponibilidade</th><th>Status</th></tr></thead>
         <tbody><tr><td>Regional</td><td>{total}</td><td>{online}</td><td>{offline}</td><td>{warning}</td><td>{inativos}</td><td>{round((online / total) * 100) if total else 0}%</td><td>{_preventiva_badge(resumo_status, 'warning' if warning else 'offline' if offline else 'online')}</td></tr></tbody></table>
     </div>
     """
