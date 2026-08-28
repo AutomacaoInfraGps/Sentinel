@@ -6,6 +6,7 @@ Armazena dados em formato JSON para fácil acesso pela interface web
 
 import json
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -27,10 +28,22 @@ def save_data(component, data):
     # Adiciona timestamp
     data['timestamp'] = datetime.now().isoformat()
     
-    # Salva em arquivo JSON
+    # Salva em arquivo temporario e substitui de forma atomica.
     file_path = DATA_DIR / f"{component}.json"
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{component}-",
+        suffix=".tmp",
+        dir=str(DATA_DIR),
+    )
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary_name, file_path)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
     
     return True
 
