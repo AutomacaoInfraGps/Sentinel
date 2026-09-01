@@ -36,6 +36,7 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv/
 
 # IDEs
 .vscode/
@@ -63,6 +64,8 @@ zabbix_config.json
 *.json.bak
 api_response_test.json
 diagnostico.json
+resultados_verificacao.json
+status_servidores.html
 auth_state.json
 data/*.json
 auditoria_*.json
@@ -107,7 +110,10 @@ MIGRATION_PLAN.md
 audit_*.json
 
 # Documentos locais de instrucoes/backlog que nao devem subir
-docs/archive/
+# Documentacao historica deve continuar versionada.
+docs/archive/*
+!docs/archive/*.md
+!docs/archive/*.txt
 docs/*SMARTVC*.md
 docs/*SmartVC*.md
 docs/*smartvc*.md

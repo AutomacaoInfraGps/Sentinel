@@ -1,13 +1,12 @@
-# Scripts
+# Scripts legados
 
-Este diretório contém os seguintes arquivos:
+Esta pasta contem copias antigas de scripts que tambem existem na raiz. As
+copias nao sao identicas e, por isso, nao devem ser tratadas como fonte oficial
+nem alteradas sem uma comparacao previa.
 
-- [Unifi.py](Unifi.py)
-- [Replicacao_Servers.ps1](Replicacao_Servers.ps1)
-- [executar_tudo.py](executar_tudo.py)
-- [executar_tudo_v2.py](executar_tudo_v2.py)
-- [Chelist.py](Chelist.py)
-- [iLOcheck.py](iLOcheck.py)
+Enquanto a migracao nao for concluida, os arquivos operacionais usados pelo
+Sentinel permanecem na raiz do projeto, incluindo `Unifi.Py`, `Chelist.py`,
+`iLOcheck.py`, `executar_tudo_v2.py` e `Replicacao_Servers.ps1`.
 
----
-Gerado automaticamente em 2025-07-24 10:59:27
+Novos scripts manuais devem ser adicionados em `tools/manual/`. Rotinas de
+manutencao do repositorio devem ficar em `tools/maintenance/`.
