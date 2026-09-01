@@ -8,6 +8,7 @@ from web_config import (
     gerenciador_fortigate,
     coletar_hardware_vm,
     atualizar_cache_seguranca_dashboard,
+    _mapa_atualizar_fontes_operacionais,
     _montar_dados_mapa_monitoramento,
     _mapa_salvar_cache,
 )
@@ -230,6 +231,17 @@ def _montar_mapa_checklist_static_script():
 
     try:
         with sentinel_app.app_context():
+            resultados_fontes = _mapa_atualizar_fontes_operacionais()
+            fontes_com_falha = [
+                nome
+                for nome, resultado in resultados_fontes.items()
+                if isinstance(resultado, dict) and not resultado.get("success", True)
+            ]
+            if fontes_com_falha:
+                print(
+                    "[AVISO] Mapa do checklist usara o ultimo cache valido para: "
+                    + ", ".join(fontes_com_falha)
+                )
             payload = _montar_dados_mapa_monitoramento()
         if not isinstance(payload, dict):
             raise ValueError("Dados do mapa retornaram em formato invalido.")
