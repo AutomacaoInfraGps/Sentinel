@@ -69,6 +69,7 @@ from gerenciar_contatos_email import GerenciadorContatosEmail
 from switches_backup_utils import create_switch_backup
 from maintenance_status import apply_device_maintenance, apply_zabbix_maintenance, normalize_ip
 from operational_state import load_operational_state, publish_map_snapshot, records_for
+from services.unifi_models import normalizar_modelo_ap
 from sofia import init_sofia
 from sofia.tools_sentinel import configurar_ferramentas_sentinel
 
@@ -8054,7 +8055,8 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
     except Exception as exc:
         current_app.logger.warning("Falha ao conciliar manutencao UniFi/Zabbix: %s", exc)
     aps_visiveis = [
-        ap for ap in (dados.get("aps") or [])
+        normalizar_modelo_ap(ap)
+        for ap in (dados.get("aps") or [])
         if not _deve_ocultar_ap_unifi(ap)
     ]
     dados["aps"] = aps_visiveis

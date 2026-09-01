@@ -52,6 +52,8 @@ def _extrair_css(texto):
     if inicio < 0:
         inicio = texto.find("        .regional-inventory-toolbar {")
     fim = texto.find("        .kpi-container {", inicio)
+    if inicio >= 0 and fim <= inicio:
+        fim = texto.find("</style>", inicio)
     if inicio < 0 or fim <= inicio:
         return ""
     return texto[inicio:fim].strip()
@@ -64,6 +66,8 @@ def _extrair_js(texto):
 
     inicio = texto.find("let infraMapSelectedRegional = '';")
     fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", inicio)
+    if inicio >= 0 and fim <= inicio:
+        fim = texto.find("</script>", inicio)
     if inicio < 0 or fim <= inicio:
         return ""
     return texto[inicio:fim].strip()
@@ -106,7 +110,8 @@ def main():
     ) if (PUBLIC_AUTOMACAO / "relatorio_preventiva").exists() else []
 
     candidatos = [
-        ("preview", PROJECT_ROOT / "output" / "dashboard_preview.html", True),
+        ("fonte_versionada", PROJECT_ROOT / "templates" / "mapa_checklist_base.html", True),
+        ("preview", PROJECT_ROOT / "output" / "mapa_checklist_preview.html", False),
         ("dashboard_final", PROJECT_ROOT / "output" / "dashboard_final.html", False),
     ]
     if relatorios:
@@ -139,11 +144,11 @@ def main():
         )
 
     if not algum_arquivo:
-        print("[ERRO] Nenhum dashboard_preview/dashboard_final encontrado em output.")
+        print("[ERRO] Nenhuma fonte ou saida do mapa do checklist foi encontrada.")
         return 1
 
     if not preview_ok:
-        print("[ERRO] Preview invalido. Nao rode o checklist completo antes de corrigir o preview.")
+        print("[ERRO] Fonte versionada invalida. Corrija o mapa-base antes de gerar o checklist.")
         return 1
 
     print("[OK] Mapa do checklist pronto para ser embutido no dashboard.")

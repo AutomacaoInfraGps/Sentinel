@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_PREVIEW = PROJECT_ROOT / "output" / "dashboard_preview.html"
+SOURCE_PREVIEW = PROJECT_ROOT / "templates" / "mapa_checklist_base.html"
 MAP_CACHE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
 EXECUTAR_TUDO = PROJECT_ROOT / "executar_tudo.py"
 PREVIEW_FILE = PROJECT_ROOT / "output" / "mapa_checklist_preview.html"
@@ -72,7 +72,7 @@ def _adjust_tooltips(map_js):
 
 def generate_preview():
     if not SOURCE_PREVIEW.exists():
-        raise FileNotFoundError("dashboard_preview.html nao encontrado para fornecer o visual do checklist.")
+        raise FileNotFoundError("templates/mapa_checklist_base.html nao encontrado.")
     if not MAP_CACHE.exists():
         raise FileNotFoundError("Cache do mapa nao encontrado. Abra o mapa principal primeiro.")
 

@@ -598,21 +598,51 @@ def _carregar_mapa_checklist_embutido():
     """
     base = Path(__file__).resolve().parent
     output_dir = base / "output"
-    candidatos = [output_dir / "dashboard_preview.html", output_dir / "dashboard_final.html"]
+    candidatos = []
+    for nome_global in ("DASHBOARD_FINAL", "DASHBOARD_FINAL_ORIGINAL"):
+        caminho = globals().get(nome_global)
+        if caminho:
+            candidatos.append(Path(caminho))
+    candidatos.extend([
+        base / "templates" / "mapa_checklist_base.html",
+        output_dir / "dashboard_preview.html",
+        output_dir / "dashboard_final.html",
+    ])
+    candidatos = list(dict.fromkeys(candidatos))
     for preview_path in candidatos:
         try:
             if not preview_path.exists():
                 continue
             texto = preview_path.read_text(encoding="utf-8", errors="replace")
-            css_inicio = texto.find("        .regional-inventory-group {")
-            if css_inicio < 0:
-                css_inicio = texto.find("        .infra-map-shell {")
-            css_fim = texto.find("        .kpi-container {", css_inicio)
-            css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
-            mapa_html = _extrair_section_por_id(texto, "map-view")
-            js_inicio = texto.find("let infraMapSelectedRegional = '';")
-            js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
-            js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
+            css = _extrair_bloco_marcado(
+                texto,
+                "/* CHECKLIST_MAP_CSS_START */",
+                "/* CHECKLIST_MAP_CSS_END */",
+            )
+            if not css:
+                css_inicio = texto.find("        .regional-inventory-group {")
+                if css_inicio < 0:
+                    css_inicio = texto.find("        .infra-map-shell {")
+                css_fim = texto.find("        .kpi-container {", css_inicio)
+                css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+
+            mapa_html = _extrair_bloco_marcado(
+                texto,
+                "<!-- CHECKLIST_MAP_HTML_START -->",
+                "<!-- CHECKLIST_MAP_HTML_END -->",
+            ) or _extrair_section_por_id(texto, "map-view")
+
+            js_fonte = _extrair_bloco_marcado(
+                texto,
+                "// CHECKLIST_MAP_JS_START",
+                "// CHECKLIST_MAP_JS_END",
+            ) or texto
+            js_inicio = js_fonte.find("let infraMapSelectedRegional = '';")
+            js_fim = js_fonte.find(
+                "setDashboardView(document.querySelector('.dashboard-view-tab.active')",
+                js_inicio,
+            )
+            js = js_fonte[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
             if not mapa_html or fallback_msg in mapa_html or not js:
                 continue
             js = _ajustar_tooltips_mapa_checklist(js)
