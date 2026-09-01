@@ -469,8 +469,13 @@ class FortiManagerClient:
             ],
             "session": self.sessionid,
         }
-        response = self.session.post(self.base_url, json=payload, timeout=20)
-        response.raise_for_status()
+        try:
+            response = self.session.post(self.base_url, json=payload, timeout=20)
+            response.raise_for_status()
+        except requests.exceptions.Timeout as exc:
+            return {"_erro": "timeout", "_detalhe": str(exc)}
+        except requests.exceptions.RequestException as exc:
+            return {"_erro": "erro_consulta", "_detalhe": str(exc)}
         data = response.json()
         result_list = data.get("result", [])
         if not result_list:
@@ -489,8 +494,8 @@ class FortiManagerClient:
         if isinstance(entry_status, dict) and entry_status.get("code", 0) != 0:
             msg = entry_status.get("message", "")
             if "No tunnel" in msg or "tunnel" in msg.lower():
-                return {"_erro": "offline"}
-            return {"_erro": msg or "erro_proxy"}
+                return {"_erro": "offline", "_detalhe": msg or "FortiManager sem tunel com o firewall"}
+            return {"_erro": "erro_proxy", "_detalhe": msg or "Erro no proxy do FortiManager"}
 
         response_body = proxy_entry.get("response", proxy_entry)
 
