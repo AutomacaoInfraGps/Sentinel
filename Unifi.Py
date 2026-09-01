@@ -7,6 +7,7 @@ from datetime import datetime
 # Importa as configurações dinâmicas
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
+from services.unifi_models import nome_modelo_unifi
 
 def texto_limpo(valor):
     return str(valor or "").strip()
@@ -132,7 +133,7 @@ for site in sites:
                 "ip": ap.get("ip", ""),
                 "mac": ap.get("mac", ""),
                 "modelo_codigo": ap.get("model", ""),
-                "modelo": texto_limpo(ap.get("model")),
+                "modelo": nome_modelo_unifi(ap.get("model")),
                 "firmware": ap.get("version", ""),
                 "status": status_ap,
                 "clientes": ap.get("num_sta", 0),
@@ -148,7 +149,7 @@ for site in sites:
                 <td>{ap.get("name", "")}</td>
                 <td>{ap.get("ip", "")}</td>
                 <td>{ap.get("mac", "")}</td>
-                <td>{texto_limpo(ap.get("model"))}</td>
+                <td>{nome_modelo_unifi(ap.get("model"))}</td>
                 <td>{ap.get("version", "")}</td>
                 <td class="{status_class}">{status}</td>
                 <td>{ap.get("num_sta", 0)}</td>

@@ -75,6 +75,11 @@ python tools/manual/gerar_preview_mapa_checklist.py
 
 O resultado fica em `output/mapa_checklist_preview.html`.
 
+O checklist final incorpora HTML, CSS, JavaScript e dados do mapa no proprio
+arquivo. Ele pode ser aberto em outra maquina sem Flask, API ou arquivos da
+pasta `output`. A fonte visual versionada fica em
+`templates/mapa_checklist_base.html`; previews em `output/` sao descartaveis.
+
 Na lateral do mapa do checklist, os contadores exibem somente total de
 regionais e problemas operacionais: servidores, links, switches, APs e VPNs
 offline, alem de firewalls offline e licencas de firewall a vencer. Cada
@@ -110,6 +115,11 @@ associados e persistidos na regional correspondente.
 Coleta diretamente da controladora UniFi por `Unifi.Py`, incluindo modelo real,
 firmware, clientes e metricas de radio. O IP e usado para conciliar manutencao
 com o Zabbix e impedir falso offline.
+
+Os codigos de hardware retornados pela controladora sao convertidos para nomes
+de exibicao em `services/unifi_models.py`; codigos desconhecidos sao mantidos.
+A normalizacao tambem ocorre na leitura do cache operacional, permitindo que
+registros anteriores sejam corrigidos sem aguardar a proxima rodada do mapa.
 
 ### Certificados, AD e relatorios
 

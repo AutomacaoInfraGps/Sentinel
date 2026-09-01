@@ -22,6 +22,8 @@ arquivos `.spec`, scripts PowerShell e tarefas configuradas no Windows.
 
 - `services/`, `clients/`, `auth/`, `sofia/`: codigo modular ativo.
 - `templates/` e `static/`: interface web.
+- `templates/mapa_checklist_base.html`: fonte visual versionada do mapa do
+  checklist; os arquivos equivalentes em `output/` sao apenas resultados.
 - `tests/unit/`: testes automatizados.
 - `tests/manual/`: verificacoes executadas sob demanda.
 - `tools/manual/`: ferramentas de diagnostico e operacao manual.
