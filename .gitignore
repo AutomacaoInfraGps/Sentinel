@@ -5,7 +5,6 @@ Conexoes.txt
 # Arquivos de saída
 output/*
 !output/
-!output/dashboard_preview.html
 
 # Mas os templates do projeto são commitados
 !templates/*.html
