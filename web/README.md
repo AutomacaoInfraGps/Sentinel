@@ -1,13 +1,11 @@
-# Web
+# Web legado
 
-Este diretório contém os seguintes arquivos:
+Esta pasta contem uma estrutura web anterior. O servico atual e iniciado por
+`run_web_service.py` e utiliza `web_config.py`, ambos na raiz do projeto.
 
-- `restart_web_service.ps1` (entrada operacional recomendada)
-- [iniciar_web.py](iniciar_web.py) - wrapper para reinício controlado
-- [web_config.py](web_config.py)
-- [web_config_hierarquico.py](web_config_hierarquico.py)
-- [auth_ad.py](auth_ad.py)
-- [user_model.py](user_model.py)
+Os arquivos desta pasta nao devem substituir as entradas da raiz sem uma
+migracao controlada e testes de inicializacao, rotas e tarefas em background.
 
----
-Gerado automaticamente em 2025-07-24 10:59:27
+`user_model.py` nao permanece nesta pasta porque era identico ao arquivo ativo
+da raiz. Consulte `docs/ESTRUTURA_PROJETO.md` para a classificacao das demais
+copias.

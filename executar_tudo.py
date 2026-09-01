@@ -120,8 +120,464 @@ def _extrair_section_por_id(texto, section_id):
     return ""
 
 
+def _montar_adaptador_dados_mapa_checklist():
+    """Atualiza o mapa visual do checklist com o payload consolidado atual."""
+    return r"""
+(function hydrateChecklistMapFromSharedPayload() {
+    const payload = window.SENTINEL_MAPA_CHECKLIST_DATA;
+    if (!payload || !Array.isArray(payload.regionais)) return;
+
+    const normalize = (value) => String(value || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const regionals = new Map();
+    payload.regionais.forEach((regional) => {
+        [regional.codigo, regional.nome, regional.descricao].forEach((key) => {
+            if (key) regionals.set(normalize(key), regional);
+        });
+    });
+    const count = (totals, key) => Number(totals[key] || 0);
+    const statusForChecklist = (status) => {
+        const normalized = String(status || 'ok').toLowerCase();
+        if (normalized === 'critico' || normalized === 'alto') return 'danger';
+        if (normalized === 'medio' || normalized === 'warning' || normalized === 'atencao') return 'warning';
+        return 'ok';
+    };
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[char]));
+    const normalizedDeviceStatus = (device, type) => {
+        let status = String(
+            type === 'firewalls'
+                ? (device.status_disponibilidade || device.status)
+                : device.status
+        ).toLowerCase().trim();
+        if (device.em_manutencao || status === 'maintenance' || status === 'manutencao') return 'maintenance';
+        if (['inactive', 'inativo', 'disabled', 'desabilitado'].includes(status)) return 'inactive';
+        if (['offline', 'down', 'critico', 'critical', 'erro'].includes(status)) return 'offline';
+        if (['warning', 'atencao', 'medio', 'alerta'].includes(status)) return 'warning';
+        if (type === 'firewalls') {
+            if (Number(device.licencas_expiradas || 0) > 0) return 'expirado';
+            if (Number(device.licencas_criticas || 0) > 0) return 'warning';
+        }
+        return 'online';
+    };
+    const statusPresentation = (status) => ({
+        online: ['Online', 'ok'], offline: ['Offline', 'danger'], warning: ['Aten\u00e7\u00e3o', 'warning'],
+        inactive: ['Inativo', 'neutral'], maintenance: ['Manuten\u00e7\u00e3o', 'neutral'],
+        expirado: ['Expirado', 'danger'], 'sem-sinal': ['Consulta indispon\u00edvel', 'warning'],
+    }[status] || [status || 'N\u00e3o informado', 'neutral']);
+    const deviceName = (device, type) => device.nome || device.host || device.hostname
+        || device.interface_monitorada || device.id || type;
+    const deviceDescription = (device, type) => {
+        const details = type === 'links'
+            ? [device.provedor, device.ip_exibicao || device.ip, device.velocidade]
+            : type === 'vpns'
+                ? [device.remote_gateway || device.gateway || device.ip, device.descricao]
+                : type === 'firewalls'
+                    ? [device.model || device.modelo, device.ip, device.serial]
+                    : [device.modelo || device.funcao || device.descricao, device.ip || device.ip_numerico];
+        return [...new Set(details.filter((value) => value && value !== 'N/A'))].join(' - ');
+    };
+    const groups = [
+        ['servidores', 'Servidores', 'fa-server'], ['aps', 'APs', 'fa-wifi'],
+        ['switches', 'Switches', 'fa-network-wired'], ['links', 'Links', 'fa-globe'],
+        ['vpns', 'VPNs', 'fa-shield-alt'], ['firewalls', 'Firewalls', 'fa-shield-alt'],
+        ['admins', 'Admins', 'fa-user-shield'],
+    ];
+    const renderRegionalDetails = (regional) => {
+        const sections = groups.map(([type, title, icon]) => {
+            const devices = Array.isArray(regional[type]) ? regional[type] : [];
+            if (!devices.length) return '';
+            const cards = devices.map((device) => {
+                const status = normalizedDeviceStatus(device, type);
+                const [statusLabel, statusClass] = statusPresentation(status);
+                return `<div class="regional-inventory-device" data-device-type="${type}" data-status="${status}">
+                    <div><strong>${escapeHtml(deviceName(device, type))}</strong><span>${escapeHtml(deviceDescription(device, type))}</span></div>
+                    <em class="regional-inventory-status ${statusClass}">${statusLabel}</em>
+                </div>`;
+            }).join('');
+            return `<section class="regional-inventory-group" data-device-type="${type}">
+                <header><span><i class="fas ${icon}"></i> ${title}</span><strong>${devices.length}</strong></header>
+                <div class="regional-inventory-list">${cards}</div>
+            </section>`;
+        }).join('');
+        const total = groups.reduce((sum, [type]) => sum + (Array.isArray(regional[type]) ? regional[type].length : 0), 0);
+        return `<div class="infra-map-regional-detail-title"><strong>${escapeHtml(regional.codigo || regional.nome)}</strong><span>${total} aparelho(s)</span></div>
+            <div class="infra-map-regional-detail-grid">${sections}</div>`;
+    };
+
+    document.querySelectorAll('.infra-map-dot, .infra-map-list-item').forEach((item) => {
+        const regional = regionals.get(normalize(item.dataset.regional || item.getAttribute('aria-label')));
+        if (!regional) return;
+        const totals = regional.totais || {};
+        const status = statusForChecklist(regional.status);
+        const values = {
+            servidores: count(totals, 'servidores_online') + count(totals, 'servidores_offline') + count(totals, 'servidores_warning') + count(totals, 'servidores_maintenance'),
+            servidoresOnline: count(totals, 'servidores_online'),
+            servidoresOffline: count(totals, 'servidores_offline'),
+            servidoresWarning: count(totals, 'servidores_warning'),
+            aps: count(totals, 'aps_online') + count(totals, 'aps_offline') + count(totals, 'aps_warning') + count(totals, 'aps_maintenance'),
+            apsOnline: count(totals, 'aps_online'),
+            apsOffline: count(totals, 'aps_offline'),
+            switches: count(totals, 'switches_online') + count(totals, 'switches_offline') + count(totals, 'switches_warning') + count(totals, 'switches_inativo') + count(totals, 'switches_maintenance'),
+            switchesOnline: count(totals, 'switches_online'),
+            switchesOffline: count(totals, 'switches_offline'),
+            switchesWarning: count(totals, 'switches_warning'),
+            links: count(totals, 'links_online') + count(totals, 'links_offline') + count(totals, 'links_warning') + count(totals, 'links_inativo'),
+            linksOnline: count(totals, 'links_online'),
+            linksOffline: count(totals, 'links_offline') + count(totals, 'links_inativo'),
+            vpns: count(totals, 'vpns_online') + count(totals, 'vpns_offline') + count(totals, 'vpns_warning') + count(totals, 'vpns_inativo'),
+            vpnsOnline: count(totals, 'vpns_online'),
+            vpnsOffline: count(totals, 'vpns_offline'),
+            firewalls: count(totals, 'firewalls_ok') + count(totals, 'firewalls_alerta') + count(totals, 'firewalls_inativo') + count(totals, 'firewalls_maintenance'),
+            firewallsOk: count(totals, 'firewalls_ok'),
+            firewallsAlerta: count(totals, 'firewalls_expirados'),
+            firewallsOffline: count(totals, 'firewalls_expirados'),
+            firewallWarning: count(totals, 'firewalls_warning'),
+            admins: count(totals, 'admins_ok') + count(totals, 'admins_alerta'),
+            adminsOk: count(totals, 'admins_ok'),
+            adminsAlerta: count(totals, 'admins_alerta'),
+            alertas: (regional.alertas || []).reduce((sum, alert) => sum + Number(alert.quantidade || 0), 0),
+        };
+        Object.entries(values).forEach(([key, value]) => { item.dataset[key] = String(value); });
+        item.dataset.status = status;
+        item.classList.remove('ok', 'warning', 'danger');
+        item.classList.add(status);
+        if (item.classList.contains('infra-map-list-item') && item.dataset.detailsId) {
+            const template = document.getElementById(item.dataset.detailsId);
+            if (template) template.innerHTML = renderRegionalDetails(regional);
+        }
+    });
+})();
+"""
+
+
+def _montar_contadores_mapa_checklist():
+    return r"""
+(function configureChecklistProblemCounters() {
+    const visibilityStyle = document.createElement('style');
+    visibilityStyle.textContent = '.infra-map-stats[hidden] { display: none !important; }';
+    document.head.appendChild(visibilityStyle);
+    const stats = document.getElementById('infraMapInitialStats');
+    const summaryStats = document.getElementById('infraMapSummaryStats');
+    if (!stats) return;
+    const definitions = [
+        ['all', 'Total de regionais', 'infraMapTotalRegionais', 'infra-map-stat-main'],
+        ['servidores-offline', 'Servidores offline', 'infraMapServidoresOfflineTotal', 'infra-map-stat-alert'],
+        ['links-offline', 'Links offline', 'infraMapLinksOfflineTotal', 'infra-map-stat-alert'],
+        ['switches-offline', 'Switches offline', 'infraMapSwitchesOfflineTotal', 'infra-map-stat-alert'],
+        ['aps-offline', 'APs offline', 'infraMapApsOfflineTotal', 'infra-map-stat-alert'],
+        ['firewalls-offline', 'Firewalls offline', 'infraMapFirewallsOfflineTotal', 'infra-map-stat-alert'],
+        ['firewalls-warning', 'Firewalls a vencer', 'infraMapFirewallsWarningTotal', 'infra-map-stat-warning'],
+        ['vpns-offline', 'VPNs offline', 'infraMapVpnsOfflineTotal', 'infra-map-stat-alert'],
+    ];
+    stats.innerHTML = definitions.map(([filter, label, id, className]) => (
+        `<button type="button" class="${className}" data-checklist-problem-filter="${filter}"><span>${label}</span><strong id="${id}">0</strong></button>`
+    )).join('');
+    if (summaryStats) {
+        summaryStats.innerHTML = [
+            ['servidores', 'offline', 'Servidores offline', 'infraMapServidoresOffline'],
+            ['links', 'offline,inativo', 'Links offline', 'infraMapLinksOffline'],
+            ['switches', 'offline', 'Switches offline', 'infraMapSwitchesOffline'],
+            ['aps', 'offline', 'APs offline', 'infraMapApsOffline'],
+            ['firewalls', 'offline', 'Firewalls offline', 'infraMapFirewallsOffline'],
+            ['firewalls', 'warning', 'Firewalls a vencer', 'infraMapFirewallWarningSelected'],
+            ['vpns', 'offline', 'VPNs offline', 'infraMapVpnsOffline'],
+        ].map(([type, statuses, label, id]) => (
+            `<button type="button" class="${label.includes('vencer') ? 'infra-map-stat-warning' : 'infra-map-stat-alert'}" data-detail-filter-type="${type}" data-detail-filter-status="${statuses}"><span>${label}</span><strong id="${id}">0</strong></button>`
+        )).join('');
+    }
+
+    const valueFor = (item, filter) => {
+        if (filter === 'servidores-offline') return Number(item.dataset.servidoresOffline || 0);
+        if (filter === 'links-offline') return Number(item.dataset.linksOffline || 0);
+        if (filter === 'switches-offline') return Number(item.dataset.switchesOffline || 0);
+        if (filter === 'aps-offline') return Number(item.dataset.apsOffline || 0);
+        if (filter === 'firewalls-offline') return Number(item.dataset.firewallsOffline || 0);
+        if (filter === 'firewalls-warning') return Number(item.dataset.firewallWarning || 0);
+        if (filter === 'vpns-offline') return Number(item.dataset.vpnsOffline || 0);
+        return 1;
+    };
+    const items = Array.from(document.querySelectorAll('.infra-map-list-item'));
+    const dots = Array.from(document.querySelectorAll('.infra-map-dot'));
+    const ids = {
+        'servidores-offline': 'infraMapServidoresOfflineTotal',
+        'links-offline': 'infraMapLinksOfflineTotal',
+        'switches-offline': 'infraMapSwitchesOfflineTotal',
+        'aps-offline': 'infraMapApsOfflineTotal',
+        'firewalls-offline': 'infraMapFirewallsOfflineTotal',
+        'firewalls-warning': 'infraMapFirewallsWarningTotal',
+        'vpns-offline': 'infraMapVpnsOfflineTotal',
+    };
+    document.getElementById('infraMapTotalRegionais').textContent = String(items.length);
+    Object.entries(ids).forEach(([filter, id]) => {
+        document.getElementById(id).textContent = String(items.reduce((sum, item) => sum + valueFor(item, filter), 0));
+    });
+
+    const updateFixedTooltips = (regionalMatches) => {
+        document.querySelectorAll('.infra-map-fixed-alert, .infra-map-tooltip-guide').forEach((tooltip) => {
+            const visible = regionalMatches.has(tooltip.dataset.regional || '');
+            tooltip.classList.toggle('infra-map-hidden', !visible);
+        });
+    };
+    const updateSelectedCounters = (source) => {
+        if (!source) return;
+        const fields = {
+            infraMapServidoresOffline: source.dataset.servidoresOffline || '0',
+            infraMapLinksOffline: source.dataset.linksOffline || '0',
+            infraMapSwitchesOffline: source.dataset.switchesOffline || '0',
+            infraMapApsOffline: source.dataset.apsOffline || '0',
+            infraMapFirewallsOffline: source.dataset.firewallsOffline || '0',
+            infraMapFirewallWarningSelected: source.dataset.firewallWarning || '0',
+            infraMapVpnsOffline: source.dataset.vpnsOffline || '0',
+        };
+        Object.entries(fields).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        });
+    };
+    const applyProblemFilter = (filter, label) => {
+        const active = filter && filter !== 'all';
+        document.querySelectorAll('[data-checklist-problem-filter]').forEach((button) => {
+            button.classList.toggle('active', button.dataset.checklistProblemFilter === filter);
+        });
+        items.forEach((item) => {
+            const match = !active || valueFor(item, filter) > 0;
+            item.hidden = active && !match;
+            item.classList.toggle('infra-map-hidden', active && !match);
+            item.classList.toggle('filter-match', active && match);
+            item.classList.remove('active');
+        });
+        dots.forEach((dot) => {
+            const match = !active || valueFor(dot, filter) > 0;
+            dot.classList.toggle('filter-match', active && match);
+            dot.classList.toggle('infra-map-hidden', active && !match);
+        });
+        updateFixedTooltips(new Set(items.filter((item) => !active || valueFor(item, filter) > 0).map((item) => item.dataset.regional)));
+        document.querySelector('.infra-map-stage')?.classList.toggle('filtering', active);
+        document.querySelector('.infra-map-list')?.classList.toggle('filtering', active);
+        setInfraMapListVisible(true);
+        setInfraMapStatsMode('initial');
+        setInfraMapBackVisible(active);
+        setInfraMapCardMode(active ? 'warning' : 'neutral');
+        const matches = items.filter((item) => !active || valueFor(item, filter) > 0);
+        const title = document.getElementById('infraMapRegional');
+        if (title) title.textContent = active ? `${label} (${matches.length} regionais)` : 'Brasil completo';
+        setInfraMapScopeText(active ? `Filtro aplicado: ${label}.` : 'Clique em um estado para ver suas regionais.');
+    };
+    stats.querySelectorAll('[data-checklist-problem-filter]').forEach((button) => {
+        button.addEventListener('click', () => applyProblemFilter(
+            button.dataset.checklistProblemFilter,
+            button.querySelector('span')?.textContent || 'Filtro'
+        ));
+    });
+
+    const focusRegional = (regionalCode) => {
+        if (!regionalCode) return;
+        const matchingItem = items.find((item) => item.dataset.regional === regionalCode);
+        const matchingDot = dots.find((dot) => dot.dataset.regional === regionalCode);
+        if (!matchingItem && !matchingDot) return;
+        items.forEach((item) => {
+            const match = item.dataset.regional === regionalCode;
+            item.hidden = !match;
+            item.classList.toggle('infra-map-hidden', !match);
+            item.classList.toggle('filter-match', match);
+        });
+        dots.forEach((dot) => {
+            const match = dot.dataset.regional === regionalCode;
+            dot.classList.toggle('infra-map-hidden', !match);
+            dot.classList.toggle('filter-match', match);
+        });
+        updateFixedTooltips(new Set([regionalCode]));
+        if (matchingItem || matchingDot) {
+            updateInfraMapPanel(matchingItem || matchingDot);
+            updateSelectedCounters(matchingItem || matchingDot);
+        }
+        setInfraMapListVisible(true);
+        document.querySelector('.infra-map-stage')?.classList.add('filtering');
+        document.querySelector('.infra-map-list')?.classList.add('filtering');
+        setInfraMapBackVisible(true);
+    };
+
+    document.addEventListener('click', (event) => {
+        const tooltip = event.target.closest && event.target.closest('.infra-map-fixed-alert');
+        if (!tooltip) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        focusRegional(tooltip.dataset.regional || '');
+    }, true);
+
+    document.addEventListener('click', (event) => {
+        const regionalTarget = event.target.closest && event.target.closest(
+            '.infra-map-dot, .infra-map-list-item, .infra-map-state-regional'
+        );
+        if (!regionalTarget) return;
+        const regionalCode = regionalTarget.dataset.regional || '';
+        if (!regionalCode) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        focusRegional(regionalCode);
+    }, true);
+
+    document.getElementById('infraMapBack')?.addEventListener('click', () => {
+        updateFixedTooltips(new Set(items.map((item) => item.dataset.regional)));
+        document.querySelectorAll('[data-checklist-problem-filter]').forEach((button) => button.classList.remove('active'));
+    });
+    [...items, ...dots].forEach((item) => {
+        item.addEventListener('click', () => updateSelectedCounters(item));
+    });
+})();
+"""
+
+
+def _montar_tooltips_criticidade_mapa_checklist():
+    return r"""
+(function renderChecklistTooltipsWithMainMapRules() {
+    const payload = window.SENTINEL_MAPA_CHECKLIST_DATA;
+    const map = document.querySelector('.infra-map-brazil');
+    const dotsLayer = map?.querySelector('.infra-map-dots');
+    if (!payload || !map || !dotsLayer) return;
+    map.querySelectorAll('.infra-map-fixed-alerts, .infra-map-tooltip-guides').forEach((item) => item.remove());
+
+    const rank = { critico: 4, alto: 3, medio: 2, atencao: 1, warning: 1, ok: 0 };
+    const label = { critico: 'Crítico', alto: 'Alto', medio: 'Médio', atencao: 'Atenção', warning: 'Atenção', ok: 'OK' };
+    const normalize = (value) => String(value || '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const isInactive = (alert) => `${alert.tipo || ''} ${alert.descricao || ''}`.toLowerCase()
+        .match(/inativo|inactive|desabilitado/);
+    const alertsFor = (regional) => (regional.alertas || [])
+        .filter((alert) => Number(alert.quantidade || 0) > 0 && !isInactive(alert))
+        .sort((a, b) => (rank[b.severidade] || 0) - (rank[a.severidade] || 0) || Number(b.quantidade || 0) - Number(a.quantidade || 0));
+    const severityFor = (alerts) => alerts.length ? (alerts[0].severidade === 'warning' ? 'atencao' : alerts[0].severidade) : 'ok';
+    const regionals = new Map();
+    (payload.regionais || []).forEach((regional) => {
+        [regional.codigo, regional.nome, regional.descricao].forEach((key) => {
+            if (key) regionals.set(normalize(key), regional);
+        });
+    });
+    const pointFor = (dot) => {
+        const match = (dot.getAttribute('transform') || '').match(/translate\(([-\d.]+)[ ,]+([-\d.]+)\)/);
+        return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: 0, y: 0 };
+    };
+    const entries = Array.from(dotsLayer.querySelectorAll('.infra-map-dot')).map((dot) => {
+        const regional = regionals.get(normalize(dot.dataset.regional));
+        const alerts = regional ? alertsFor(regional) : [];
+        return { dot, regional, alerts, point: pointFor(dot), uf: dot.dataset.uf || regional?.uf || 'NA' };
+    }).filter((entry) => entry.regional && entry.alerts.length);
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const guidesLayer = document.createElementNS(ns, 'g');
+    guidesLayer.setAttribute('class', 'infra-map-tooltip-guides');
+    const alertsLayer = document.createElementNS(ns, 'g');
+    alertsLayer.setAttribute('class', 'infra-map-fixed-alerts');
+    dotsLayer.parentNode.insertBefore(guidesLayer, dotsLayer.nextSibling);
+    guidesLayer.parentNode.insertBefore(alertsLayer, guidesLayer.nextSibling);
+    const grouped = entries.reduce((groups, entry) => {
+        (groups[entry.uf] ||= []).push(entry);
+        return groups;
+    }, {});
+    const placed = [];
+    const queued = [];
+    Object.entries(grouped).forEach(([uf, stateEntries]) => {
+        const layout = {
+            RJ: { side: 'right', shiftX: 18, shiftY: -8 }, SP: { side: 'left', shiftX: -20, shiftY: -14 },
+            PR: { side: 'left', shiftX: -18, shiftY: -8 }, RS: { side: 'left', shiftX: -18, shiftY: -8 },
+            AL: { side: 'right', shiftX: 18, shiftY: -8 }, CE: { side: 'right', shiftX: 18, shiftY: -8 },
+            PA: { side: 'right', shiftX: 18, shiftY: -8 }, PI: { side: 'left', shiftX: -18, shiftY: -18 },
+            SE: { side: 'right', shiftX: 16, shiftY: -8 }, GO: { side: 'right', shiftX: 16, shiftY: -12 },
+            AM: { side: 'right', shiftX: 18, shiftY: -8 }, MG: { side: 'left', shiftX: -20, shiftY: 0 },
+        }[uf] || { side: 'right', shiftX: 18, shiftY: -8 };
+        stateEntries.forEach((entry, index) => {
+            const severity = severityFor(entry.alerts);
+            const title = `${entry.regional.codigo.replace(/^REG_/, '').replace(/_/g, ' ')} - ${label[severity] || 'Atenção'}`;
+            const firstTwo = entry.alerts.slice(0, 2).map((alert) => `${alert.descricao}: ${alert.quantidade}`).join(' | ');
+            const detail = `${firstTwo}${entry.alerts.length > 2 ? '...' : ''}`;
+            const width = Math.min(155, Math.max(100, title.length * 4.8 + 14, detail.length * 3.8 + 14));
+            const height = 34;
+            const stackOffset = (index - ((stateEntries.length - 1) / 2)) * (height + 5);
+            const baseX = layout.side === 'left' ? entry.point.x + layout.shiftX - width : entry.point.x + layout.shiftX;
+            const baseY = entry.point.y - 20 + layout.shiftY + stackOffset;
+            queued.push({ ...entry, severity, title, detail, width, height, layout, baseX, baseY });
+        });
+    });
+    queued.forEach((entry) => {
+        let x = entry.baseX;
+        let y = entry.baseY;
+        const padding = 12;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+            const overlaps = placed.some((box) => x < box.x + box.width + padding && x + entry.width > box.x - padding && y < box.y + box.height + padding && y + entry.height > box.y - padding);
+            if (!overlaps) break;
+            x += entry.layout.side === 'left' ? -20 : 20;
+            y += attempt % 2 === 0 ? 20 + (attempt * 5) : -(20 + (attempt * 5));
+        }
+        placed.push({ x, y, width: entry.width, height: entry.height });
+        const guide = document.createElementNS(ns, 'path');
+        const startX = entry.point.x + (entry.layout.side === 'left' ? -7 : 7);
+        const endX = entry.layout.side === 'left' ? x + entry.width : x;
+        const endY = y + entry.height / 2;
+        guide.setAttribute('class', `infra-map-tooltip-guide ${entry.severity}`);
+        guide.setAttribute('data-regional', entry.regional.codigo);
+        guide.setAttribute('d', `M ${startX} ${entry.point.y} C ${(startX + endX) / 2} ${entry.point.y}, ${(startX + endX) / 2} ${endY}, ${endX} ${endY}`);
+        guidesLayer.appendChild(guide);
+
+        const group = document.createElementNS(ns, 'g');
+        group.setAttribute('class', `infra-map-fixed-alert ${entry.severity}`);
+        group.setAttribute('data-regional', entry.regional.codigo);
+        group.setAttribute('transform', `translate(${x} ${y})`);
+        group.setAttribute('tabindex', '0');
+        group.setAttribute('role', 'button');
+        const rect = document.createElementNS(ns, 'rect');
+        rect.setAttribute('width', entry.width);
+        rect.setAttribute('height', entry.height);
+        rect.setAttribute('rx', 6);
+        const title = document.createElementNS(ns, 'text');
+        title.setAttribute('x', 7); title.setAttribute('y', 13);
+        title.textContent = entry.title.length > 38 ? `${entry.title.slice(0, 37)}...` : entry.title;
+        const detail = document.createElementNS(ns, 'text');
+        detail.setAttribute('class', 'alert-problem'); detail.setAttribute('x', 7); detail.setAttribute('y', 27);
+        detail.textContent = entry.detail.length > 48 ? `${entry.detail.slice(0, 45)}...` : entry.detail;
+        group.append(rect, title, detail);
+        alertsLayer.appendChild(group);
+    });
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .infra-map-fixed-alert.critico rect { stroke: #f87171; }
+        .infra-map-fixed-alert.alto rect { stroke: #fb7185; }
+        .infra-map-fixed-alert.medio rect { stroke: #fb923c; }
+        .infra-map-fixed-alert.atencao rect { stroke: #facc15; }
+        .infra-map-fixed-alert.critico .alert-problem { fill: #fecaca; }
+        .infra-map-fixed-alert.alto .alert-problem { fill: #ffe4e6; }
+        .infra-map-fixed-alert.medio .alert-problem { fill: #ffedd5; }
+        .infra-map-fixed-alert.atencao .alert-problem { fill: #fef3c7; }
+        .infra-map-tooltip-guide { fill: none; stroke-width: 1.1; stroke-dasharray: 4 5; opacity: .78; filter: drop-shadow(0 0 5px rgba(0, 0, 0, .35)); animation: guideDash 2.8s linear infinite; }
+        .infra-map-tooltip-guide.critico { stroke: rgba(248, 113, 113, .72); }
+        .infra-map-tooltip-guide.alto { stroke: rgba(251, 113, 133, .72); }
+        .infra-map-tooltip-guide.medio { stroke: rgba(251, 146, 60, .72); }
+        .infra-map-tooltip-guide.atencao { stroke: rgba(250, 204, 21, .72); }
+    `;
+    document.head.appendChild(style);
+})();
+"""
+
+
+def _ajustar_tooltips_mapa_checklist(js):
+    js = js.replace('Servidores em warning', 'Servidores em atenção')
+    js = js.replace('Switches em warning', 'Switches em atenção')
+    js = js.replace(
+        "problemText: mainProblem ? `${mainProblem[0]}: ${mainProblem[1]}` : 'Sem alerta detectado',",
+        "problemText: problems.length ? `${problems.slice(0, 2).map((item) => `${item[0]}: ${item[1]}`).join(' | ')}${problems.length > 2 ? '...' : ''}` : 'Sem alerta detectado',",
+    )
+    js = js.replace(
+        "const problemText = mainProblem\n            ? `${mainProblem[0]}: ${mainProblem[1]}`\n            : 'Sem alerta detectado';",
+        "const problemText = problems.length\n            ? `${problems.slice(0, 2).map((item) => `${item[0]}: ${item[1]}`).join(' | ')}${problems.length > 2 ? '...' : ''}`\n            : 'Sem alerta detectado';",
+    )
+    return js
+
+
 def _carregar_mapa_checklist_embutido():
-    """Reaproveita o mapa estatico do preview para o HTML abrir sem depender do Flask."""
+    """Carrega o componente visual proprio do checklist e atualiza seus dados."""
     fallback_msg = "Mapa por regional indisponivel neste arquivo. Gere o preview/checklist novamente."
     fallback_html = """
         <section id="map-view" class="dashboard-view" data-dashboard-view="map">
@@ -142,72 +598,35 @@ def _carregar_mapa_checklist_embutido():
     """
     base = Path(__file__).resolve().parent
     output_dir = base / "output"
-    candidatos = [
-        base / "templates" / "mapa_monitoramento.html",
-        output_dir / "dashboard_preview.html",
-        output_dir / "dashboard_final.html",
-    ]
-    try:
-        final_atual = globals().get("DASHBOARD_FINAL")
-        if final_atual:
-            candidatos.append(Path(final_atual))
-    except Exception:
-        pass
-
+    candidatos = [output_dir / "dashboard_preview.html", output_dir / "dashboard_final.html"]
     for preview_path in candidatos:
         try:
             if not preview_path.exists():
                 continue
-
             texto = preview_path.read_text(encoding="utf-8", errors="replace")
-
-            css = _extrair_bloco_marcado(
-                texto,
-                "/* CHECKLIST_MAP_CSS_START */",
-                "/* CHECKLIST_MAP_CSS_END */",
-            )
-            if not css:
+            css_inicio = texto.find("        .regional-inventory-group {")
+            if css_inicio < 0:
                 css_inicio = texto.find("        .infra-map-shell {")
-                if css_inicio < 0:
-                    css_inicio = texto.find("        .regional-inventory-toolbar {")
-                css_fim = texto.find("        .kpi-container {", css_inicio)
-                css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
-            css_aberto = css.count("{") - css.count("}")
-            if css_aberto > 0:
-                css = css.rstrip() + "\n" + ("\n}" * css_aberto)
-
-            mapa_html = _extrair_bloco_marcado(
-                texto,
-                "<!-- CHECKLIST_MAP_HTML_START -->",
-                "<!-- CHECKLIST_MAP_HTML_END -->",
-            )
-            if not mapa_html:
-                mapa_html = _extrair_section_por_id(texto, "map-view")
-
-            if not mapa_html or fallback_msg in mapa_html:
-                print(f"[AVISO] Mapa do checklist ausente/invalido em: {preview_path}")
+            css_fim = texto.find("        .kpi-container {", css_inicio)
+            css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+            mapa_html = _extrair_section_por_id(texto, "map-view")
+            js_inicio = texto.find("let infraMapSelectedRegional = '';")
+            js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
+            js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
+            if not mapa_html or fallback_msg in mapa_html or not js:
                 continue
-
-            js = _extrair_bloco_marcado(
-                texto,
-                "// CHECKLIST_MAP_JS_START",
-                "// CHECKLIST_MAP_JS_END",
+            js = _ajustar_tooltips_mapa_checklist(js)
+            js = (
+                _montar_adaptador_dados_mapa_checklist()
+                + "\n" + js
+                + "\n" + _montar_tooltips_criticidade_mapa_checklist()
+                + "\n" + _montar_contadores_mapa_checklist()
             )
-            if not js:
-                js_inicio = texto.find("let infraMapSelectedRegional = '';")
-                js_fim = texto.find("setDashboardView(document.querySelector('.dashboard-view-tab.active')", js_inicio)
-                js = texto[js_inicio:js_fim].rstrip() if js_inicio >= 0 and js_fim > js_inicio else ""
-
-            if not js:
-                print(f"[AVISO] JS do mapa do checklist nao encontrado em: {preview_path}")
-                continue
-
-            print(f"[OK] Mapa do checklist embutido a partir de: {preview_path}")
+            print(f"[OK] Mapa visual do checklist carregado de: {preview_path}")
             return {"css": css, "html": mapa_html, "js": js}
         except Exception as exc:
             print(f"[AVISO] Nao foi possivel ler mapa do checklist em {preview_path}: {exc}")
-
-    print("[AVISO] Nenhum preview/checklist com mapa valido foi encontrado.")
+    print("[AVISO] Nenhum mapa visual valido do checklist foi encontrado.")
     return {"css": fallback_css, "html": fallback_html, "js": ""}
 
 
@@ -3482,8 +3901,8 @@ try:
 except Exception as exc:
     print(f"[AVISO] Nao foi possivel atualizar o cache de seguranca: {exc}")
 security_dashboard = build_security_dashboard(PROJECT_ROOT)
-mapa_checklist_embutido = _carregar_mapa_checklist_embutido()
 mapa_checklist_static_script = _montar_mapa_checklist_static_script()
+mapa_checklist_embutido = _carregar_mapa_checklist_embutido()
 dashboard_html = f"""
 <!DOCTYPE html>
 <html>

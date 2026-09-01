@@ -1,13 +1,7 @@
-# Core
+# Core legado
 
-Este diretório contém os seguintes arquivos:
+Esta pasta pertence a uma tentativa anterior de modularizacao. A aplicacao em
+producao ainda utiliza principalmente os modulos equivalentes na raiz.
 
-- [config.py](config.py)
-- [data_store.py](data_store.py)
-- [gerenciar_regionais.py](gerenciar_regionais.py)
-- [gerenciar_servidores.py](gerenciar_servidores.py)
-- [verificar_servidores_v2.py](verificar_servidores_v2.py)
-- [dashboard_hierarquico.py](dashboard_hierarquico.py)
-
----
-Gerado automaticamente em 2025-07-24 10:59:27
+Nao mova nem remova estes arquivos ate que os imports, tarefas agendadas e
+scripts de inicializacao sejam migrados e testados em conjunto.

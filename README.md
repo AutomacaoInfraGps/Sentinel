@@ -1,309 +1,215 @@
-﻿# 🛡️ Sentinel - Automação e Monitoramento de Infraestrutura
+# Sentinel - Automacao e Monitoramento de Infraestrutura
 
-O **Sentinel** é uma aplicação web Flask para automação, consulta e monitoramento de infraestrutura do **Grupo GPS**. O sistema centraliza regionais, servidores, links, switches, firewalls, VPNs, certificados, relatórios e rotinas operacionais em uma interface web única.
+> Referencia viva do projeto. Atualizado em 01/09/2026. Toda alteracao
+> funcional, operacional ou estrutural deve atualizar este arquivo no mesmo
+> commit.
 
-O projeto roda principalmente em Windows, com Flask servido via **Waitress**, configurações locais em JSON e integrações com **FortiManager**, **FortiAnalyzer**, **Zabbix**, **UniFi**, **Microsoft Graph**, **Active Directory** e portais internos.
+O Sentinel e uma aplicacao web Flask para automacao, consulta e monitoramento
+da infraestrutura do Grupo GPS. Ele consolida regionais, servidores, VMs,
+links, VPNs, switches, firewalls, licencas, APs UniFi, certificados, relatorios
+e rotinas operacionais.
 
-## 🚀 Visão Geral
+## Execucao principal
 
-- 🌐 Aplicação web principal: `web_config.py`
-- ⚙️ Entrada do serviço web: `run_web_service.py`
-- 🔌 Porta padrão: `5000`
-- 🧩 Templates: `templates/`
-- 🎨 Arquivos estáticos: `static/`
-- 📁 Dados locais/runtime: `data/`, `output/`, `logs/`
-- 🔐 Configurações sensíveis: `environment.json` (não deve ir para o Git)
-- 🏢 Estrutura das regionais: `estrutura_regionais.json` (não deve ir para o Git)
+- `run_web_service.py`: inicia o Flask com Waitress na porta 5000.
+- `web_config.py`: aplicacao web, rotas, cache e regras de negocio.
+- `gerenciador_atualizacoes.py`: atualizacoes operacionais em background.
+- `executar_tudo.py`: checklist e dashboard consolidado offline.
+- `environment.json`: configuracao local e credenciais; nunca versionar.
+- `estrutura_regionais.json`: cadastro local das regionais; nunca versionar.
 
-## 📚 Documentação de Apoio
-
-Além deste README principal, o projeto tem documentos específicos para operação, configuração e manutenção:
-
-- 📘 [Guia de Configuração](GUIA_CONFIGURACAO.md) - configuração geral do ambiente.
-- 🔐 [README de Autenticação](README_AUTH.md) - autenticação e controle de acesso.
-- 🧱 [Estrutura V2](README_ESTRUTURA_V2.md) - organização da estrutura hierárquica.
-- 🛡️ [Guia de Segurança](GUIA_SEGURANCA.md) - cuidados com credenciais e arquivos sensíveis.
-- 🧪 [Guia JR Homologação](GUIA_JR_HOMOLOGACAO.md) - fluxo de homologação.
-- 🏭 [Ambientes Produção/Homologação](GUIA_AMBIENTES_PROD_HML.md) - operação entre ambientes.
-- 📦 [Guia de Compilação EXE](GUIA_COMPILACAO_EXE.md) - empacotamento/compilação.
-- 📝 [Changelog](CHANGELOG.md) - histórico de mudanças.
-- 📁 [Docs](docs/README.md) - documentação complementar na pasta `docs/`.
-
-Observação: arquivos pessoais de contexto para IA, como `COPILOT_CONTEXT.md`, devem ficar somente locais e não devem ser versionados.
-
-## 🧭 Funcionalidades Principais
-
-### 🏢 Regionais
-
-- Cadastro e visualização de regionais.
-- Servidores, VMs, links, switches, firewalls e dados operacionais agrupados por regional.
-- Contadores clicáveis para filtrar regionais com/sem servidores, links, switches e firewalls a vencer.
-- Detalhes por regional com seções de servidores, links, switches, firewalls e ações operacionais.
-- Tela principal em `/regionais`.
-- Detalhe individual em `/regional/<codigo>`.
-- Botões de preventiva por grupo: servidores, switches, firewalls e relatório consolidado da regional.
-- Botão de preventiva geral para gerar relatórios individuais por dispositivo e entregar em arquivo ZIP.
-
-### 🗺️ Mapa de Monitoramento
-
-- Tela dedicada em `/mapa`, acessível pelo menu de Infraestrutura.
-- Exibe mapa do Brasil com pontos por regional e painel lateral de alertas.
-- Atualização periódica para uso em monitoramento operacional.
-- Destaque visual por criticidade:
-  - Crítico: itens offline que exigem ação.
-  - Atenção: alertas operacionais como warnings.
-  - Normal: regionais sem alerta acionável.
-- Tooltips automáticos para regionais com problemas.
-- Clique em estado, regional, bolinha ou tooltip para filtrar e abrir detalhes.
-- Inativos/desabilitados propositalmente não devem ser tratados como alerta acionável.
-
-### 🖥️ Servidores e VMs
-
-- Monitoramento de servidores regionais.
-- Consulta de status, serviços e informações de VMs.
-- Relatórios simples e completos.
-- Dados organizados em estrutura hierárquica por regional.
-
-### 🌐 Links de Internet
-
-- Consulta e exibição de links por regional.
-- Sincronização manual com FortiManager/FortiGate.
-- Identificação de interfaces WAN, IPs públicos, provedores, velocidades e status.
-- A sincronização automática ao abrir a tela de regionais foi desativada para reduzir consumo de API.
-- Suporte a aliases de regionais renomeadas para manter links antigos associados corretamente.
-- Botões de teste e atualização usam feedback visual com load flutuante.
-
-### 🔥 Firewalls
-
-- Tela em `/firewalls`.
-- Consulta FortiGates via FortiManager.
-- Exibe status, modelo, serial, versão da firmware e licenças FortiCare.
-- Licenças usam regra operacional por status: OK, a vencer, expirada e sem sinal.
-- A tela de mapa considera como alerta acionável apenas licenças expiradas ou a vencer.
-- Usa cache local por até **60 minutos** para reduzir chamadas repetidas ao FortiManager.
-- O botão **Atualizar Forti** força nova consulta em tempo real.
-
-### 👤 Monitor de Admins
-
-- Tela em `/admin-logins`.
-- Compara usuários administradores atuais com a baseline aprovada em `admin_baseline.json`.
-- Consulta FortiManager, FortiGates via proxy do FortiManager, FortiAnalyzer e logs administrativos.
-- Usa cache local por até **30 minutos**.
-- O botão **Atualizar Forti** força nova consulta.
-
-### 🔌 Switches
-
-- Tela em `/switches`.
-- Integração com Zabbix.
-- Consulta status de switches, alertas e organização por regional.
-- Diferencia online, offline, warning e inativo.
-- Itens inativos/desabilitados não devem entrar como alerta crítico no mapa operacional.
-- Usa `gerenciar_switches.py` e planilha/configuração definida no ambiente.
-
-### 🔐 VPN IPsec
-
-- Tela em `/vpn-ipsec`.
-- Exibe túneis VPN agrupados por regional.
-- Dados obtidos via FortiManager/FortiGate.
-- Mapeamento por regional revisado para evitar túneis aparecendo em unidades incorretas.
-
-### 📡 Antenas UniFi
-
-- Telas de antenas UniFi e dashboards relacionados.
-- Coleta por `Unifi.Py`.
-- Agrupamento por site/regional.
-- Exibe status de APs, usuários conectados, modelo, firmware e informações operacionais.
-- A visão de interferência/co-canal 5GHz foca em APs com Atenção ou Crítico.
-- Há atualização manual das antenas para recarregar status, modelo e dados operacionais.
-
-### 📜 Certificados
-
-- Telas de validade de certificados.
-- Relatórios e templates para acompanhamento de certificados e discos.
-- Exemplo de template: `templates/certificate_disk_report_acrab.json`.
-
-### 📊 Relatórios e Rotinas
-
-- Dashboard consolidado por `executar_tudo.py`.
-- Relatórios de infraestrutura.
-- Dashboard preview em `output/dashboard_preview.html` usado para homologação visual.
-- Checklist consolidado com visão por dispositivo e visão por regional/mapa.
-- Preventivas por regional e por tipo de dispositivo.
-- Relatórios preventivos individuais por dispositivo empacotados em ZIP.
-- Rotinas de replicação AD.
-- Capturas de portais internos, GPS Amigo, Saturno e AppGate.
-- Envio de e-mails via Microsoft Graph.
-
-### 🤖 SofIA
-
-- Assistente virtual integrada ao Sentinel.
-- Módulo em `sofia/`.
-- Ativação por `environment.json`:
-
-```json
-"sofia": {
-  "enabled": true
-}
-```
-
-- A SofIA atualmente usa regras determinísticas, sem LLM externo.
-- Ela responde sobre regionais, servidores, switches, links, VPNs, Zabbix e dashboard com base nos dados já carregados pelo Sentinel.
-
-## 🧱 Arquitetura
-
-```text
-Automacao/
-|-- web_config.py                  # Aplicação Flask principal
-|-- run_web_service.py             # Inicialização Waitress
-|-- config.py                      # Caminhos e carregamento do environment.json
-|-- environment.example.json       # Exemplo seguro de configuração
-|-- environment.json               # Configuração real local, não versionada
-|-- estrutura_regionais.json       # Regionais reais, não versionado
-|-- fortimanager_client.py         # Cliente FortiManager JSON-RPC
-|-- fortianalyzer_client.py        # Cliente FortiAnalyzer JSON-RPC
-|-- gerenciar_regionais.py         # Cadastro/estrutura de regionais
-|-- gerenciar_switches.py          # Integração Zabbix/switches
-|-- gerenciar_vms.py               # Rotinas de VMs
-|-- executar_tudo.py               # Dashboard consolidado
-|-- gps_print.py                   # Capturas de portais
-|-- sofia/                         # Assistente SofIA
-|-- docs/                          # Documentacao e backlog operacional
-|-- templates/                     # Templates HTML/Jinja2
-|-- static/                        # CSS, JS, imagens e branding
-|-- data/                          # Dados gerados em runtime
-|-- output/                        # HTMLs, caches e relatórios
-|-- logs/                          # Logs da aplicação
-```
-
-## ⚙️ Configuração
-
-1. Copie ou gere um `environment.json` a partir de `environment.example.json`.
-2. Configure credenciais e hosts dos sistemas usados:
-   - Zabbix
-   - FortiManager
-   - FortiAnalyzer
-   - UniFi
-   - Microsoft Graph
-   - Portais internos
-3. Garanta que `environment.json`, `estrutura_regionais.json`, `admin_baseline.json` e arquivos com IPs/senhas continuem fora do Git.
-
-Arquivos sensíveis já devem estar protegidos no `.gitignore`.
-
-## ▶️ Execução Local
-
-Instale dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
-Inicie/reinicie o serviço web:
+Instalacao e inicializacao:
 
 ```powershell
+pip install -r requirements.txt
 .\restart_web_service.ps1
 ```
 
-Ou execute diretamente:
+Alternativamente:
 
-```bash
+```powershell
 python run_web_service.py
-```
-
-Acesse:
-
-```text
-http://localhost:5000
-```
-
-## 📊 Dashboard Consolidado
-
-```bash
-python executar_tudo.py
-```
-
-Para rodar sem abrir navegador:
-
-```bash
 python executar_tudo.py --no-browser
 ```
 
-O dashboard consolidado gera arquivos em `output/` e também em pastas públicas configuradas em `config.py`.
+A aplicacao fica disponivel em `http://localhost:5000`.
 
-O preview visual do dashboard pode ser acessado pelo Sentinel quando o arquivo `output/dashboard_preview.html` existir. Ele é usado para validar layout e navegação antes de aplicar mudanças no checklist oficial.
+## Atualizacao e cache
 
-## 🧾 Preventivas
+O checklist executa o lote completo e gera a primeira fotografia/cache do dia.
+O mapa funciona como atualizador operacional continuo:
 
-As preventivas são relatórios operacionais gerados a partir dos dados já coletados pelo Sentinel.
+- A thread de atualizacao roda a cada **3 minutos**.
+- Links, VPNs, switches, firewalls, servidores e APs sao consultados.
+- Somente registros alterados devem ser persistidos e registrados no historico.
+- Infraestrutura, Regionais, Checklist e Mapa consomem a mesma base operacional,
+  evitando estados diferentes entre as telas.
+- O endpoint do mapa possui TTL configuravel por
+  `MAPA_MONITORAMENTO_TTL_SECONDS`, com padrao de **300 segundos**.
+- Caches especificos de integracoes continuam existindo para limitar chamadas
+  externas; atualizacoes manuais podem forcar uma nova consulta.
 
-- **Gerar Relatório:** consolida servidores, links, switches e firewalls da regional.
-- **Preventiva Servidores:** gera visão focada apenas nos servidores da regional.
-- **Preventiva Switches:** gera visão focada apenas nos switches da regional.
-- **Preventiva Firewalls:** gera visão focada apenas nos firewalls/licenças da regional.
-- **Preventiva geral:** gera relatórios individuais por dispositivo e compacta o resultado.
+## Modulos monitorados
 
-Os arquivos gerados ficam organizados em `output/preventivas/` por ano, mês e dia.
+### Regionais
 
-## 🧯 Cache e Consumo de API Forti
+A pagina principal consolida todos os componentes por regional. A tela de
+detalhes apresenta servidores, links, switches, firewalls e acoes preventivas.
 
-Para reduzir consumo no FortiManager/FortiAnalyzer:
+### Mapa
 
-- `/firewalls` usa cache por até **60 minutos**.
-- `/admin-logins` usa cache por até **30 minutos**.
-- Os botões **Atualizar Forti** forçam consulta em tempo real.
-- A sincronização automática de links ao abrir regionais foi desativada.
-- A sincronização de links continua disponível manualmente.
-- O mapa de monitoramento deve reaproveitar cache operacional e atualizar somente o necessário.
-- O checklist diário continua sendo uma fotografia consolidada do horário programado.
+O mapa do Brasil mostra o estado operacional por regional, alertas e historico.
+Os estados visuais sao normal, atencao, critico e manutencao. O valor tecnico
+interno `warning` deve ser apresentado ao usuario como **atencao**.
 
-Isso mantém as consultas funcionando, mas evita chamadas repetidas a cada navegação.
+O mapa embutido no checklist mantem seu visual proprio, mas recebe o mesmo
+payload consolidado, estados e regras de dispositivos do mapa principal. Para
+validar exatamente esse componente pelo cache sem gerar o checklist completo,
+acesse `/mapa/checklist-preview`.
 
-## 🔒 Segurança
+Tambem e possivel gerar um HTML estatico usando somente o ultimo cache:
 
-- Nunca commitar `environment.json`.
-- Nunca commitar `estrutura_regionais.json` com IPs reais.
-- Nunca commitar `admin_baseline.json` se contiver usuários reais sensíveis.
-- Evitar expor tokens, senhas, API keys e client secrets em código.
-- Revisar `git status` antes de cada commit.
-
-## 🧾 Logs e Diagnóstico
-
-Locais principais:
-
-- `logs/web_service.log`
-- `logs/sofia_audit.jsonl`
-- `logs/certificados.log`
-- `output/dashboard_*_cache.json`
-- `output/status_atualizacao.json`
-
-Comandos úteis:
-
-```bash
-git status
-python -m py_compile web_config.py
-python tools/manual/verificar_dependencias.py
+```powershell
+python tools/manual/gerar_preview_mapa_checklist.py
 ```
 
-## 🛠️ Observações Operacionais
+O resultado fica em `output/mapa_checklist_preview.html`.
 
-- O Waitress não faz auto-reload: após alterar backend, reinicie o serviço.
-- Alterações em templates geralmente exigem recarregar a página.
-- Rotas que consultam Forti podem demorar dependendo da quantidade de dispositivos.
-- O cache foi criado para aliviar consumo de API sem remover as consultas.
+Na lateral do mapa do checklist, os contadores exibem somente total de
+regionais e problemas operacionais: servidores, links, switches, APs e VPNs
+offline, alem de firewalls offline e licencas de firewall a vencer. Cada
+contador filtra as regionais correspondentes. Ao selecionar uma regional, a
+lateral continua mostrando somente esses sete contadores de problema, sem
+contadores online ou de admins. Os tooltips mostram no maximo dois problemas e
+usam `...` quando existem alertas adicionais.
 
-## ✅ Status Atual do Projeto
+### Servidores e VMs
 
-O Sentinel hoje é uma plataforma interna de automação de infraestrutura com foco em:
+Monitora disponibilidade, servicos, seguranca e dados de VMs. Servidores em
+manutencao no Zabbix nao devem ser tratados como offline.
 
-- Operação regional
-- Monitoramento de rede
-- Mapa Brasil para acompanhamento operacional
-- Inventário e status de firewalls
-- Controle de admins Forti
-- Links, VPNs e switches
-- Antenas UniFi e interferência 5GHz
-- Preventivas por regional e por dispositivo
-- Certificados e relatórios
-- Assistente SofIA integrada
+### Switches
 
-O projeto segue em evolução e deve priorizar mudanças incrementais, mantendo compatibilidade com os dados locais e rotinas já existentes.
+Usa a API do Zabbix e rotinas de backup. Diferencia online, offline, atencao,
+manutencao e inativo. A manutencao e conciliada com as GMUDs ativas.
 
+### Firewalls e licencas
+
+Usa FortiManager e FortiGate para disponibilidade, modelo, serial, firmware e
+licencas FortiCare. Disponibilidade e licenca possuem filtros independentes.
+Quando uma consulta de licenca fica indisponivel, a ultima data valida pode ser
+preservada sem transformar o equipamento automaticamente em offline.
+
+### Links e VPNs
+
+Consulta FortiManager/FortiGate, interfaces WAN e tuneis IPsec. Os dados sao
+associados e persistidos na regional correspondente.
+
+### APs UniFi
+
+Coleta diretamente da controladora UniFi por `Unifi.Py`, incluindo modelo real,
+firmware, clientes e metricas de radio. O IP e usado para conciliar manutencao
+com o Zabbix e impedir falso offline.
+
+### Certificados, AD e relatorios
+
+Inclui validade de certificados, replicacao do Active Directory, preventivas,
+capturas de portais internos, dashboard consolidado e envio por Microsoft
+Graph.
+
+### SofIA
+
+Assistente deterministica em `sofia/`, protegida por Flask-Login, limite de
+requisicoes e auditoria. Responde com os dados ja carregados pelo Sentinel, sem
+LLM externo.
+
+## Integracoes
+
+- Zabbix API
+- UniFi Controller
+- FortiManager, FortiGate e FortiAnalyzer
+- Active Directory e WinRM
+- Microsoft Graph
+- GPS Amigo, Saturno, AppGate e portais internos
+
+As credenciais ficam em `environment.json`. Use `environment.example.json` como
+referencia segura de configuracao.
+
+## Estrutura
+
+```text
+Automacao/
+|-- run_web_service.py
+|-- web_config.py
+|-- gerenciador_atualizacoes.py
+|-- executar_tudo.py
+|-- services/              # servicos de dominio ativos
+|-- clients/               # clientes de integracao
+|-- auth/                  # autenticacao e autorizacao
+|-- sofia/                 # assistente virtual
+|-- templates/             # templates Jinja2
+|-- static/                # CSS, JavaScript e imagens
+|-- tests/unit/            # testes automatizados
+|-- tests/manual/          # verificacoes sob demanda
+|-- tools/manual/          # diagnosticos manuais
+|-- tools/maintenance/     # manutencao do repositorio
+|-- docs/                  # documentacao atual
+|   `-- archive/           # material historico
+|-- data/                  # dados locais de execucao
+|-- output/                # dashboards, caches e relatorios
+`-- logs/                  # logs da aplicacao
+```
+
+A lista de arquivos que ainda precisam permanecer na raiz e as areas legadas
+estao em [docs/ESTRUTURA_PROJETO.md](docs/ESTRUTURA_PROJETO.md).
+
+## Documentacao
+
+- [Indice da documentacao](docs/README.md)
+- [Estrutura atual](docs/ESTRUTURA_PROJETO.md)
+- [Guia de configuracao](GUIA_CONFIGURACAO.md)
+- [Autenticacao](README_AUTH.md)
+- [Seguranca](GUIA_SEGURANCA.md)
+- [Fluxo do desenvolvedor JR](GUIA_JR_HOMOLOGACAO.md)
+- [Producao e homologacao](GUIA_AMBIENTES_PROD_HML.md)
+- [Changelog](CHANGELOG.md)
+
+## Seguranca e arquivos locais
+
+Nunca versione `environment.json`, `estrutura_regionais.json`,
+`admin_baseline.json`, credenciais, caches, HTML gerado ou ambientes virtuais.
+Revise `git status` antes de cada commit.
+
+Arquivos como `diagnostico.json`, `resultados_verificacao.json`,
+`status_servidores.html` e `.venv/` sao locais e estao no `.gitignore`.
+
+## Validacao antes do push
+
+```powershell
+python -m unittest discover -s tests/unit -p "*_test.py"
+python -m py_compile run_web_service.py web_config.py gerenciador_atualizacoes.py executar_tudo.py
+git diff --check
+git status
+```
+
+O Waitress nao possui auto-reload. Reinicie o servico depois de alteracoes no
+backend.
+
+O mapa do checklist reutiliza a criticidade do mapa principal nas cores e no
+posicionamento dos tooltips. Seus filtros e contadores continuam independentes.
+Ao abrir uma regional, os equipamentos permanecem separados em cards
+individuais dentro dos grupos de servidores, APs, switches, links, VPNs e
+firewalls.
+Os cards e os contadores da expansao sao hidratados pelo mesmo cache operacional
+do mapa, evitando divergencia de status entre o alerta e o dispositivo.
+Ao clicar em uma regional, ponto ou tooltip, o checklist isola a regional
+selecionada na lista e no mapa ate o usuario voltar para a visao anterior.
+
+## Manutencao da documentacao
+
+- Atualize este `README.md` em toda mudanca relevante.
+- Documentos ativos descrevem apenas o comportamento atual.
+- Relatorios de implementacoes concluidas e versoes antigas ficam em
+  `docs/archive/`.
+- Antes de mover um arquivo, verifique imports, subprocessos, arquivos `.spec`,
+  tarefas do Windows e referencias Markdown.
