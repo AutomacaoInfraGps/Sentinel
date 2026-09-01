@@ -2581,6 +2581,23 @@ def mapa_monitoramento():
     return render_template('mapa_monitoramento.html')
 
 
+@app.route('/mapa/checklist-preview')
+@login_required
+def mapa_checklist_preview():
+    """Gera o mapa visual do checklist usando somente o cache compartilhado."""
+    try:
+        from tools.manual.gerar_preview_mapa_checklist import generate_preview
+
+        preview_path = generate_preview()
+        return send_file(preview_path, mimetype="text/html")
+    except Exception as exc:
+        current_app.logger.exception("Falha ao gerar preview do mapa do checklist")
+        return make_response(
+            f"Nao foi possivel gerar o preview do mapa do checklist: {html.escape(str(exc))}",
+            500,
+        )
+
+
 _MAPA_CACHE_TTL_SECONDS = int(os.environ.get("MAPA_MONITORAMENTO_TTL_SECONDS", "300"))
 _MAPA_CACHE_FILE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
 _mapa_cache_refresh_lock = Lock()

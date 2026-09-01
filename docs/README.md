@@ -1,17 +1,20 @@
-# Docs
+# Documentacao do Sentinel
 
-Este diretório contém os seguintes arquivos:
+Este diretorio separa referencias atuais de material historico.
 
-- [README.md](README.md)
-- [CHANGELOG.md](CHANGELOG.md)
-- [GUIA_CONFIGURACAO.md](GUIA_CONFIGURACAO.md)
-- [PROJECT_INFO.md](PROJECT_INFO.md)
-- [PROJETO_ORGANIZADO.md](PROJETO_ORGANIZADO.md)
-- [README_AUTH.md](README_AUTH.md)
-- [README_ESTRUTURA_V2.md](README_ESTRUTURA_V2.md)
-- [ATUALIZACAO_DASHBOARDS.md](ATUALIZACAO_DASHBOARDS.md)
-- [CARDS_DADOS_REAIS_IMPLEMENTADO.md](CARDS_DADOS_REAIS_IMPLEMENTADO.md)
-- [RESUMO_FINAL_ATUALIZACAO.md](RESUMO_FINAL_ATUALIZACAO.md)
+## Referencias atuais
 
----
-Gerado automaticamente em 2025-07-24 10:59:27
+- [Estrutura do projeto](ESTRUTURA_PROJETO.md)
+- [Status dos switches](como_funciona_status_switch.md)
+- [Guia de configuracao](GUIA_CONFIGURACAO.md)
+- [Autenticacao](README_AUTH.md)
+- [Tarefas do mapa e preventivas](TAREFAS_SMARTVC_MAPA_PREVENTIVAS.md)
+
+O `README.md` da raiz e a fonte principal e deve ser atualizado junto com toda
+mudanca funcional, operacional ou estrutural.
+
+## Historico
+
+`archive/` contem analises, relatorios de implementacao e descricoes de versoes
+anteriores. Esses arquivos servem para consulta e nao garantem correspondencia
+com o comportamento atual.
