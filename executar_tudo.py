@@ -5372,8 +5372,12 @@ dashboard_html = f"""
             </div>
         </details>
         <details id="firewalls" class="details-section">
-            <summary>Licenças de Firewalls</summary>
+            <summary>Firewalls</summary>
             <div class="details-content">{security_dashboard['firewall_detail']}</div>
+        </details>
+        <details id="firewall-licenses" class="details-section">
+            <summary>Licenças de Firewalls</summary>
+            <div class="details-content">{security_dashboard['firewall_licence_detail']}</div>
         </details>
         <details id="admin-monitor" class="details-section">
             <summary>Monitor de Admins</summary>
@@ -5579,7 +5583,7 @@ function resetSectionFilters(detail) {{
     if (detail.id === 'switches') resetSwitchesSection(detail);
     if (detail.id === 'links') resetLinksSection(detail);
     if (detail.id === 'vpn-details') resetVpnSection(detail);
-    if (detail.id === 'firewalls' || detail.id === 'admin-monitor') resetSecuritySection(detail);
+    if (detail.id === 'firewalls' || detail.id === 'firewall-licenses' || detail.id === 'admin-monitor') resetSecuritySection(detail);
 }}
 
 function abrirEIrParaDetalhe(detailTarget) {{
@@ -5720,7 +5724,7 @@ function abrirEIrParaDetalhe(detailTarget) {{
         }}
     }}
 
-    if (detailId === 'firewalls' || detailId === 'admin-monitor') {{
+    if (detailId === 'firewalls' || detailId === 'firewall-licenses' || detailId === 'admin-monitor') {{
         filterSecuritySection(detail, action);
     }}
 
@@ -5737,7 +5741,7 @@ function navegarPeloGrafico(chartId, datasetIndex) {{
         chartDeviceSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
         chartDeviceLinks: ['links-online', 'links-offline', 'links-inativo'],
         chartDeviceVpn: ['vpn-details-online', 'vpn-details-offline'],
-        chartDeviceFirewalls: ['firewalls-ok', 'firewalls-warning', 'firewalls-expirado'],
+        chartDeviceFirewalls: ['firewall-licenses-ok', 'firewall-licenses-warning', 'firewall-licenses-expirado'],
         chartDeviceAdmins: ['admin-monitor-ok', 'admin-monitor-alerta', 'admin-monitor-offline', 'admin-monitor-sem-permissao'],
         chartRegionalServers: ['regionais-online', 'regionais-offline', 'regionais-warning'],
         chartRegionalUnifi: ['unifi-online', 'unifi-offline'],
@@ -5745,7 +5749,7 @@ function navegarPeloGrafico(chartId, datasetIndex) {{
         chartRegionalSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
         chartRegionalLinks: ['links-regional-online', 'links-regional-offline', 'links-regional-inativo'],
         chartRegionalVpn: ['vpn-details-online', 'vpn-details-offline'],
-        chartRegionalFirewalls: ['firewalls-regional-ok', 'firewalls-regional-warning', 'firewalls-regional-expirado'],
+        chartRegionalFirewalls: ['firewall-licenses-regional-ok', 'firewall-licenses-regional-warning', 'firewall-licenses-regional-expirado'],
         chartRegionalAdmins: ['admin-monitor-regional-ok', 'admin-monitor-regional-alerta', 'admin-monitor-regional-offline', 'admin-monitor-regional-sem-permissao'],
     }};
 
@@ -6036,7 +6040,7 @@ new Chart(document.getElementById('chartDeviceVpn'), {{
     }}
 }});
 
-criarGraficoRegional('chartDeviceFirewalls', 'Licenças de Firewalls', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
+criarGraficoRegional('chartDeviceFirewalls', 'Licenças de Firewalls', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewall-licenses');
 criarGraficoRegional('chartDeviceAdmins', 'Monitor de Admins', ['OK', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_counts']['ok']}, {security_dashboard['admin_counts']['alerta']}, {security_dashboard['admin_counts']['offline']}, {security_dashboard['admin_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
 
 // Botão flutuante: fechar tudo e voltar ao topo
@@ -6069,7 +6073,7 @@ criarGraficoRegional('chartRegionalReplicacao', 'Replicação AD por Regional', 
 criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com atenção', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
 criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline', 'Com inativo'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}, {links_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#718096'], 'links');
 criarGraficoRegional('chartRegionalVpn', 'VPNs por Regional', ['Sem offline', 'Com offline'], [{vpn_regionais_sem_offline}, {vpn_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'vpn-details');
-criarGraficoRegional('chartRegionalFirewalls', 'Licenças por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewalls');
+criarGraficoRegional('chartRegionalFirewalls', 'Licenças por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewall-licenses');
 criarGraficoRegional('chartRegionalAdmins', 'Admins por Regional', ['Sem alerta', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_regional_counts']['ok']}, {security_dashboard['admin_regional_counts']['alerta']}, {security_dashboard['admin_regional_counts']['offline']}, {security_dashboard['admin_regional_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
 
 const backToTopBtn = document.getElementById('backToTopBtn');

@@ -3982,13 +3982,16 @@ def detalhar_regional(codigo_regional):
                             'ultima_verificacao': datetime.now().isoformat()
                         }
 
-                        # Device offline (sem túnel)
-                        if isinstance(licenses_data, dict) and licenses_data.get('_erro') == 'offline':
+                        # Falha na consulta nao altera, sozinha, a disponibilidade do firewall.
+                        if isinstance(licenses_data, dict) and licenses_data.get('_erro'):
+                            erro_licenca = licenses_data.get('_erro')
                             firewall_info['licencas'].append({
                                 'nome': 'forticare', 'tipo': 'forticare',
-                                'status': 'offline', 'dias_restantes': 0,
+                                'status': 'indisponivel', 'dias_restantes': 0,
                                 'expiracao': 'N/A', 'notificacao_critica': False,
                                 'notificacao_expirada': False,
+                                'motivo': 'Timeout ao consultar o FortiManager' if erro_licenca == 'timeout' else 'FortiManager sem tunel com o firewall' if erro_licenca == 'offline' else 'Erro ao consultar a licenca no FortiManager',
+                                'detalhe': licenses_data.get('_detalhe'),
                             })
 
                         # Processar apenas forticare
@@ -4607,7 +4610,7 @@ def _status_firewall_disponibilidade(firewall):
                     if not isinstance(lic, dict):
                         continue
                     lic_status = str(lic.get('status') or '').strip().lower()
-                    if lic_status and lic_status not in {'offline', 'no_license', 'unknown'}:
+                    if lic_status and lic_status not in {'offline', 'indisponivel', 'timeout', 'erro_consulta', 'no_license', 'unknown'}:
                         return 'online'
     except Exception:
         pass
@@ -4651,15 +4654,18 @@ def _obter_firewalls_regionais_live(codigo_regional):
 
             try:
                 licenses_data = fm_client.proxy_monitor_license(adom, device_name)
-                if isinstance(licenses_data, dict) and licenses_data.get('_erro') == 'offline':
+                if isinstance(licenses_data, dict) and licenses_data.get('_erro'):
+                    erro_licenca = licenses_data.get('_erro')
                     lic_obj = {
                         'nome': 'forticare',
                         'tipo': 'forticare',
-                        'status': 'offline',
+                        'status': 'indisponivel',
                         'dias_restantes': 0,
                         'expiracao': 'N/A',
                         'notificacao_critica': False,
                         'notificacao_expirada': False,
+                        'motivo': 'Timeout ao consultar o FortiManager' if erro_licenca == 'timeout' else 'FortiManager sem tunel com o firewall' if erro_licenca == 'offline' else 'Erro ao consultar a licenca no FortiManager',
+                        'detalhe': licenses_data.get('_detalhe'),
                     }
                     firewall_info['licencas'].append(lic_obj)
                 elif isinstance(licenses_data, dict):
@@ -5893,6 +5899,67 @@ def _carregar_cache_dashboard(nome, ttl_seconds=None):
         return None
 
 
+_LICENCA_STATUS_INDISPONIVEL = {"offline", "indisponivel", "timeout", "erro_consulta", "unknown", "sem sinal"}
+
+
+def _aplicar_ultima_licenca_valida(firewall_info, regional, cache_anterior):
+    """Preserva a ultima validade conhecida sem esconder a falha da coleta atual."""
+    licencas_atuais = firewall_info.get("licencas") or []
+    indisponiveis = [
+        lic for lic in licencas_atuais
+        if isinstance(lic, dict)
+        and str(lic.get("status") or "").strip().lower() in _LICENCA_STATUS_INDISPONIVEL
+    ]
+    if not indisponiveis:
+        return firewall_info
+
+    nome_atual = str(firewall_info.get("nome") or "").strip().lower()
+    firewalls_anteriores = (cache_anterior or {}).get("firewalls_por_regional", {}).get(regional, [])
+    anterior = next(
+        (
+            item for item in firewalls_anteriores or []
+            if str(item.get("nome") or "").strip().lower() == nome_atual
+        ),
+        None,
+    )
+    if not anterior:
+        return firewall_info
+
+    for atual in indisponiveis:
+        tipo_atual = str(atual.get("nome") or atual.get("tipo") or "forticare").strip().lower()
+        candidata = next(
+            (
+                lic for lic in anterior.get("licencas") or []
+                if isinstance(lic, dict)
+                and str(lic.get("nome") or lic.get("tipo") or "forticare").strip().lower() == tipo_atual
+                and str(lic.get("status") or "").strip().lower() not in _LICENCA_STATUS_INDISPONIVEL
+                and lic.get("expiracao") not in (None, "", "N/A", 0, "0")
+            ),
+            None,
+        )
+        if not candidata:
+            continue
+
+        expiracao = candidata.get("expiracao")
+        dias_restantes = candidata.get("dias_restantes")
+        if isinstance(expiracao, (int, float)) and expiracao > 0:
+            try:
+                dias_restantes = max(0, (datetime.fromtimestamp(expiracao).date() - datetime.now().date()).days)
+            except (OSError, OverflowError, ValueError):
+                pass
+
+        atual.update({
+            "expiracao": expiracao,
+            "dias_restantes": dias_restantes,
+            "ultima_coleta_valida": candidata.get("ultima_coleta_valida")
+            or anterior.get("ultima_verificacao")
+            or (cache_anterior or {}).get("atualizado_em"),
+            "dados_anteriores": True,
+            "status_ultima_coleta_valida": candidata.get("status"),
+        })
+    return firewall_info
+
+
 def _invalidar_cache_dashboard(nome):
     """Remove snapshot salvo para forcar nova consulta na proxima abertura."""
     try:
@@ -5980,6 +6047,7 @@ def listar_firewalls(return_data=False):
                     usando_cache=True,
                 )
 
+        cache_firewalls_anterior = _carregar_cache_dashboard("firewalls") or {}
         print("[FIREWALL] Coleta iniciada")
         current_app.logger.info("[FIREWALL] Coleta iniciada")
         firewalls_por_regional = {}
@@ -6104,17 +6172,20 @@ def listar_firewalls(return_data=False):
                             'ultima_verificacao': datetime.now().isoformat()
                         }
 
-                        # Device offline (sem túnel) — licença não verificável
-                        if isinstance(licenses_data, dict) and licenses_data.get('_erro') == 'offline':
+                        # A consulta pode falhar mesmo sem confirmacao de firewall offline.
+                        if isinstance(licenses_data, dict) and licenses_data.get('_erro'):
+                            erro_licenca = licenses_data.get('_erro')
                             lic_obj = {
                                 'nome': 'forticare',
                                 'tipo': 'forticare',
-                                'status': 'offline',
+                                'status': 'indisponivel',
                                 'dias_restantes': 0,
                                 'expiracao': 'N/A',
                                 'tipo_licenca': 'forticare',
                                 'notificacao_critica': False,
                                 'notificacao_expirada': False,
+                                'motivo': 'Timeout ao consultar o FortiManager' if erro_licenca == 'timeout' else 'FortiManager sem tunel com o firewall' if erro_licenca == 'offline' else 'Erro ao consultar a licenca no FortiManager',
+                                'detalhe': licenses_data.get('_detalhe'),
                             }
                             firewall_info['licencas'].append(lic_obj)
                         
@@ -6180,6 +6251,11 @@ def listar_firewalls(return_data=False):
                                 firewall_info['licencas'].append(lic_obj)
 
                         _aplicar_fallback_forticare_device_data(firewall_info, device_data)
+                        _aplicar_ultima_licenca_valida(
+                            firewall_info,
+                            regional_encontrada,
+                            cache_firewalls_anterior,
+                        )
                         
                         # Adicionar ao resultado
                         if regional_encontrada not in firewalls_por_regional:

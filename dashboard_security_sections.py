@@ -2,6 +2,7 @@ import html
 import json
 import re
 import unicodedata
+from datetime import datetime
 from pathlib import Path
 
 
@@ -129,19 +130,24 @@ def _kpi(title, icon, target, items):
 def _firewall_availability_status(firewall):
     if str(firewall.get("status_disponibilidade") or firewall.get("status") or "").lower() == "maintenance":
         return "online"
-    if str(firewall.get("status_disponibilidade") or "").lower() in {"offline", "inativo", "sem-sinal", "down", "error", "erro"}:
+    if str(firewall.get("status_disponibilidade") or "").lower() in {"offline", "sem-sinal", "down", "error", "erro"}:
         return "offline"
+    if str(firewall.get("status_disponibilidade") or "").lower() in {"inativo", "inactive", "unknown", "desconhecido"}:
+        return "inativo"
     if str(firewall.get("status_disponibilidade") or "").lower() in {"online", "ok", "ready", "active", "up"}:
         return "online"
 
-    licencas = firewall.get("licencas") or []
-    if any(str(lic.get("status") or "").lower() == "offline" for lic in licencas if isinstance(lic, dict)):
-        return "offline"
-    return "online"
+    return "inativo"
 
 
 def _firewall_licence_status(firewall):
     licencas = firewall.get("licencas") or []
+    if any(
+        isinstance(lic, dict)
+        and str(lic.get("status") or "").lower() in {"offline", "indisponivel", "timeout", "erro_consulta"}
+        for lic in licencas
+    ):
+        return "indisponivel"
     if any(
         isinstance(lic, dict)
         and (
@@ -178,7 +184,7 @@ def _firewall_licence_status(firewall):
 def _licence_status(licence):
     if not isinstance(licence, dict):
         return "ok"
-    if str(licence.get("status") or "").lower() == "offline":
+    if str(licence.get("status") or "").lower() in {"offline", "indisponivel", "timeout", "erro_consulta"}:
         return "indisponivel"
     status = str(licence.get("status") or "").lower()
     if licence.get("notificacao_expirada") or status in {"expired", "no_license"}:
@@ -189,6 +195,19 @@ def _licence_status(licence):
     ):
         return "warning"
     return "ok"
+
+
+def _format_datetime(value, include_time=False):
+    if value in (None, "", "N/A", 0, "0"):
+        return "N/A"
+    try:
+        if isinstance(value, (int, float)):
+            parsed = datetime.fromtimestamp(value)
+        else:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed.strftime("%d/%m/%Y %H:%M" if include_time else "%d/%m/%Y")
+    except (OSError, OverflowError, TypeError, ValueError):
+        return str(value)
 
 
 def _firewall_status(firewall):
@@ -214,11 +233,13 @@ def _admin_status(device):
 def _status_badge(status):
     labels = {
         "ok": "OK", "warning": "A vencer", "expirado": "Expirada", "sem-sinal": "Offline",
-        "alerta": "Com alerta", "offline": "Offline", "sem-permissao": "Sem permissão",
+        "alerta": "Com alerta", "offline": "Offline", "inativo": "Inativo",
+        "indisponivel": "Consulta indisponível", "sem-permissao": "Sem permissão",
     }
     css = {
         "ok": "security-ok", "warning": "security-warning", "expirado": "security-danger", "sem-sinal": "security-inactive",
-        "alerta": "security-danger", "offline": "security-inactive", "sem-permissao": "security-warning",
+        "alerta": "security-danger", "offline": "security-inactive", "inativo": "security-inactive",
+        "indisponivel": "security-warning", "sem-permissao": "security-warning",
     }
     return f'<span class="security-badge {css.get(status, "security-inactive")}">{labels.get(status, status)}</span>'
 
@@ -268,21 +289,22 @@ def build_security_dashboard(project_root):
             firewalls.append(item)
 
     fw_counts = {status: sum(1 for item in firewalls if item["dashboard_licence_status"] == status)
-                 for status in ("ok", "warning", "expirado")}
+                 for status in ("ok", "warning", "expirado", "indisponivel")}
     fw_availability_counts = {status: sum(1 for item in firewalls if item["dashboard_availability_status"] == status)
-                             for status in ("online", "offline", "maintenance")}
+                             for status in ("online", "offline", "inativo", "maintenance")}
     fw_total = len(firewalls)
 
     regional_fw = []
     for regional, entries in firewalls_by_regional.items():
         availability_statuses = [_firewall_availability_status(item) for item in entries or []]
         licence_statuses = [_firewall_licence_status(item) for item in entries or []]
-        status = "expirado" if "expirado" in licence_statuses else "warning" if "warning" in licence_statuses else "ok"
-        regional_fw.append((regional, len(entries or []), status, "offline" if "offline" in availability_statuses else "online"))
+        status = "expirado" if "expirado" in licence_statuses else "warning" if "warning" in licence_statuses else "indisponivel" if "indisponivel" in licence_statuses else "ok"
+        availability = "offline" if "offline" in availability_statuses else "inativo" if "inativo" in availability_statuses else "online"
+        regional_fw.append((regional, len(entries or []), status, availability))
     fw_reg_counts = {status: sum(1 for _, _, item_status, _ in regional_fw if item_status == status)
-                     for status in ("ok", "warning", "expirado")}
+                     for status in ("ok", "warning", "expirado", "indisponivel")}
     fw_reg_availability_counts = {status: sum(1 for _, _, _, item_status in regional_fw if item_status == status)
-                                 for status in ("online", "offline")}
+                                 for status in ("online", "offline", "inativo")}
 
     admin_devices = admin_cache.get("dispositivos") or {}
     admins = []
@@ -323,18 +345,21 @@ def build_security_dashboard(project_root):
         ("Total", fw_total, "status-neutral", "total"),
         ("Online", fw_availability_counts.get("online", 0), "status-online", "fw-online"),
         ("Offline", fw_availability_counts.get("offline", 0), "status-offline", "fw-offline"),
+        ("Inativos", fw_availability_counts.get("inativo", 0), "status-inactive", "fw-inativo"),
     ])
-    firewall_licence_kpi = _kpi("Licenças de Firewalls", "fa-shield-alt", "firewalls", [
+    firewall_licence_kpi = _kpi("Licenças de Firewalls", "fa-shield-alt", "firewall-licenses", [
         ("Total", fw_total, "status-neutral", "licence-total"),
         ("OK", fw_counts.get("ok", 0), "status-online", "licence-ok"),
         ("A vencer", fw_counts.get("warning", 0), "status-warning", "licence-warning"),
         ("Expiradas", fw_counts.get("expirado", 0), "status-inactive", "licence-expirado"),
+        ("Indisponíveis", fw_counts.get("indisponivel", 0), "status-inactive", "licence-indisponivel"),
     ])
-    firewall_regional_kpi = _kpi("Firewalls por Regional", "fa-shield-alt", "firewalls", [
+    firewall_regional_kpi = _kpi("Firewalls por Regional", "fa-shield-alt", "firewall-licenses", [
         ("Total", len(regional_fw), "status-neutral", "regional-total"),
         ("Sem alerta", fw_reg_counts["ok"], "status-online", "regional-ok"),
         ("A vencer", fw_reg_counts["warning"], "status-warning", "regional-warning"),
         ("Com expirada", fw_reg_counts["expirado"], "status-inactive", "regional-expirado"),
+        ("Consulta indisponível", fw_reg_counts["indisponivel"], "status-warning", "regional-indisponivel"),
         ("Com offline", fw_reg_availability_counts.get("offline", 0), "status-offline", "regional-fw-offline"),
     ])
     admin_device_kpi = _kpi("Monitor de Admins", "fa-user-shield", "admin-monitor", [
@@ -351,27 +376,39 @@ def build_security_dashboard(project_root):
     ])
 
     fw_rows = []
+    license_rows = []
     for item in sorted(firewalls, key=lambda row: (row["regional"], row.get("nome", ""))):
-        licenses = item.get("licencas") or [{}]
+        fw_rows.append(
+            f'<tr class="security-row" data-status="{item["dashboard_availability_status"]}" '
+            f'data-fw-status="{item["dashboard_availability_status"]}" data-regional="{_escape(item["regional"])}">'
+            f'<td>{_escape(item["regional"])}</td><td><strong>{_escape(item.get("nome"))}</strong></td>'
+            f'<td>{_escape(item.get("ip"))}</td><td>{_escape(item.get("model"))}</td><td>{_escape(item.get("serial"))}</td>'
+            f'<td>{_status_badge(item["dashboard_availability_status"])}</td></tr>'
+        )
+        licenses = item.get("licencas") or []
         for license_info in licenses:
             licence_status = _licence_status(license_info)
-            display_status = (
-                "sem-sinal"
-                if item["dashboard_availability_status"] == "offline"
-                else item["dashboard_licence_status"] if not license_info else licence_status
-            )
             days = license_info.get("dias_restantes", "N/A")
             license_name = license_info.get("nome") or license_info.get("tipo") or "N/A"
             license_value = license_info.get("status") or "N/A"
-            fw_rows.append(
-                f'<tr class="security-row" data-status="{display_status}" '
+            reason = license_info.get("motivo") or license_info.get("detalhe") or "-"
+            expiration = _format_datetime(license_info.get("expiracao"))
+            last_valid = _format_datetime(license_info.get("ultima_coleta_valida"), include_time=True)
+            license_rows.append(
+                f'<tr class="security-row" data-status="{licence_status}" '
                 f'data-fw-status="{item["dashboard_availability_status"]}" data-regional="{_escape(item["regional"])}">'
                 f'<td>{_escape(item["regional"])}</td><td><strong>{_escape(item.get("nome"))}</strong></td>'
-                f'<td>{_escape(item.get("ip"))}</td><td>{_escape(item.get("model"))}</td><td>{_escape(item.get("serial"))}</td>'
-                f'<td>{_escape(license_name)}: {_escape(license_value)}</td><td>{_escape(days)}</td>'
-                f'<td>{_status_badge(display_status)}</td></tr>'
+                f'<td>{_escape(license_name)}</td><td>{_escape(license_value)}</td><td>{_escape(expiration)}</td>'
+                f'<td>{_escape(days)}</td><td>{_escape(last_valid)}</td><td>{_escape(reason)}</td>'
+                f'<td>{_status_badge(licence_status)}</td></tr>'
             )
-    firewall_detail = _table("Firewalls e Licenças", "Regional|Firewall|IP|Modelo|Serial|Licença|Dias restantes|Status", fw_rows, firewall_cache)
+    firewall_detail = _table("Firewalls", "Regional|Firewall|IP|Modelo|Serial|Status", fw_rows, firewall_cache)
+    firewall_licence_detail = _table(
+        "Licenças de Firewalls",
+        "Regional|Firewall|Licença|Retorno|Expiração|Dias restantes|Última leitura válida|Motivo|Status",
+        license_rows,
+        firewall_cache,
+    )
 
     admin_rows = []
     for item in sorted(admins, key=lambda row: (row["regional"], row.get("nome", ""))):
@@ -396,6 +433,7 @@ def build_security_dashboard(project_root):
         "admin_device_kpi": admin_device_kpi,
         "admin_regional_kpi": admin_regional_kpi,
         "firewall_detail": firewall_detail,
+        "firewall_licence_detail": firewall_licence_detail,
         "admin_detail": admin_detail,
         "firewall_counts": fw_counts,
         "firewall_availability_counts": fw_availability_counts,

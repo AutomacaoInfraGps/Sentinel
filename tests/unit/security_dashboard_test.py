@@ -48,12 +48,52 @@ class SecurityDashboardTests(unittest.TestCase):
 
             dashboard = build_security_dashboard(root)
             detail = dashboard["firewall_detail"]
+            licence_detail = dashboard["firewall_licence_detail"]
 
-            self.assertIn("fortiguard: valid", detail)
-            self.assertIn('data-status="warning"', detail)
+            self.assertIn("fortiguard", licence_detail)
+            self.assertIn('data-status="warning"', licence_detail)
             self.assertIn('data-fw-status="offline"', detail)
             self.assertEqual(dashboard["firewall_counts"]["warning"], 1)
             self.assertEqual(dashboard["firewall_availability_counts"]["offline"], 1)
+
+    def test_inactive_firewall_with_unavailable_license_is_not_offline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "output").mkdir()
+            (root / "estrutura_regionais.json").write_text(
+                json.dumps({"regionais": {"REG_TESTE": {"nome": "REG_TESTE"}}}),
+                encoding="utf-8",
+            )
+            cache = {
+                "firewalls_por_regional": {
+                    "REG_TESTE": [{
+                        "nome": "FW-INATIVO",
+                        "status_disponibilidade": "inativo",
+                        "licencas": [{
+                            "nome": "forticare",
+                            "status": "indisponivel",
+                            "motivo": "FortiManager sem tunel com o firewall",
+                            "expiracao": 1798675200,
+                            "dias_restantes": 120,
+                            "ultima_coleta_valida": "2026-08-31T08:00:00",
+                            "dados_anteriores": True,
+                        }],
+                    }]
+                }
+            }
+            (root / "output" / "dashboard_firewalls_cache.json").write_text(
+                json.dumps(cache), encoding="utf-8"
+            )
+            (root / "output" / "dashboard_admins_cache.json").write_text("{}", encoding="utf-8")
+
+            dashboard = build_security_dashboard(root)
+
+            self.assertEqual(dashboard["firewall_availability_counts"]["offline"], 0)
+            self.assertEqual(dashboard["firewall_availability_counts"]["inativo"], 1)
+            self.assertEqual(dashboard["firewall_counts"]["indisponivel"], 1)
+            self.assertIn("FortiManager sem tunel", dashboard["firewall_licence_detail"])
+            self.assertIn("30/12/2026", dashboard["firewall_licence_detail"])
+            self.assertIn("31/08/2026 08:00", dashboard["firewall_licence_detail"])
 
     def test_checklist_license_kpis_use_filterable_statuses(self):
         source = (Path(__file__).parents[2] / "executar_tudo.py").read_text(encoding="utf-8")
