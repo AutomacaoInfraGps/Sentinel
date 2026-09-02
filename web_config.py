@@ -70,6 +70,7 @@ from switches_backup_utils import create_switch_backup
 from maintenance_status import apply_device_maintenance, apply_zabbix_maintenance, normalize_ip
 from operational_state import load_operational_state, publish_map_snapshot, records_for
 from services.unifi_models import normalizar_modelo_ap
+from regional_matching import find_regional_code
 from sofia import init_sofia
 from sofia.tools_sentinel import configurar_ferramentas_sentinel
 
@@ -2983,23 +2984,9 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
     if alvo in aliases:
         alvo = aliases[alvo]
 
-    candidatos_por_codigo = {}
-    for codigo, dados in regionais.items():
-        candidatos_por_codigo[codigo] = {
-            _mapa_normalizar_token(codigo),
-            _mapa_normalizar_token(dados.get("nome")),
-            _mapa_normalizar_token(dados.get("descricao")),
-        }
-
-    # Resolve primeiro todas as correspondencias exatas. Isso impede, por exemplo,
-    # GRSA_MACAE de ser capturada antecipadamente pela regional distinta MACAE.
-    for codigo, candidatos in candidatos_por_codigo.items():
-        if alvo in candidatos:
-            return codigo
-
-    for codigo, candidatos in candidatos_por_codigo.items():
-        if any(alvo and (alvo in candidato or candidato in alvo) for candidato in candidatos if candidato):
-            return codigo
+    codigo_encontrado = find_regional_code(regionais, alvo, _mapa_normalizar_token)
+    if codigo_encontrado:
+        return codigo_encontrado
 
     for codigo in regionais:
         if _mapa_normalizar_token(codigo) in {"REG_PIAU", "REG_PIAUI", "REG_PIAUÍ"} and alvo in {"REG_PIAU", "REG_PIAUI", "REG_PIAUÍ"}:
