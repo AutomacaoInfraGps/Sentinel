@@ -2921,7 +2921,9 @@ def _mapa_criar_regional(codigo, info=None):
         "codigo": codigo,
         "nome": info.get("nome") or codigo,
         "descricao": info.get("descricao") or "",
-        "uf": _MAPA_REGIONAL_ESTADOS.get(codigo, ""),
+        "uf": str(
+            info.get("estado") or info.get("uf") or _MAPA_REGIONAL_ESTADOS.get(codigo, "")
+        ).strip().upper(),
         "servidores": [],
         "switches": [],
         "links": [],
@@ -5256,7 +5258,12 @@ def editar_regional(codigo_regional):
         regional_dados = {
             'codigo': codigo_regional,
             'nome': regional_info.get('nome', ''),
-            'descricao': regional_info.get('descricao', '')
+            'descricao': regional_info.get('descricao', ''),
+            'estado': (
+                regional_info.get('estado')
+                or regional_info.get('uf')
+                or _MAPA_REGIONAL_ESTADOS.get(codigo_regional, '')
+            ),
         }
         
         return render_template('regional_form.html', regional=regional_dados, acao='Editar')
@@ -8998,6 +9005,9 @@ def api_salvar_regional():
         codigo_original = (data.get('codigo_original') or codigo).upper()
         nome = data['nome']
         descricao = data.get('descricao', '')
+        estado = str(data.get('estado') or '').strip().upper()
+        if estado and (len(estado) != 2 or not estado.isalpha()):
+            return jsonify({'success': False, 'message': 'Estado/UF inválido'})
         
         # Se não tem código, gera um baseado no nome
         if not codigo:
@@ -9018,9 +9028,11 @@ def api_salvar_regional():
                 return jsonify({'success': False, 'message': 'Regional original não encontrada'})
             if codigo != codigo_original and regional_existente:
                 return jsonify({'success': False, 'message': 'Já existe outra regional com este código'})
-            codigo = gerenciador_regionais.atualizar_regional(codigo_original, codigo, nome, descricao)
+            codigo = gerenciador_regionais.atualizar_regional(
+                codigo_original, codigo, nome, descricao, estado
+            )
         else:
-            gerenciador_regionais.adicionar_regional(codigo, nome, descricao)
+            gerenciador_regionais.adicionar_regional(codigo, nome, descricao, estado)
         
         return jsonify({'success': True, 'message': 'Regional salva com sucesso!', 'codigo': codigo})
         
