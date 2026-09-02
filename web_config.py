@@ -3283,6 +3283,7 @@ def _montar_dados_mapa_monitoramento():
         switch_mapa = dict(switch)
         switch_mapa.update({
             "nome": nome_switch,
+            "regional_zabbix": regional_nome,
             "ip": switch.get("ip") or "",
             "descricao": switch.get("warning_resumo") or switch.get("status_reason") or "",
             "status": _mapa_status(switch.get("status")),
@@ -5690,9 +5691,19 @@ def listar_switches():
                 return str(valor)
 
         switches_operacionais = records_for("switches")
+        regionais_configuradas = {}
+        for codigo in gerenciador_regionais.listar_regionais():
+            info = gerenciador_regionais.obter_regional(codigo) or {}
+            regionais_configuradas[codigo] = info
         switches_por_regional_operacional = {}
         for switch in switches_operacionais:
             regional = str(switch.get("regional") or "SEM_REGIONAL")
+            regional_zabbix = str(switch.get("regional_zabbix") or "").strip()
+            if regional_zabbix:
+                regional = (
+                    _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_zabbix)
+                    or regional
+                )
             switches_por_regional_operacional.setdefault(regional, []).append(dict(switch))
 
         if switches_por_regional_operacional:
