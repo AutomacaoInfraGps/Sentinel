@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import json, html
 from dashboard_security_sections import build_security_dashboard
+from maintenance_status import apply_zabbix_maintenance, is_device_in_maintenance
 
 AUTO_NO_BROWSER = "--no-browser" in sys.argv or os.environ.get("AUTOMACAO_NO_BROWSER", "").strip().lower() in {"1", "true", "yes", "on"}
 from config import REPLICACAO_HTML, REPLICACAO_JSON
@@ -85,6 +86,46 @@ def render_bloco_gps():
       </div>
     </section>
     """
+
+
+def _montar_unifi_html_checklist(aps):
+    """Monta o detalhe UniFi somente com APs operacionais conciliados."""
+    aps_por_site = {}
+    for ap in aps:
+        if ap.get("oculto") or is_device_in_maintenance(ap):
+            continue
+        site = str(ap.get("site") or "SEM SITE").strip() or "SEM SITE"
+        aps_por_site.setdefault(site, []).append(ap)
+
+    if not aps_por_site:
+        return '<div class="note">Nenhuma antena operacional para exibir.</div>'
+
+    headers = ("Nome", "IP", "MAC", "Modelo", "Firmware", "Status", "Usuarios", "Uptime (s)")
+    sections = []
+    for site in sorted(aps_por_site, key=str.casefold):
+        site_aps = sorted(aps_por_site[site], key=lambda ap: str(ap.get("nome") or "").casefold())
+        rows = []
+        for ap in site_aps:
+            status = str(ap.get("status") or "offline").strip().lower()
+            is_online = status == "online"
+            values = (
+                ap.get("nome"), ap.get("ip"), ap.get("mac"), ap.get("modelo"),
+                ap.get("firmware"), "Online" if is_online else "Offline",
+                ap.get("clientes", 0), ap.get("uptime", 0),
+            )
+            cells = []
+            for index, value in enumerate(values):
+                css_class = f' class="ap-{"online" if is_online else "offline"}"' if index == 5 else ""
+                display_value = "-" if value is None or value == "" else value
+                cells.append(f"<td{css_class}>{html.escape(str(display_value))}</td>")
+            rows.append(f"<tr>{''.join(cells)}</tr>")
+        heading = f"{html.escape(site)} ({len(site_aps)} APs)"
+        header_row = "".join(f"<th>{header}</th>" for header in headers)
+        sections.append(
+            f"<h2 onclick='toggle(this)'>{heading}</h2>"
+            f"<div style='display:block'><table><tr>{header_row}</tr>{''.join(rows)}</table></div>"
+        )
+    return "<h1>Status das Antenas UniFi</h1>" + "".join(sections)
 
 
 def _extrair_bloco_marcado(texto, marcador_inicio, marcador_fim):
@@ -3461,15 +3502,16 @@ try:
     unifi_json_path = PROJECT_ROOT / "data" / "unifi.json"
     if unifi_json_path.exists():
         _unifi_json = json.loads(unifi_json_path.read_text(encoding="utf-8"))
-        from maintenance_status import apply_zabbix_maintenance
         _unifi_json = apply_zabbix_maintenance(
             _unifi_json,
             gerenciador_switches.obter_hosts_em_manutencao_direta(),
         )
         _aps_visiveis = [ap for ap in (_unifi_json.get("aps") or []) if not ap.get("oculto")]
-        aps_online = sum(1 for ap in _aps_visiveis if str(ap.get("status") or "").lower() == "online")
-        aps_offline = sum(1 for ap in _aps_visiveis if str(ap.get("status") or "").lower() == "offline")
-        aps_maintenance = sum(1 for ap in _aps_visiveis if ap.get("em_manutencao"))
+        _aps_operacionais = [ap for ap in _aps_visiveis if not is_device_in_maintenance(ap)]
+        aps_online = sum(1 for ap in _aps_operacionais if str(ap.get("status") or "").lower() == "online")
+        aps_offline = sum(1 for ap in _aps_operacionais if str(ap.get("status") or "").lower() == "offline")
+        aps_maintenance = len(_aps_visiveis) - len(_aps_operacionais)
+        unifi_html = _montar_unifi_html_checklist(_aps_operacionais)
     elif "[ERROR]" not in unifi_html:
         # fallback: conta pelo HTML se o JSON não existir
         aps_online = unifi_html.count('"status-online"') or unifi_html.count('status-online')
@@ -3490,6 +3532,8 @@ try:
             gerenciador_switches.obter_hosts_em_manutencao_direta(),
         )
         for ap in unifi_json_data.get("aps", []):
+            if ap.get("oculto") or is_device_in_maintenance(ap):
+                continue
             regional_ap = _extrair_chave_regional(ap.get("site"))
             if regional_ap == "N/A":
                 continue
@@ -3498,8 +3542,6 @@ try:
             dados_regional = aps_regionais_status.setdefault(regional_ap, {"online": 0, "offline": 0, "maintenance": 0})
             if status_ap == "online":
                 dados_regional["online"] += 1
-            elif status_ap == "maintenance":
-                dados_regional["maintenance"] += 1
             else:
                 dados_regional["offline"] += 1
 except Exception as e:

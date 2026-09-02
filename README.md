@@ -116,7 +116,8 @@ associados e persistidos na regional correspondente.
 
 Coleta diretamente da controladora UniFi por `Unifi.Py`, incluindo modelo real,
 firmware, clientes e metricas de radio. O IP e usado para conciliar manutencao
-com o Zabbix e impedir falso offline.
+com o Zabbix e impedir falso offline. No checklist, APs conciliados como em
+manutencao sao excluidos dos contadores, alertas e detalhes operacionais.
 
 Os codigos de hardware retornados pela controladora sao convertidos para nomes
 de exibicao em `services/unifi_models.py`; codigos desconhecidos sao mantidos.
