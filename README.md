@@ -124,6 +124,13 @@ de exibicao em `services/unifi_models.py`; codigos desconhecidos sao mantidos.
 A normalizacao tambem ocorre na leitura do cache operacional, permitindo que
 registros anteriores sejam corrigidos sem aguardar a proxima rodada do mapa.
 
+### Contatos e relatórios
+
+O cadastro de e-mails usa uma planilha XLSX com `NOME_REGIONAL` para o padrão
+SLA/Sentinel e `NOME_REG_FORTI` para a correspondência exata do relatório no
+FortiAnalyzer. A API de mapeamento resolve qualquer uma das chaves e retorna os
+destinatários, seus papéis e primeiros nomes.
+
 ### Certificados, AD e relatorios
 
 Inclui validade de certificados, replicacao do Active Directory, preventivas,
