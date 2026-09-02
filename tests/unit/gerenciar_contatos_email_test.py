@@ -61,6 +61,12 @@ class GerenciadorContatosEmailTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "já está cadastrada"):
                 self.manager.cadastrar_registro(self.registro)
 
+    def test_exibe_orientacao_quando_planilha_esta_bloqueada(self):
+        workbook = Workbook()
+        with patch.object(workbook, "save", side_effect=PermissionError("bloqueado")):
+            with self.assertRaisesRegex(PermissionError, "Feche a planilha no Excel"):
+                self.manager._salvar_workbook(workbook, Path("Lideres.xlsx"))
+
 
 if __name__ == "__main__":
     unittest.main()

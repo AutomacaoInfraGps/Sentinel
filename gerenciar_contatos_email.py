@@ -91,6 +91,18 @@ class GerenciadorContatosEmail:
             return sheet_name
         return workbook.sheetnames[0]
 
+    @staticmethod
+    def _salvar_workbook(workbook, xlsx_path: Path) -> None:
+        try:
+            workbook.save(xlsx_path)
+        except PermissionError as exc:
+            raise PermissionError(
+                f"Sem permissão para alterar '{xlsx_path}'. Feche a planilha no Excel "
+                "e confirme que o usuário do serviço Sentinel possui permissão de gravação na pasta."
+            ) from exc
+        finally:
+            workbook.close()
+
     def listar_registros(self) -> List[Dict[str, str]]:
         xlsx_path, sheet_name = self._resolve_planilha()
         dataframe = pd.read_excel(xlsx_path, sheet_name=sheet_name or 0, dtype=str).fillna("")
@@ -185,8 +197,7 @@ class GerenciadorContatosEmail:
             worksheet.cell(row=excel_row, column=header_map[column]).value = value
             registro_atualizado[column] = value
 
-        workbook.save(xlsx_path)
-        workbook.close()
+        self._salvar_workbook(workbook, xlsx_path)
         return registro_atualizado
 
     def cadastrar_registro(self, dados: Dict[str, str]) -> Dict[str, str]:
@@ -222,6 +233,5 @@ class GerenciadorContatosEmail:
             value = str(dados.get(column, "") or "").strip()
             worksheet.cell(row=excel_row, column=header_map[column]).value = value
             registro[column] = value
-        workbook.save(xlsx_path)
-        workbook.close()
+        self._salvar_workbook(workbook, xlsx_path)
         return registro
