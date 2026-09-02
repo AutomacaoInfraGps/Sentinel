@@ -99,6 +99,8 @@ manutencao no Zabbix nao devem ser tratados como offline.
 
 Usa a API do Zabbix e rotinas de backup. Diferencia online, offline, atencao,
 manutencao e inativo. A manutencao e conciliada com as GMUDs ativas.
+Quando um switch pertence a mais de um host group regional no Zabbix, grupos
+explicitos no formato `REGIONAL ...` prevalecem sobre grupos tecnicos `REG_...`.
 
 ### Firewalls e licencas
 
@@ -111,6 +113,10 @@ preservada sem transformar o equipamento automaticamente em offline.
 
 Consulta FortiManager/FortiGate, interfaces WAN e tuneis IPsec. Os dados sao
 associados e persistidos na regional correspondente.
+O campo `estado`/`uf` das regionais e salvo em `estrutura_regionais.json` e tem
+prioridade sobre o mapeamento legado de estados ao posicionar a regional no mapa.
+Quando ainda não existe UF salva, a tela de edição sugere automaticamente o
+valor desse mapeamento legado, que pode ser alterado e persistido pelo usuário.
 
 ### APs UniFi
 
@@ -132,6 +138,8 @@ FortiAnalyzer. A API de mapeamento resolve qualquer uma das chaves e retorna os
 destinatários, seus papéis e primeiros nomes. O editor altera contatos de
 regionais existentes; novas linhas são incluídas pelo fluxo `Cadastrar regional`,
 que também impede nomes SLA ou correspondências FortiAnalyzer duplicadas.
+No Windows, o XLSX deve estar fechado no Excel e a conta do serviço web precisa
+ter permissão de gravação na pasta configurada.
 
 ### Certificados, AD e relatorios
 

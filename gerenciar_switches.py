@@ -936,7 +936,17 @@ class GerenciadorSwitches:
             if "REGIONAL" in grupo.upper() or grupo.upper().startswith(("REG_", "RG_"))
         ]
         if candidatos_regionais:
-            return sorted(candidatos_regionais)[0]
+            def prioridade_regional(grupo):
+                nome = grupo.strip().upper()
+                regional_explicita = bool(re.match(r"^REGIONAL(?:[ _-]|$)", nome))
+                prefixo_tecnico = nome.startswith(("REG_", "RG_"))
+                return (
+                    0 if regional_explicita else 1 if prefixo_tecnico else 2,
+                    len(nome),
+                    nome,
+                )
+
+            return min(candidatos_regionais, key=prioridade_regional)
 
         candidatos = [grupo for grupo in grupos if grupo.upper() not in genericos]
         return sorted(candidatos or grupos)[0]
