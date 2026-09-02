@@ -46,7 +46,8 @@ def _extrair_section_por_id(texto, section_id):
 def _extrair_css(texto):
     css = _extrair_bloco_marcado(texto, "/* CHECKLIST_MAP_CSS_START */", "/* CHECKLIST_MAP_CSS_END */")
     if css:
-        return css
+        abertas = css.count("{") - css.count("}")
+        return css.rstrip() + (("\n}" * abertas) if abertas > 0 else "")
 
     inicio = texto.find("        .infra-map-shell {")
     if inicio < 0:
@@ -56,7 +57,9 @@ def _extrair_css(texto):
         fim = texto.find("</style>", inicio)
     if inicio < 0 or fim <= inicio:
         return ""
-    return texto[inicio:fim].strip()
+    css = texto[inicio:fim].strip()
+    abertas = css.count("{") - css.count("}")
+    return css.rstrip() + (("\n}" * abertas) if abertas > 0 else "")
 
 
 def _extrair_js(texto):
@@ -84,6 +87,8 @@ def validar(caminho):
 
     if not css or ".infra-map-shell" not in css:
         erros.append("CSS do mapa nao encontrado.")
+    if css.count("{") != css.count("}"):
+        erros.append("CSS do mapa possui chaves desequilibradas.")
     if not html or "infra-map-shell" not in html:
         erros.append("HTML do mapa nao encontrado.")
     if html and FALLBACK_MSG in html:
