@@ -5358,6 +5358,27 @@ def api_atualizar_emails_contatos(row_index):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/api/emails-contatos', methods=['POST'])
+@login_required
+def api_cadastrar_emails_contatos():
+    try:
+        data = request.get_json() or {}
+        payload = {
+            column: str(data.get(column) or '').strip()
+            for column in gerenciador_contatos_email.REQUIRED_COLUMNS
+        }
+        registro = gerenciador_contatos_email.cadastrar_registro(payload)
+        return jsonify({
+            'success': True,
+            'message': 'Regional cadastrada com sucesso.',
+            'registro': registro,
+        }), 201
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/api/emails-contatos/mapeamento', methods=['GET'])
 @login_required
 def api_mapeamento_emails_contatos():

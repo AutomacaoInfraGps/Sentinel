@@ -188,3 +188,40 @@ class GerenciadorContatosEmail:
         workbook.save(xlsx_path)
         workbook.close()
         return registro_atualizado
+
+    def cadastrar_registro(self, dados: Dict[str, str]) -> Dict[str, str]:
+        """Inclui uma regional nova na proxima linha livre da planilha."""
+        nome_regional = str(dados.get("NOME_REGIONAL", "") or "").strip()
+        nome_reg_forti = str(dados.get("NOME_REG_FORTI", "") or "").strip()
+        if not nome_regional or not nome_reg_forti:
+            raise ValueError("Regional padrão e correspondência no FortiAnalyzer são obrigatórias.")
+
+        regional_key = self._normalizar_chave(nome_regional)
+        forti_key = self._normalizar_chave(nome_reg_forti)
+        for registro in self.listar_registros():
+            if self._normalizar_chave(registro["NOME_REGIONAL"]) == regional_key:
+                raise ValueError(f"A regional '{nome_regional}' já está cadastrada.")
+            if self._normalizar_chave(registro["NOME_REG_FORTI"]) == forti_key:
+                raise ValueError(f"A correspondência FortiAnalyzer '{nome_reg_forti}' já está cadastrada.")
+
+        xlsx_path, configured_sheet_name = self._resolve_planilha()
+        workbook = load_workbook(xlsx_path)
+        worksheet = workbook[self._resolve_sheet_title(workbook, configured_sheet_name)]
+        header_map = {
+            str(worksheet.cell(row=1, column=index).value or "").strip(): index
+            for index in range(1, worksheet.max_column + 1)
+        }
+        missing_columns = [column for column in self.REQUIRED_COLUMNS if column not in header_map]
+        if missing_columns:
+            workbook.close()
+            raise ValueError("A planilha não contém as colunas obrigatórias: " + ", ".join(missing_columns))
+
+        excel_row = worksheet.max_row + 1
+        registro = {"_row_index": excel_row - 2}
+        for column in self.REQUIRED_COLUMNS:
+            value = str(dados.get(column, "") or "").strip()
+            worksheet.cell(row=excel_row, column=header_map[column]).value = value
+            registro[column] = value
+        workbook.save(xlsx_path)
+        workbook.close()
+        return registro
