@@ -28,6 +28,14 @@ class SwitchRegionalSelectionTests(unittest.TestCase):
         second = self.manager._selecionar_regional_zabbix(list(reversed(groups)))
         self.assertEqual(first, second)
 
+    def test_reconhece_novo_nome_grsa_macae(self):
+        groups = [{"name": "REGIONAL GRSA MACAE"}, {"name": "SWITCHES"}]
+
+        self.assertEqual(
+            self.manager._selecionar_regional_zabbix(groups),
+            "REGIONAL GRSA MACAE",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -293,6 +293,18 @@ def _build_switches_resumo(resultados):
     }
 
 
+def _publicar_switches_atualizados(manager):
+    """Propaga a leitura mais recente do Zabbix para o estado comum do Sentinel."""
+    with gerenciador_switches._switches_load_lock:
+        gerenciador_switches.switches = [dict(item) for item in manager.switches]
+        gerenciador_switches.regionais = {
+            regional: [dict(item) for item in switches]
+            for regional, switches in manager.regionais.items()
+        }
+    dados_mapa = _montar_dados_mapa_monitoramento()
+    _mapa_salvar_cache(dados_mapa)
+
+
 def _run_switches_job(job_id, mode='all', regional=None, host=None):
     manager = GerenciadorSwitches()
 
@@ -313,6 +325,7 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
                 current_item=alvo,
             )
             resultado = manager.verificar_switch(alvo)
+            _publicar_switches_atualizados(manager)
             _update_background_job(job_id, completed=1, patch_results={alvo: resultado})
             _complete_background_job(job_id, result={
                 'success': True,
@@ -353,6 +366,8 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
                 _fail_background_job(job_id, resultados['error'], message=f'Falha ao verificar a regional {regional}')
                 return
 
+            _publicar_switches_atualizados(manager)
+
             _complete_background_job(job_id, result={
                 'success': True,
                 'resultados': resultados,
@@ -382,6 +397,7 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
             )
 
         resultados = manager.verificar_todos_switches(progress_callback=all_progress)
+        _publicar_switches_atualizados(manager)
         _complete_background_job(job_id, result={
             'success': True,
             'resultados': resultados,
