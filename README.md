@@ -101,6 +101,8 @@ Usa a API do Zabbix e rotinas de backup. Diferencia online, offline, atencao,
 manutencao e inativo. A manutencao e conciliada com as GMUDs ativas.
 Quando um switch pertence a mais de um host group regional no Zabbix, grupos
 explicitos no formato `REGIONAL ...` prevalecem sobre grupos tecnicos `REG_...`.
+A atualização manual de switches republica imediatamente a leitura do Zabbix
+no estado operacional compartilhado por Infraestrutura, Regionais e Mapa.
 
 ### Firewalls e licencas
 
