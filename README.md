@@ -105,6 +105,8 @@ A atualização manual de switches republica imediatamente a leitura do Zabbix
 no estado operacional compartilhado por Infraestrutura, Regionais e Mapa.
 Na tela de switches, `Recarregar inventário do Zabbix` sincroniza hosts, IPs e
 host groups; `Verificar Todos` também consulta e atualiza os estados operacionais.
+Regionais com nomes parcialmente coincidentes permanecem separadas: por exemplo,
+`REG_MACAE` e `REG_GRSA_MACAE` são entidades distintas, embora ambas usem UF `RJ`.
 
 ### Firewalls e licencas
 
