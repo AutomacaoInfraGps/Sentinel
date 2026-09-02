@@ -79,6 +79,9 @@ def generate_preview():
     source = SOURCE_PREVIEW.read_text(encoding="utf-8", errors="replace")
     payload = json.loads(MAP_CACHE.read_text(encoding="utf-8"))
     css = _extract_between(source, "        .regional-inventory-group {", "        .kpi-container {")
+    css_open = css.count("{") - css.count("}")
+    if css_open > 0:
+        css = css.rstrip() + "\n" + ("\n}" * css_open)
     map_html = _extract_section(source, "map-view")
     map_js = _extract_between(
         source,
