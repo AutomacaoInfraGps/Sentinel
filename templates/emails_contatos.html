@@ -262,7 +262,12 @@
             <i class="bi bi-table me-2"></i>
             Contatos por Regional
         </h5>
-        <span class="badge bg-light text-dark" id="badge-registros">{{ registros|length }} registros</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark" id="badge-registros">{{ registros|length }} registros</span>
+            <button type="button" class="btn btn-primary btn-sm" onclick="iniciarCadastroRegional()">
+                <i class="bi bi-plus-circle me-1"></i>Cadastrar regional
+            </button>
+        </div>
     </div>
     <div class="card-body">
         {% if page_error %}
@@ -274,10 +279,6 @@
         <div class="alert alert-secondary mb-0 d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div>Configure o caminho da planilha em Configurações Gerais para carregar os contatos.</div>
             <a href="{{ url_for('configuracoes') }}" class="btn btn-primary btn-sm">Abrir configurações</a>
-        </div>
-        {% elif not registros %}
-        <div class="alert alert-secondary mb-0">
-            A planilha foi conectada, mas não retornou registros editáveis.
         </div>
         {% else %}
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -292,8 +293,8 @@
                 <div class="editor-shell h-100">
                     <div class="editor-toolbar mb-3">
                         <div>
-                            <div class="fw-semibold fs-5">Editor por Campos</div>
-                            <div class="text-muted small">Selecione a regional, ajuste os dados e salve sem recarregar a página.</div>
+                            <div class="fw-semibold fs-5" id="editor-title">Editar contatos</div>
+                            <div class="text-muted small" id="editor-description">Selecione a regional e ajuste responsáveis ou e-mails.</div>
                         </div>
                         <span class="badge bg-primary-subtle text-primary">Atualização imediata</span>
                     </div>
@@ -315,7 +316,7 @@
                     <form id="edit-form" class="row g-3">
                         <input type="hidden" id="row_index" name="row_index">
 
-                        <div class="col-12">
+                        <div class="col-12" id="regional-mapping-fields" style="display: none;">
                             <div class="contact-block contact-block--regional">
                                 <div class="block-title">Dados da Regional</div>
                                 <div class="row g-3">
@@ -415,7 +416,7 @@
                                 Próxima regional
                             </button>
                             <button type="button" class="btn btn-outline-secondary" onclick="limparSelecao()">
-                                Limpar seleção
+                                <span id="cancel-button-text">Limpar seleção</span>
                             </button>
                         </div>
                     </form>
@@ -490,6 +491,10 @@
     const previousButton = document.getElementById('previous-button');
     const nextButton = document.getElementById('next-button');
     const summaryBox = document.getElementById('selected-summary');
+    const mappingFields = document.getElementById('regional-mapping-fields');
+    const editorTitle = document.getElementById('editor-title');
+    const editorDescription = document.getElementById('editor-description');
+    const cancelButtonText = document.getElementById('cancel-button-text');
     const tableSectionCard = document.querySelector('.card:has(#registros-table)');
     const tableBody = document.querySelector('#registros-table tbody');
     const badgeRegistros = document.getElementById('badge-registros');
@@ -498,6 +503,7 @@
     const statsCards = Array.from(document.querySelectorAll('.email-stats-card'));
     let filteredRegistros = [...registros];
     let activeStatsFilter = 'all';
+    let formMode = 'edit';
 
     const placeholderMap = {
         NOME_DIRETOR_1: 'SEM_DIRETOR',
@@ -876,6 +882,13 @@
             return;
         }
 
+        formMode = 'edit';
+        mappingFields.style.display = 'none';
+        editorTitle.textContent = 'Editar contatos';
+        editorDescription.textContent = 'Selecione a regional e ajuste responsáveis ou e-mails.';
+        cancelButtonText.textContent = 'Limpar seleção';
+        saveButtonText.textContent = 'Salvar alterações';
+
         document.getElementById('row_index').value = registro._row_index;
         requiredColumns.forEach((column) => {
             const input = document.getElementById(column);
@@ -896,6 +909,20 @@
         atualizarResumo(registro);
         atualizarEstadoCamposFormulario();
         atualizarEstadoNavegacao();
+    }
+
+    function iniciarCadastroRegional() {
+        limparFormulario();
+        formMode = 'create';
+        mappingFields.style.display = '';
+        editorTitle.textContent = 'Cadastrar regional';
+        editorDescription.textContent = 'Informe o mapeamento da regional e seus contatos iniciais.';
+        cancelButtonText.textContent = 'Cancelar cadastro';
+        saveButtonText.textContent = 'Cadastrar regional';
+        saveButton.disabled = false;
+        summaryBox.className = 'alert alert-info small mb-3';
+        summaryBox.textContent = 'Nova regional: preencha os dois identificadores e os contatos disponíveis.';
+        document.getElementById('NOME_REGIONAL')?.focus();
     }
 
     function irParaRegionalAnterior() {
@@ -948,6 +975,12 @@
     }
 
     function limparSelecao() {
+        formMode = 'edit';
+        mappingFields.style.display = 'none';
+        editorTitle.textContent = 'Editar contatos';
+        editorDescription.textContent = 'Selecione a regional e ajuste responsáveis ou e-mails.';
+        cancelButtonText.textContent = 'Limpar seleção';
+        saveButtonText.textContent = 'Salvar alterações';
         if (regionalSearch) {
             regionalSearch.value = '';
         }
@@ -960,7 +993,7 @@
 
     async function salvarRegistro() {
         const rowIndex = document.getElementById('row_index')?.value;
-        if (!rowIndex) {
+        if (formMode === 'edit' && rowIndex === '') {
             showAlert('warning', 'Selecione uma regional antes de salvar.');
             return;
         }
@@ -974,8 +1007,9 @@
         saveButtonText.textContent = 'Salvando...';
 
         try {
-            const response = await fetch(`/api/emails-contatos/${rowIndex}`, {
-                method: 'PUT',
+            const isCreate = formMode === 'create';
+            const response = await fetch(isCreate ? '/api/emails-contatos' : `/api/emails-contatos/${rowIndex}`, {
+                method: isCreate ? 'POST' : 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
@@ -987,19 +1021,24 @@
             }
 
             const registroAtualizado = data.registro || { ...payload, _row_index: Number(rowIndex) };
+            if (isCreate) {
+                registros.push(registroAtualizado);
+                activeStatsFilter = 'all';
+                if (regionalSearch) regionalSearch.value = '';
+            }
             const registroExistente = registros.find((item) => Number(item._row_index) === Number(rowIndex));
-            if (registroExistente) {
+            if (!isCreate && registroExistente) {
                 Object.assign(registroExistente, registroAtualizado);
             }
 
             aplicarFiltro();
-            selecionarRegistro(rowIndex);
+            selecionarRegistro(registroAtualizado._row_index);
             showAlert('success', data.message || 'Registro atualizado com sucesso.');
         } catch (error) {
             showAlert('danger', 'Falha inesperada ao salvar o registro.');
         } finally {
             saveButton.disabled = false;
-            saveButtonText.textContent = 'Salvar alterações';
+            saveButtonText.textContent = formMode === 'create' ? 'Cadastrar regional' : 'Salvar alterações';
         }
     }
 
