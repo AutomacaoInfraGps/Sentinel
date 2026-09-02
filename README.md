@@ -79,6 +79,8 @@ O checklist final incorpora HTML, CSS, JavaScript e dados do mapa no proprio
 arquivo. Ele pode ser aberto em outra maquina sem Flask, API ou arquivos da
 pasta `output`. A fonte visual versionada fica em
 `templates/mapa_checklist_base.html`; previews em `output/` sao descartaveis.
+O CSS extraido do mapa e balanceado antes da incorporacao para nao interferir
+nos cards da visao por dispositivo.
 
 Na lateral do mapa do checklist, os contadores exibem somente total de
 regionais e problemas operacionais: servidores, links, switches, APs e VPNs

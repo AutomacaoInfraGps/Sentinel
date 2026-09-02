@@ -625,6 +625,9 @@ def _carregar_mapa_checklist_embutido():
                     css_inicio = texto.find("        .infra-map-shell {")
                 css_fim = texto.find("        .kpi-container {", css_inicio)
                 css = texto[css_inicio:css_fim].rstrip() if css_inicio >= 0 and css_fim > css_inicio else fallback_css
+            css_aberto = css.count("{") - css.count("}")
+            if css_aberto > 0:
+                css = css.rstrip() + "\n" + ("\n}" * css_aberto)
 
             mapa_html = _extrair_bloco_marcado(
                 texto,
