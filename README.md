@@ -103,6 +103,8 @@ Quando um switch pertence a mais de um host group regional no Zabbix, grupos
 explicitos no formato `REGIONAL ...` prevalecem sobre grupos tecnicos `REG_...`.
 A atualização manual de switches republica imediatamente a leitura do Zabbix
 no estado operacional compartilhado por Infraestrutura, Regionais e Mapa.
+Na tela de switches, `Recarregar inventário do Zabbix` sincroniza hosts, IPs e
+host groups; `Verificar Todos` também consulta e atualiza os estados operacionais.
 
 ### Firewalls e licencas
 

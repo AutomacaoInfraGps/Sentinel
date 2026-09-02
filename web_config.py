@@ -309,6 +309,21 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
     manager = GerenciadorSwitches()
 
     try:
+        if mode == 'reload':
+            _update_background_job(
+                job_id,
+                total=len(manager.switches),
+                message='Publicando inventário do Zabbix...',
+                detail='Atualizando hosts, IPs e host groups na base compartilhada.',
+            )
+            _publicar_switches_atualizados(manager)
+            _complete_background_job(job_id, result={
+                'success': True,
+                'total': len(manager.switches),
+                'regionais': len(manager.regionais),
+            }, message='Inventário recarregado do Zabbix.', detail='Host groups e regionais atualizados no Sentinel.')
+            return
+
         _update_background_job(job_id, message='Autenticando no Zabbix...', detail='Iniciando verificação dos switches.')
 
         if not manager.autenticar():
@@ -5845,6 +5860,23 @@ def api_verificar_switches():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'})
+
+
+@app.route('/api/switches/recarregar', methods=['POST'])
+@login_required
+def api_recarregar_switches_zabbix():
+    """Recarrega inventário e host groups sem executar a verificação completa."""
+    job_id = _create_background_job(
+        'switches-reload',
+        total=0,
+        message='Buscando inventário no Zabbix...',
+        detail='Consultando hosts, interfaces e host groups.',
+    )
+    _start_background_job(
+        lambda: _run_switches_job(job_id, mode='reload'),
+        name=f'switch-reload-job-{job_id}',
+    )
+    return jsonify({'success': True, 'job_id': job_id})
 
 @app.route('/api/switches/regional/<regional>', methods=['POST'])
 @login_required

@@ -419,15 +419,15 @@
                     
                     <div class="col-md-6 mb-3">
                         <div class="d-grid">
-                            <a href="{{ url_for('listar_switches') }}" class="btn btn-outline-primary btn-lg">
-                                <i class="bi bi-arrow-repeat me-2"></i>
-                                Recarregar do Zabbix
-                            </a>
+                            <button type="button" class="btn btn-outline-primary btn-lg" onclick="recarregarSwitchesZabbix(this)">
+                                <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
+                                <span class="btn-text"><i class="bi bi-cloud-download me-2"></i>Recarregar inventário do Zabbix</span>
+                            </button>
                         </div>
                     </div>
                 </div>
                 <p class="text-muted small mb-0">
-                    Verificar Todos consulta o Zabbix e atualiza os status agora. Recarregar do Zabbix busca novamente os hosts e mantém a separação por regional.
+                    Verificar Todos consulta os estados operacionais. Recarregar inventário atualiza hosts, IPs e regionais pelos host groups do Zabbix.
                 </p>
             </div>
         </div>
@@ -1220,6 +1220,45 @@ function verificarTodosSwitches(button, options = {}) {
                 }
             });
         });
+}
+
+function recarregarSwitchesZabbix(button) {
+    showLoading(button);
+    showLoadingOverlay(
+        'Recarregando inventário',
+        'Buscando hosts, interfaces e host groups diretamente no Zabbix.'
+    );
+    showToast('Recarregando inventário do Zabbix...', 'info');
+
+    $.ajax({
+        url: '/api/switches/recarregar',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ async: true })
+    }).done(function(response) {
+        if (!response.success || !response.job_id) {
+            showToast(`Erro: ${response.message || 'Não foi possível recarregar o inventário'}`, 'danger');
+            hideLoading(button);
+            hideLoadingOverlay();
+            return;
+        }
+
+        acompanharJobSwitches(response.job_id, {
+            onComplete: function(result) {
+                showToast(`Inventário atualizado: ${result.total || 0} switches em ${result.regionais || 0} regionais`, 'success');
+                setTimeout(() => window.location.reload(), 500);
+            },
+            onError: function(job) {
+                showToast(job.error || job.message || 'Falha ao recarregar o inventário.', 'danger');
+                hideLoading(button);
+                hideLoadingOverlay();
+            }
+        });
+    }).fail(function() {
+        showToast('Erro de conexão ao recarregar o inventário.', 'danger');
+        hideLoading(button);
+        hideLoadingOverlay();
+    });
 }
 
 function verificarRegional(regional, button) {
