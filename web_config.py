@@ -5357,6 +5357,26 @@ def api_atualizar_emails_contatos(row_index):
     except Exception as exc:
         return jsonify({'success': False, 'message': str(exc)}), 500
 
+
+@app.route('/api/emails-contatos/mapeamento', methods=['GET'])
+@login_required
+def api_mapeamento_emails_contatos():
+    """Resolve destinatarios pelo nome padrao ou pelo report do FortiAnalyzer."""
+    try:
+        nome_regional = str(request.args.get('nome_regional') or '').strip()
+        nome_reg_forti = str(request.args.get('nome_reg_forti') or '').strip()
+        registro = gerenciador_contatos_email.localizar_registro(nome_regional, nome_reg_forti)
+        if registro is None:
+            return jsonify({'success': False, 'message': 'Regional não encontrada.'}), 404
+        return jsonify({
+            'success': True,
+            'mapeamento': gerenciador_contatos_email.montar_destinatarios(registro),
+        })
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
 @app.route('/switches/editar/<host>', methods=['GET', 'POST'])
 @login_required
 def editar_switch(host):

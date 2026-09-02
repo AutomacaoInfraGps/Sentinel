@@ -320,12 +320,14 @@
                                 <div class="block-title">Dados da Regional</div>
                                 <div class="row g-3">
                                     <div class="col-12">
-                                        <label for="NOME_REGIONAL" class="form-label fw-semibold">Nome Regional</label>
-                                        <input type="text" class="form-control" id="NOME_REGIONAL" name="NOME_REGIONAL">
+                                        <label for="NOME_REGIONAL" class="form-label fw-semibold">Regional padrão</label>
+                                        <input type="text" class="form-control" id="NOME_REGIONAL" name="NOME_REGIONAL" placeholder="PADRÃO SLA" autocomplete="off">
+                                        <div class="field-autofill-hint">Nome usado para identificar a regional no Sentinel e na base SLA.</div>
                                     </div>
                                     <div class="col-12">
-                                        <label for="NOME_REG_FORTI" class="form-label fw-semibold">Nome Regional Forti</label>
-                                        <input type="text" class="form-control" id="NOME_REG_FORTI" name="NOME_REG_FORTI">
+                                        <label for="NOME_REG_FORTI" class="form-label fw-semibold">Correspondência no FortiAnalyzer</label>
+                                        <input type="text" class="form-control" id="NOME_REG_FORTI" name="NOME_REG_FORTI" placeholder="REPORT DE SEGURANCA-FGT_ORMEC_PARA" autocomplete="off">
+                                        <div class="field-autofill-hint">Informe exatamente o nome utilizado no relatório do FortiAnalyzer.</div>
                                     </div>
                                 </div>
                             </div>
@@ -427,8 +429,8 @@
                             <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                                 <tr>
                                     <th style="width: 120px;">Ação</th>
-                                    <th>Regional</th>
-                                    <th>Forti</th>
+                                    <th>Regional padrão</th>
+                                    <th>FortiAnalyzer</th>
                                     <th>Diretor</th>
                                     <th>Gerente</th>
                                     <th>Apoio 1</th>
@@ -446,7 +448,6 @@
                                     </td>
                                     <td>
                                         <div class="fw-semibold">{{ registro.NOME_REGIONAL }}</div>
-                                        <div class="text-muted small">{{ registro.EMAIL_DIRETOR }}</div>
                                     </td>
                                     <td>{{ registro.NOME_REG_FORTI }}</td>
                                     <td>

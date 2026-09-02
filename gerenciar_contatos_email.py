@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple
+import unicodedata
 
 from config import PROJECT_ROOT
 
@@ -33,6 +34,12 @@ class GerenciadorContatosEmail:
         "EMAIL_APOIO_1",
         "EMAIL_APOIO_2",
     ]
+    NAME_EMAIL_PAIRS = (
+        ("NOME_DIRETOR_1", "EMAIL_DIRETOR", "diretor"),
+        ("NOME_GERENTE", "EMAIL_GERENTE", "gerente"),
+        ("NOME_APOIO_1", "EMAIL_APOIO_1", "apoio_1"),
+        ("NOME_APOIO_2", "EMAIL_APOIO_2", "apoio_2"),
+    )
 
     def __init__(self, environment_file: Path | None = None):
         self.environment_file = Path(environment_file or (PROJECT_ROOT / "environment.json"))
@@ -100,6 +107,54 @@ class GerenciadorContatosEmail:
             registro["_row_index"] = int(row_index)
             registros.append(registro)
         return registros
+
+    @staticmethod
+    def _normalizar_chave(value: str) -> str:
+        text = unicodedata.normalize("NFKD", str(value or ""))
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        return " ".join(text.strip().upper().replace("_", " ").replace("-", " ").split())
+
+    @staticmethod
+    def _primeiro_nome(value: str) -> str:
+        text = str(value or "").strip()
+        if not text or text.upper().startswith("SEM_"):
+            return ""
+        return text.split()[0]
+
+    def localizar_registro(self, nome_regional: str = "", nome_reg_forti: str = "") -> Dict[str, str] | None:
+        """Localiza contatos pelo nome padrao ou pela correspondencia do FortiAnalyzer."""
+        regional_key = self._normalizar_chave(nome_regional)
+        forti_key = self._normalizar_chave(nome_reg_forti)
+        if not regional_key and not forti_key:
+            raise ValueError("Informe nome_regional ou nome_reg_forti.")
+
+        for registro in self.listar_registros():
+            regional_match = regional_key and self._normalizar_chave(registro["NOME_REGIONAL"]) == regional_key
+            forti_match = forti_key and self._normalizar_chave(registro["NOME_REG_FORTI"]) == forti_key
+            if regional_match or forti_match:
+                return registro
+        return None
+
+    def montar_destinatarios(self, registro: Dict[str, str]) -> Dict[str, object]:
+        """Entrega o mapeamento e os contatos em formato pronto para relatorios."""
+        contatos = []
+        for name_column, email_column, role in self.NAME_EMAIL_PAIRS:
+            name = str(registro.get(name_column, "") or "").strip()
+            email = str(registro.get(email_column, "") or "").strip()
+            if not email or email.upper().startswith("SEM_"):
+                continue
+            contatos.append({
+                "papel": role,
+                "nome": name,
+                "primeiro_nome": self._primeiro_nome(name),
+                "email": email,
+            })
+        return {
+            "nome_regional": registro.get("NOME_REGIONAL", ""),
+            "nome_reg_forti": registro.get("NOME_REG_FORTI", ""),
+            "contatos": contatos,
+            "emails": [contato["email"] for contato in contatos],
+        }
 
     def atualizar_registro(self, row_index: int, dados: Dict[str, str]) -> Dict[str, str]:
         xlsx_path, configured_sheet_name = self._resolve_planilha()
