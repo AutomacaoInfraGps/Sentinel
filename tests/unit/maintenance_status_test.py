@@ -1,6 +1,11 @@
 import unittest
 
-from maintenance_status import apply_device_maintenance, apply_zabbix_maintenance, normalize_ip
+from maintenance_status import (
+    apply_device_maintenance,
+    apply_zabbix_maintenance,
+    is_device_in_maintenance,
+    normalize_ip,
+)
 
 
 class MaintenanceStatusTests(unittest.TestCase):
@@ -51,6 +56,9 @@ class MaintenanceStatusTests(unittest.TestCase):
     def test_normalize_ip_rejects_non_ip_values(self):
         self.assertEqual(normalize_ip(" 10.0.0.1 "), "10.0.0.1")
         self.assertEqual(normalize_ip("ap.example.local"), "")
+
+    def test_maintenance_flag_has_priority_over_stale_offline_status(self):
+        self.assertTrue(is_device_in_maintenance({"status": "offline", "em_manutencao": True}))
 
     def test_applies_maintenance_to_offline_server(self):
         devices = [{"nome": "SRV-01", "ip": "10.0.0.20", "status": "offline"}]

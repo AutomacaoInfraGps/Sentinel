@@ -7,6 +7,16 @@ import ipaddress
 MAINTENANCE_STATUS = "maintenance"
 
 
+def is_device_in_maintenance(device, status_field="status"):
+    """Indica manutencao mesmo quando o cache ainda conserva status offline."""
+    status = str(device.get(status_field) or device.get("status") or "").strip().lower()
+    return bool(device.get("em_manutencao")) or status in {
+        MAINTENANCE_STATUS,
+        "manutencao",
+        "em manutencao",
+    }
+
+
 def normalize_ip(value):
     """Retorna a representacao canonica de um IP ou uma string vazia."""
     text = str(value or "").strip()
@@ -64,7 +74,12 @@ def apply_zabbix_maintenance(unifi_data, maintenance_hosts):
 
     result["aps"] = aps
     result["total_aps"] = len(aps)
-    result["aps_online"] = sum(1 for ap in aps if str(ap.get("status")).lower() == "online")
-    result["aps_offline"] = sum(1 for ap in aps if str(ap.get("status")).lower() == "offline")
-    result["aps_maintenance"] = sum(1 for ap in aps if ap.get("em_manutencao"))
+    operational_aps = [ap for ap in aps if not is_device_in_maintenance(ap)]
+    result["aps_online"] = sum(
+        1 for ap in operational_aps if str(ap.get("status")).lower() == "online"
+    )
+    result["aps_offline"] = sum(
+        1 for ap in operational_aps if str(ap.get("status")).lower() == "offline"
+    )
+    result["aps_maintenance"] = sum(1 for ap in aps if is_device_in_maintenance(ap))
     return result
