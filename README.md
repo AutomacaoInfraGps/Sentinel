@@ -129,7 +129,9 @@ registros anteriores sejam corrigidos sem aguardar a proxima rodada do mapa.
 O cadastro de e-mails usa uma planilha XLSX com `NOME_REGIONAL` para o padrão
 SLA/Sentinel e `NOME_REG_FORTI` para a correspondência exata do relatório no
 FortiAnalyzer. A API de mapeamento resolve qualquer uma das chaves e retorna os
-destinatários, seus papéis e primeiros nomes.
+destinatários, seus papéis e primeiros nomes. O editor altera contatos de
+regionais existentes; novas linhas são incluídas pelo fluxo `Cadastrar regional`,
+que também impede nomes SLA ou correspondências FortiAnalyzer duplicadas.
 
 ### Certificados, AD e relatorios
 
