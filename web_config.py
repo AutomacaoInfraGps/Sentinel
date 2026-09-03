@@ -5690,30 +5690,43 @@ def listar_switches():
             except Exception:
                 return str(valor)
 
-        switches_operacionais = records_for("switches")
         regionais_configuradas = {}
         for codigo in gerenciador_regionais.listar_regionais():
             info = gerenciador_regionais.obter_regional(codigo) or {}
             regionais_configuradas[codigo] = info
+
+        # A aba de Infraestrutura deve refletir o agrupamento atual do Zabbix.
+        # O estado operacional permanece apenas como fallback de inicializacao.
+        switches_fonte = [dict(switch) for switch in gerenciador_switches.switches]
+        if not switches_fonte:
+            switches_fonte = records_for("switches")
+
         switches_por_regional_operacional = {}
-        for switch in switches_operacionais:
-            regional = str(switch.get("regional") or "SEM_REGIONAL")
-            regional_zabbix = str(switch.get("regional_zabbix") or "").strip()
-            if regional_zabbix:
-                regional = (
-                    _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_zabbix)
-                    or regional
-                )
+        for switch in switches_fonte:
+            regional_origem = str(
+                switch.get("regional_zabbix")
+                or switch.get("regional")
+                or "SEM_REGIONAL"
+            ).strip()
+            regional = (
+                _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_origem)
+                or regional_origem
+            )
             switches_por_regional_operacional.setdefault(regional, []).append(dict(switch))
 
-        if switches_por_regional_operacional:
-            regionais = sorted(switches_por_regional_operacional)
-        else:
-            # Compatibilidade para a primeira execucao, antes do cache comum existir.
+        if not switches_por_regional_operacional:
             sucesso_api = gerenciador_switches._carregar_switches_api()
             if not sucesso_api:
                 gerenciador_switches._carregar_switches()
-            regionais = gerenciador_switches.listar_regionais()
+            for switch in gerenciador_switches.switches:
+                regional_origem = str(switch.get("regional") or "SEM_REGIONAL").strip()
+                regional = (
+                    _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_origem)
+                    or regional_origem
+                )
+                switches_por_regional_operacional.setdefault(regional, []).append(dict(switch))
+
+        regionais = sorted(switches_por_regional_operacional)
 
         # Prepara dados para a view
         regionais_dados = []
@@ -5722,11 +5735,7 @@ def listar_switches():
 
         # Agora processa os dados para a view
         for regional in regionais:
-            switches = (
-                switches_por_regional_operacional.get(regional, [])
-                if switches_por_regional_operacional
-                else gerenciador_switches.obter_switches_regional(regional)
-            )
+            switches = switches_por_regional_operacional.get(regional, [])
             switches_unicos = {}
             for switch in switches:
                 switch.setdefault("host", switch.get("nome") or "Switch")
