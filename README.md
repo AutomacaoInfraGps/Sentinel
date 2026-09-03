@@ -109,8 +109,10 @@ Regionais com nomes parcialmente coincidentes permanecem separadas: por exemplo,
 `REG_MACAE` e `REG_GRSA_MACAE` são entidades distintas, embora ambas usem UF `RJ`.
 O host group original também é preservado em `regional_zabbix`, permitindo que
 a aba de Infraestrutura refaça o agrupamento sem depender de snapshots anteriores.
-A listagem de Infraestrutura prioriza o inventário atual em memória retornado
-pelo Zabbix; o snapshot operacional é usado somente durante a inicialização.
+A listagem de Infraestrutura prioriza `output/switches_status_cache.json`,
+persistido pela última consulta ao Zabbix, e usa o inventário em memória apenas
+como fallback. Assim, uma instância iniciada antes da recarga não conserva o
+agrupamento regional antigo na interface.
 
 ### Firewalls e licencas
 
