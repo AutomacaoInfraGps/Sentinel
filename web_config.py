@@ -5695,9 +5695,17 @@ def listar_switches():
             info = gerenciador_regionais.obter_regional(codigo) or {}
             regionais_configuradas[codigo] = info
 
-        # A aba de Infraestrutura deve refletir o agrupamento atual do Zabbix.
-        # O estado operacional permanece apenas como fallback de inicializacao.
-        switches_fonte = [dict(switch) for switch in gerenciador_switches.switches]
+        # A aba de Infraestrutura deve refletir o inventario persistido pela
+        # ultima consulta ao Zabbix. A instancia em memoria pode ter sido
+        # carregada antes de uma recarga e manter regionais antigas.
+        switches_cache = _mapa_ler_json_output("switches_status_cache.json")
+        switches_fonte = [
+            {"host": nome_switch, **dict(switch)}
+            for nome_switch, switch in switches_cache.items()
+            if isinstance(switch, dict)
+        ]
+        if not switches_fonte:
+            switches_fonte = [dict(switch) for switch in gerenciador_switches.switches]
         if not switches_fonte:
             switches_fonte = records_for("switches")
 
