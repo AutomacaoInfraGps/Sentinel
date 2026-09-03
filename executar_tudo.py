@@ -122,10 +122,23 @@ def _montar_unifi_html_checklist(aps):
         heading = f"{html.escape(site)} ({len(site_aps)} APs)"
         header_row = "".join(f"<th>{header}</th>" for header in headers)
         sections.append(
-            f"<h2 onclick='toggle(this)'>{heading}</h2>"
+            f"<h2 class='unifi-site-heading' onclick='toggle(this)'>{heading}</h2>"
             f"<div style='display:block'><table><tr>{header_row}</tr>{''.join(rows)}</table></div>"
         )
-    return "<h1>Status das Antenas UniFi</h1>" + "".join(sections)
+    return """
+<style>
+    .unifi-checklist .unifi-site-heading {
+        cursor:pointer; margin:0 0 10px; padding:10px 12px; border-radius:8px;
+        background:linear-gradient(135deg,#012E40,#0A4A63,#0F6C8C); color:#fff;
+        font-size:18px; font-weight:400;
+    }
+    .unifi-checklist table { width:100%; margin:0; border-collapse:collapse; }
+    .unifi-checklist th, .unifi-checklist td { padding:8px; border:1px solid #ccc; text-align:left; }
+    .unifi-checklist th { background:#e8f3f8; color:#012E40; }
+    .unifi-checklist .ap-online { color:green; font-weight:bold; }
+    .unifi-checklist .ap-offline { color:red; font-weight:bold; }
+</style>
+<div class="unifi-checklist"><h1>Status das Antenas UniFi</h1>""" + "".join(sections) + "</div>"
 
 
 def _extrair_bloco_marcado(texto, marcador_inicio, marcador_fim):
