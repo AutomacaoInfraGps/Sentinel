@@ -107,6 +107,7 @@ Na tela de switches, `Recarregar inventário do Zabbix` sincroniza hosts, IPs e
 host groups; `Verificar Todos` também consulta e atualiza os estados operacionais.
 Regionais com nomes parcialmente coincidentes permanecem separadas: por exemplo,
 `REG_MACAE` e `REG_GRSA_MACAE` são entidades distintas, embora ambas usem UF `RJ`.
+O código exato da regional prevalece sobre nomes e descrições compartilhados.
 O host group original também é preservado em `regional_zabbix`, permitindo que
 a aba de Infraestrutura refaça o agrupamento sem depender de snapshots anteriores.
 A listagem de Infraestrutura prioriza `output/switches_status_cache.json`,

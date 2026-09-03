@@ -30,6 +30,15 @@ class RegionalMatchingTests(unittest.TestCase):
         code = find_regional_code(self.regionals, normalize("REGIONAL GRSA MACAE"), normalize)
         self.assertEqual(code, "REG_GRSA_MACAE")
 
+    def test_codigo_prevalece_quando_descricoes_sao_iguais(self):
+        regionals = {
+            "REG_GRSA_MACAE": {"nome": "REG_GRSA_MACAE", "descricao": "Regional Macaé"},
+            "REG_MACAE": {"nome": "REG_MACAE", "descricao": "Regional Macaé"},
+        }
+
+        code = find_regional_code(regionals, normalize("REGIONAL MACAE"), normalize)
+        self.assertEqual(code, "REG_MACAE")
+
 
 if __name__ == "__main__":
     unittest.main()
