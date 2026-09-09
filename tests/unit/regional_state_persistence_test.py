@@ -32,3 +32,20 @@ class RegionalStatePersistenceTests(unittest.TestCase):
 
         self.assertEqual(reloaded["estado"], "RJ")
         self.assertEqual(reloaded["uf"], "RJ")
+
+    def test_remover_servidor_recarrega_e_persiste_a_estrutura(self):
+        self.manager.adicionar_regional("REG_TESTE", "Regional Teste", estado="SP")
+        self.manager.adicionar_servidor("REG_TESTE", {
+            "id": 123,
+            "nome": "Servidor Teste",
+            "tipo": "vm",
+            "ip": "10.0.0.10",
+            "usuario": "usuario",
+            "senha": "senha",
+        })
+
+        ok, _ = self.manager.remover_servidor("REG_TESTE", "123")
+        reloaded = GerenciadorRegionais(str(self.path)).obter_regional("REG_TESTE")
+
+        self.assertTrue(ok)
+        self.assertEqual(reloaded["servidores"], [])

@@ -223,6 +223,8 @@ class GerenciadorRegionais:
     def remover_servidor(self, codigo_regional: str, id_servidor: str):
         """Remove um servidor de uma regional"""
         codigo_regional = codigo_regional.upper()
+        id_servidor = str(id_servidor)
+        self.recarregar_regionais()
 
         regional = self.regionais.get("regionais", {}).get(codigo_regional)
         if not regional:
@@ -232,7 +234,7 @@ class GerenciadorRegionais:
 
         servidor_encontrado = None
         for s in servidores:
-            if s.get("id") == id_servidor:
+            if str(s.get("id")) == id_servidor:
                 servidor_encontrado = s
                 break
 
