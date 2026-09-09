@@ -2092,6 +2092,32 @@ def _list_fortimanager_devices(adom: str):
         return []
 
 
+def _list_cached_fortimanager_devices() -> list:
+    """Recupera somente a identidade dos devices do ultimo cache de firewalls."""
+    cache_path = PROJECT_ROOT / "output" / "dashboard_firewalls_cache.json"
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+
+    devices_by_name = {}
+    for firewalls in (payload.get("firewalls_por_regional") or {}).values():
+        for firewall in firewalls or []:
+            if not isinstance(firewall, dict):
+                continue
+            name = str(firewall.get("nome") or firewall.get("name") or "").strip()
+            if not name:
+                continue
+            devices_by_name[name.upper()] = {
+                "name": name,
+                "hostname": str(firewall.get("hostname") or "").strip(),
+                "ip": str(firewall.get("ip") or "").strip(),
+                "status": firewall.get("status"),
+                "inventory_source": "firewall_cache",
+            }
+    return list(devices_by_name.values())
+
+
 def _match_fortimanager_device(codigo_regional: str, regional_info: dict, devices: list) -> dict:
     if not devices:
         return {}
@@ -2170,7 +2196,11 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
 
     adom = adom or _get_fortimanager_adom()
     devices = fortimanager_devices if fortimanager_devices is not None else _list_fortimanager_devices(adom)
-    inventory_available = devices is not None
+    inventory_available = bool(devices)
+    inventory_source = "fortimanager"
+    if not devices:
+        devices = _list_cached_fortimanager_devices()
+        inventory_source = "firewall_cache" if devices else "unavailable"
     devices = devices or []
     candidate_devices = _rank_fortimanager_devices(codigo_regional, regional_info or {}, devices)
     device_match = {}
@@ -2198,6 +2228,7 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
             "device": None,
             "adom": adom,
             "fortimanager_inventory_available": inventory_available,
+            "inventory_source": inventory_source,
             "fortimanager_devices": devices,
             "candidate_devices": candidate_devices
         }
@@ -2221,6 +2252,7 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
         "device": device_info,
         "adom": adom,
         "fortimanager_inventory_available": inventory_available,
+        "inventory_source": inventory_source,
         "fortimanager_devices": devices,
         "candidate_devices": candidate_devices
     }
