@@ -96,6 +96,8 @@ Monitora disponibilidade, servicos, seguranca e dados de VMs. Servidores em
 manutencao no Zabbix nao devem ser tratados como offline.
 O cadastro regional permite editar e excluir servidores diretamente no JSON;
 a exclusao recarrega a estrutura antes de persistir para evitar dados defasados.
+Na tela de detalhes, o JSON define o inventario de servidores e o cache fornece
+somente status e horarios, sem recriar cards de servidores ja excluidos.
 Timeouts da coleta WMI sao identificados como consulta indisponivel, sem serem
 confundidos automaticamente com indisponibilidade do servidor.
 

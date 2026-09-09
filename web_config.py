@@ -3918,9 +3918,34 @@ def detalhar_regional(codigo_regional):
         servidores_completos = []
 
         servidores_operacionais = records_for("servidores", codigo_regional)
-        servidores_fonte = servidores_operacionais or regional_info.get('servidores', [])
-        for servidor in servidores_fonte:
+        operacionais_por_id = {
+            str(servidor.get("id")): servidor
+            for servidor in servidores_operacionais
+            if servidor.get("id") not in (None, "")
+        }
+        operacionais_por_ip = {
+            str(servidor.get("ip") or "").strip(): servidor
+            for servidor in servidores_operacionais
+            if str(servidor.get("ip") or "").strip()
+        }
+        campos_operacionais = {
+            "status", "tempo_resposta", "erro", "ultima_verificacao",
+            "em_manutencao", "maintenance_status", "maintenanceid",
+            "status_reason", "status_details",
+        }
+
+        # O JSON define quais servidores existem. O cache apenas atualiza o
+        # estado dos servidores cadastrados, sem recriar itens ja excluidos.
+        for servidor in regional_info.get('servidores', []):
             servidor_completo = servidor.copy()
+            operacional = (
+                operacionais_por_id.get(str(servidor.get("id")))
+                or operacionais_por_ip.get(str(servidor.get("ip") or "").strip())
+            )
+            if operacional:
+                for campo in campos_operacionais:
+                    if campo in operacional:
+                        servidor_completo[campo] = operacional[campo]
 
             # garante campos pra não quebrar o template
             servidor_completo.setdefault("status", "unknown")
