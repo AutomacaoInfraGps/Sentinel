@@ -11,6 +11,8 @@ from ldap3.core.exceptions import LDAPException
 from typing import Optional, Dict, Tuple
 import logging
 
+from user_model import User, get_user, remove_user, save_user
+
 # Configuração de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -312,49 +314,6 @@ def testar_conexao_ad() -> Tuple[bool, str]:
     """Função helper para testar conexão"""
     return auth_ad.testar_conexao()
 
-# === INTEGRAÇÃO COM FLASK ===
-
-from flask_login import UserMixin
-
-class User(UserMixin):
-    """Classe de usuário para Flask-Login"""
-    
-    def __init__(self, user_id, display_name=None, email=None):
-        self.id = user_id
-        self.display_name = display_name or user_id
-        self.email = email
-    
-    def get_id(self):
-        return self.id
-    
-    @property
-    def is_authenticated(self):
-        return True
-    
-    @property
-    def is_active(self):
-        return True
-    
-    @property
-    def is_anonymous(self):
-        return False
-    
-    def __repr__(self):
-        return f'<User {self.id}>'
-
-# Cache de usuários para evitar múltiplas consultas AD
-_user_cache = {}
-
-def get_user(user_id):
-    """Obtém usuário do cache ou cria novo"""
-    if user_id in _user_cache:
-        return _user_cache[user_id]
-    
-    # Cria usuário básico se não estiver no cache
-    user = User(user_id)
-    _user_cache[user_id] = user
-    return user
-
 def init_auth(app):
     """Inicializa autenticação no Flask app"""
     
@@ -381,12 +340,8 @@ def init_auth(app):
             
             if sucesso:
                 # Cria usuário e faz login
-                user = User(
-                    user_id=username,
-                    display_name=user_info.get('display_name'),
-                    email=user_info.get('email')
-                )
-                _user_cache[username] = user
+                user = User(user_info)
+                save_user(user)
                 login_user(user)
                 
                 flash(f'Bem-vindo, {user.display_name}!', 'success')
@@ -408,9 +363,7 @@ def init_auth(app):
         if current_user.is_authenticated:
             username = current_user.id
             logout_user()
-            # Remove do cache
-            if username in _user_cache:
-                del _user_cache[username]
+            remove_user(username)
             flash('Logout realizado com sucesso', 'info')
         
         return redirect(url_for('login'))

@@ -4773,7 +4773,11 @@ def _coletar_hardware_preventiva_servidor(servidor):
         hardware = {"success": False, "message": str(exc)}
 
     message = str(hardware.get("message") or "")
-    if hardware.get("success") or "timed out" not in message.lower():
+    if (
+        hardware.get("success")
+        or not hardware.get("timed_out")
+        and "timed out" not in message.lower()
+    ):
         return hardware
 
     ip = (servidor.get("ip") or "").strip()
@@ -9773,12 +9777,20 @@ def _obter_detalhes_vm_wmi(ip, username, password):
         ps_path = ps_file.name
 
     try:
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_path],
-            capture_output=True,
-            text=True,
-            timeout=45
-        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_path],
+                capture_output=True,
+                text=True,
+                timeout=45
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "message": "Consulta WMI indisponível: o servidor não respondeu dentro de 45 segundos.",
+                "error_code": "wmi_timeout",
+                "timed_out": True,
+            }
     finally:
         try:
             os.unlink(ps_path)
@@ -9855,7 +9867,9 @@ def coletar_hardware_vm(servidor):
             )
         return {
             "success": False,
-            "message": message
+            "message": message,
+            "error_code": detalhes.get("error_code"),
+            "timed_out": bool(detalhes.get("timed_out")),
         }
 
     info = detalhes.get("details", {})

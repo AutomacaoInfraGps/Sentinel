@@ -94,6 +94,8 @@ usam `...` quando existem alertas adicionais.
 
 Monitora disponibilidade, servicos, seguranca e dados de VMs. Servidores em
 manutencao no Zabbix nao devem ser tratados como offline.
+Timeouts da coleta WMI sao identificados como consulta indisponivel, sem serem
+confundidos automaticamente com indisponibilidade do servidor.
 
 ### Switches
 
