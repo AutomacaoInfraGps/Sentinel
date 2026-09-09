@@ -2,35 +2,43 @@
 Modelo de usuário para Flask-Login
 """
 
-from flask_login import UserMixin
-from typing import Dict, Optional
-import json
 from datetime import datetime
+from threading import RLock
+from typing import Dict, Optional
+
+from flask_login import UserMixin
 
 class User(UserMixin):
     """Classe de usuário para Flask-Login"""
     
     def __init__(self, user_data: Dict):
-        self.id = user_data['username']
-        self.username = user_data['username']
+        self.username = str(user_data['username']).strip()
+        self.id = self.username
         self.display_name = user_data.get('display_name', self.username)
         self.email = user_data.get('email', '')
-        self.dn = user_data.get('dn', '')
-        self.groups = user_data.get('groups', [])
+        self.dn = str(user_data.get('dn') or '').strip()
+        self.groups = tuple(
+            str(group).strip()
+            for group in (user_data.get('groups') or [])
+            if str(group).strip()
+        )
         self.login_time = datetime.now()
     
     def get_id(self):
         """Retorna o ID único do usuário"""
         return self.username
     
+    @property
     def is_authenticated(self):
         """Retorna True se o usuário está autenticado"""
         return True
     
+    @property
     def is_active(self):
         """Retorna True se o usuário está ativo"""
         return True
     
+    @property
     def is_anonymous(self):
         """Retorna True se o usuário é anônimo"""
         return False
@@ -42,7 +50,7 @@ class User(UserMixin):
             'display_name': self.display_name,
             'email': self.email,
             'dn': self.dn,
-            'groups': self.groups,
+            'groups': list(self.groups),
             'login_time': self.login_time.isoformat()
         }
     
@@ -59,20 +67,24 @@ class User(UserMixin):
 
 # Cache simples de usuários (em produção, usar Redis ou banco)
 _user_cache = {}
+_user_cache_lock = RLock()
 
 def get_user(user_id: str) -> Optional[User]:
     """Recupera usuário do cache"""
-    return _user_cache.get(user_id)
+    with _user_cache_lock:
+        return _user_cache.get(str(user_id))
 
 def save_user(user: User):
     """Salva usuário no cache"""
-    _user_cache[user.get_id()] = user
+    with _user_cache_lock:
+        _user_cache[user.get_id()] = user
 
 def remove_user(user_id: str):
     """Remove usuário do cache"""
-    if user_id in _user_cache:
-        del _user_cache[user_id]
+    with _user_cache_lock:
+        _user_cache.pop(str(user_id), None)
 
 def get_all_users() -> Dict[str, User]:
     """Retorna todos os usuários logados"""
-    return _user_cache.copy()
+    with _user_cache_lock:
+        return _user_cache.copy()

@@ -37,6 +37,7 @@ Ela ja possui:
 - Widget de chat no Sentinel.
 - Rota autenticada `POST /api/sofia/chat`.
 - Uso do usuario ja logado no Flask.
+- Identidade AD preservada no modelo de usuario (`dn` e `groups`).
 - Validacao basica de permissao.
 - Rate limit por usuario.
 - Validacao de origem da requisicao.
@@ -119,6 +120,11 @@ sofia/permissions_matrix.json
 ```
 
 Atualmente apenas acoes de baixo risco estao habilitadas. Acoes de AD, execucao e alteracao permanecem desabilitadas.
+
+O modelo autenticado preserva a OU no `dn` e os grupos retornados pelo AD. Esses
+campos formam a identidade usada pela futura autorizacao por escopo, mas ainda
+nao concedem capacidades enquanto as regras correspondentes nao forem
+implementadas em `permissions.py`.
 
 ## Capacidades Atuais
 
