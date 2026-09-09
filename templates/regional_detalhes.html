@@ -444,8 +444,8 @@
                                         Editar
                                     </button>
 
-                                    <button class="btn btn-outline-danger btn-sm flex-fill"
-                                            onclick="excluirServidor('{{ regional.codigo }}', '{{ servidor.id }}', '{{ servidor.nome }}')">
+                                    <button type="button" class="btn btn-outline-danger btn-sm flex-fill"
+                                            onclick='excluirServidor({{ regional.codigo|tojson }}, {{ servidor.id|string|tojson }}, {{ servidor.nome|tojson }})'>
                                         <i class="bi bi-trash me-1"></i>
                                         Excluir
                                     </button>
@@ -1085,26 +1085,37 @@ function editarServidor(codigoRegional, servidorId) {
     window.location.href = `/regional/${codigoRegional}/servidor/${servidorId}/editar`;
 }
 
-function excluirServidor(codigoRegional, servidorId, nomeServidor) {
+async function excluirServidor(codigoRegional, servidorId, nomeServidor) {
     if (!confirm(`Deseja realmente excluir o servidor "${nomeServidor}"?`)) {
         return;
     }
 
-    fetch(`/api/regional/${codigoRegional}/servidor/${servidorId}`, {
-        method: "DELETE"
-    })
-    .then(res => res.json())
-    .then(data => {
+    try {
+        const response = await fetch(
+            `/api/regional/${encodeURIComponent(codigoRegional)}/servidor/${encodeURIComponent(servidorId)}`,
+            {
+                method: "DELETE",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" }
+            }
+        );
+
+        const contentType = response.headers.get("content-type") || "";
+        if (response.redirected || !contentType.includes("application/json")) {
+            showToast("Sua sessão expirou. Entre novamente no Sentinel.", "danger");
+            return;
+        }
+
+        const data = await response.json();
         if (data.success) {
             showToast(data.message, "success");
             setTimeout(() => location.reload(), 800);
         } else {
-            showToast(data.message, "danger");
+            showToast(data.message || "Não foi possível excluir o servidor.", "danger");
         }
-    })
-    .catch(() => {
+    } catch (error) {
         showToast("Erro ao excluir servidor", "danger");
-    });
+    }
 }
 
 function testarServidor(codigoRegional, idServidor, nomeServidor) {
