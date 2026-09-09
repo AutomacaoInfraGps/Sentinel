@@ -132,6 +132,9 @@ preservada sem transformar o equipamento automaticamente em offline.
 
 Consulta FortiManager/FortiGate, interfaces WAN e tuneis IPsec. Os dados sao
 associados e persistidos na regional correspondente.
+Se a listagem de devices do FortiManager ficar temporariamente indisponivel, o
+ultimo cache de firewalls e usado somente para resolver nome e IP do FortiGate;
+a situacao atual das interfaces continua sendo consultada no FortiManager.
 O campo `estado`/`uf` das regionais e salvo em `estrutura_regionais.json` e tem
 prioridade sobre o mapeamento legado de estados ao posicionar a regional no mapa.
 Quando ainda não existe UF salva, a tela de edição sugere automaticamente o
