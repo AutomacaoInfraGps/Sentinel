@@ -1,40 +1,260 @@
 {% extends "base.html" %}
 
-{% block title %}Validade de Certificados - Sistema de Automação{% endblock %}
+{% block title %}Validade de Certificados - Sentinel{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <h1 class="display-5 mb-4">
-            <i class="bi bi-shield-check me-3"></i>
-            Validade de Certificados
-        </h1>
-        <p class="lead text-muted">
-            Boas-vindas! Esta é a página de validade de certificados.
-        </p>
+{% set total = certificates|length %}
+{% set expirados = certificates|selectattr('status_text', 'equalto', 'Expirado')|list|length %}
+{% set alertas = certificates|selectattr('status_class', 'equalto', 'table-warning')|list|length %}
+{% set validos = certificates|selectattr('status_class', 'equalto', 'table-success')|list|length %}
+
+<style>
+    .cert-page {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .cert-hero {
+        background: linear-gradient(135deg, #012e40, #0f6c8c);
+        color: #fff;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .cert-hero h1 {
+        margin: 0;
+        font-size: 30px;
+        font-weight: 700;
+    }
+
+    .cert-hero p {
+        margin: 6px 0 0;
+        opacity: .88;
+    }
+
+    .cert-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .cert-stat {
+        background: #f8fafc;
+        border: 1px solid #d7e1ec;
+        border-radius: 8px;
+        padding: 18px;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, .08);
+    }
+
+    .cert-stat strong {
+        display: block;
+        font-size: 30px;
+        line-height: 1;
+        color: #182235;
+    }
+
+    .cert-stat span {
+        display: block;
+        margin-top: 8px;
+        color: #4a5a70;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: .04em;
+    }
+
+    .cert-stat.ok { border-left: 5px solid #2fac66; }
+    .cert-stat.warn { border-left: 5px solid #f5b21b; }
+    .cert-stat.bad { border-left: 5px solid #e33b4f; }
+
+    .cert-table-wrap {
+        background: #fff;
+        border: 1px solid #d7e1ec;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, .08);
+    }
+
+    .cert-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .cert-table th {
+        background: #edf4f8;
+        color: #344154;
+        font-size: 12px;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        text-align: left;
+        padding: 14px;
+        border-bottom: 1px solid #cbd6e2;
+    }
+
+    .cert-table td {
+        padding: 14px;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: top;
+        color: #243044;
+    }
+
+    .cert-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .cert-subject {
+        font-weight: 700;
+    }
+
+    .cert-small {
+        color: #617089;
+        font-size: 12px;
+        word-break: break-all;
+    }
+
+    .cert-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .cert-badge.table-success {
+        color: #137042;
+        background: #e7f8ee;
+        border: 1px solid #7adea3;
+    }
+
+    .cert-badge.table-warning {
+        color: #8a5d00;
+        background: #fff7df;
+        border: 1px solid #f5c45f;
+    }
+
+    .cert-badge.table-danger {
+        color: #a11224;
+        background: #fff0f2;
+        border: 1px solid #ff9aa8;
+    }
+
+    .cert-badge.table-secondary {
+        color: #4b5563;
+        background: #eef2f6;
+        border: 1px solid #cbd5e1;
+    }
+
+    .cert-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 16px;
+    }
+
+    @media (max-width: 900px) {
+        .cert-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .cert-hero {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="cert-page">
+    <div class="cert-hero">
+        <div>
+            <h1><i class="bi bi-shield-check me-2"></i>Validade de Certificados</h1>
+            <p>Consulta dos certificados coletados no servidor e alerta de vencimento.</p>
+        </div>
+        <button class="btn btn-light" id="refreshCertificatesBtn">
+            <i class="bi bi-arrow-clockwise me-1"></i> Atualizar
+        </button>
+    </div>
+
+    <div class="cert-stats">
+        <div class="cert-stat">
+            <strong>{{ total }}</strong>
+            <span>Total</span>
+        </div>
+        <div class="cert-stat ok">
+            <strong>{{ validos }}</strong>
+            <span>Validos</span>
+        </div>
+        <div class="cert-stat warn">
+            <strong>{{ alertas }}</strong>
+            <span>A vencer</span>
+        </div>
+        <div class="cert-stat bad">
+            <strong>{{ expirados }}</strong>
+            <span>Expirados</span>
+        </div>
+    </div>
+
+    {% if no_data_message %}
+        <div class="alert alert-warning">{{ no_data_message }}</div>
+    {% endif %}
+
+    <div class="cert-table-wrap">
+        <table class="cert-table">
+            <thead>
+                <tr>
+                    <th>Certificado</th>
+                    <th>Emissor</th>
+                    <th>Validade</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cert in certificates %}
+                <tr>
+                    <td>
+                        <div class="cert-subject">{{ cert.subject or 'Sem subject' }}</div>
+                        <div class="cert-small">{{ cert.thumbprint or 'Sem thumbprint' }}</div>
+                    </td>
+                    <td>{{ cert.issuer or 'Nao informado' }}</td>
+                    <td>{{ cert.notAfter or 'Nao informado' }}</td>
+                    <td><span class="cert-badge {{ cert.status_class }}">{{ cert.status_text }}</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4">Nenhum certificado encontrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="alert alert-success" role="alert">
-            <strong>Sucesso!</strong> A rota foi carregada e o template está sendo renderizado corretamente.
-        </div>
-    </div>
-</div>
+<script>
+document.getElementById('refreshCertificatesBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('refreshCertificatesBtn');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Atualizando';
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <p class="mb-0">
-                    Se você está vendo esta página, a rota <code>/validade_certificados</code> está funcionando.
-                </p>
-                <p class="mb-0">
-                    Para validação pública direta sem login, use <code>/validade_certificados/ok</code>.
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
+    try {
+        const response = await fetch('/api/certificados/refresh');
+        const payload = await response.json();
+        if (!response.ok || payload.status !== 'success') {
+            throw new Error(payload.message || 'Falha ao atualizar certificados');
+        }
+        window.location.reload();
+    } catch (error) {
+        alert(error.message || 'Falha ao atualizar certificados');
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+});
+</script>
 {% endblock %}

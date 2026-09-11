@@ -1629,6 +1629,7 @@ def _normalize_synced_link(interface: dict, fortigate_host=None, fortigate_porta
     addressing_mode = _extract_interface_addressing_mode(interface)
     interface_ip = _extract_interface_ip(interface.get("ip")) or ""
     status = "online" if _interface_esta_online(interface) else "offline"
+    link_mode_status = str(interface.get("_link_mode_status") or "").strip().lower()
 
     return {
         "nome": interface_name.upper() if interface_name.lower().startswith("wan") else interface_name,
@@ -1642,6 +1643,7 @@ def _normalize_synced_link(interface: dict, fortigate_host=None, fortigate_porta
         "addressing_mode": addressing_mode,
         "ip_publico_status": "pppoe" if not interface_ip and addressing_mode == "pppoe" else ("sem_ip_publico" if not interface_ip else ""),
         "status": status,
+        "link_mode_status": link_mode_status,
         "ativo": True,
         "interface_monitorada": interface_name or None,
         "fortigate_host": fortigate_host,
@@ -1824,6 +1826,68 @@ def _persistir_links_internet_exibicao_lote(links_por_regional: dict):
         "changed_at",
     }
 
+
+def _extract_monitor_zabbix_packet_loss(sla_data):
+    monitor_fields = {"name", "sla", "healthcheck", "healthcheckname", "monitor"}
+    loss_fields = {"packetloss", "packetlosspercent", "packetlosspercentage", "loss"}
+
+    def _key(value):
+        return re.sub(r"[^a-z0-9]", "", str(value or "").strip().lower())
+
+    def _loss(value):
+        if not isinstance(value, dict):
+            return None
+        for field, raw in value.items():
+            if _key(field) not in loss_fields:
+                continue
+            try:
+                return float(str(raw).strip().replace("%", "").replace(",", "."))
+            except (TypeError, ValueError):
+                continue
+        for child in value.values():
+            if isinstance(child, dict):
+                found = _loss(child)
+                if found is not None:
+                    return found
+        return None
+
+    if not isinstance(sla_data, dict):
+        return None
+
+    for field, value in sla_data.items():
+        if _key(field) == "monitorzabbix":
+            found = _loss(value)
+            if found is not None:
+                return found
+
+    for item in FortiManagerClient._walk_dicts(sla_data):
+        identifies_monitor = any(
+            _key(field) in monitor_fields and _key(value) == "monitorzabbix"
+            for field, value in item.items()
+        )
+        if identifies_monitor:
+            found = _loss(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _resolve_link_operational_status(link_mode_status, sla_status, sla_data=None) -> tuple:
+    """Usa o packet loss do MONITOR_ZABBIX e mantem fallbacks operacionais."""
+    packet_loss = _extract_monitor_zabbix_packet_loss(sla_data)
+    if packet_loss is not None:
+        return ("online" if packet_loss <= 10 else "offline"), "monitor_zabbix_packet_loss"
+
+    link_mode = str(link_mode_status or "").strip().lower()
+    sla = str(sla_status or "").strip().lower()
+    if link_mode in {"online", "offline"}:
+        return link_mode, "link_mode"
+    if sla == "active":
+        return "online", "sla"
+    if sla == "inactive":
+        return "offline", "sla"
+    return None, None
+
     def assinatura(links):
         normalizados = [
             {
@@ -1968,25 +2032,34 @@ def _load_regional_interfaces(
                 exc,
             )
 
-        if not interfaces:
-            try:
-                with FortiManagerClient() as fm:
-                    monitor_interfaces = fm.proxy_monitor_interfaces(adom, device_info.get("name"))
-                if monitor_interfaces:
-                    interfaces = list(monitor_interfaces.values())
-                    source = "fortimanager_proxy_monitor"
-                    proxy_error = None
-                elif proxy_error:
-                    proxy_error = f"{proxy_error}; proxy monitor nao retornou interfaces"
+        try:
+            with FortiManagerClient() as fm:
+                monitor_interfaces = fm.proxy_monitor_interfaces(adom, device_info.get("name"))
+            if monitor_interfaces:
+                if interfaces:
+                    for interface in interfaces:
+                        interface_name = str(interface.get("name") or interface.get("interface") or "").strip().lower()
+                        runtime = monitor_interfaces.get(interface_name)
+                        if not runtime:
+                            continue
+                        interface.update(runtime)
+                        interface["_link_mode_status"] = "online" if _interface_esta_online(runtime) else "offline"
+                    source = "fortimanager_config+proxy_monitor"
                 else:
-                    proxy_error = "proxy monitor nao retornou interfaces"
-            except Exception as exc:
-                proxy_error = f"{proxy_error}; proxy monitor: {exc}" if proxy_error else f"proxy monitor: {exc}"
-                current_app.logger.warning(
-                    "Erro ao obter interfaces via proxy monitor FortiManager para %s: %s",
-                    codigo_regional,
-                    exc,
-                )
+                    interfaces = list(monitor_interfaces.values())
+                    for interface in interfaces:
+                        interface["_link_mode_status"] = "online" if _interface_esta_online(interface) else "offline"
+                    source = "fortimanager_proxy_monitor"
+                proxy_error = None
+            elif not interfaces:
+                proxy_error = f"{proxy_error}; proxy monitor nao retornou interfaces" if proxy_error else "proxy monitor nao retornou interfaces"
+        except Exception as exc:
+            proxy_error = f"{proxy_error}; proxy monitor: {exc}" if proxy_error else f"proxy monitor: {exc}"
+            current_app.logger.warning(
+                "Erro ao obter interfaces via proxy monitor FortiManager para %s: %s",
+                codigo_regional,
+                exc,
+            )
 
     if not interfaces:
         detalhe_proxy = f" Detalhe: {proxy_error}" if proxy_error else ""
@@ -2118,6 +2191,34 @@ def _list_cached_fortimanager_devices() -> list:
     return list(devices_by_name.values())
 
 
+def _get_cached_fortimanager_device(codigo_regional: str) -> dict:
+    """Retorna o firewall associado diretamente a uma regional no ultimo cache."""
+    cache_path = PROJECT_ROOT / "output" / "dashboard_firewalls_cache.json"
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {}
+
+    regionais = payload.get("firewalls_por_regional") or {}
+    codigo_normalizado = str(codigo_regional or "").strip().upper()
+    for codigo_cache, firewalls in regionais.items():
+        if str(codigo_cache or "").strip().upper() != codigo_normalizado:
+            continue
+        for firewall in firewalls or []:
+            if not isinstance(firewall, dict):
+                continue
+            name = str(firewall.get("nome") or firewall.get("name") or "").strip()
+            if name:
+                return {
+                    "name": name,
+                    "hostname": str(firewall.get("hostname") or "").strip(),
+                    "ip": str(firewall.get("ip") or "").strip(),
+                    "status": firewall.get("status_disponibilidade") or firewall.get("status"),
+                    "inventory_source": "firewall_cache_regional",
+                }
+    return {}
+
+
 def _match_fortimanager_device(codigo_regional: str, regional_info: dict, devices: list) -> dict:
     if not devices:
         return {}
@@ -2202,6 +2303,12 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
         devices = _list_cached_fortimanager_devices()
         inventory_source = "firewall_cache" if devices else "unavailable"
     devices = devices or []
+    cached_regional_device = _get_cached_fortimanager_device(codigo_regional)
+    if cached_regional_device:
+        cached_ip = str(cached_regional_device.get("ip") or "").strip()
+        if not target_name and (not target_ip or not cached_ip or str(target_ip).strip() == cached_ip):
+            target_name = cached_regional_device.get("name")
+            target_ip = cached_ip or target_ip
     candidate_devices = _rank_fortimanager_devices(codigo_regional, regional_info or {}, devices)
     device_match = {}
 
@@ -2269,6 +2376,8 @@ def _preparar_link_para_template(link: dict) -> dict:
     link_completo.setdefault("fortigate_porta", None)
     link_completo.setdefault("modo_verificacao", None)
     link_completo.setdefault("sla_status", None)
+    link_completo.setdefault("link_mode_status", None)
+    link_completo.setdefault("sla_data", {})
     link_completo.setdefault("sdwan_member_id", None)
     link_completo.setdefault("velocidade", "N/A")
     link_completo.setdefault("mascara", "")
@@ -2468,12 +2577,18 @@ def _coletar_links_regional(
             link_final["modo_verificacao"] = "sla"
             sla_status = str(sdwan_member.get("sla_status") or sdwan_member.get("status") or "").strip().lower()
             link_final["sla_status"] = sla_status
+            link_final["sla_data"] = sdwan_member.get("sla_data") or {}
+            link_final["packet_loss_percent"] = _extract_monitor_zabbix_packet_loss(link_final["sla_data"])
             link_final["sdwan_member_id"] = sdwan_member.get("member_id")
             link_final["priority"] = sdwan_member.get("priority")
-            if sla_status == "active":
-                link_final["status"] = "online"
-            elif sla_status == "inactive":
-                link_final["status"] = "offline"
+            status_resolvido, modo_resolvido = _resolve_link_operational_status(
+                link_final.get("link_mode_status"),
+                sla_status,
+                link_final.get("sla_data"),
+            )
+            if status_resolvido:
+                link_final["status"] = status_resolvido
+                link_final["modo_verificacao"] = modo_resolvido
         elif device_desconectado:
             link_final["modo_verificacao"] = "fortimanager_device_offline"
             link_final["sla_status"] = "inactive"
@@ -3661,7 +3776,7 @@ def validade_certificados():
         no_data_message = 'Nenhum dado disponível'
  
     _log_certificados('Página de validade de certificados acessada')
-    return render_template('validade_certificados_servidores.html', certificates=certificates, no_data_message=no_data_message)
+    return render_template('validade_certificados.html', certificates=certificates, no_data_message=no_data_message)
  
  
 @app.route('/api/certificados/refresh')
@@ -10071,6 +10186,8 @@ def api_testar_link_regional(codigo_regional, id_link):
                 "interface_monitorada": interface_monitorada,
                 "modo_verificacao": link_preparado.get("modo_verificacao") or "fortimanager",
                 "sla_status": link_preparado.get("sla_status") or "",
+                "link_mode_status": link_preparado.get("link_mode_status") or "",
+                "packet_loss_percent": link_preparado.get("packet_loss_percent"),
                 "sdwan_member_id": link_preparado.get("sdwan_member_id"),
             })
             _atualizar_link_internet_exibicao(codigo_regional, id_link, link_atualizado)
@@ -10124,18 +10241,19 @@ def api_testar_link_regional(codigo_regional, id_link):
                 mensagem="FortiManager nao retornou a interface do link; link marcado como offline",
             )
 
-        link_offline = dict(link_oficial or link)
-        link_offline.update({
-            "status": "offline",
+        link_indisponivel = dict(link_oficial or link)
+        status_anterior = str(link_indisponivel.get("status") or "unknown").strip().lower()
+        link_indisponivel.update({
+            "status": status_anterior,
             "sla_status": "",
             "ultima_verificacao": datetime.now().isoformat(),
             "modo_verificacao": "fortimanager_indisponivel",
-            "message": resultado_coleta.get("message") or "FortiManager nao retornou dados para validar o link; link marcado como offline",
+            "message": resultado_coleta.get("message") or "FortiManager nao retornou dados para validar o link; ultimo estado preservado",
         })
         return _responder_link_fortimanager(
-            link_offline,
+            link_indisponivel,
             warning=True,
-            mensagem=link_offline["message"],
+            mensagem=link_indisponivel["message"],
         )
 
         interfaces_result = _load_regional_interfaces(codigo_regional, regional_info, auth_timeout=12)

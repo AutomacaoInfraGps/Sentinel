@@ -247,6 +247,14 @@ git status
 O Waitress nao possui auto-reload. Reinicie o servico depois de alteracoes no
 backend.
 
+Na atualizacao dos links, o Sentinel resolve o firewall pelo cadastro/cache da
+regional e consulta o monitor de interfaces do FortiManager. Para cada link, o
+status usa o `packet loss` do SLA `MONITOR_ZABBIX`: ate 10% e online e acima de
+10% e offline. Sem esse dado, `Link Mode` e o SLA agregado sao usados como
+contingencia. Os valores permanecem armazenados separadamente para diagnostico.
+Se a credencial da API nao tiver permissao para consultar esses endpoints, a
+atualizacao preserva o ultimo estado valido em vez de registrar uma queda falsa.
+
 O mapa do checklist reutiliza a criticidade do mapa principal nas cores e no
 posicionamento dos tooltips. Seus filtros e contadores continuam independentes.
 Ao abrir uma regional, os equipamentos permanecem separados em cards
