@@ -1576,14 +1576,20 @@ def _mesclar_links_fortigate_com_cadastro(regiao, links_fortigate):
         link_mesclado["nome"] = (link_cadastrado.get("nome") or link_fortigate.get("nome") or "N/A").strip()
         link_mesclado["alias"] = (link_cadastrado.get("provedor") or link_fortigate.get("alias") or "").strip()
         link_mesclado["ip"] = ip_cadastrado or link_fortigate.get("ip", "N/A")
-        link_mesclado["status"] = link_fortigate.get("status", link_cadastrado.get("status", "offline"))
+        status_canonico = str(link_cadastrado.get("status") or "").strip().lower()
+        modo_canonico = str(link_cadastrado.get("modo_verificacao") or "").strip().lower()
+        if modo_canonico == "monitor_zabbix_packet_loss" and status_canonico in {"online", "offline"}:
+            link_mesclado["status"] = status_canonico
+        else:
+            link_mesclado["status"] = link_fortigate.get("status", link_cadastrado.get("status", "offline"))
         link_mesclado["velocidade"] = link_fortigate.get("velocidade", "N/A")
         link_mesclado["tipo"] = link_fortigate.get("tipo", "N/A")
         link_mesclado["estatisticas"] = link_fortigate.get("estatisticas") or {}
         link_mesclado["ultima_verificacao"] = link_fortigate.get("ultima_verificacao") or link_cadastrado.get("ultima_verificacao")
         # Cadastro que o live FortiGate pode não ter, mas é importante para o dashboard e não deve ser sobrescrito por dados do FortiGate que podem estar incompletos ou desatualizados.
         for _campo in ("mascara", "mascara_completa", "ip_local", "mascara_local",
-                       "interface_local", "sla_status", "modo_verificacao", "addressing_mode"):
+                       "interface_local", "sla_status", "sla_data", "link_mode_status",
+                       "packet_loss_percent", "modo_verificacao", "addressing_mode"):
             if not link_mesclado.get(_campo):
                 val = link_cadastrado.get(_campo)
                 if val:
@@ -3019,9 +3025,8 @@ try:
         links_processados = _mesclar_links_fortigate_com_cadastro(regiao, links_info.get("links", []))
 
         for link in links_processados:
-            sla_status = str(link.get("sla_status") or "").strip().lower()
             status = str(link.get("status") or "offline").strip().lower()
-            if sla_status == "inactive" or status in {"inactive", "inativo"}:
+            if status in {"inactive", "inativo"}:
                 status = "offline"
             if status == "online":
                 links_online += 1
@@ -3042,6 +3047,7 @@ try:
                 "provedor": str(link.get("alias") or link.get("provedor") or "").strip(),
                 "velocidade": link.get("velocidade", "N/A"),
                 "sla_status": str(link.get("sla_status") or "").strip(),
+                "packet_loss_percent": link.get("packet_loss_percent"),
                 "modo_verificacao": str(link.get("modo_verificacao") or "").strip().upper(),
                 "ip_local": str(link.get("ip_local") or "").strip(),
                 "mascara_local": str(link.get("mascara_local") or "").strip(),
@@ -3089,8 +3095,7 @@ try:
                     nome_link = str(link.get("nome") or link.get("provedor") or "N/A").strip()
                     provedor_link = str(link.get("provedor") or "").strip()
                     status_link = str(link.get("status") or "offline").strip().lower()
-                    sla_status_link = str(link.get("sla_status") or "").strip().lower()
-                    if sla_status_link == "inactive" or status_link in {"inactive", "inativo"}:
+                    if status_link in {"inactive", "inativo"}:
                         status_link = "offline"
                     elif status_link not in {"online", "offline"}:
                         status_link = "offline"
@@ -3113,6 +3118,7 @@ try:
                         "provedor": provedor_link,
                         "velocidade": link.get("velocidade") or "N/A",
                         "sla_status": str(link.get("sla_status") or "").strip(),
+                        "packet_loss_percent": link.get("packet_loss_percent"),
                         "modo_verificacao": str(link.get("modo_verificacao") or "").strip().upper(),
                         "ip_local": str(link.get("ip_local") or "").strip(),
                         "mascara_local": str(link.get("mascara_local") or "").strip(),
