@@ -2339,6 +2339,24 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
             target_name = device_match.get("name") or target_name
             target_ip = device_match.get("ip") or target_ip
 
+    if not target_name and target_ip:
+        for device in devices:
+            if str(device.get("ip", "")).strip() == str(target_ip).strip():
+                device_match = device
+                target_name = device.get("name") or device.get("hostname")
+                target_ip = device.get("ip") or target_ip
+                break
+
+    if not target_name:
+        device_match = device_match or _match_fortimanager_device(
+            codigo_regional,
+            regional_info or {},
+            devices,
+        )
+        if device_match:
+            target_name = device_match.get("name") or device_match.get("hostname")
+            target_ip = device_match.get("ip") or target_ip
+
     if not target_ip and target_name:
         for device in devices:
             if str(device.get("name", "")).strip().upper() == str(target_name).strip().upper():

@@ -312,6 +312,9 @@ da primeira sincronizacao. O snapshot operacional antigo nao pode restaurar um
 link que ja deixou de existir no FortiManager.
 Falhas de consulta ao FortiManager preservam o ultimo cache, mas sao exibidas
 com estado visual de erro (icone `X` vermelho), nunca como sucesso.
+O device da regional e resolvido pelo inventario atual do FortiManager mesmo
+quando os links ainda guardam um IP antigo, sem depender de um cache auxiliar
+ou de uma excecao por regional.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
