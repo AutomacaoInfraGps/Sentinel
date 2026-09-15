@@ -249,8 +249,8 @@ backend.
 
 Na atualizacao dos links, o Sentinel resolve o firewall pelo cadastro/cache da
 regional e consulta o monitor de interfaces do FortiManager. Para cada link, o
-status usa o `packet loss` do SLA `MONITOR_ZABBIX`: ate 10% e online e acima de
-10% e offline. Sem esse dado, `Link Mode` e o SLA agregado sao usados como
+status usa o `packet loss` do SLA `MONITOR_ZABBIX`: abaixo de 100% e online e
+100% de perda e offline. Sem esse dado, `Link Mode` e o SLA agregado sao usados como
 contingencia. Os valores permanecem armazenados separadamente para diagnostico.
 Se a credencial da API nao tiver permissao para consultar esses endpoints, a
 atualizacao preserva o ultimo estado valido em vez de registrar uma queda falsa.
@@ -298,8 +298,8 @@ pelo checklist. Links canonicos sem IP tambem permanecem na consolidacao.
 Os dois botoes globais de Atualizar Links (Regionais e Infraestrutura) consultam
 todas as regionais; o botao em Detalhes consulta apenas sua regional; e Testar
 consulta apenas o link selecionado. Todos convergem em `_coletar_links_regional`.
-O status prioriza o packet loss do SLA `MONITOR_ZABBIX`: ate 10% online e acima
-de 10% offline. Sem uma leitura valida, o ultimo estado e preservado em vez de
+O status prioriza o packet loss do SLA `MONITOR_ZABBIX`: abaixo de 100% online e
+100% de perda offline. Sem uma leitura valida, o ultimo estado e preservado em vez de
 transformar ausencia de resposta em queda.
 Quando o FortiGate omite o percentual porque o `MONITOR_ZABBIX` esta totalmente
 `down`, o Sentinel interpreta esse retorno como 100% de perda e mantem a mesma
@@ -320,6 +320,10 @@ interfaces compoem os links operacionais. Nomes legados como `dmz` e `ha1` sao
 aceitos quando possuem IP publico, papel WAN e provedor identificado.
 O teste de um unico link reutiliza esse mesmo coletor e preserva o ultimo estado
 quando a consulta nao fornece dados suficientes para uma validacao conclusiva.
+VPNs e firewalls usam a identidade cadastrada da regional. Os codigos de tunel
+distinguem Ceara (`T018`), Ceara 2 (`T024`) e Control Nanuque (`T062`), enquanto
+novas unidades no formato `REG_CONTROL_<UNIDADE>` sao associadas pelo sufixo
+completo. A tela de detalhes lista as VPNs do mesmo estado operacional do mapa.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
