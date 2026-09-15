@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock, Thread
 from uuid import uuid4
 from gerenciar_fortigate import GerenciadorFortigate
-from fortimanager_client import FortiManagerClient
+from fortimanager_client import FortiManagerClient, FortiManagerClientError
 from fortianalyzer_client import FortiAnalyzerClient
 from config import ENV_CONFIG
 from flask import Flask, render_template, jsonify, request, redirect, url_for, current_app, make_response, send_file, send_from_directory, session, flash, has_app_context, Response
@@ -537,6 +537,7 @@ def _run_links_sync_job(job_id):
             )
 
         resultado = _executar_sincronizacao_links_todas_regionais(progress_callback=progress)
+        resultado["dashboard"] = _coletar_links_multiregional()
         _complete_background_job(
             job_id,
             result=resultado,
@@ -1826,6 +1827,37 @@ def _persistir_links_internet_exibicao_lote(links_por_regional: dict):
         "changed_at",
     }
 
+    def assinatura(links):
+        normalizados = [
+            {
+                chave: valor
+                for chave, valor in dict(link).items()
+                if chave not in campos_temporais
+            }
+            for link in _filtrar_links_internet(links or [])
+        ]
+        return json.dumps(normalizados, ensure_ascii=False, sort_keys=True, default=str)
+
+    houve_verificacao = False
+    for codigo_regional, links in links_por_regional.items():
+        regional = regionais_config.get(codigo_regional)
+        if not regional:
+            continue
+
+        links_novos = _filtrar_links_internet(links or [])
+        if assinatura(regional.get("links_internet_auto") or []) != assinatura(links_novos):
+            alteradas.append(codigo_regional)
+
+        regional["links_internet_auto"] = [
+            {**dict(link), "ultima_verificacao": timestamp_sync}
+            for link in links_novos
+        ]
+        houve_verificacao = True
+
+    if houve_verificacao:
+        gerenciador_regionais.salvar_regionais()
+    return alteradas
+
 
 def _extract_monitor_zabbix_packet_loss(sla_data):
     monitor_fields = {"name", "sla", "healthcheck", "healthcheckname", "monitor"}
@@ -1851,6 +1883,17 @@ def _extract_monitor_zabbix_packet_loss(sla_data):
                     return found
         return None
 
+    def _is_down(value):
+        if not isinstance(value, dict):
+            return False
+        for field, raw in value.items():
+            if _key(field) in {"status", "state", "health", "slastatus"}:
+                if str(raw or "").strip().lower() in {
+                    "down", "dead", "inactive", "fail", "failed", "unreachable"
+                }:
+                    return True
+        return False
+
     if not isinstance(sla_data, dict):
         return None
 
@@ -1859,6 +1902,9 @@ def _extract_monitor_zabbix_packet_loss(sla_data):
             found = _loss(value)
             if found is not None:
                 return found
+            # O FortiGate omite packet_loss quando o health-check esta totalmente down.
+            if _is_down(value):
+                return 100.0
 
     for item in FortiManagerClient._walk_dicts(sla_data):
         identifies_monitor = any(
@@ -1869,6 +1915,8 @@ def _extract_monitor_zabbix_packet_loss(sla_data):
             found = _loss(item)
             if found is not None:
                 return found
+            if _is_down(item):
+                return 100.0
     return None
 
 
@@ -1887,34 +1935,6 @@ def _resolve_link_operational_status(link_mode_status, sla_status, sla_data=None
     if sla == "inactive":
         return "offline", "sla"
     return None, None
-
-    def assinatura(links):
-        normalizados = [
-            {
-                chave: valor
-                for chave, valor in dict(link).items()
-                if chave not in campos_temporais
-            }
-            for link in _filtrar_links_internet(links or [])
-        ]
-        return json.dumps(normalizados, ensure_ascii=False, sort_keys=True, default=str)
-
-    for codigo_regional, links in links_por_regional.items():
-        regional = regionais_config.get(codigo_regional)
-        if not regional:
-            continue
-        links_novos = _filtrar_links_internet(links or [])
-        if assinatura(regional.get("links_internet_auto") or []) == assinatura(links_novos):
-            continue
-        regional["links_internet_auto"] = [
-            {**dict(link), "ultima_verificacao": timestamp_sync}
-            for link in links_novos
-        ]
-        alteradas.append(codigo_regional)
-
-    if alteradas:
-        gerenciador_regionais.salvar_regionais()
-    return alteradas
 
 
 def _atualizar_link_internet_exibicao(codigo_regional: str, id_link: str, novos_dados: dict):
@@ -4032,6 +4052,15 @@ def _obter_switches_detalhe_regional(codigo_regional, regional_info):
     return regional_switch, switches
 
 
+def _obter_links_detalhe_regional(codigo_regional, regional_info):
+    links_canonicos = _obter_links_internet_exibicao(regional_info)
+    if isinstance((regional_info or {}).get("links_internet_auto"), list):
+        return links_canonicos
+
+    links_operacionais = records_for("links", codigo_regional)
+    return links_operacionais or links_canonicos
+
+
 @app.route('/regional/<codigo_regional>')
 @login_required
 def detalhar_regional(codigo_regional):
@@ -4106,8 +4135,7 @@ def detalhar_regional(codigo_regional):
             servidores_completos.append(servidor_completo)
 
         links_completos = []
-        links_operacionais = records_for("links", codigo_regional)
-        links_fonte = links_operacionais or _obter_links_internet_exibicao(regional_info)
+        links_fonte = _obter_links_detalhe_regional(codigo_regional, regional_info)
         for link in links_fonte:
             link_completo = _preparar_link_para_template(link)
             link_completo["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
@@ -6706,6 +6734,8 @@ def listar_admin_logins(return_data=False):
 
     adom = _get_fortimanager_adom()
     baseline = _load_admin_baseline()
+    cache_anterior = _carregar_cache_dashboard("admins") or {}
+    dispositivos_anteriores = cache_anterior.get("dispositivos") or {}
     force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
     if not force_refresh:
         cached = _carregar_cache_dashboard("admins", ttl_seconds=1800)
@@ -6720,6 +6750,7 @@ def listar_admin_logins(return_data=False):
                 total_alertas=cached.get("total_alertas", 0),
                 total_offline=cached.get("total_offline", 0),
                 total_sem_perm=cached.get("total_sem_perm", 0),
+                total_indisponivel=cached.get("total_indisponivel", 0),
                 total_ok=cached.get("total_ok", 0),
                 admin_eventos=[],
                 cache_atualizado_em=cached.get("atualizado_em"),
@@ -6772,23 +6803,54 @@ def listar_admin_logins(return_data=False):
         nomes_validos = [d.get("name", "") for d in (device_list or []) if isinstance(d, dict) and d.get("name")]
 
         def _consultar_fgt(dev_name):
+            anterior = dispositivos_anteriores.get(dev_name, {})
+            admins_anteriores = sorted(anterior.get("admins") or [])
+            base = set(baseline.get(dev_name, []))
             try:
                 admins = fmg.get_fortigate_admins(dev_name, adom)
-                offline = admins is None
-                admins  = admins or []
-                base    = set(baseline.get(dev_name, []))
+                if admins is None:
+                    raise FortiManagerClientError("dispositivo sem túnel ou sem resposta do FortiManager")
+
+                admins = sorted(admins)
+                ausentes = base - set(admins)
+                pendentes_anteriores = set(anterior.get("remocoes_pendentes") or [])
+                removidos_confirmados = ausentes & pendentes_anteriores
                 return dev_name, {
                     "nome":     dev_name,
                     "tipo":     "fortigate",
-                    "admins":   sorted(admins),
-                    "novos":    sorted(set(admins) - base) if not offline else [],
-                    "removidos": sorted(base - set(admins)) if not offline else [],
-                    "offline":  offline,
+                    "admins":   admins,
+                    "novos":    sorted(set(admins) - base),
+                    "removidos": sorted(removidos_confirmados),
+                    "remocoes_pendentes": sorted(ausentes),
+                    "offline":  False,
                     "sem_permissao": False,
                     "monitoramento_limitado": False,
+                    "consulta_indisponivel": False,
+                    "consulta_valida": True,
+                    "ultima_coleta_valida": datetime.now().isoformat(),
+                    "motivo": (
+                        "Ausência aguardando confirmação em nova coleta: "
+                        + ", ".join(sorted(ausentes - removidos_confirmados))
+                    ) if ausentes - removidos_confirmados else "",
                 }, None
             except Exception as exc:
-                return dev_name, None, str(exc)
+                return dev_name, {
+                    "nome": dev_name,
+                    "tipo": "fortigate",
+                    "admins": admins_anteriores,
+                    "novos": [],
+                    "removidos": [],
+                    # Uma falha quebra a sequência: remoção só é confirmada por
+                    # duas coletas válidas consecutivas.
+                    "remocoes_pendentes": [],
+                    "offline": False,
+                    "sem_permissao": False,
+                    "monitoramento_limitado": False,
+                    "consulta_indisponivel": True,
+                    "consulta_valida": False,
+                    "ultima_coleta_valida": anterior.get("ultima_coleta_valida") or cache_anterior.get("atualizado_em"),
+                    "motivo": str(exc),
+                }, str(exc)
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
         with ThreadPoolExecutor(max_workers=10) as pool:
@@ -6797,7 +6859,7 @@ def listar_admin_logins(return_data=False):
                 dev_name, resultado, erro = fut.result()
                 if erro:
                     erros.append(f"{dev_name}: {erro}")
-                elif resultado:
+                if resultado:
                     dispositivos[dev_name] = resultado
 
         fmg.logout()
@@ -6834,7 +6896,8 @@ def listar_admin_logins(return_data=False):
     total_alertas     = sum(1 for d in dispositivos.values() if d.get("novos") or d.get("removidos"))
     total_offline     = sum(1 for d in dispositivos.values() if d.get("offline"))
     total_sem_perm    = sum(1 for d in dispositivos.values() if d.get("sem_permissao"))
-    total_ok          = total_disp - total_alertas - total_offline - total_sem_perm
+    total_indisponivel = sum(1 for d in dispositivos.values() if d.get("consulta_indisponivel"))
+    total_ok          = total_disp - total_alertas - total_offline - total_sem_perm - total_indisponivel
 
     admin_snapshot = {
         "atualizado_em": datetime.now().isoformat(),
@@ -6843,6 +6906,7 @@ def listar_admin_logins(return_data=False):
         "total_alertas": total_alertas,
         "total_offline": total_offline,
         "total_sem_perm": total_sem_perm,
+        "total_indisponivel": total_indisponivel,
         "total_ok": total_ok,
     }
     _salvar_cache_dashboard("admins", admin_snapshot)
@@ -6869,6 +6933,7 @@ def listar_admin_logins(return_data=False):
         total_alertas=total_alertas,
         total_offline=total_offline,
         total_sem_perm=total_sem_perm,
+        total_indisponivel=total_indisponivel,
         total_ok=total_ok,
         admin_eventos=admin_eventos,
         cache_atualizado_em=admin_snapshot.get("atualizado_em"),
@@ -7866,9 +7931,24 @@ def api_remover_vm(vm_id):
 @login_required
 def api_verificar_links():
 
-    """API para verificar status dos links de internet"""
+    """Sincroniza os links e devolve a mesma base usada pela tela e checklist."""
     try:
+        if _background_async_requested():
+            job_id = _create_background_job(
+                'links-page',
+                total=len(gerenciador_regionais.listar_regionais()),
+                message='Preparando atualização dos links...',
+                detail='Criando job para consultar o FortiManager e todas as regionais.',
+            )
+            _start_background_job(
+                lambda: _run_links_sync_job(job_id),
+                name=f'links-page-job-{job_id}',
+            )
+            return jsonify({'success': True, 'job_id': job_id})
+
+        sincronizacao = _executar_sincronizacao_links_todas_regionais()
         resultado = _coletar_links_multiregional()
+        resultado['sincronizacao'] = sincronizacao
         return jsonify(resultado)
 
     except Exception as e:
@@ -10227,18 +10307,19 @@ def api_testar_link_regional(codigo_regional, id_link):
                 if _mesmo_link_fortimanager(link_validado):
                     return _responder_link_fortimanager(link_validado)
 
-            link_offline = dict(link_oficial or link)
-            link_offline.update({
-                "status": "offline",
+            link_inconclusivo = dict(link_oficial or link)
+            status_anterior = str(link_inconclusivo.get("status") or "unknown").strip().lower()
+            link_inconclusivo.update({
+                "status": status_anterior,
                 "sla_status": "",
                 "ultima_verificacao": datetime.now().isoformat(),
                 "modo_verificacao": "fortimanager_interface_not_found",
-                "message": "FortiManager nao retornou a interface do link; link marcado como offline",
+                "message": "FortiManager não retornou a interface do link; último status preservado",
             })
             return _responder_link_fortimanager(
-                link_offline,
+                link_inconclusivo,
                 warning=True,
-                mensagem="FortiManager nao retornou a interface do link; link marcado como offline",
+                mensagem="FortiManager não retornou a interface do link; último status preservado",
             )
 
         link_indisponivel = dict(link_oficial or link)

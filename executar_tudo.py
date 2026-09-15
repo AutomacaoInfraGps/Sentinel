@@ -280,7 +280,7 @@ def _montar_adaptador_dados_mapa_checklist():
             switchesWarning: count(totals, 'switches_warning'),
             links: count(totals, 'links_online') + count(totals, 'links_offline') + count(totals, 'links_warning') + count(totals, 'links_inativo'),
             linksOnline: count(totals, 'links_online'),
-            linksOffline: count(totals, 'links_offline') + count(totals, 'links_inativo'),
+            linksOffline: count(totals, 'links_offline'),
             vpns: count(totals, 'vpns_online') + count(totals, 'vpns_offline') + count(totals, 'vpns_warning') + count(totals, 'vpns_inativo'),
             vpnsOnline: count(totals, 'vpns_online'),
             vpnsOffline: count(totals, 'vpns_offline'),
@@ -332,7 +332,7 @@ def _montar_contadores_mapa_checklist():
     if (summaryStats) {
         summaryStats.innerHTML = [
             ['servidores', 'offline', 'Servidores offline', 'infraMapServidoresOffline'],
-            ['links', 'offline,inativo', 'Links offline', 'infraMapLinksOffline'],
+            ['links', 'offline', 'Links offline', 'infraMapLinksOffline'],
             ['switches', 'offline', 'Switches offline', 'infraMapSwitchesOffline'],
             ['aps', 'offline', 'APs offline', 'infraMapApsOffline'],
             ['firewalls', 'offline', 'Firewalls offline', 'infraMapFirewallsOffline'],
@@ -2574,7 +2574,6 @@ try:
                     <div><strong>Online:</strong> {switches_online}</div>
                     <div><strong>Offline:</strong> {switches_offline}</div>
                     <div><strong>Atenção:</strong> {switches_warning}</div>
-                    <div><strong>Inativos:</strong> {switches_inativo}</div>
                     <div><strong>Cobertura da coleta:</strong> {len(switches_data)}/{total_switches}</div>
                 </div>
             </div>
@@ -2606,7 +2605,7 @@ try:
                     <div class="regional-badge {status_class}">
                         <strong>{regional}</strong><br>
                         {dados['online']}/{dados['total']} online ({taxa:.0f}%)<br>
-                        <span class="small">Offline: {dados['offline']} | Atenção: {dados['warning']} | Inativos: {dados['inativo']}</span>
+                        <span class="small">Offline: {dados['offline']} | Atenção: {dados['warning']}</span>
                     </div>
             """
 
@@ -2798,7 +2797,6 @@ try:
                         <span class="sep">&nbsp;|&nbsp;</span>
                         <span class="counter-warning">{switches_warning} em atenção</span>
                         <span class="sep">&nbsp;|&nbsp;</span>
-                        <span class="counter-neutral">{switches_inativo} inativos</span>
                     </span>
                 </div>
                 <div class="links-region-table-body" id="switches-offline-regionais">
@@ -3087,25 +3085,25 @@ try:
                         continue
                     # Só ignora entradas que são explicitamente Rede Local (têm ip_local mas não ip externo)
                     ip_link = str(link.get("ip") or link.get("ip_externo") or "").strip()
-                    if not ip_link or ip_link == "N/A":
-                        continue
+                    if not ip_link:
+                        ip_link = "N/A"
                     # Pula links com IP já coletado via FortiGate (evita duplicatas)
                     if _normalizar_link_ip(ip_link) in ips_fortigate:
                         continue
                     nome_link = str(link.get("nome") or link.get("provedor") or "N/A").strip()
                     provedor_link = str(link.get("provedor") or "").strip()
-                    status_link = str(link.get("status") or "offline").strip().lower()
+                    status_link = str(link.get("status") or "unknown").strip().lower()
                     if status_link in {"inactive", "inativo"}:
-                        status_link = "offline"
+                        status_link = "inativo"
                     elif status_link not in {"online", "offline"}:
-                        status_link = "offline"
+                        status_link = "inativo"
                     ultima_verif = link.get("ultima_verificacao") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     nome_exibicao = f"{nome_link} - {provedor_link}" if provedor_link and provedor_link.upper() != nome_link.upper() else nome_link
                     if status_link == "online":
                         links_online += 1
                     elif status_link == "inativo":
                         links_inativo += 1
-                    else:
+                    elif status_link == "offline":
                         links_offline += 1
                     links_data.append({
                         "regiao": regiao_label,
@@ -3250,7 +3248,6 @@ try:
                         <span class="sep">&nbsp;|&nbsp;</span>
                         <span class="counter-offline">&#x2716; {offline_regiao} offline</span>
                         <span class="sep">&nbsp;|&nbsp;</span>
-                        <span class="counter-neutral">{inativo_regiao} inativo</span>
                     </span>
                 </div>
                 <div class="links-region-table-body">
@@ -5586,7 +5583,6 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{switches_regionais_sem_alerta}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Com offline</span><strong>{switches_regionais_com_offline}</strong></div>
                             <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Com atenção</span><strong>{switches_regionais_com_warning}</strong></div>
-                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Com inativo</span><strong>{switches_regionais_com_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5606,7 +5602,6 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="links" role="button" tabindex="0"><span>Total</span><strong>{links_regionais_total}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-regional-online" role="button" tabindex="0"><span>Sem alerta</span><strong>{links_regionais_sem_alerta}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-regional-offline" role="button" tabindex="0"><span>Com offline</span><strong>{links_regionais_com_offline}</strong></div>
-                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="links-regional-inativo" role="button" tabindex="0"><span>Com inativo</span><strong>{links_regionais_com_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5737,7 +5732,6 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="switches-online" role="button" tabindex="0"><span>Online</span><strong>{switches_online}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="switches-offline" role="button" tabindex="0"><span>Offline</span><strong>{switches_offline}</strong></div>
                             <div class="kpi-combo-item status-warning nav-detail-trigger" data-detail-target="switches-warning" role="button" tabindex="0"><span>Atenção</span><strong>{switches_warning}</strong></div>
-                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="switches-inativo" role="button" tabindex="0"><span>Inativos</span><strong>{switches_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -5756,7 +5750,6 @@ dashboard_html = f"""
                             <div class="kpi-combo-item status-neutral nav-detail-trigger" data-detail-target="links" role="button" tabindex="0"><span>Total</span><strong>{links_online + links_offline + links_inativo}</strong></div>
                             <div class="kpi-combo-item status-online nav-detail-trigger" data-detail-target="links-online" role="button" tabindex="0"><span>Online</span><strong>{links_online}</strong></div>
                             <div class="kpi-combo-item status-offline nav-detail-trigger" data-detail-target="links-offline" role="button" tabindex="0"><span>Offline</span><strong>{links_offline}</strong></div>
-                            <div class="kpi-combo-item status-inactive nav-detail-trigger" data-detail-target="links-inativo" role="button" tabindex="0"><span>Inativos</span><strong>{links_inativo}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -6251,16 +6244,16 @@ function navegarPeloGrafico(chartId, datasetIndex) {{
         chartDeviceServers: ['regionais-online', 'regionais-offline', 'regionais-warning'],
         chartDeviceUnifi: ['unifi-online', 'unifi-offline'],
         chartDeviceReplicacao: ['replicacao', 'replicacao'],
-        chartDeviceSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
-        chartDeviceLinks: ['links-online', 'links-offline', 'links-inativo'],
+        chartDeviceSwitches: ['switches-online', 'switches-offline', 'switches-warning'],
+        chartDeviceLinks: ['links-online', 'links-offline'],
         chartDeviceVpn: ['vpn-details-online', 'vpn-details-offline'],
         chartDeviceFirewalls: ['firewall-licenses-ok', 'firewall-licenses-warning', 'firewall-licenses-expirado'],
         chartDeviceAdmins: ['admin-monitor-ok', 'admin-monitor-alerta', 'admin-monitor-offline', 'admin-monitor-sem-permissao'],
         chartRegionalServers: ['regionais-online', 'regionais-offline', 'regionais-warning'],
         chartRegionalUnifi: ['unifi-online', 'unifi-offline'],
         chartRegionalReplicacao: ['replicacao', 'replicacao'],
-        chartRegionalSwitches: ['switches-online', 'switches-offline', 'switches-warning', 'switches-inativo'],
-        chartRegionalLinks: ['links-regional-online', 'links-regional-offline', 'links-regional-inativo'],
+        chartRegionalSwitches: ['switches-online', 'switches-offline', 'switches-warning'],
+        chartRegionalLinks: ['links-regional-online', 'links-regional-offline'],
         chartRegionalVpn: ['vpn-details-online', 'vpn-details-offline'],
         chartRegionalFirewalls: ['firewall-licenses-regional-ok', 'firewall-licenses-regional-warning', 'firewall-licenses-regional-expirado'],
         chartRegionalAdmins: ['admin-monitor-regional-ok', 'admin-monitor-regional-alerta', 'admin-monitor-regional-offline', 'admin-monitor-regional-sem-permissao'],
@@ -6440,10 +6433,10 @@ new Chart(document.getElementById('chartDeviceReplicacao'), {{
 new Chart(document.getElementById('chartDeviceSwitches'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline', 'Atenção', 'Inativos'],
+        labels: ['Online', 'Offline', 'Atenção'],
         datasets: [{{
-            data: [{switches_online}, {switches_offline}, {switches_warning}, {switches_inativo}],
-            backgroundColor: ['#2f855a', '#e53e3e', '#d69e2e', '#718096'],
+            data: [{switches_online}, {switches_offline}, {switches_warning}],
+            backgroundColor: ['#2f855a', '#e53e3e', '#d69e2e'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -6481,10 +6474,10 @@ new Chart(document.getElementById('chartDeviceSwitches'), {{
 new Chart(document.getElementById('chartDeviceLinks'), {{
     type: 'doughnut',
     data: {{
-        labels: ['Online', 'Offline', 'Inativos'],
+        labels: ['Online', 'Offline'],
         datasets: [{{
-            data: [{links_online}, {links_offline}, {links_inativo}],
-            backgroundColor: ['#2f855a', '#e53e3e', '#718096'],
+            data: [{links_online}, {links_offline}],
+            backgroundColor: ['#2f855a', '#e53e3e'],
             borderColor: '#ffffff',
             borderWidth: 2
         }}]
@@ -6554,7 +6547,7 @@ new Chart(document.getElementById('chartDeviceVpn'), {{
 }});
 
 criarGraficoRegional('chartDeviceFirewalls', 'Licenças de Firewalls', ['Licenças OK', 'A vencer', 'Expiradas'], [{security_dashboard['firewall_counts']['ok']}, {security_dashboard['firewall_counts']['warning']}, {security_dashboard['firewall_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewall-licenses');
-criarGraficoRegional('chartDeviceAdmins', 'Monitor de Admins', ['OK', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_counts']['ok']}, {security_dashboard['admin_counts']['alerta']}, {security_dashboard['admin_counts']['offline']}, {security_dashboard['admin_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');
+criarGraficoRegional('chartDeviceAdmins', 'Monitor de Admins', ['OK', 'Com alerta', 'Offline', 'Visibilidade limitada', 'Consulta indisponível'], [{security_dashboard['admin_counts']['ok']}, {security_dashboard['admin_counts']['alerta']}, {security_dashboard['admin_counts']['offline']}, {security_dashboard['admin_counts']['sem-permissao']}, {security_dashboard['admin_counts']['indisponivel']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5', '#d69e2e'], 'admin-monitor');
 
 // Botão flutuante: fechar tudo e voltar ao topo
 function criarGraficoRegional(canvasId, titulo, labels, data, cores, detalhePadrao) {{
@@ -6583,8 +6576,8 @@ function criarGraficoRegional(canvasId, titulo, labels, data, cores, detalhePadr
 criarGraficoRegional('chartRegionalServers', 'Servidores por Regional', ['Sem alerta', 'Com offline', 'Com atenção'], [{regionais_servidor_sem_alerta}, {regionais_servidor_com_offline}, {regionais_servidor_com_warning}], ['#2f855a', '#e53e3e', '#d69e2e'], 'regionais');
 criarGraficoRegional('chartRegionalUnifi', 'APs por Regional', ['Sem AP offline', 'Com AP offline'], [{aps_regionais_sem_offline}, {aps_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'unifi');
 criarGraficoRegional('chartRegionalReplicacao', 'Replicação AD por Regional', ['Sem falha', 'Com falha'], [{rep_ok}, {rep_fail}], ['#2f855a', '#e53e3e'], 'replicacao');
-criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com atenção', 'Com inativo'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}, {switches_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#d69e2e', '#718096'], 'switches');
-criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline', 'Com inativo'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}, {links_regionais_com_inativo}], ['#2f855a', '#e53e3e', '#718096'], 'links');
+criarGraficoRegional('chartRegionalSwitches', 'Switches por Regional', ['Sem alerta', 'Com offline', 'Com atenção'], [{switches_regionais_sem_alerta}, {switches_regionais_com_offline}, {switches_regionais_com_warning}], ['#2f855a', '#e53e3e', '#d69e2e'], 'switches');
+criarGraficoRegional('chartRegionalLinks', 'Links por Regional', ['Sem alerta', 'Com offline'], [{links_regionais_sem_alerta}, {links_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'links');
 criarGraficoRegional('chartRegionalVpn', 'VPNs por Regional', ['Sem offline', 'Com offline'], [{vpn_regionais_sem_offline}, {vpn_regionais_com_offline}], ['#2f855a', '#e53e3e'], 'vpn-details');
 criarGraficoRegional('chartRegionalFirewalls', 'Licenças por Regional', ['Sem alerta', 'A vencer', 'Com expirada'], [{security_dashboard['firewall_regional_counts']['ok']}, {security_dashboard['firewall_regional_counts']['warning']}, {security_dashboard['firewall_regional_counts']['expirado']}], ['#2f855a', '#d69e2e', '#e53e3e'], 'firewall-licenses');
 criarGraficoRegional('chartRegionalAdmins', 'Admins por Regional', ['Sem alerta', 'Com alerta', 'Offline', 'Visibilidade limitada'], [{security_dashboard['admin_regional_counts']['ok']}, {security_dashboard['admin_regional_counts']['alerta']}, {security_dashboard['admin_regional_counts']['offline']}, {security_dashboard['admin_regional_counts']['sem-permissao']}], ['#2f855a', '#e53e3e', '#718096', '#805ad5'], 'admin-monitor');

@@ -589,9 +589,17 @@ class FortiManagerClient:
         data = resp.json()
         result_list = data.get("result", [])
         if not result_list:
-            return []
+            raise FortiManagerClientError(
+                f"Listar admins de {device_name}: resposta sem resultado"
+            )
 
         outer = result_list[0] if isinstance(result_list, list) else {}
+        outer_status = outer.get("status", {}) if isinstance(outer, dict) else {}
+        if isinstance(outer_status, dict) and outer_status.get("code", 0) not in (0, None):
+            raise FortiManagerClientError(
+                f"Listar admins de {device_name}: {outer_status.get('message', 'falha no proxy')} "
+                f"(code={outer_status.get('code')})"
+            )
         proxy_data = outer.get("data", [])
         if not proxy_data:
             return None  # sem dados → provavelmente offline
@@ -602,12 +610,33 @@ class FortiManagerClient:
             msg = entry_status.get("message", "")
             if "No tunnel" in msg or "tunnel" in msg.lower() or "offline" in msg.lower():
                 return None  # offline
-            return []
+            raise FortiManagerClientError(
+                f"Listar admins de {device_name}: {msg or 'falha na consulta'} "
+                f"(code={entry_status.get('code')})"
+            )
 
         response_body = proxy_entry.get("response", {})
+        if not isinstance(response_body, dict):
+            raise FortiManagerClientError(
+                f"Listar admins de {device_name}: resposta do FortiGate inválida"
+            )
+        http_status = response_body.get("http_status")
+        response_status = str(response_body.get("status") or "").lower()
+        if http_status not in (None, 200) or response_status not in ("", "success"):
+            raise FortiManagerClientError(
+                f"Listar admins de {device_name}: retorno HTTP {http_status or 'inválido'} "
+                f"({response_body.get('status') or 'sem status'})"
+            )
         admins_raw = response_body.get("results", []) if isinstance(response_body, dict) else []
-        return sorted(set(
+        admins = sorted(set(
             a.get("name", "").strip()
             for a in admins_raw if isinstance(a, dict) and a.get("name")
         ))
+        # Todo FortiGate acessível possui ao menos uma conta administrativa. Uma
+        # lista vazia aqui indica resposta incompleta e nunca deve virar remoção.
+        if not admins:
+            raise FortiManagerClientError(
+                f"Listar admins de {device_name}: consulta não retornou contas"
+            )
+        return admins
 
