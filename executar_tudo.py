@@ -1429,27 +1429,20 @@ _VPN_REGIONAL_ALIAS = {
     "MCO": "REG_CONTROL_MCO",
     "CONTMCO": "REG_CONTROL_MCO",
     "CONTROLMCO": "REG_CONTROL_MCO",
+    "T062": "REG_CONTROL_NANUQUE",
+    "NANUQUE": "REG_CONTROL_NANUQUE",
 }
-
-_VPN_REGIONAL_BLOCKLIST = {
-    "T062",
-    "NANUQUE",
-}
-
 
 def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     if not indice_regionais:
         return None
 
     candidatos = []
-    candidatos.extend(_gerar_tokens_regional(nome_exibicao_vpn))
     candidatos.extend(_gerar_tokens_regional(codigo_vpn))
+    candidatos.extend(_gerar_tokens_regional(nome_exibicao_vpn))
     candidatos = [c for c in candidatos if c]
 
     indice_por_chave = {str(reg.get("chave") or "").strip().upper(): reg for reg in indice_regionais}
-    if any(candidato in _VPN_REGIONAL_BLOCKLIST for candidato in candidatos):
-        return None
-
     for cand in candidatos:
         regional_alias = _VPN_REGIONAL_ALIAS.get(cand)
         if regional_alias and regional_alias in indice_por_chave:

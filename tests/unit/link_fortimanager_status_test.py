@@ -7,6 +7,45 @@ import web_config
 
 
 class LinkFortimanagerStatusTest(unittest.TestCase):
+    def test_vpn_codes_map_ceara_units_and_control_nanuque_exactly(self):
+        index = [
+            {"chave": "REG_CEARA", "nome_exibicao": "CEARA", "tokens": web_config._gerar_tokens_regional("REG_CEARA")},
+            {"chave": "REG_CEARA_2", "nome_exibicao": "CEARA 2", "tokens": web_config._gerar_tokens_regional("REG_CEARA_2")},
+            {"chave": "REG_CONTROL_NANUQUE", "nome_exibicao": "CONTROL NANUQUE", "tokens": web_config._gerar_tokens_regional("REG_CONTROL_NANUQUE")},
+        ]
+
+        self.assertEqual("REG_CEARA", web_config._mapear_regional_vpn("CEARA", "T018", index)["chave"])
+        self.assertEqual("REG_CEARA_2", web_config._mapear_regional_vpn("CEARA", "T024", index)["chave"])
+        self.assertEqual("REG_CONTROL_NANUQUE", web_config._mapear_regional_vpn("NANUQUE", "T062", index)["chave"])
+
+    def test_firewalls_choose_single_most_specific_regional(self):
+        regionals = {
+            "REG_CEARA": {"nome": "REG_CEARA"},
+            "REG_CEARA_2": {"nome": "REG_CEARA 2"},
+            "REG_CONTROL_NANUQUE": {"nome": "REG_CONTROL_NANUQUE"},
+            "REG_CONTROL_ARAPIRACA": {"nome": "REG_CONTROL_ARAPIRACA"},
+        }
+
+        self.assertEqual("REG_CEARA", web_config._resolver_regional_firewall("FGT_REGCEARA01", regionals))
+        self.assertEqual("REG_CEARA_2", web_config._resolver_regional_firewall("FGT_REGCEARA02ULTRA", regionals))
+        self.assertEqual("REG_CONTROL_NANUQUE", web_config._resolver_regional_firewall("FGT_CONTROL_NANUQUE", regionals))
+        self.assertEqual("REG_CONTROL_ARAPIRACA", web_config._resolver_regional_firewall("FGT_REGCONTROL_ARAPIRACA", regionals))
+
+    @patch.object(web_config, "records_for")
+    def test_regional_details_remap_vpns_from_stale_snapshot(self, records_for):
+        records_for.return_value = [
+            {"tunel": "T024_CEARA2_01", "status": "online", "regional": "REG_CEARA"},
+        ]
+        index = [
+            {"chave": "REG_CEARA", "nome_exibicao": "CEARA", "tokens": web_config._gerar_tokens_regional("REG_CEARA")},
+            {"chave": "REG_CEARA_2", "nome_exibicao": "CEARA 2", "tokens": web_config._gerar_tokens_regional("REG_CEARA_2")},
+        ]
+
+        with patch.object(web_config, "_carregar_indice_regionais_vpn", return_value=index):
+            vpns = web_config._obter_vpns_detalhe_regional("REG_CEARA_2")
+
+        self.assertEqual(["T024_CEARA2_01"], [vpn["tunel"] for vpn in vpns])
+
     @patch.object(web_config.gerenciador_regionais, "salvar_regionais")
     @patch.object(web_config.gerenciador_regionais, "recarregar_regionais")
     def test_successful_sync_refreshes_timestamp_without_reporting_change(self, recarregar, salvar):
@@ -31,15 +70,15 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertGreater(datetime.fromisoformat(novo_timestamp), datetime.fromisoformat("2026-08-28T08:05:15"))
         salvar.assert_called_once()
 
-    def test_monitor_zabbix_packet_loss_above_ten_is_offline(self):
-        sla_data = {"MONITOR_ZABBIX": {"packet_loss": 10.01}}
+    def test_monitor_zabbix_packet_loss_at_one_hundred_is_offline(self):
+        sla_data = {"MONITOR_ZABBIX": {"packet_loss": 100}}
         status, source = web_config._resolve_link_operational_status("online", "active", sla_data)
 
         self.assertEqual("offline", status)
         self.assertEqual("monitor_zabbix_packet_loss", source)
 
-    def test_monitor_zabbix_packet_loss_at_ten_is_online(self):
-        sla_data = {"MONITOR_ZABBIX": {"packet-loss": "10%"}}
+    def test_monitor_zabbix_packet_loss_below_one_hundred_is_online(self):
+        sla_data = {"MONITOR_ZABBIX": {"packet-loss": "99.99%"}}
         status, source = web_config._resolve_link_operational_status("offline", "inactive", sla_data)
 
         self.assertEqual("online", status)

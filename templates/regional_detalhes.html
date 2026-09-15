@@ -201,7 +201,7 @@
 
 <!-- Estatísticas da Regional -->
 <div class="row mb-4">
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-servidores-section')">
             <div class="stats-number" id="regional-servidores-total">{{ regional.servidores|length }}</div>
             <div class="stats-label">
@@ -211,7 +211,7 @@
         </button>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-links-section')" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
             <div class="stats-number" id="regional-links-total">{{ regional.links|length }}</div>
             <div class="stats-label">
@@ -221,7 +221,7 @@
         </button>
     </div>
 
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-switches-section')" style="background: linear-gradient(135deg, #012E40, #0A4A63);">
             <div class="stats-number" id="regional-switches-total">{{ regional.switches|length }}</div>
             <div class="stats-label">
@@ -231,12 +231,22 @@
         </button>
     </div>
 
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-firewalls-section')" style="background: linear-gradient(135deg, #495057, #0A4A63);">
             <div class="stats-number">{{ regional.firewalls|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-shield-check me-1"></i>
                 Firewalls
+            </div>
+        </button>
+    </div>
+
+    <div class="col-lg col-md-4 col-sm-6 mb-3">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-vpns-section')" style="background: linear-gradient(135deg, #0F6C8C, #495057);">
+            <div class="stats-number">{{ regional.vpns|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-shield-lock me-1"></i>
+                VPNs
             </div>
         </button>
     </div>
@@ -793,6 +803,47 @@
                         <i class="bi bi-hdd-network me-2"></i>
                         Abrir Infra de Switches
                     </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4 regional-section-anchor" id="regional-vpns-section">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>VPNs IPsec da Regional</h5>
+                <span class="badge bg-light text-dark">{{ regional.vpns|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if regional.vpns %}
+                <div class="row">
+                    {% for vpn in regional.vpns %}
+                    {% set vpn_online = vpn.status|default('', true)|lower in ['up', 'online'] %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-{{ 'success' if vpn_online else 'danger' }} h-100">
+                            <div class="card-header bg-{{ 'success' if vpn_online else 'danger' }} text-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-bold"><i class="bi bi-shield-lock me-2"></i>{{ vpn.tunel or vpn.nome or 'VPN' }}</h6>
+                                <span class="badge bg-light text-dark">{{ 'Online' if vpn_online else 'Offline' }}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-2"><span class="small text-muted">Interface:</span><span class="small">{{ vpn.interface or 'N/A' }}</span></div>
+                                <div class="d-flex justify-content-between mb-2"><span class="small text-muted">Gateway remoto:</span><code class="small">{{ vpn.remote_ip or vpn.gateway or 'N/A' }}</code></div>
+                                {% if vpn.ultima_verificacao or vpn.updated_at %}
+                                <div class="verification-meta mt-2"><i class="bi bi-clock-history"></i><strong>Ultima verificacao</strong><span>{{ vpn.ultima_verificacao or vpn.updated_at }}</span></div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-shield-lock text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">Nenhuma VPN encontrada</h4>
+                    <p class="text-muted">Ainda nao ha tuneis IPsec associados a esta regional.</p>
                 </div>
                 {% endif %}
             </div>
