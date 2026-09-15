@@ -64,6 +64,67 @@
         scroll-margin-top: 90px;
     }
 
+    .regional-vpn-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 10px;
+    }
+
+    .regional-vpn-tunnel {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        padding: 12px 14px;
+        border: 1px solid #dbe5f0;
+        border-left-width: 4px;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .regional-vpn-tunnel.up {
+        border-left-color: #198754;
+        background: #ecfdf3;
+    }
+
+    .regional-vpn-tunnel.down {
+        border-left-color: #dc3545;
+        background: #fff1f2;
+    }
+
+    .regional-vpn-name {
+        color: #374151;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .regional-vpn-meta {
+        margin-top: 4px;
+        color: #6b7280;
+        font-size: 0.8rem;
+    }
+
+    .regional-vpn-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 82px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        color: #ffffff;
+        font-size: 0.78rem;
+        font-weight: 800;
+    }
+
+    .regional-vpn-status.up { background: #198754; }
+    .regional-vpn-status.down { background: #dc3545; }
+
+    @media (max-width: 575.98px) {
+        .regional-vpn-list { grid-template-columns: minmax(0, 1fr); }
+        .regional-vpn-tunnel { align-items: flex-start; }
+    }
+
     .regional-report-overlay {
         position: fixed;
         inset: 0;
@@ -201,7 +262,7 @@
 
 <!-- Estatísticas da Regional -->
 <div class="row mb-4">
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="col-md-3 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-servidores-section')">
             <div class="stats-number" id="regional-servidores-total">{{ regional.servidores|length }}</div>
             <div class="stats-label">
@@ -211,7 +272,7 @@
         </button>
     </div>
     
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="col-md-3 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-links-section')" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
             <div class="stats-number" id="regional-links-total">{{ regional.links|length }}</div>
             <div class="stats-label">
@@ -221,7 +282,7 @@
         </button>
     </div>
 
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="col-md-3 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-switches-section')" style="background: linear-gradient(135deg, #012E40, #0A4A63);">
             <div class="stats-number" id="regional-switches-total">{{ regional.switches|length }}</div>
             <div class="stats-label">
@@ -231,7 +292,7 @@
         </button>
     </div>
 
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="col-md-3 col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-firewalls-section')" style="background: linear-gradient(135deg, #495057, #0A4A63);">
             <div class="stats-number">{{ regional.firewalls|length }}</div>
             <div class="stats-label">
@@ -241,15 +302,6 @@
         </button>
     </div>
 
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
-        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-vpns-section')" style="background: linear-gradient(135deg, #0F6C8C, #495057);">
-            <div class="stats-number">{{ regional.vpns|length }}</div>
-            <div class="stats-label">
-                <i class="bi bi-shield-lock me-1"></i>
-                VPNs
-            </div>
-        </button>
-    </div>
 </div>
 
 <!-- Ações da Regional -->
@@ -814,29 +866,21 @@
     <div class="col-12">
         <div class="card shadow-sm border-0">
             <div class="card-header d-flex align-items-center justify-content-between">
-                <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>VPNs IPsec da Regional</h5>
+                <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>VPNs da Regional</h5>
                 <span class="badge bg-light text-dark">{{ regional.vpns|length }}</span>
             </div>
             <div class="card-body">
                 {% if regional.vpns %}
-                <div class="row">
+                <div class="regional-vpn-list">
                     {% for vpn in regional.vpns %}
                     {% set vpn_online = vpn.status|default('', true)|lower in ['up', 'online'] %}
-                    <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="card border-{{ 'success' if vpn_online else 'danger' }} h-100">
-                            <div class="card-header bg-{{ 'success' if vpn_online else 'danger' }} text-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 fw-bold"><i class="bi bi-shield-lock me-2"></i>{{ vpn.tunel or vpn.nome or 'VPN' }}</h6>
-                                <span class="badge bg-light text-dark">{{ 'Online' if vpn_online else 'Offline' }}</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between mb-2"><span class="small text-muted">Interface:</span><span class="small">{{ vpn.interface or 'N/A' }}</span></div>
-                                <div class="d-flex justify-content-between mb-2"><span class="small text-muted">Gateway remoto:</span><code class="small">{{ vpn.remote_ip or vpn.gateway or 'N/A' }}</code></div>
-                                {% if vpn.ultima_verificacao or vpn.updated_at %}
-                                <div class="verification-meta mt-2"><i class="bi bi-clock-history"></i><strong>Ultima verificacao</strong><span>{{ vpn.ultima_verificacao or vpn.updated_at }}</span></div>
-                                {% endif %}
-                            </div>
+                    <article class="regional-vpn-tunnel {{ 'up' if vpn_online else 'down' }}">
+                        <div>
+                            <div class="regional-vpn-name">{{ vpn.tunel or vpn.nome or 'VPN' }}</div>
+                            <div class="regional-vpn-meta">Ultima verificacao: {{ vpn.ultima_verificacao or vpn.updated_at or 'N/A' }}</div>
                         </div>
-                    </div>
+                        <span class="regional-vpn-status {{ 'up' if vpn_online else 'down' }}">{{ 'UP' if vpn_online else 'DOWN' }}</span>
+                    </article>
                     {% endfor %}
                 </div>
                 {% else %}
