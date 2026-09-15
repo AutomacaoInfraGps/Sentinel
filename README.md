@@ -283,6 +283,34 @@ animacao de digitacao em toda nova abertura do chat.
 No chat, as mensagens da SofIA usam azul claro com destaque luminoso e as do
 usuario usam o azul institucional escuro.
 
+O Monitor de Admins valida as respostas do FortiManager antes de comparar com
+a baseline. Falhas e respostas incompletas aparecem como consulta indisponivel,
+preservando a ultima lista valida sem gerar divergencias. Remocoes precisam ser
+observadas em duas coletas validas consecutivas antes de gerar alerta.
+
+O checklist omite contadores e segmentos de grafico de dispositivos inativos.
+Esses registros permanecem nos caches operacionais, mas nao sao somados como
+offline ou atencao no mapa lateral.
+
+O botao Atualizar Links da aba de Infraestrutura executa a sincronizacao central
+em segundo plano e atualiza a tela com o mesmo `links_internet_auto` consumido
+pelo checklist. Links canonicos sem IP tambem permanecem na consolidacao.
+Os dois botoes globais de Atualizar Links (Regionais e Infraestrutura) consultam
+todas as regionais; o botao em Detalhes consulta apenas sua regional; e Testar
+consulta apenas o link selecionado. Todos convergem em `_coletar_links_regional`.
+O status prioriza o packet loss do SLA `MONITOR_ZABBIX`: ate 10% online e acima
+de 10% offline. Sem uma leitura valida, o ultimo estado e preservado em vez de
+transformar ausencia de resposta em queda.
+Quando o FortiGate omite o percentual porque o `MONITOR_ZABBIX` esta totalmente
+`down`, o Sentinel interpreta esse retorno como 100% de perda e mantem a mesma
+prioridade sobre o fallback de Link Mode.
+Uma consulta concluida com sucesso sempre renova `ultima_verificacao`, mesmo
+quando o status permanece igual. O historico continua registrando somente
+mudancas reais de conteudo ou status.
+Nos detalhes da regional, `links_internet_auto` e a fonte autoritativa depois
+da primeira sincronizacao. O snapshot operacional antigo nao pode restaurar um
+link que ja deixou de existir no FortiManager.
+
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
 - Relatorios de implementacoes concluidas e versoes antigas ficam em
