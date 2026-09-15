@@ -328,6 +328,16 @@ unidades ainda nao cadastradas permanecem sem regional, em vez de serem alocadas
 por aproximacao em outra unidade. A tela de detalhes lista as VPNs do mesmo estado
 operacional do mapa.
 
+A aba de Antenas UniFi le diretamente `data/unifi.json`, renovado pelo botao
+Atualizar Antenas. O snapshot operacional compartilhado nao substitui essa coleta,
+pois pode ser anterior a uma atualizacao isolada; a conciliacao de manutencao do
+Zabbix continua aplicada sobre os dados atuais da controladora.
+
+Ao alterar o codigo ou o nome de uma regional, links descobertos automaticamente
+para a identidade anterior sao descartados e procurados novamente no FortiManager.
+Links manuais sao preservados. Termos genericos como `CONTROL`, `CTRL` e `CNTRL`
+nao bastam para associar equipamentos de unidades diferentes.
+
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
 - Relatorios de implementacoes concluidas e versoes antigas ficam em

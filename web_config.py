@@ -1151,13 +1151,24 @@ def _compact_identifier(value: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "", _normalize_text(value or ""))
 
 
+def _control_unit_identity(value: str) -> str:
+    identity = _compact_identifier(value)
+    identity = re.sub(r"^(?:FGT|FTG)", "", identity)
+    identity = re.sub(r"^(?:REGIONAL|REG|RG)", "", identity)
+    identity = re.sub(r"^(?:CONTROL|CTRL|CNTRL)", "", identity)
+    return identity
+
+
 def _tokenize(value: str) -> set:
     if not value:
         return set()
     normalized = _normalize_text(value)
     tokens = {t for t in normalized.split() if t}
     # remove tokens comuns que não ajudam na identificação
-    stopwords = {"RG", "REG", "REGIONAL", "REGIAO"}
+    stopwords = {
+        "RG", "REG", "REGIONAL", "REGIAO", "FGT", "FTG", "FIREWALL",
+        "CONTROL", "CTRL", "CNTRL",
+    }
     return {t for t in tokens if t not in stopwords}
 
 
@@ -1193,6 +1204,8 @@ def _rank_fortimanager_devices(codigo_regional: str, regional_info: dict, device
     regional_name = regional_info.get("nome", "") if regional_info else ""
     base = f"{codigo_regional} {regional_name}"
     regional_tokens = _expand_aliases(_tokenize(base))
+    if not regional_tokens:
+        return {}
     regional_compacts = {
         _compact_identifier(codigo_regional),
         _compact_identifier(regional_name),
@@ -2262,6 +2275,20 @@ def _match_fortimanager_device(codigo_regional: str, regional_info: dict, device
         for device in devices:
             if str(device.get("name", "")).strip().upper() == device_name.upper():
                 return device
+
+    codigo_compacto = _compact_identifier(codigo_regional)
+    if re.match(r"^(?:REGIONAL|REG|RG)(?:CONTROL|CTRL|CNTRL)", codigo_compacto):
+        unidade = _control_unit_identity(codigo_regional)
+        correspondencias = [
+            device for device in devices
+            if unidade and unidade in {
+                _control_unit_identity(device.get("name", "")),
+                _control_unit_identity(device.get("hostname", "")),
+            }
+        ]
+        if len(correspondencias) == 1:
+            return correspondencias[0]
+        return {}
 
     regional_name = regional_info.get("nome", "") if regional_info else ""
     base = f"{codigo_regional} {regional_name}"
@@ -8450,11 +8477,9 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
 @login_required
 def antenas_unifi():
     """Página de antenas UniFi"""
-    # O estado operacional e a controladora usam a mesma conciliacao atual do Zabbix.
+    # A coleta UniFi e a fonte autoritativa desta pagina. O snapshot operacional
+    # pode estar mais antigo quando o usuario atualiza somente as antenas.
     unifi_data = load_data("unifi") or {}
-    aps_operacionais = records_for("aps")
-    if aps_operacionais:
-        unifi_data["aps"] = aps_operacionais
     unifi_data = _filtrar_antenas_unifi_ocultas(unifi_data)
 
     # Agrupa APs por site para o template

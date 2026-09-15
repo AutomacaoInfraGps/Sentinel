@@ -146,6 +146,19 @@ class GerenciadorRegionais:
             raise ValueError(f"Regional {novo_codigo} já existe")
 
         regional = regionais.pop(codigo_atual)
+        identidade_alterada = (
+            novo_codigo != codigo_atual
+            or str(regional.get("nome") or "").strip().upper() != str(nome or "").strip().upper()
+        )
+        if identidade_alterada:
+            regional.pop("links_internet_auto", None)
+            regional["links"] = [
+                link for link in (regional.get("links") or [])
+                if not (
+                    str(link.get("origem_sync") or "").lower().startswith("fortimanager")
+                    or str(link.get("regra_origem") or "").lower() == "links_internet_auto"
+                )
+            ]
         regional["nome"] = nome
         regional["descricao"] = descricao
         regional.setdefault("servidores", [])
