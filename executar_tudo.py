@@ -2987,10 +2987,10 @@ try:
     from gerenciar_fortigate import GerenciadorFortigate
     from config import ENV_CONFIG
 
-    fortigates = ENV_CONFIG.get("fortigate")
-
-    if not isinstance(fortigates, dict):
-        raise Exception("ENV_CONFIG['fortigate'] deve conter SP/RJ")
+    # A sincronizacao executada acima ja persiste o estado canonico de todos os
+    # links. O checklist apenas consome essa base para nao recalcular SP/RJ por
+    # um caminho diferente e gerar divergencias por falha de correspondencia.
+    fortigates = {}
 
     # percorre SP, RJ, etc
     for regiao, cfg in fortigates.items():

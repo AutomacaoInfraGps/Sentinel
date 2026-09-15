@@ -10,6 +10,9 @@ output/*
 !templates/*.html
 !templates/**/*.html
 *.png
+!static/branding/sofia_chat_avatar.png
+!static/branding/sofia_chat_header.png
+!static/branding/sentinel_regionais_logo.png
 *.jpg
 *.jpeg
 

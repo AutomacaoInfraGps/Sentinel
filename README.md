@@ -254,6 +254,8 @@ status usa o `packet loss` do SLA `MONITOR_ZABBIX`: ate 10% e online e acima de
 contingencia. Os valores permanecem armazenados separadamente para diagnostico.
 Se a credencial da API nao tiver permissao para consultar esses endpoints, a
 atualizacao preserva o ultimo estado valido em vez de registrar uma queda falsa.
+O checklist sincroniza os links pela mesma rotina central e depois consome
+`links_internet_auto`; ele nao recalcula separadamente os links de SP/RJ.
 
 O mapa do checklist reutiliza a criticidade do mapa principal nas cores e no
 posicionamento dos tooltips. Seus filtros e contadores continuam independentes.
@@ -266,6 +268,20 @@ Ao clicar em uma regional, ponto ou tooltip, o checklist isola a regional
 selecionada na lista e no mapa ate o usuario voltar para a visao anterior.
 
 ## Manutencao da documentacao
+
+O chat da SofIA usa um avatar frontal no cabecalho e outro lateral no acionador
+flutuante ampliado do canto inferior direito, independentes do logo principal. Quando
+fechado, o acionador preto exibe um balao de apresentacao clicavel.
+O destaque principal da pagina de Regionais usa o logo horizontal dedicado
+`static/branding/sentinel_regionais_logo.png`.
+O simbolo isolado usado nos formularios de Regionais e na navegacao permanece
+centralizado em `static/branding/sentinel_x_men_head.png`.
+As novas mensagens da SofIA, incluindo a saudacao inicial e respostas prontas,
+sao exibidas com animacao de digitacao; o historico ja lido abre imediatamente.
+Enquanto o usuario ainda nao enviou uma mensagem, a saudacao reinicia a
+animacao de digitacao em toda nova abertura do chat.
+No chat, as mensagens da SofIA usam azul claro com destaque luminoso e as do
+usuario usam o azul institucional escuro.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
