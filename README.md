@@ -323,7 +323,10 @@ quando a consulta nao fornece dados suficientes para uma validacao conclusiva.
 VPNs e firewalls usam a identidade cadastrada da regional. Os codigos de tunel
 distinguem Ceara (`T018`), Ceara 2 (`T024`) e Control Nanuque (`T062`), enquanto
 novas unidades no formato `REG_CONTROL_<UNIDADE>` sao associadas pelo sufixo
-completo. A tela de detalhes lista as VPNs do mesmo estado operacional do mapa.
+completo. O vinculo automatico exige uma correspondencia exata e unica; VPNs de
+unidades ainda nao cadastradas permanecem sem regional, em vez de serem alocadas
+por aproximacao em outra unidade. A tela de detalhes lista as VPNs do mesmo estado
+operacional do mapa.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.

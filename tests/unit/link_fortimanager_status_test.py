@@ -18,6 +18,23 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertEqual("REG_CEARA_2", web_config._mapear_regional_vpn("CEARA", "T024", index)["chave"])
         self.assertEqual("REG_CONTROL_NANUQUE", web_config._mapear_regional_vpn("NANUQUE", "T062", index)["chave"])
 
+    def test_unregistered_vpn_is_not_approximately_assigned_to_another_regional(self):
+        index = [
+            {"chave": "REG_ORMEC_PARA", "nome_exibicao": "ORMEC PARA", "tokens": web_config._gerar_tokens_regional("REG_ORMEC_PARA")},
+        ]
+
+        self.assertIsNone(web_config._mapear_regional_vpn("OUROPRETO", "T063", index))
+
+        index.append({
+            "chave": "REG_CONTROL_OURO_PRETO",
+            "nome_exibicao": "CONTROL OURO PRETO",
+            "tokens": web_config._gerar_tokens_regional("REG_CONTROL_OURO_PRETO"),
+        })
+        self.assertEqual(
+            "REG_CONTROL_OURO_PRETO",
+            web_config._mapear_regional_vpn("OUROPRETO", "T063", index)["chave"],
+        )
+
     def test_firewalls_choose_single_most_specific_regional(self):
         regionals = {
             "REG_CEARA": {"nome": "REG_CEARA"},
