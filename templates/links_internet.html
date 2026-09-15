@@ -497,10 +497,6 @@ function hideLoading(button) {
     button.prop('disabled', false);
 }
 
-function showToast(message, type) {
-    // Implementação do toast (pode ser personalizada conforme necessário)
-}
-
 function formatarDataHora(valor) {
     if (!valor) {
         return 'N/A';
@@ -686,15 +682,7 @@ function verificarLinks(btn = null) {
 
     $('#loadingOverlay').show();
 
-    $.post('/api/links/verificar')
-        .done(function (response) {
-            console.log('Resposta API:', response);
-
-            if (!response || !response.success) {
-                showToast(`Erro: ${response?.message || 'Erro desconhecido'}`, 'danger');
-                return;
-            }
-
+    function aplicarResultado(response) {
             const linksPorRegional = response.links_por_regional || {};
 
 
@@ -723,12 +711,57 @@ function verificarLinks(btn = null) {
             if (linksPageSearch) {
                 linksPageSearch.apply();
             }
+    }
+
+    function acompanharJob(jobId) {
+        return fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`, { cache: 'no-store' })
+            .then(response => response.json())
+            .then(response => {
+                if (!response.success || !response.job) {
+                    throw new Error(response.message || 'Job de links não encontrado.');
+                }
+                const job = response.job;
+                if (job.status === 'failed') {
+                    throw new Error(job.detail || job.error || 'Falha ao atualizar links.');
+                }
+                if (job.status !== 'completed') {
+                    const andamento = job.total ? `${job.completed || 0}/${job.total}` : `${job.percent || 0}%`;
+                    showToast(`Atualizando links: ${andamento}`, 'info', { delay: 1600 });
+                    return new Promise(resolve => setTimeout(resolve, 1200)).then(() => acompanharJob(jobId));
+                }
+                return job.result || {};
+            });
+    }
+
+    fetch('/api/links/verificar?async=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ async: true })
+    })
+        .then(response => response.json().then(data => {
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Não foi possível iniciar a atualização.');
+            }
+            return data;
+        }))
+        .then(data => acompanharJob(data.job_id))
+        .then(resultado => {
+            const dashboard = resultado.dashboard || {};
+            if (!dashboard.success) {
+                throw new Error(dashboard.message || 'A atualização terminou sem dados de links.');
+            }
+            aplicarResultado(dashboard);
+            const pendencias = Object.values(resultado.regionais || {}).filter(item => !item.success).length;
+            showToast(
+                pendencias ? `Links atualizados com ${pendencias} regional(is) sem nova leitura.` : 'Links atualizados com sucesso.',
+                pendencias ? 'warning' : 'success',
+                { delay: 7000 }
+            );
         })
-        .fail(function () {
-            showToast('Erro de conexão com a API', 'danger');
+        .catch(error => {
+            showToast(error.message || 'Erro de conexão ao atualizar links.', 'danger', { delay: 9000 });
         })
-        .always(function () {
-            // ✅ GARANTE que nunca fique carregando infinito
+        .finally(function () {
             $('#loadingOverlay').hide();
             if ($btn) hideLoading($btn);
         });

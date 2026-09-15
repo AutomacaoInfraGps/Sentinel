@@ -100,6 +100,52 @@ class SecurityDashboardTests(unittest.TestCase):
         self.assertIn("replace(/^licence-/, '')", source)
         self.assertIn("row.dataset.status === normalizedAction", source)
 
+    def test_checklist_does_not_render_inactive_counters(self):
+        root = Path(__file__).parents[2]
+        source = (root / "executar_tudo.py").read_text(encoding="utf-8")
+        security_source = (root / "dashboard_security_sections.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("<span>Inativos</span>", source)
+        self.assertNotIn("<span>Com inativo</span>", source)
+        self.assertNotIn('(\"Inativos\", fw_availability_counts', security_source)
+        self.assertIn("linksOffline: count(totals, 'links_offline')", source)
+        self.assertNotIn('status_link = "offline"', source)
+
+    def test_unavailable_admin_query_is_not_counted_as_change_or_ok(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "output").mkdir()
+            (root / "estrutura_regionais.json").write_text(
+                json.dumps({"regionais": {"REG_TESTE": {"nome": "REG_TESTE"}}}),
+                encoding="utf-8",
+            )
+            (root / "output" / "dashboard_firewalls_cache.json").write_text(
+                json.dumps({"firewalls_por_regional": {}}), encoding="utf-8"
+            )
+            (root / "output" / "dashboard_admins_cache.json").write_text(
+                json.dumps({
+                    "dispositivos": {
+                        "FGT_REGTESTE": {
+                            "nome": "FGT_REGTESTE",
+                            "tipo": "fortigate",
+                            "admins": ["admin", "admin.orquisa"],
+                            "novos": [],
+                            "removidos": [],
+                            "consulta_indisponivel": True,
+                            "motivo": "resposta sem resultado",
+                        }
+                    }
+                }),
+                encoding="utf-8",
+            )
+
+            dashboard = build_security_dashboard(root)
+
+            self.assertEqual(dashboard["admin_counts"]["indisponivel"], 1)
+            self.assertEqual(dashboard["admin_counts"]["alerta"], 0)
+            self.assertEqual(dashboard["admin_counts"]["ok"], 0)
+            self.assertIn("Consulta indisponível", dashboard["admin_detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,7 @@
     .stat-total   { background: linear-gradient(135deg, #012E40, #0A4A63); color: white; }
     .stat-alerta  { background: linear-gradient(135deg, #7b1524, #dc3545); color: white; }
     .stat-offline { background: linear-gradient(135deg, #3d3d3d, #6c757d); color: white; }
+    .stat-indisponivel { background: linear-gradient(135deg, #805500, #d69e2e); color: white; }
     .stat-ok      { background: linear-gradient(135deg, #155724, #28a745); color: white; }
 
     /* Device cards */
@@ -47,6 +48,7 @@
     .device-card.sem-base { border-color: #ffc107; }
     .device-card.sem-perm { border-color: #6610f2; }
     .device-card.limitado  { border-color: #0dcaf0; }
+    .device-card.indisponivel { border-color: #d69e2e; }
 
     .device-header {
         padding: 0.75rem 1rem;
@@ -59,6 +61,7 @@
     .device-card.sem-base .device-header { background: #fffbf0; }
     .device-card.sem-perm .device-header { background: #f5f0ff; }
     .device-card.limitado .device-header { background: #e8fafd; }
+    .device-card.indisponivel .device-header { background: #fffaf0; }
 
     .device-tipo-badge {
         font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
@@ -183,6 +186,18 @@
             </div>
         </div>
         <div class="col-6 col-md-3">
+            <div class="card stat-card stat-indisponivel p-3" data-filter="indisponivel" role="button"
+                 tabindex="0" aria-pressed="false" aria-label="Mostrar consultas indisponíveis">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-num">{{ total_indisponivel }}</div>
+                        <div class="stat-label">Consulta indisponível</div>
+                    </div>
+                    <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
             <div class="card stat-card stat-alerta p-3" data-filter="alerta" role="button"
                  tabindex="0" aria-pressed="false" aria-label="Mostrar somente dispositivos com alertas">
                 <div class="d-flex justify-content-between align-items-center">
@@ -246,6 +261,10 @@
             <input class="form-check-input" type="checkbox" id="chkSemPerm" checked onchange="filtrarCards()">
             <label class="form-check-label" style="color:#6610f2" for="chkSemPerm">Sem permissão</label>
         </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="chkIndisponivel" checked onchange="filtrarCards()">
+            <label class="form-check-label" style="color:#946200" for="chkIndisponivel">Consulta indisponível</label>
+        </div>
         <input type="text" id="searchInput" class="form-control form-control-sm ms-auto"
                placeholder="Buscar dispositivo…" style="width:220px" oninput="filtrarCards()">
     </div>
@@ -263,19 +282,22 @@
             {% if d.sem_permissao %}{% set _ = ordered.append((1, k, d)) %}{% endif %}
         {% endfor %}
         {% for k, d in dispositivos.items() %}
-            {% if d.offline %}{% set _ = ordered.append((2, k, d)) %}{% endif %}
+            {% if d.consulta_indisponivel and not d.sem_permissao %}{% set _ = ordered.append((2, k, d)) %}{% endif %}
         {% endfor %}
         {% for k, d in dispositivos.items() %}
-            {% if not d.novos and not d.removidos and not d.offline and not d.sem_permissao and not baseline.get(k) %}{% set _ = ordered.append((3, k, d)) %}{% endif %}
+            {% if d.offline and not d.consulta_indisponivel %}{% set _ = ordered.append((3, k, d)) %}{% endif %}
         {% endfor %}
         {% for k, d in dispositivos.items() %}
-            {% if not d.novos and not d.removidos and not d.offline and not d.sem_permissao and baseline.get(k) %}{% set _ = ordered.append((4, k, d)) %}{% endif %}
+            {% if not d.novos and not d.removidos and not d.offline and not d.sem_permissao and not d.consulta_indisponivel and not baseline.get(k) %}{% set _ = ordered.append((4, k, d)) %}{% endif %}
+        {% endfor %}
+        {% for k, d in dispositivos.items() %}
+            {% if not d.novos and not d.removidos and not d.offline and not d.sem_permissao and not d.consulta_indisponivel and baseline.get(k) %}{% set _ = ordered.append((5, k, d)) %}{% endif %}
         {% endfor %}
 
         {% for _, dev_key, d in ordered %}
         {%   set tem_alerta  = d.novos or d.removidos %}
         {%   set tem_base    = baseline.get(dev_key) %}
-        {%   set card_class  = 'alerta' if tem_alerta else ('sem-perm' if d.sem_permissao else ('limitado' if d.monitoramento_limitado else ('offline' if d.offline else ('sem-base' if not tem_base else 'ok')))) %}
+        {%   set card_class  = 'alerta' if tem_alerta else ('sem-perm' if d.sem_permissao else ('indisponivel' if d.consulta_indisponivel else ('limitado' if d.monitoramento_limitado else ('offline' if d.offline else ('sem-base' if not tem_base else 'ok'))))) %}
 
         <div class="device-card {{ card_class }}" data-state="{{ card_class }}" data-nome="{{ d.nome }}">
             <!-- Cabeçalho clicável -->
@@ -292,7 +314,9 @@
                 <strong class="ms-1">{{ d.nome }}</strong>
 
                 <!-- Status badge -->
-                {% if d.offline %}
+                {% if d.consulta_indisponivel %}
+                    <span class="badge text-white ms-2" style="background:#d69e2e"><i class="fas fa-exclamation-circle me-1"></i>Consulta indisponível</span>
+                {% elif d.offline %}
                     <span class="badge badge-offline text-white ms-2"><i class="fas fa-plug me-1"></i>Offline</span>
                 {% elif d.sem_permissao %}
                     <span class="badge text-white ms-2" style="background:#6610f2"><i class="fas fa-eye-slash me-1"></i>{{ 'Visibilidade limitada' if d.tipo == 'fortianalyzer' else 'Sem permissão na API key' }}</span>
@@ -377,7 +401,14 @@
                     <div class="mb-1" style="font-size:0.8rem;color:#6c757d;font-weight:600">
                         <i class="fas fa-users me-1"></i>Admins atuais no dispositivo
                     </div>
-                    {% if d.offline %}
+                    {% if d.consulta_indisponivel %}
+                        <div class="alert alert-warning py-2 mb-0" style="font-size:0.85rem">
+                            <i class="fas fa-exclamation-circle me-1"></i>
+                            <strong>Não foi possível atualizar os administradores deste dispositivo.</strong><br>
+                            <small class="text-muted">{{ d.motivo }}</small>
+                            {% if d.ultima_coleta_valida %}<br><small>Última coleta válida: {{ d.ultima_coleta_valida[:19].replace('T', ' ') }}</small>{% endif %}
+                        </div>
+                    {% elif d.offline %}
                         <span class="text-muted"><i class="fas fa-plug me-1"></i>Dispositivo offline — não foi possível consultar</span>
                     {% elif d.sem_permissao %}
                         <div class="alert alert-warning py-2 mb-0" style="font-size:0.85rem">
@@ -407,7 +438,7 @@
         {% endif %}
     </div>
                 <!-- Definir baseline (se ainda não tem) -->
-                {% if not d.offline and d.admins and not tem_base %}
+                {% if not d.offline and not d.consulta_indisponivel and d.admins and not tem_base %}
                 <div class="px-3 pb-3">
                     <form method="POST" action="{{ url_for('admin_definir_baseline') }}" class="d-flex align-items-center gap-2 flex-wrap">
                         <input type="hidden" name="device_key" value="{{ dev_key }}">
@@ -516,6 +547,7 @@ function filtrarCards() {
     const wantOffline = document.getElementById('chkOffline').checked;
     const wantSemBase = document.getElementById('chkSemBase').checked;
     const wantSemPerm = document.getElementById('chkSemPerm').checked;
+    const wantIndisponivel = document.getElementById('chkIndisponivel').checked;
     const search      = document.getElementById('searchInput').value.toLowerCase();
 
     let visibleCount = 0;
@@ -529,6 +561,7 @@ function filtrarCards() {
         if (state === 'offline'  && !wantOffline) visible = false;
         if (state === 'sem-base' && !wantSemBase) visible = false;
         if (state === 'sem-perm' && !wantSemPerm) visible = false;
+        if (state === 'indisponivel' && !wantIndisponivel) visible = false;
         if (state === 'limitado' && !wantOk)      visible = false;
         if (search && !nome.includes(search))     visible = false;
 
@@ -546,7 +579,8 @@ const statusCheckboxes = {
     ok: document.getElementById('chkOk'),
     offline: document.getElementById('chkOffline'),
     semBase: document.getElementById('chkSemBase'),
-    semPerm: document.getElementById('chkSemPerm')
+    semPerm: document.getElementById('chkSemPerm'),
+    indisponivel: document.getElementById('chkIndisponivel')
 };
 
 function aplicarFiltroContador(filtro) {
@@ -557,6 +591,7 @@ function aplicarFiltroContador(filtro) {
     // Sem baseline e monitoramento limitado fazem parte do total estatistico de OK.
     statusCheckboxes.semBase.checked = todos || filtro === 'ok';
     statusCheckboxes.semPerm.checked = todos;
+    statusCheckboxes.indisponivel.checked = todos || filtro === 'indisponivel';
 
     filtrarCards();
     document.getElementById('deviceList').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -568,9 +603,10 @@ function sincronizarContadorAtivo() {
     );
     let ativo = null;
     if (Object.values(selecionados).every(Boolean)) ativo = 'total';
-    else if (selecionados.alerta && !selecionados.ok && !selecionados.offline && !selecionados.semBase && !selecionados.semPerm) ativo = 'alerta';
-    else if (!selecionados.alerta && selecionados.ok && !selecionados.offline && selecionados.semBase && !selecionados.semPerm) ativo = 'ok';
-    else if (!selecionados.alerta && !selecionados.ok && selecionados.offline && !selecionados.semBase && !selecionados.semPerm) ativo = 'offline';
+    else if (selecionados.alerta && !selecionados.ok && !selecionados.offline && !selecionados.semBase && !selecionados.semPerm && !selecionados.indisponivel) ativo = 'alerta';
+    else if (!selecionados.alerta && selecionados.ok && !selecionados.offline && selecionados.semBase && !selecionados.semPerm && !selecionados.indisponivel) ativo = 'ok';
+    else if (!selecionados.alerta && !selecionados.ok && selecionados.offline && !selecionados.semBase && !selecionados.semPerm && !selecionados.indisponivel) ativo = 'offline';
+    else if (!selecionados.alerta && !selecionados.ok && !selecionados.offline && !selecionados.semBase && !selecionados.semPerm && selecionados.indisponivel) ativo = 'indisponivel';
 
     document.querySelectorAll('.stat-card[data-filter]').forEach(card => {
         const isActive = card.dataset.filter === ativo;
