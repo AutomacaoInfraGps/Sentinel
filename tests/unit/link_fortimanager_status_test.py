@@ -108,6 +108,24 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertEqual("FGT_CONTROL_MCO", result["device"]["name"])
         self.assertEqual("10.253.3.54", result["device"]["ip"])
 
+    @patch.object(web_config, "_get_cached_fortimanager_device", return_value={})
+    def test_live_inventory_resolves_device_despite_stale_link_ip(self, cached_device):
+        regional = {
+            "nome": "REG_NUTRICAR",
+            "links": [{"nome": "WAN1", "fortigate_host": "10.253.2.146"}],
+        }
+        devices = [{"name": "FGT_NUTRICAR", "hostname": "FGT_NUTRICAR", "ip": "10.253.2.144"}]
+
+        result = web_config._get_gerenciador_fortigate_regional(
+            "REG_NUTRICAR",
+            regional,
+            adom="GPS_UNIDADES-70",
+            fortimanager_devices=devices,
+        )
+
+        self.assertEqual("FGT_NUTRICAR", result["device"]["name"])
+        self.assertEqual("10.253.2.144", result["device"]["ip"])
+
     def test_all_link_buttons_use_the_canonical_collection_routes(self):
         root = Path(__file__).parents[2]
         regionais = (root / "templates" / "regionais.html").read_text(encoding="utf-8")
