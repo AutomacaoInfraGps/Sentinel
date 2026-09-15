@@ -29,11 +29,34 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
             {"chave": "REG_CEARA", "nome_exibicao": "CEARA", "tokens": web_config._gerar_tokens_regional("REG_CEARA")},
             {"chave": "REG_CEARA_2", "nome_exibicao": "CEARA 2", "tokens": web_config._gerar_tokens_regional("REG_CEARA_2")},
             {"chave": "REG_CONTROL_NANUQUE", "nome_exibicao": "CONTROL NANUQUE", "tokens": web_config._gerar_tokens_regional("REG_CONTROL_NANUQUE")},
+            {"chave": "REG_CONTROL_MACEIO", "nome_exibicao": "CONTROL MACEIO", "tokens": web_config._gerar_tokens_regional("REG_CONTROL_MACEIO")},
         ]
 
         self.assertEqual("REG_CEARA", web_config._mapear_regional_vpn("CEARA", "T018", index)["chave"])
         self.assertEqual("REG_CEARA_2", web_config._mapear_regional_vpn("CEARA", "T024", index)["chave"])
         self.assertEqual("REG_CONTROL_NANUQUE", web_config._mapear_regional_vpn("NANUQUE", "T062", index)["chave"])
+        self.assertEqual("REG_CONTROL_MACEIO", web_config._mapear_regional_vpn("MCO", "T060", index)["chave"])
+
+    @patch.object(web_config, "_get_cached_fortimanager_device")
+    def test_control_inventory_overrides_contaminated_link_and_firewall_cache(self, cached_device):
+        cached_device.return_value = {
+            "name": "FGT_CTRLMACEIO", "hostname": "FGT_CTRLMACEIO", "ip": "10.0.0.1"
+        }
+        devices = [
+            {"name": "FGT_CTRLMACEIO", "hostname": "FGT_CTRLMACEIO", "ip": "10.0.0.1"},
+            {"name": "FGT_CTRLARAPIRACA", "hostname": "FGT_CTRLARAPIRACA", "ip": "10.0.0.2"},
+        ]
+        regional = {
+            "nome": "REG_CONTROL_ARAPIRACA",
+            "links_internet_auto": [{"fortigate_host": "10.0.0.1"}],
+        }
+
+        resolved = web_config._get_gerenciador_fortigate_regional(
+            "REG_CONTROL_ARAPIRACA", regional, adom="root", fortimanager_devices=devices
+        )
+
+        self.assertEqual("FGT_CTRLARAPIRACA", resolved["device"]["name"])
+        self.assertEqual("10.0.0.2", resolved["device"]["ip"])
 
     def test_unregistered_vpn_is_not_approximately_assigned_to_another_regional(self):
         index = [

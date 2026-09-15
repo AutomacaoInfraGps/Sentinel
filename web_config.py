@@ -957,6 +957,10 @@ def _carregar_indice_regionais_vpn():
 
 
 _VPN_REGIONAL_ALIAS = {
+    "T060": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
+    "MCO": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
+    "CONTMCO": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
+    "CONTROLMCO": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
     "T018": "REG_CEARA",
     "CEARA01": "REG_CEARA",
     "CEARA1": "REG_CEARA",
@@ -983,7 +987,8 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     for candidato in candidatos:
         regional_alias = _VPN_REGIONAL_ALIAS.get(candidato)
         if regional_alias:
-            return indice_por_chave.get(regional_alias)
+            aliases = regional_alias if isinstance(regional_alias, (tuple, list)) else (regional_alias,)
+            return next((indice_por_chave[alias] for alias in aliases if alias in indice_por_chave), None)
 
     for candidato in candidatos:
         correspondencias = [
@@ -2365,14 +2370,25 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
         devices = _list_cached_fortimanager_devices()
         inventory_source = "firewall_cache" if devices else "unavailable"
     devices = devices or []
+    codigo_compacto = _compact_identifier(codigo_regional)
+    control_family = bool(re.match(r"^(?:REGIONAL|REG|RG)(?:CONTROL|CTRL|CNTRL)", codigo_compacto))
+    if control_family and inventory_available:
+        device_match = _match_fortimanager_device(codigo_regional, regional_info or {}, devices)
+        if device_match:
+            target_name = device_match.get("name") or device_match.get("hostname")
+            target_ip = device_match.get("ip")
+        else:
+            target_name = None
+            target_ip = None
+
     cached_regional_device = _get_cached_fortimanager_device(codigo_regional)
-    if cached_regional_device:
+    if cached_regional_device and not control_family:
         cached_ip = str(cached_regional_device.get("ip") or "").strip()
         if not target_name and (not target_ip or not cached_ip or str(target_ip).strip() == cached_ip):
             target_name = cached_regional_device.get("name")
             target_ip = cached_ip or target_ip
     candidate_devices = _rank_fortimanager_devices(codigo_regional, regional_info or {}, devices)
-    device_match = {}
+    device_match = device_match if "device_match" in locals() else {}
 
     if override_device_names:
         target_name = target_name or override_device_names[0]

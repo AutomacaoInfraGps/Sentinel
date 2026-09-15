@@ -336,7 +336,10 @@ Zabbix continua aplicada sobre os dados atuais da controladora.
 Ao alterar o codigo ou o nome de uma regional, links descobertos automaticamente
 para a identidade anterior sao descartados e procurados novamente no FortiManager.
 Links manuais sao preservados. Termos genericos como `CONTROL`, `CTRL` e `CNTRL`
-nao bastam para associar equipamentos de unidades diferentes.
+nao bastam para associar equipamentos de unidades diferentes. Para essas novas
+regionais, o inventario atual do FortiManager prevalece sobre IPs e caches antigos.
+A VPN legada `T060/MCO` acompanha tanto a chave atual `REG_CONTROL_MACEIO` quanto
+a antiga `REG_CONTROL_MCO`, priorizando a chave atual.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
