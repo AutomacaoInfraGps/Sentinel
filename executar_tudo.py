@@ -1430,10 +1430,10 @@ _VPN_REGIONAL_ALIAS = {
     "T048": "REG_PRAIA_GRANDE",
     "PRAIA": "REG_PRAIA_GRANDE",
     "PRAIAGRANDE": "REG_PRAIA_GRANDE",
-    "T060": "REG_CONTROL_MCO",
-    "MCO": "REG_CONTROL_MCO",
-    "CONTMCO": "REG_CONTROL_MCO",
-    "CONTROLMCO": "REG_CONTROL_MCO",
+    "T060": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
+    "MCO": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
+    "CONTMCO": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
+    "CONTROLMCO": ("REG_CONTROL_MACEIO", "REG_CONTROL_MCO"),
     "T062": "REG_CONTROL_NANUQUE",
     "NANUQUE": "REG_CONTROL_NANUQUE",
 }
@@ -1451,7 +1451,8 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     for cand in candidatos:
         regional_alias = _VPN_REGIONAL_ALIAS.get(cand)
         if regional_alias:
-            return indice_por_chave.get(regional_alias)
+            aliases = regional_alias if isinstance(regional_alias, (tuple, list)) else (regional_alias,)
+            return next((indice_por_chave[alias] for alias in aliases if alias in indice_por_chave), None)
 
     for cand in candidatos:
         correspondencias = [reg for reg in indice_regionais if cand in reg["tokens"]]
