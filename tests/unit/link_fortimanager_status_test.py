@@ -94,7 +94,7 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
 
     @patch.object(web_config, "_list_fortimanager_devices")
     @patch.object(web_config, "_get_cached_fortimanager_device")
-    def test_regional_cache_supplies_exact_device_name(self, cached_device, live_devices):
+    def test_live_inventory_refreshes_ip_for_cached_device_name(self, cached_device, live_devices):
         live_devices.return_value = [{"name": "FGT_CONTROL_MCO", "ip": "10.0.0.99"}]
         cached_device.return_value = {
             "name": "FGT_CONTROL_MCO",
@@ -106,7 +106,27 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         result = web_config._get_gerenciador_fortigate_regional("REG_CONTROL_MCO", regional)
 
         self.assertEqual("FGT_CONTROL_MCO", result["device"]["name"])
-        self.assertEqual("10.253.3.54", result["device"]["ip"])
+        self.assertEqual("10.0.0.99", result["device"]["ip"])
+
+    def test_public_sdwan_interface_can_use_legacy_dmz_or_ha_name(self):
+        interface = {
+            "name": "dmz",
+            "alias": "(WAN_VIVO)",
+            "ip": "201.63.46.74 255.255.255.248",
+            "role": 1,
+            "status": True,
+        }
+
+        self.assertTrue(web_config._is_wan_interface(interface))
+        normalized = {
+            "interface_monitorada": "dmz",
+            "provedor": "(WAN_VIVO)",
+            "ip": "201.63.46.74",
+            "categoria": "internet",
+            "regra_origem": "links_internet_auto",
+        }
+        self.assertTrue(web_config._should_keep_synced_link(normalized))
+        self.assertTrue(web_config._is_internet_link_candidate(normalized))
 
     @patch.object(web_config, "_get_cached_fortimanager_device", return_value={})
     def test_live_inventory_resolves_device_despite_stale_link_ip(self, cached_device):

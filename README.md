@@ -315,6 +315,9 @@ com estado visual de erro (icone `X` vermelho), nunca como sucesso.
 O device da regional e resolvido pelo inventario atual do FortiManager mesmo
 quando os links ainda guardam um IP antigo, sem depender de um cache auxiliar
 ou de uma excecao por regional.
+Quando o FortiManager retorna membros monitorados no SD-WAN, somente essas
+interfaces compoem os links operacionais. Nomes legados como `dmz` e `ha1` sao
+aceitos quando possuem IP publico, papel WAN e provedor identificado.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.

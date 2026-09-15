@@ -1346,12 +1346,22 @@ def _is_excluded_wan_name(name: str) -> bool:
     return False
 
 
+def _is_legacy_named_wan_candidate(link: dict) -> bool:
+    name = str(link.get("interface_monitorada") or link.get("name") or link.get("interface") or "").strip().lower()
+    provider = str(link.get("provedor") or link.get("alias") or link.get("description") or "").strip().lower()
+    return (
+        _is_excluded_wan_name(name)
+        and "wan" in provider
+        and _is_public_ip(_extract_interface_ip(link.get("ip")))
+    )
+
+
 def _should_keep_synced_link(link: dict) -> bool:
     interface_name = str(link.get("interface_monitorada") or link.get("nome") or "").strip().lower()
     provider_name = str(link.get("provedor") or "").strip()
     ip_text = _extract_interface_ip(link.get("ip"))
 
-    if _is_excluded_wan_name(interface_name):
+    if _is_excluded_wan_name(interface_name) and not _is_legacy_named_wan_candidate(link):
         return False
     if not _is_meaningful_provider_text(provider_name):
         return False
@@ -1406,6 +1416,8 @@ def _is_wan_interface(interface: dict) -> bool:
     has_public_ip = _is_public_ip(interface_ip)
     is_up = _interface_esta_online(interface)
     meaningful_provider = _is_meaningful_provider_text(interface.get("alias") or interface.get("description") or "")
+    edge_name = name.startswith("wan") or name.startswith("port") or name in {"a", "b"}
+    role_wan = role in {"1", "wan"} or role_raw == 1
 
     if not name:
         return False
@@ -1416,7 +1428,7 @@ def _is_wan_interface(interface: dict) -> bool:
     if "vpn" in name or name.startswith("t_"):
         return False
 
-    if _is_excluded_wan_name(name):
+    if _is_excluded_wan_name(name) and not _is_legacy_named_wan_candidate(interface):
         return False
 
     if name.startswith(("internal", "loopback", "fortilink")):
@@ -1424,9 +1436,6 @@ def _is_wan_interface(interface: dict) -> bool:
 
     if name == "mgmt":
         return False
-
-    edge_name = name.startswith("wan") or name.startswith("port") or name in {"a", "b"}
-    role_wan = role in {"1", "wan"} or role_raw == 1
 
     if has_public_ip:
         return role_wan or edge_name
@@ -1699,7 +1708,7 @@ def _is_internet_link_candidate(link: dict) -> bool:
     if interface_name.startswith("t_"):
         return False
 
-    if _is_excluded_wan_name(interface_name):
+    if _is_excluded_wan_name(interface_name) and not _is_legacy_named_wan_candidate(link):
         return False
 
     if not _is_meaningful_provider_text(provider_name):
@@ -2357,10 +2366,12 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
             target_name = device_match.get("name") or device_match.get("hostname")
             target_ip = device_match.get("ip") or target_ip
 
-    if not target_ip and target_name:
+    if target_name:
         for device in devices:
             if str(device.get("name", "")).strip().upper() == str(target_name).strip().upper():
-                target_ip = device.get("ip")
+                device_match = device
+                target_name = device.get("name") or target_name
+                target_ip = device.get("ip") or target_ip
                 break
 
     if not target_ip:
@@ -2556,6 +2567,15 @@ def _coletar_links_regional(
                 codigo_regional,
                 exc,
             )
+
+    if sdwan_members_map:
+        interfaces_monitoradas = []
+        for interface in interfaces_wan:
+            interface_name = interface.get("name") or interface.get("interface")
+            if _buscar_sdwan_member(sdwan_members_map, interface_name):
+                interfaces_monitoradas.append(interface)
+        if interfaces_monitoradas:
+            interfaces_wan = interfaces_monitoradas
 
     if not interfaces_wan:
         if persist and links_fallback:
