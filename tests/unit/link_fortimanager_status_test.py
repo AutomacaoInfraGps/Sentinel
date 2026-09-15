@@ -122,6 +122,20 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertIn("resultado = _executar_sincronizacao_links_todas_regionais()", backend)
         self.assertIn("resultado_coleta = _coletar_links_regional(", backend)
 
+    def test_fortimanager_warning_uses_error_overlay(self):
+        detalhes = (Path(__file__).parents[2] / "templates" / "regional_detalhes.html").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "falharOverlayAcaoRegional('FortiManager indisponível', data.message",
+            detalhes,
+        )
+        self.assertIn(
+            "falharOverlayAcaoRegional('FortiManager indisponível', message",
+            detalhes,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
