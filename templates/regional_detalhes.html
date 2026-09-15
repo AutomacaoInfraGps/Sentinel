@@ -1518,7 +1518,7 @@ function sincronizarLinksRegional(button = null) {
             if (data.warning) {
                 const links = data.links || [];
                 try { atualizarLinksRegionalTempoReal(links); } catch (_) {}
-                finalizarOverlayAcaoRegional('FortiManager indisponível', data.message || 'Exibindo último estado dos links.');
+                falharOverlayAcaoRegional('FortiManager indisponível', data.message || 'Exibindo último estado dos links.');
                 showToast(data.message || 'FortiManager indisponível; exibindo último estado.', 'warning', { delay: 9000 });
                 return;
             }
@@ -1573,7 +1573,7 @@ function testarLink(codigoRegional, linkId, nomeLink) {
 
                 // FortiManager indisponivel: mostra aviso em vez de "Link online"
                 if (response.warning) {
-                    finalizarOverlayAcaoRegional('FortiManager indisponível', message || `${nomeLink}: FortiManager nao retornou o link, marcado como offline.`);
+                    falharOverlayAcaoRegional('FortiManager indisponível', message || `${nomeLink}: FortiManager nao retornou o link, marcado como offline.`);
                     showToast(message || 'FortiManager indisponível; link marcado como offline.', 'warning', { delay: 9000 });
                 } else if (status === 'online') {
                     finalizarOverlayAcaoRegional('Link online', message || `${nomeLink} esta online.`);

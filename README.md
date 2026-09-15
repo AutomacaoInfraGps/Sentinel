@@ -310,6 +310,8 @@ mudancas reais de conteudo ou status.
 Nos detalhes da regional, `links_internet_auto` e a fonte autoritativa depois
 da primeira sincronizacao. O snapshot operacional antigo nao pode restaurar um
 link que ja deixou de existir no FortiManager.
+Falhas de consulta ao FortiManager preservam o ultimo cache, mas sao exibidas
+com estado visual de erro (icone `X` vermelho), nunca como sucesso.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
