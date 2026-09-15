@@ -318,6 +318,8 @@ ou de uma excecao por regional.
 Quando o FortiManager retorna membros monitorados no SD-WAN, somente essas
 interfaces compoem os links operacionais. Nomes legados como `dmz` e `ha1` sao
 aceitos quando possuem IP publico, papel WAN e provedor identificado.
+O teste de um unico link reutiliza esse mesmo coletor e preserva o ultimo estado
+quando a consulta nao fornece dados suficientes para uma validacao conclusiva.
 
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
