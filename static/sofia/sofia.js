@@ -11,6 +11,7 @@
     const maxStoredMessages = 50;
     const panel = document.getElementById("sofiaPanel");
     const launcher = document.getElementById("sofiaLauncher");
+    const greeting = document.getElementById("sofiaGreeting");
     const closeButton = document.getElementById("sofiaClose");
     const clearButton = document.getElementById("sofiaClear");
     const form = document.getElementById("sofiaForm");
@@ -18,13 +19,74 @@
     const sendButton = document.getElementById("sofiaSend");
     const messages = document.getElementById("sofiaMessages");
     const status = document.getElementById("sofiaStatus");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    function typeAssistantMessage(item) {
+        if (!item || item.dataset.typed === "true" || item.dataset.typing === "true") return;
+
+        const textNode = item.querySelector("p");
+        const fullText = item.dataset.fullText || textNode?.textContent || "";
+        if (!textNode || !fullText) return;
+
+        item.dataset.fullText = fullText;
+        if (reduceMotion.matches) {
+            textNode.textContent = fullText;
+            item.dataset.typed = "true";
+            return;
+        }
+
+        item.dataset.typing = "true";
+        item.classList.add("is-typing");
+        textNode.textContent = "";
+        const typingRun = String((Number(item.dataset.typingRun) || 0) + 1);
+        item.dataset.typingRun = typingRun;
+
+        let position = 0;
+        const interval = 22;
+        const charsPerStep = Math.max(1, Math.ceil(fullText.length / (8000 / interval)));
+        const typeNext = function () {
+            if (item.dataset.typingRun !== typingRun) return;
+            position = Math.min(fullText.length, position + charsPerStep);
+            textNode.textContent = fullText.slice(0, position);
+            messages.scrollTop = messages.scrollHeight;
+
+            if (position < fullText.length) {
+                window.setTimeout(typeNext, interval);
+                return;
+            }
+
+            item.classList.remove("is-typing");
+            item.dataset.typing = "false";
+            item.dataset.typed = "true";
+        };
+        typeNext();
+    }
+
+    function resetWelcomeAnimation() {
+        const hasUserMessage = messages.querySelector(".sofia-message-user");
+        if (hasUserMessage) return;
+
+        messages.querySelectorAll(".sofia-message-assistant").forEach(function (item) {
+            const textNode = item.querySelector("p");
+            if (!textNode) return;
+            item.dataset.typingRun = String((Number(item.dataset.typingRun) || 0) + 1);
+            item.dataset.typing = "false";
+            item.dataset.typed = "false";
+            item.classList.remove("is-typing");
+            textNode.textContent = item.dataset.fullText || textNode.textContent;
+        });
+    }
 
     function setOpen(open) {
+        const isNewOpening = open && panel.hidden;
         panel.hidden = !open;
+        widget.classList.toggle("is-open", open);
         launcher.setAttribute("aria-expanded", open ? "true" : "false");
         launcher.setAttribute("aria-label", open ? "Fechar SofIA" : "Abrir SofIA");
         savePanelState(open);
         if (open) {
+            if (isNewOpening) resetWelcomeAnimation();
+            messages.querySelectorAll(".sofia-message-assistant:not([data-typed='true'])").forEach(typeAssistantMessage);
             input.focus();
             messages.scrollTop = messages.scrollHeight;
         } else {
@@ -78,7 +140,7 @@
     function messageFromElement(item) {
         const type = item.classList.contains("sofia-message-user") ? "user" : "assistant";
         const author = item.querySelector(".sofia-message-author")?.textContent || (type === "user" ? "Você" : "SofIA");
-        const text = item.querySelector("p")?.textContent || "";
+        const text = item.dataset.fullText || item.querySelector("p")?.textContent || "";
         return { author, text, type };
     }
 
@@ -97,14 +159,15 @@
 
         messages.textContent = "";
         history.forEach(function (message) {
-            appendMessage(message.author, message.text, message.type, false);
+            appendMessage(message.author, message.text, message.type, false, false);
         });
     }
 
-    function appendMessage(author, text, type, persist = true) {
+    function appendMessage(author, text, type, persist = true, animate = true) {
         const safeType = normalizeMessageType(type);
         const item = document.createElement("div");
         item.className = `sofia-message sofia-message-${safeType}`;
+        item.dataset.fullText = text;
 
         const authorNode = document.createElement("span");
         authorNode.className = "sofia-message-author";
@@ -118,6 +181,11 @@
         messages.scrollTop = messages.scrollHeight;
 
         if (persist) saveMessages(getCurrentMessages());
+        if (safeType === "assistant" && animate) {
+            if (!panel.hidden) typeAssistantMessage(item);
+        } else {
+            item.dataset.typed = "true";
+        }
     }
 
     function setBusy(busy) {
@@ -135,6 +203,9 @@
     launcher.addEventListener("click", function () {
         setOpen(panel.hidden);
     });
+    if (greeting) {
+        greeting.addEventListener("click", function () { setOpen(true); });
+    }
     closeButton.addEventListener("click", function () { setOpen(false); });
     clearButton.addEventListener("click", function () {
         try {
