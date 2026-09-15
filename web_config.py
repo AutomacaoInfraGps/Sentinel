@@ -952,6 +952,14 @@ def _carregar_indice_regionais_vpn():
 
 
 _VPN_REGIONAL_ALIAS = {
+    "T018": "REG_CEARA",
+    "CEARA01": "REG_CEARA",
+    "CEARA1": "REG_CEARA",
+    "T024": "REG_CEARA_2",
+    "CEARA02": "REG_CEARA_2",
+    "CEARA2": "REG_CEARA_2",
+    "T062": "REG_CONTROL_NANUQUE",
+    "NANUQUE": "REG_CONTROL_NANUQUE",
     "SLUIS": "REG_MARANHAO",
 }
 
@@ -961,8 +969,9 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
         return None
 
     candidatos = []
-    candidatos.extend(_gerar_tokens_regional(nome_exibicao_vpn))
+    # O codigo do tunel (T018/T024/T062) e mais especifico que o nome.
     candidatos.extend(_gerar_tokens_regional(codigo_vpn))
+    candidatos.extend(_gerar_tokens_regional(nome_exibicao_vpn))
     candidatos = [candidato for candidato in candidatos if candidato]
 
     indice_por_chave = {str(regional.get("chave") or "").strip().upper(): regional for regional in indice_regionais}
@@ -1000,7 +1009,7 @@ def _agrupar_vpns_por_regional(vpns):
     for vpn in vpns:
         tunel = str(vpn.get("tunel") or "Desconhecido").strip()
         status_bruto = str(vpn.get("status") or "down").strip().lower()
-        status = "up" if status_bruto == "up" else "down"
+        status = "up" if status_bruto in {"up", "online"} else "down"
         regional_vpn = _extrair_regional_vpn(tunel)
         nome_exibicao_vpn = _extrair_nome_exibicao_regional_vpn(tunel)
 
@@ -1933,7 +1942,7 @@ def _resolve_link_operational_status(link_mode_status, sla_status, sla_data=None
     """Usa o packet loss do MONITOR_ZABBIX e mantem fallbacks operacionais."""
     packet_loss = _extract_monitor_zabbix_packet_loss(sla_data)
     if packet_loss is not None:
-        return ("online" if packet_loss <= 10 else "offline"), "monitor_zabbix_packet_loss"
+        return ("offline" if packet_loss >= 100 else "online"), "monitor_zabbix_packet_loss"
 
     link_mode = str(link_mode_status or "").strip().lower()
     sla = str(sla_status or "").strip().lower()
@@ -4099,6 +4108,14 @@ def _obter_links_detalhe_regional(codigo_regional, regional_info):
     return links_operacionais or links_canonicos
 
 
+def _obter_vpns_detalhe_regional(codigo_regional):
+    vpns = records_for("vpns")
+    if not vpns:
+        return []
+    agrupadas = _agrupar_vpns_por_regional(vpns).get("vpns_por_regional") or {}
+    return [dict(vpn) for vpn in (agrupadas.get(codigo_regional, {}).get("tunels") or [])]
+
+
 @app.route('/regional/<codigo_regional>')
 @login_required
 def detalhar_regional(codigo_regional):
@@ -4181,53 +4198,17 @@ def detalhar_regional(codigo_regional):
             )
             links_completos.append(link_completo)
 
+        vpns_completas = _obter_vpns_detalhe_regional(codigo_regional)
+
         # Buscar firewalls desta regional usando o mesmo matching da página principal
         firewalls_completos = []
         try:
             adom = _get_fortimanager_adom()
+            regionais_map = {
+                codigo: gerenciador_regionais.obter_regional(codigo) or {}
+                for codigo in gerenciador_regionais.listar_regionais()
+            }
             try:
-                import re as _re
-
-                DEVICE_REGIONAL_OVERRIDE = {
-                    'FTG_GLX_100F_MATRIZ': 'REG_GALAXIA',
-                    'FGT_REGSAOJOSEDOSCAMPOS': 'REG_SJC',
-                }
-
-                def _norm2(s):
-                    return _re.sub(r'[^A-Z0-9]', '', s.upper())
-
-                def _device_key2(name):
-                    n = name.upper()
-                    for prefix in ('FGT_REG', 'FTG_REG', 'FGT_', 'FTG_'):
-                        if n.startswith(prefix):
-                            return n[len(prefix):]
-                    return n
-
-                def _match_regional(device_name, regional_code):
-                    """Verifica se o device pertence à regional usando o mesmo algoritmo do listar_firewalls"""
-                    # Override manual
-                    if device_name in DEVICE_REGIONAL_OVERRIDE:
-                        return DEVICE_REGIONAL_OVERRIDE[device_name] == regional_code
-
-                    dev_norm = _norm2(_device_key2(device_name))
-                    reg_upper = regional_code.upper()
-                    reg_key = reg_upper[4:] if reg_upper.startswith('REG_') else reg_upper
-                    reg_norm = _norm2(reg_key)
-                    if not reg_norm or not dev_norm:
-                        return False
-
-                    if dev_norm == reg_norm:
-                        return True
-                    if len(reg_norm) >= 3 and dev_norm.startswith(reg_norm):
-                        return True
-                    if len(dev_norm) >= 3 and reg_norm.startswith(dev_norm):
-                        return True
-                    if len(reg_norm) >= 4 and reg_norm in dev_norm:
-                        return True
-                    if len(dev_norm) >= 4 and dev_norm in reg_norm:
-                        return True
-                    return False
-
                 fm_client = FortiManagerClient()
                 fm_client.login()
                 fm_devices = fm_client.list_devices(adom)
@@ -4241,7 +4222,7 @@ def detalhar_regional(codigo_regional):
                     if not device_name:
                         continue
 
-                    if not _match_regional(device_name, codigo_regional):
+                    if _resolver_regional_firewall(device_name, regionais_map) != codigo_regional:
                         continue
 
                     device_ip       = device_data.get('ip', '')
@@ -4357,6 +4338,7 @@ def detalhar_regional(codigo_regional):
             'descricao': regional_info.get('descricao', ''),
             'servidores': servidores_completos,
             'links': links_completos,
+            'vpns': vpns_completas,
             'firewalls': firewalls_completos,
             'switches': switches_completos,
             'switches_regional_nome': switches_regional_nome
@@ -4460,37 +4442,59 @@ def _obter_firewalls_regionais_cache(codigo_regional):
     return [dict(item) for item in firewalls_por_regional.get(codigo_norm, [])]
 
 
-def _device_pertence_regional_firewall(device_name, codigo_regional):
-    device_overrides = {
-        'FTG_GLX_100F_MATRIZ': 'REG_GALAXIA',
-        'FGT_REGSAOJOSEDOSCAMPOS': 'REG_SJC',
-    }
-    if device_name in device_overrides:
-        return device_overrides[device_name] == codigo_regional
+_FIREWALL_REGIONAL_OVERRIDES = {
+    "FTG_GLX_100F_MATRIZ": "REG_GALAXIA",
+    "FGT_REGSAOJOSEDOSCAMPOS": "REG_SJC",
+}
 
-    def _norm(value):
-        return re.sub(r'[^A-Z0-9]', '', str(value or '').upper())
 
-    device_key = str(device_name or '').upper()
-    for prefix in ('FGT_REG', 'FTG_REG', 'FGT_', 'FTG_'):
-        if device_key.startswith(prefix):
-            device_key = device_key[len(prefix):]
-            break
+def _normalizar_identidade_firewall(valor):
+    texto = _normalizar_texto_regional(valor)
+    texto = re.sub(r"^(?:FGT|FTG)(?:REG)?", "", texto)
+    texto = re.sub(r"^REG", "", texto)
+    return re.sub(r"\d+", lambda match: str(int(match.group(0))), texto)
 
-    dev_norm = _norm(device_key)
-    reg_key = str(codigo_regional or '').upper()
-    reg_key = reg_key[4:] if reg_key.startswith('REG_') else reg_key
-    reg_norm = _norm(reg_key)
-    if not dev_norm or not reg_norm:
-        return False
 
-    return (
-        dev_norm == reg_norm
-        or (len(reg_norm) >= 3 and dev_norm.startswith(reg_norm))
-        or (len(dev_norm) >= 3 and reg_norm.startswith(dev_norm))
-        or (len(reg_norm) >= 4 and reg_norm in dev_norm)
-        or (len(dev_norm) >= 4 and dev_norm in reg_norm)
-    )
+def _resolver_regional_firewall(device_name, regionais_map):
+    device_upper = str(device_name or "").strip().upper()
+    override = _FIREWALL_REGIONAL_OVERRIDES.get(device_upper)
+    if override in regionais_map:
+        return override
+
+    device_norm = _normalizar_identidade_firewall(device_upper)
+    if not device_norm:
+        return None
+
+    melhor = None
+    melhor_score = 0
+    for codigo, dados in (regionais_map or {}).items():
+        candidatos = {
+            _normalizar_identidade_firewall(codigo),
+            _normalizar_identidade_firewall((dados or {}).get("nome")),
+        }
+        candidatos.discard("")
+        for regional_norm in candidatos:
+            if device_norm == regional_norm:
+                score = 10000 + len(regional_norm)
+            elif len(regional_norm) >= 3 and device_norm.startswith(regional_norm):
+                score = 1000 + len(regional_norm)
+            elif len(device_norm) >= 4 and regional_norm.startswith(device_norm):
+                score = 500 + len(device_norm)
+            else:
+                continue
+            if score > melhor_score:
+                melhor = codigo
+                melhor_score = score
+    return melhor
+
+
+def _device_pertence_regional_firewall(device_name, codigo_regional, regionais_map=None):
+    if regionais_map is None:
+        regionais_map = {
+            codigo: gerenciador_regionais.obter_regional(codigo) or {}
+            for codigo in gerenciador_regionais.listar_regionais()
+        }
+    return _resolver_regional_firewall(device_name, regionais_map) == codigo_regional
 
 
 def _normalizar_licenca_firewall(license_key, license_info):
@@ -6462,52 +6466,6 @@ def listar_firewalls(return_data=False):
                     regionais_map[regional_code] = regional_info
             
             # Mapeamento manual para casos onde nome do device é abreviação diferente da regional
-            DEVICE_REGIONAL_OVERRIDE = {
-                'FTG_GLX_100F_MATRIZ': 'REG_GALAXIA',
-                'FGT_REGSAOJOSEDOSCAMPOS': 'REG_SJC',
-            }
-
-            import re as _re
-
-            def _norm(s):
-                """Normaliza string: remove separadores, maiúsculo, só alfanumérico"""
-                return _re.sub(r'[^A-Z0-9]', '', s.upper())
-
-            def _device_key(name):
-                """Extrai parte significativa do nome do device (remove prefixo FGT_REG etc.)"""
-                n = name.upper()
-                for prefix in ('FGT_REG', 'FTG_REG', 'FGT_', 'FTG_'):
-                    if n.startswith(prefix):
-                        return n[len(prefix):]
-                return n
-
-            def _find_regional(device_name, regionais_map):
-                """Matching fuzzy: normaliza nomes e usa prefixo/contenção para casar device→regional"""
-                dev_norm = _norm(_device_key(device_name))
-                best_match = None
-                best_score = 0
-                for reg_code in regionais_map:
-                    reg_upper = reg_code.upper()
-                    reg_key = reg_upper[4:] if reg_upper.startswith('REG_') else reg_upper
-                    reg_norm = _norm(reg_key)
-                    if not reg_norm:
-                        continue
-                    score = 0
-                    if dev_norm == reg_norm:
-                        score = 1000
-                    elif len(reg_norm) >= 3 and dev_norm.startswith(reg_norm):
-                        score = len(reg_norm)          # prefixo exato (CAMPINAS in CAMPINAS01)
-                    elif len(dev_norm) >= 3 and reg_norm.startswith(dev_norm):
-                        score = len(dev_norm)           # device é prefixo da regional (GLOBALSEG in GLOBALSEGURANCA)
-                    elif len(reg_norm) >= 4 and reg_norm in dev_norm:
-                        score = len(reg_norm) - 1      # regional contida no device
-                    elif len(dev_norm) >= 4 and dev_norm in reg_norm:
-                        score = len(dev_norm) - 1      # device contido na regional
-                    if score > best_score:
-                        best_score = score
-                        best_match = reg_code
-                return best_match if best_score > 0 else None
-
             # Para cada device no FortiManager, matchear com regional
             for device_data in devices_data:
                 if not isinstance(device_data, dict):
@@ -6529,7 +6487,7 @@ def listar_firewalls(return_data=False):
                     regional_encontrada = DEVICE_REGIONAL_OVERRIDE[device_name]
                     print(f"   -> OVERRIDE: {device_name} -> {regional_encontrada}")
                 else:
-                    regional_encontrada = _find_regional(device_name, regionais_map)
+                    regional_encontrada = _resolver_regional_firewall(device_name, regionais_map)
                     print(f"   -> MATCH: {device_name} -> {regional_encontrada}")
                 
                 # Se encontrou regional, buscar licenças
