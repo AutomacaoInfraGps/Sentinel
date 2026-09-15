@@ -49,3 +49,21 @@ class RegionalStatePersistenceTests(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual(reloaded["servidores"], [])
+
+    def test_renomear_regional_descarta_links_auto_e_preserva_manuais(self):
+        self.manager.adicionar_regional("REG_CNTRL_MACEIO", "REG_CNTRL_MACEIO")
+        regional = self.manager.regionais["regionais"]["REG_CNTRL_MACEIO"]
+        regional["links"] = [
+            {"id": "auto", "origem_sync": "fortimanager", "fortigate_host": "10.0.0.1"},
+            {"id": "manual", "nome": "Link manual"},
+        ]
+        regional["links_internet_auto"] = [{"id": "auto"}]
+        self.manager.salvar_regionais()
+
+        self.manager.atualizar_regional(
+            "REG_CNTRL_MACEIO", "REG_CONTROL_MACEIO", "REG_CONTROL_MACEIO"
+        )
+        reloaded = GerenciadorRegionais(str(self.path)).obter_regional("REG_CONTROL_MACEIO")
+
+        self.assertNotIn("links_internet_auto", reloaded)
+        self.assertEqual(["manual"], [link["id"] for link in reloaded["links"]])

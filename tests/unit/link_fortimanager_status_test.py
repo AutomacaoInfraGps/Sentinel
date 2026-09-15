@@ -7,6 +7,23 @@ import web_config
 
 
 class LinkFortimanagerStatusTest(unittest.TestCase):
+    def test_control_regional_requires_the_specific_unit_name(self):
+        devices = [
+            {"name": "FGT_CTRLMACEIO", "hostname": "FGT_CTRLMACEIO", "ip": "10.0.0.1"},
+            {"name": "FGT_CTRLNANUQUE", "hostname": "FGT_CTRLNANUQUE", "ip": "10.0.0.2"},
+            {"name": "FGT_CTRLPONTENOVA", "hostname": "FGT_CTRLPONTENOVA", "ip": "10.0.0.3"},
+        ]
+
+        maceio = web_config._match_fortimanager_device(
+            "REG_CONTROL_MACEIO", {"nome": "REG_CONTROL_MACEIO"}, devices
+        )
+        desconhecida = web_config._match_fortimanager_device(
+            "REG_CONTROL_UNIDADE_NOVA", {"nome": "REG_CONTROL_UNIDADE_NOVA"}, devices
+        )
+
+        self.assertEqual("FGT_CTRLMACEIO", maceio["name"])
+        self.assertEqual({}, desconhecida)
+
     def test_vpn_codes_map_ceara_units_and_control_nanuque_exactly(self):
         index = [
             {"chave": "REG_CEARA", "nome_exibicao": "CEARA", "tokens": web_config._gerar_tokens_regional("REG_CEARA")},
