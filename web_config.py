@@ -913,6 +913,11 @@ def _gerar_tokens_regional(valor):
             if parte_norm:
                 tokens.add(parte_norm)
 
+        partes_identidade = [parte for parte in partes if parte != "CONTROL"]
+        identidade = _normalizar_texto_regional("".join(partes_identidade))
+        if identidade:
+            tokens.add(identidade)
+
         if partes:
             sigla = "".join(parte[0] for parte in partes if parte and parte[0].isalpha())
             sigla_norm = _normalizar_texto_regional(sigla)
@@ -977,28 +982,20 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     indice_por_chave = {str(regional.get("chave") or "").strip().upper(): regional for regional in indice_regionais}
     for candidato in candidatos:
         regional_alias = _VPN_REGIONAL_ALIAS.get(candidato)
-        if regional_alias and regional_alias in indice_por_chave:
-            return indice_por_chave[regional_alias]
+        if regional_alias:
+            return indice_por_chave.get(regional_alias)
 
     for candidato in candidatos:
-        for regional in indice_regionais:
-            if candidato in regional["tokens"]:
-                return regional
+        correspondencias = [
+            regional for regional in indice_regionais
+            if candidato in regional["tokens"]
+        ]
+        if len(correspondencias) == 1:
+            return correspondencias[0]
 
-    melhor = None
-    melhor_score = 0
-    for candidato in candidatos:
-        for regional in indice_regionais:
-            for token in regional["tokens"]:
-                if not token:
-                    continue
-                if candidato in token or token in candidato:
-                    score = min(len(candidato), len(token))
-                    if score > melhor_score:
-                        melhor = regional
-                        melhor_score = score
-
-    return melhor
+    # Sem correspondencia exata e unica, preserve a VPN sem vinculo. Aproximacoes
+    # podem associar uma unidade ainda nao cadastrada a outra regional existente.
+    return None
 
 
 def _agrupar_vpns_por_regional(vpns):

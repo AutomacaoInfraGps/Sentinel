@@ -1355,6 +1355,11 @@ def _gerar_tokens_regional(valor):
             if parte_norm:
                 tokens.add(parte_norm)
 
+        partes_identidade = [parte for parte in partes if parte != "CONTROL"]
+        identidade = _normalizar_texto_regional("".join(partes_identidade))
+        if identidade:
+            tokens.add(identidade)
+
         if partes:
             sigla = "".join(p[0] for p in partes if p and p[0].isalpha())
             sigla_norm = _normalizar_texto_regional(sigla)
@@ -1445,28 +1450,15 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
     indice_por_chave = {str(reg.get("chave") or "").strip().upper(): reg for reg in indice_regionais}
     for cand in candidatos:
         regional_alias = _VPN_REGIONAL_ALIAS.get(cand)
-        if regional_alias and regional_alias in indice_por_chave:
-            return indice_por_chave[regional_alias]
+        if regional_alias:
+            return indice_por_chave.get(regional_alias)
 
     for cand in candidatos:
-        for reg in indice_regionais:
-            if cand in reg["tokens"]:
-                return reg
+        correspondencias = [reg for reg in indice_regionais if cand in reg["tokens"]]
+        if len(correspondencias) == 1:
+            return correspondencias[0]
 
-    melhor = None
-    melhor_score = 0
-    for cand in candidatos:
-        for reg in indice_regionais:
-            for token in reg["tokens"]:
-                if not token:
-                    continue
-                if cand in token or token in cand:
-                    score = min(len(cand), len(token))
-                    if score > melhor_score:
-                        melhor = reg
-                        melhor_score = score
-
-    return melhor
+    return None
 
 
 def _mapear_interface_preferida(link_cadastrado):
