@@ -633,7 +633,7 @@
                                     {% for switch in regional.switches[:2] %}
                                     <div class="d-flex align-items-center mb-1 gap-2">
                                         <i class="bi bi-hdd-network text-secondary"></i>
-                                        <span class="small text-truncate">{{ switch.host or switch.nome }}</span>
+                                        <code class="small text-truncate">{{ switch.ip or switch.host or switch.nome }}</code>
                                         <span class="badge ms-auto {{ 'bg-success' if switch.status == 'online' else 'bg-danger' }}">
                                             {{ switch.status|default('desconhecido')|capitalize }}
                                         </span>

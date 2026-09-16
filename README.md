@@ -344,6 +344,8 @@ a antiga `REG_CONTROL_MCO`, priorizando a chave atual.
 Os cards da pagina Regionais reclassificam firewalls pela identidade atual do
 device, mesmo quando o snapshot foi salvo em uma regional antiga. O resumo de cada
 card tambem apresenta switches e VPNs IPsec, com status e limite de dois itens.
+No resumo de switches, o IP e exibido como identificador principal, com o nome
+usado apenas quando o equipamento nao possui IP.
 Os snapshots de VPN e firewall sao carregados e agrupados uma unica vez por acesso
 a pagina, evitando releituras para cada regional durante o login/redirecionamento.
 
