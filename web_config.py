@@ -3941,11 +3941,16 @@ def listar_regionais():
     """Página de listagem de regionais"""
     try:
         regionais = gerenciador_regionais.listar_regionais()
+        regionais_map = dict((gerenciador_regionais.regionais.get("regionais") or {}))
+        firewalls_agrupados = _agrupar_firewalls_regionais_cache(regionais_map)
+        vpns_agrupadas = (
+            _agrupar_vpns_por_regional(records_for("vpns")).get("vpns_por_regional") or {}
+        )
         firewalls_a_vencer = _obter_regionais_com_firewall_a_vencer()
         regionais_dados = []
         
         for codigo_regional in regionais:
-            regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+            regional_info = regionais_map.get(codigo_regional)
             if regional_info:
                 servidores = regional_info.get('servidores', [])
                 links = [
@@ -3953,8 +3958,11 @@ def listar_regionais():
                     for link in _obter_links_internet_exibicao(regional_info)
                 ]
                 _, switches = _obter_switches_detalhe_regional(codigo_regional, regional_info)
-                vpns = _obter_vpns_detalhe_regional(codigo_regional)
-                firewalls_cache = _obter_firewalls_regionais_cache(codigo_regional)
+                vpns = [
+                    dict(vpn)
+                    for vpn in (vpns_agrupadas.get(codigo_regional, {}).get("tunels") or [])
+                ]
+                firewalls_cache = firewalls_agrupados.get(codigo_regional, [])
                 # Prepara resumo dos firewalls para exibição no card
                 firewalls_resumo = []
                 for fw in firewalls_cache:
@@ -4480,6 +4488,10 @@ def _obter_firewalls_regionais_cache(codigo_regional):
         codigo: gerenciador_regionais.obter_regional(codigo) or {}
         for codigo in gerenciador_regionais.listar_regionais()
     }
+    return _agrupar_firewalls_regionais_cache(regionais_map).get(codigo_norm, [])
+
+
+def _agrupar_firewalls_regionais_cache(regionais_map):
     firewalls = records_for("firewalls")
     if not firewalls:
         cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}
@@ -4489,17 +4501,19 @@ def _obter_firewalls_regionais_cache(codigo_regional):
             for item in (itens or [])
         ]
 
-    resultado = []
+    resultado = {codigo: [] for codigo in (regionais_map or {})}
     vistos = set()
     for firewall in firewalls or []:
         nome = firewall.get("nome") or firewall.get("name") or firewall.get("hostname")
-        if _resolver_regional_firewall(nome, regionais_map) != codigo_norm:
+        codigo = _resolver_regional_firewall(nome, regionais_map)
+        if not codigo:
             continue
         chave = str(nome or "").strip().upper()
-        if chave and chave in vistos:
+        identidade = (codigo, chave)
+        if chave and identidade in vistos:
             continue
-        vistos.add(chave)
-        resultado.append(dict(firewall))
+        vistos.add(identidade)
+        resultado.setdefault(codigo, []).append(dict(firewall))
     return resultado
 
 
