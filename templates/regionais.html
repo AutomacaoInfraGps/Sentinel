@@ -491,6 +491,7 @@
                         data-total-servidores="{{ regional.total_servidores }}"
                         data-total-links="{{ regional.total_links }}"
                         data-total-switches="{{ regional.total_switches }}"
+                        data-total-vpns="{{ regional.total_vpns }}"
                         data-firewall-expiring="{{ 'true' if regional.tem_firewall_a_vencer else 'false' }}"
                         data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %} {% for switch in regional.switches %} {{ switch.host }} {{ switch.ip }} {{ switch.modelo or '' }} {{ switch.local or '' }} {% endfor %}">
                         <div class="card border-0 shadow-sm h-100 transition-all regional-card"
@@ -560,6 +561,10 @@
                                         <span class="small text-muted">Switches:</span>
                                         <span class="badge bg-secondary">{{ regional.total_switches }}</span>
                                     </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small text-muted">VPNs:</span>
+                                        <span class="badge bg-dark">{{ regional.total_vpns }}</span>
+                                    </div>
                                     {% if regional.total_firewalls is defined and regional.total_firewalls > 0 %}
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="small text-muted">Firewalls:</span>
@@ -618,6 +623,42 @@
                                             +{{ regional.total_links - 2 }} link(s)
                                         </small>
                                     </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                {% if regional.total_switches > 0 %}
+                                <div class="mb-3">
+                                    <h6 class="small text-muted mb-2">Switches:</h6>
+                                    {% for switch in regional.switches[:2] %}
+                                    <div class="d-flex align-items-center mb-1 gap-2">
+                                        <i class="bi bi-hdd-network text-secondary"></i>
+                                        <span class="small text-truncate">{{ switch.host or switch.nome }}</span>
+                                        <span class="badge ms-auto {{ 'bg-success' if switch.status == 'online' else 'bg-danger' }}">
+                                            {{ switch.status|default('desconhecido')|capitalize }}
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                    {% if regional.total_switches > 2 %}
+                                    <div class="text-center mt-2"><small class="text-muted">+{{ regional.total_switches - 2 }} switch(es)</small></div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                {% if regional.total_vpns > 0 %}
+                                <div class="mb-3">
+                                    <h6 class="small text-muted mb-2">VPNs IPsec:</h6>
+                                    {% for vpn in regional.vpns[:2] %}
+                                    <div class="d-flex align-items-center mb-1 gap-2">
+                                        <i class="bi bi-shield-lock text-primary"></i>
+                                        <span class="small text-truncate">{{ vpn.tunel or vpn.nome }}</span>
+                                        <span class="badge ms-auto {{ 'bg-success' if vpn.status in ['up', 'online'] else 'bg-danger' }}">
+                                            {{ 'Online' if vpn.status in ['up', 'online'] else 'Offline' }}
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                    {% if regional.total_vpns > 2 %}
+                                    <div class="text-center mt-2"><small class="text-muted">+{{ regional.total_vpns - 2 }} VPN(s)</small></div>
                                     {% endif %}
                                 </div>
                                 {% endif %}

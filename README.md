@@ -341,6 +341,10 @@ regionais, o inventario atual do FortiManager prevalece sobre IPs e caches antig
 A VPN legada `T060/MCO` acompanha tanto a chave atual `REG_CONTROL_MACEIO` quanto
 a antiga `REG_CONTROL_MCO`, priorizando a chave atual.
 
+Os cards da pagina Regionais reclassificam firewalls pela identidade atual do
+device, mesmo quando o snapshot foi salvo em uma regional antiga. O resumo de cada
+card tambem apresenta switches e VPNs IPsec, com status e limite de dois itens.
+
 - Atualize este `README.md` em toda mudanca relevante.
 - Documentos ativos descrevem apenas o comportamento atual.
 - Relatorios de implementacoes concluidas e versoes antigas ficam em
