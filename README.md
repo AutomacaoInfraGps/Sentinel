@@ -291,6 +291,63 @@ observadas em duas coletas validas consecutivas antes de gerar alerta.
 O checklist omite contadores e segmentos de grafico de dispositivos inativos.
 Esses registros permanecem nos caches operacionais, mas nao sao somados como
 offline ou atencao no mapa lateral.
+O mesmo vale para firewalls e licencas cuja consulta esteja indisponivel: eles
+continuam registrados no cache para diagnostico, mas nao entram nos totais,
+cards ou tabelas do checklist. Um firewall realmente offline continua sendo
+exibido normalmente como incidente operacional.
+
+### Central de notificacoes
+
+As paginas autenticadas exibem um sino fixo acima da SofIA. A central usa o
+snapshot `output/sentinel_operational_state.json`, sem realizar consultas
+externas durante a navegacao, e concentra quedas de links, VPNs, APs, switches,
+firewalls e servidores, licencas de firewall em atencao e divergencias do
+Monitor de Admins. VPNs sem correspondencia exata com uma regional tambem geram
+alerta. Equipamentos em manutencao nao entram na lista.
+
+O contador representa ocorrencias ainda nao vistas pelo usuario autenticado.
+Ao abrir o painel, o lote atual e marcado como visto e o contador desaparece,
+mas os alertas permanecem disponiveis ate serem resolvidos. O estado de leitura
+por login fica em `output/notification_user_state.json`.
+Enquanto houver ocorrencias nao vistas, a mesma quantidade aparece no titulo da
+aba do navegador, por exemplo `(3) VPN IPsec`. O prefixo some junto com o badge
+quando o usuario abre o painel.
+O sino fica no canto superior direito, separado da SofIA. A lixeira do painel
+dispensa as ocorrencias atuais apenas para o usuario logado; uma nova mudanca de
+estado do mesmo equipamento gera outra notificacao normalmente. Alertas de VPN
+sem vinculo sao persistentes e permanecem visiveis, ja como lidos, ate que uma
+regional compativel seja encontrada.
+Cada item abre a tela operacional correspondente com a busca ja preenchida.
+Alertas de servidor abrem diretamente os detalhes da regional, posicionam a
+tela na secao de servidores e destacam o equipamento para teste ou edicao.
+Snapshots operacionais com mais de seis horas nao geram notificacoes, evitando
+que uma queda antiga seja apresentada como incidente atual. Nos detalhes da
+regional, o snapshot tambem so substitui o status salvo quando sua verificacao
+for igual ou mais recente.
+Essa validacao de idade tambem protege as telas de servidores, switches, links,
+VPNs e firewalls: o parametro `q` da notificacao atua somente na busca visual e
+nunca altera ou restaura o status contido no alerta.
+
+Na pagina de VPNs, o botao Atualizar VPN recarrega o cadastro de regionais,
+consulta o FortiGate e refaz todos os vinculos antes de publicar o novo resultado
+no grupo `vpns` do estado operacional. Assim, tuneis que estavam em
+`SEM_REGIONAL` sao associados quando uma regional compativel for criada. A pagina
+ignora snapshots de VPN com mais de seis horas e realiza nova consulta.
+Na mesma sessao SSH, a coleta consulta `show vpn ipsec phase1-interface` e usa o
+campo `comments` como primeira fonte do vinculo regional. O nome tecnico do tunel
+continua sendo usado como fallback quando o comentario estiver vazio ou nao
+corresponder com seguranca a uma regional cadastrada. O registro operacional
+informa a origem em `vinculo_regional_origem` (`comentario`, `tunel` ou
+`sem_vinculo`).
+O pareamento aceita abreviacoes e pequenas variacoes apenas quando existe uma
+unica regional claramente compativel; nomes curtos ou ambiguos continuam sem
+vinculo para evitar associacoes incorretas.
+Limpar filtro remove simultaneamente o filtro de status, a busca e o parametro
+`q` recebido por links de notificacao.
+
+O mesmo comportamento e compartilhado pelos botoes Limpar filtro de Regionais,
+Antenas UniFi, Switches e Cadastro de E-mails: o filtro dos contadores, o texto
+de busca e o parametro `q` sao removidos juntos.
 
 O botao Atualizar Links da aba de Infraestrutura executa a sincronizacao central
 em segundo plano e atualiza a tela com o mesmo `links_internet_auto` consumido
@@ -346,6 +403,13 @@ device, mesmo quando o snapshot foi salvo em uma regional antiga. O resumo de ca
 card tambem apresenta switches e VPNs IPsec, com status e limite de dois itens.
 No resumo de switches, o IP e exibido como identificador principal, com o nome
 usado apenas quando o equipamento nao possui IP.
+Na Infraestrutura, todas as regionais cadastradas aparecem na listagem de
+switches, inclusive quando ainda nao possuem host group correspondente no
+Zabbix. O vinculo usa apenas a identidade do codigo/nome do grupo; descricoes e
+estados nao podem emprestar switches de outra regional. Quando coexistirem os
+grupos antigo e novo, `REG_CONTROL_*` tem prioridade.
+Nos detalhes da regional, o conjunto de indicadores superiores inclui tambem a
+quantidade de VPNs IPsec e permite navegar diretamente para a secao de tuneis.
 Os snapshots de VPN e firewall sao carregados e agrupados uma unica vez por acesso
 a pagina, evitando releituras para cada regional durante o login/redirecionamento.
 

@@ -1,0 +1,28 @@
+<div class="notification-widget" id="notificationWidget" data-list-url="{{ url_for('api_notifications') }}" data-seen-url="{{ url_for('api_notifications_seen') }}" data-clear-url="{{ url_for('api_notifications_clear') }}">
+    <section class="notification-panel" id="notificationPanel" aria-labelledby="notificationTitle" hidden>
+        <header class="notification-header">
+            <div>
+                <strong id="notificationTitle">Notificações</strong>
+                <span id="notificationSummary">Carregando alertas...</span>
+            </div>
+            <div class="notification-header-actions">
+                <button type="button" class="notification-header-button" id="notificationClear" aria-label="Limpar notificações" title="Limpar notificações">
+                    <i class="bi bi-trash3" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="notification-header-button" id="notificationClose" aria-label="Fechar notificações" title="Fechar">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+        </header>
+        <div class="notification-list" id="notificationList" role="feed" aria-live="polite"></div>
+        <div class="notification-empty" id="notificationEmpty" hidden>
+            <i class="bi bi-check-circle" aria-hidden="true"></i>
+            <strong id="notificationEmptyTitle">Tudo tranquilo por aqui</strong>
+            <span id="notificationEmptyText">Nenhum alerta crítico ou importante no snapshot atual.</span>
+        </div>
+    </section>
+    <button type="button" class="notification-launcher" id="notificationLauncher" aria-controls="notificationPanel" aria-expanded="false" aria-label="Abrir notificações" title="Notificações">
+        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+        <span class="notification-count" id="notificationCount" hidden></span>
+    </button>
+</div>

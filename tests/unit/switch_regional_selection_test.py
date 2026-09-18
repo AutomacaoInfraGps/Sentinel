@@ -36,6 +36,18 @@ class SwitchRegionalSelectionTests(unittest.TestCase):
             "REGIONAL GRSA MACAE",
         )
 
+    def test_new_control_group_has_priority_over_legacy_regional_group(self):
+        groups = [
+            {"name": "REGIONAL ALAGOAS"},
+            {"name": "REG_CONTROL_ARAPIRACA"},
+            {"name": "SWITCHES"},
+        ]
+
+        self.assertEqual(
+            self.manager._selecionar_regional_zabbix(groups),
+            "REG_CONTROL_ARAPIRACA",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

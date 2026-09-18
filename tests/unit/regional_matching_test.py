@@ -39,6 +39,22 @@ class RegionalMatchingTests(unittest.TestCase):
         code = find_regional_code(regionals, normalize("REGIONAL MACAE"), normalize)
         self.assertEqual(code, "REG_MACAE")
 
+    def test_description_never_assigns_devices_to_another_regional(self):
+        regionals = {
+            "REG_CONTROL_ARAPIRACA": {
+                "nome": "REG_CONTROL_ARAPIRACA",
+                "descricao": "Regional Minas Gerais",
+            },
+            "REG_BELO_HORIZONTE": {
+                "nome": "REG_BELO_HORIZONTE",
+                "descricao": "Regional Minas Gerais",
+            },
+        }
+
+        code = find_regional_code(regionals, normalize("REGIONAL BELO HORIZONTE"), normalize)
+
+        self.assertEqual(code, "REG_BELO_HORIZONTE")
+
 
 if __name__ == "__main__":
     unittest.main()
