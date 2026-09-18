@@ -442,7 +442,7 @@
                             <strong>Filtro ativo:</strong>
                             <span id="antenasFilterSummaryText"></span>
                         </div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroAntena('all')">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltrosAntenas()">
                             Limpar filtro
                         </button>
                     </div>
@@ -584,6 +584,14 @@ function normalizeAntenaText(text) {
 
 function aplicarFiltroAntena(filtro) {
     filtroAntenaAtual = filtro || 'all';
+    atualizarFiltroAntenaAtivo();
+}
+
+function limparFiltrosAntenas() {
+    filtroAntenaAtual = 'all';
+    antenaBuscaAtual = '';
+    $('#antenasSearchInput').val('');
+    clearNotificationSearchQuery();
     atualizarFiltroAntenaAtivo();
 }
 

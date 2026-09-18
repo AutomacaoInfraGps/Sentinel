@@ -971,6 +971,10 @@
 
     function limparFiltroEspecial() {
         activeStatsFilter = 'all';
+        if (regionalSearch) {
+            regionalSearch.value = '';
+        }
+        clearNotificationSearchQuery();
         aplicarFiltro();
     }
 

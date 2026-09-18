@@ -56,7 +56,7 @@ class SecurityDashboardTests(unittest.TestCase):
             self.assertEqual(dashboard["firewall_counts"]["warning"], 1)
             self.assertEqual(dashboard["firewall_availability_counts"]["offline"], 1)
 
-    def test_inactive_firewall_with_unavailable_license_is_not_offline(self):
+    def test_checklist_omits_inactive_firewall_and_unavailable_license(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / "output").mkdir()
@@ -89,11 +89,10 @@ class SecurityDashboardTests(unittest.TestCase):
             dashboard = build_security_dashboard(root)
 
             self.assertEqual(dashboard["firewall_availability_counts"]["offline"], 0)
-            self.assertEqual(dashboard["firewall_availability_counts"]["inativo"], 1)
-            self.assertEqual(dashboard["firewall_counts"]["indisponivel"], 1)
-            self.assertIn("FortiManager sem tunel", dashboard["firewall_licence_detail"])
-            self.assertIn("30/12/2026", dashboard["firewall_licence_detail"])
-            self.assertIn("31/08/2026 08:00", dashboard["firewall_licence_detail"])
+            self.assertEqual(dashboard["firewall_availability_counts"]["inativo"], 0)
+            self.assertNotIn("indisponivel", dashboard["firewall_counts"])
+            self.assertNotIn("FW-INATIVO", dashboard["firewall_detail"])
+            self.assertNotIn("FortiManager sem tunel", dashboard["firewall_licence_detail"])
 
     def test_checklist_license_kpis_use_filterable_statuses(self):
         source = (Path(__file__).parents[2] / "executar_tudo.py").read_text(encoding="utf-8")
@@ -108,6 +107,8 @@ class SecurityDashboardTests(unittest.TestCase):
         self.assertNotIn("<span>Inativos</span>", source)
         self.assertNotIn("<span>Com inativo</span>", source)
         self.assertNotIn('(\"Inativos\", fw_availability_counts', security_source)
+        self.assertNotIn('(\"Indisponíveis\", fw_counts', security_source)
+        self.assertNotIn('(\"Consulta indisponível\", fw_reg_counts', security_source)
         self.assertIn("linksOffline: count(totals, 'links_offline')", source)
         self.assertNotIn('status_link = "offline"', source)
 

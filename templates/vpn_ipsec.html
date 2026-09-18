@@ -280,7 +280,7 @@
 <!-- Botão -->
 <div class="row mb-4">
     <div class="col-12 text-center">
-        <button class="btn btn-primary btn-lg" onclick="verificarVPN()">
+        <button class="btn btn-primary btn-lg" id="btnAtualizarVPN" onclick="verificarVPN()">
             <i class="bi bi-arrow-clockwise me-2"></i> Atualizar VPN
         </button>
     </div>
@@ -315,7 +315,7 @@
         <strong>Filtro ativo:</strong>
         <span id="vpnFilterSummaryText">Todos os túneis</span>
     </div>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroVpn('all')">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltrosVpn()">
         Limpar filtro
     </button>
 </div>
@@ -448,8 +448,22 @@ function aplicarFiltroVpn(filtro) {
     atualizarFiltroVpnAtivo();
 }
 
+function limparFiltrosVpn() {
+    filtroVpnAtual = 'all';
+    vpnBuscaAtual = '';
+    $('#vpnSearchInput').val('');
+    clearNotificationSearchQuery();
+    atualizarFiltroVpnAtivo();
+}
+
 $(document).ready(function() {
     $('#loadingOverlay').hide();
+
+    const refreshMessage = sessionStorage.getItem('vpnRefreshMessage');
+    if (refreshMessage) {
+        sessionStorage.removeItem('vpnRefreshMessage');
+        showToast(refreshMessage, 'success');
+    }
 
     $('#vpnSearchInput').on('input', function() {
         vpnBuscaAtual = normalizeSearchText(this.value);
@@ -460,46 +474,26 @@ $(document).ready(function() {
 });
 
 function verificarVPN() {
+    const button = $('#btnAtualizarVPN');
     $('#loadingOverlay').show();
+    button.prop('disabled', true);
 
     $.post('/api/vpn/verificar')
-        .done(() => location.reload())
-        .fail(() => alert('Erro ao verificar VPN'))
-        .always(() => $('#loadingOverlay').hide());
-}
-</script>
-
-<script>
-async function atualizarVPN() {
-    const btn = document.getElementById("btnAtualizarVPN");
-    btn.disabled = true;
-    btn.innerText = "Atualizando...";
-
-    try {
-        const response = await fetch("/api/vpn/verificar", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
+        .done((data) => {
+            if (!data || !data.success) {
+                showToast(data?.message || 'Erro ao atualizar VPN', 'danger');
+                return;
             }
+            sessionStorage.setItem('vpnRefreshMessage', data.message || 'VPNs atualizadas com sucesso.');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('q');
+            window.location.href = `${url.pathname}${url.search}${url.hash}`;
+        })
+        .fail((xhr) => showToast(xhr.responseJSON?.message || 'Erro ao verificar VPN', 'danger'))
+        .always(() => {
+            $('#loadingOverlay').hide();
+            button.prop('disabled', false);
         });
-
-        const data = await response.json();
-
-        if (!data.success) {
-            alert(data.message || "Erro ao atualizar VPN");
-            return;
-        }
-
-        // Recarrega a página para refletir os novos dados
-        location.reload();
-
-    } catch (err) {
-        alert("Erro ao conectar com o servidor");
-        console.error(err);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "Atualizar VPN";
-    }
 }
 </script>
 

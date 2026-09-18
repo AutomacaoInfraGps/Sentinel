@@ -115,6 +115,7 @@ class GerenciadorSwitches:
         self._maintenance_cache = []
         self._maintenance_cache_time = 0
         self._switches_load_lock = Lock()
+        self._metadata_lock = Lock()
         self.switches = []
         self.regionais = {}
         self.zabbix_url_env = zabbix_url_env
@@ -122,6 +123,7 @@ class GerenciadorSwitches:
         self.zabbix_password_env = zabbix_password_env
         self.status_cache_file = Path("output") / "switches_status_cache.json"
         self.status_cache_file.parent.mkdir(parents=True, exist_ok=True)
+        self.metadata_file = Path("output") / "switches_metadata.json"
         
         # Carrega configurações
         self._carregar_config()
@@ -202,6 +204,89 @@ class GerenciadorSwitches:
         cache = self._carregar_status_cache()
         cache[switch_info["host"]] = self._status_cache_entry(switch_info)
         self._salvar_status_cache(cache)
+
+    @staticmethod
+    def _metadata_key(switch_info):
+        hostid = str((switch_info or {}).get("hostid") or "").strip()
+        if hostid:
+            return f"hostid:{hostid}"
+        host = str((switch_info or {}).get("host") or "").strip().casefold()
+        return f"host:{host}" if host else ""
+
+    def _carregar_metadados(self):
+        try:
+            if self.metadata_file.exists():
+                with open(self.metadata_file, "r", encoding="utf-8") as arquivo:
+                    dados = json.load(arquivo)
+                return dados if isinstance(dados, dict) else {}
+        except Exception as exc:
+            print(f"[AVISO] Erro ao carregar metadados dos switches: {exc}")
+        return {}
+
+    def _salvar_metadados(self, dados):
+        descriptor = None
+        temporary_file = None
+        try:
+            self.metadata_file.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{self.metadata_file.stem}-",
+                suffix=".tmp",
+                dir=str(self.metadata_file.parent),
+            )
+            temporary_file = Path(temporary_name)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as arquivo:
+                descriptor = None
+                json.dump(dados, arquivo, indent=2, ensure_ascii=False)
+                arquivo.flush()
+                os.fsync(arquivo.fileno())
+            os.replace(temporary_file, self.metadata_file)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            if temporary_file is not None and temporary_file.exists():
+                temporary_file.unlink(missing_ok=True)
+
+    def _aplicar_metadados(self, switch_info, metadados=None):
+        metadados = metadados if metadados is not None else self._carregar_metadados()
+        registro = metadados.get(self._metadata_key(switch_info), {})
+        if not registro:
+            host_key = f"host:{str(switch_info.get('host') or '').strip().casefold()}"
+            registro = metadados.get(host_key, {})
+        for campo in ("modelo", "local"):
+            valor = str(registro.get(campo) or "").strip()
+            if valor:
+                switch_info[campo] = valor
+        return switch_info
+
+    def obter_switch(self, host_name):
+        alvo = str(host_name or "").strip().casefold()
+        return next((switch for switch in self.switches if alvo in {
+            str(switch.get("host") or "").strip().casefold(),
+            str(switch.get("zabbix_host") or "").strip().casefold(),
+            str(switch.get("zabbix_name") or "").strip().casefold(),
+        }), None)
+
+    def atualizar_metadados(self, host_name, modelo="", local=""):
+        switch_info = self.obter_switch(host_name)
+        if not switch_info:
+            raise ValueError(f"Switch nao encontrado: {host_name}")
+
+        registro = {
+            "hostid": str(switch_info.get("hostid") or "").strip(),
+            "host": str(switch_info.get("host") or "").strip(),
+            "modelo": str(modelo or "").strip() or "Não informado",
+            "local": str(local or "").strip() or "Não informado",
+            "atualizado_em": datetime.now().isoformat(),
+        }
+        with self._metadata_lock:
+            metadados = self._carregar_metadados()
+            metadados[self._metadata_key(switch_info)] = registro
+            self._salvar_metadados(metadados)
+
+        switch_info["modelo"] = registro["modelo"]
+        switch_info["local"] = registro["local"]
+        self._persistir_status_switch(switch_info)
+        return switch_info
         
     def _converter_ip_numerico(self, ip_numerico):
         """Converte IP numérico para formato padrão (ex: 192.168.1.1)"""
@@ -759,10 +844,16 @@ class GerenciadorSwitches:
                         switch["ip"] = status_salvo.get("ip")
                     if status_salvo.get("zabbix_name"):
                         switch["zabbix_name"] = status_salvo.get("zabbix_name")
+                    if status_salvo.get("hostid"):
+                        switch["hostid"] = status_salvo.get("hostid")
+                    if status_salvo.get("zabbix_host"):
+                        switch["zabbix_host"] = status_salvo.get("zabbix_host")
                     switch["status_reason"] = status_salvo.get("status_reason")
                     switch["status_details"] = status_salvo.get("status_details")
                     switch["warning_problemas"] = status_salvo.get("warning_problemas") or []
                     switch["warning_resumo"] = status_salvo.get("warning_resumo")
+
+                self._aplicar_metadados(switch)
 
                 self.switches.append(switch)
                                 
@@ -846,6 +937,7 @@ class GerenciadorSwitches:
             ]
             itens_uplink_por_host = self._carregar_itens_speed_uplink_por_host(hostids_com_alerta_uplink)
             agora = datetime.now().isoformat()
+            metadados = self._carregar_metadados()
 
             for host in hosts:
                 host_id = str(host.get("hostid") or "").strip()
@@ -903,6 +995,7 @@ class GerenciadorSwitches:
                     "warning_problemas": nomes_problemas if status == "warning" else [],
                     "warning_resumo": nomes_problemas[0] if status == "warning" and nomes_problemas else None,
                 }
+                self._aplicar_metadados(switch, metadados)
 
                 switches_novos.append(switch)
                 regionais_novas.setdefault(regional_name, []).append(switch)
@@ -938,10 +1031,11 @@ class GerenciadorSwitches:
         if candidatos_regionais:
             def prioridade_regional(grupo):
                 nome = grupo.strip().upper()
+                control_explicita = bool(re.match(r"^(?:REG|RG)[ _-]+CONTROL(?:[ _-]|$)", nome))
                 regional_explicita = bool(re.match(r"^REGIONAL(?:[ _-]|$)", nome))
                 prefixo_tecnico = nome.startswith(("REG_", "RG_"))
                 return (
-                    0 if regional_explicita else 1 if prefixo_tecnico else 2,
+                    0 if control_explicita else 1 if regional_explicita else 2 if prefixo_tecnico else 3,
                     len(nome),
                     nome,
                 )

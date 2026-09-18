@@ -368,7 +368,7 @@
         <strong>Filtro ativo:</strong>
         <span id="switchesFilterSummaryText">Todos os switches</span>
     </div>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroStatus('all')">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltrosSwitches()">
         Limpar filtro
     </button>
 </div>
@@ -1101,6 +1101,14 @@ function atualizarFiltroStatusAtivo() {
 
 function aplicarFiltroStatus(status) {
     filtroStatusAtual = status || 'all';
+    atualizarFiltroStatusAtivo();
+}
+
+function limparFiltrosSwitches() {
+    filtroStatusAtual = 'all';
+    filtroBuscaAtual = '';
+    $('#switchesSearchInput').val('');
+    clearNotificationSearchQuery();
     atualizarFiltroStatusAtivo();
 }
 

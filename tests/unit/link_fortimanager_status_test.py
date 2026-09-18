@@ -4,9 +4,166 @@ from pathlib import Path
 from datetime import datetime
 
 import web_config
+from gerenciar_fortigate import _parse_vpn_phase1_comments
 
 
 class LinkFortimanagerStatusTest(unittest.TestCase):
+    @patch.object(web_config, "snapshot_is_fresh", return_value=False)
+    @patch.object(web_config, "load_operational_state")
+    def test_stale_operational_group_never_reaches_pages(self, load_state, snapshot_fresh):
+        load_state.return_value = {
+            "groups": {
+                "servidores": {
+                    "updated_at": "2026-09-11T10:00:00",
+                    "records": [{"nome": "OLD", "status": "offline", "regional": "REG_A"}],
+                }
+            }
+        }
+
+        self.assertEqual(web_config._fresh_operational_records("servidores"), [])
+
+    @patch.object(web_config, "snapshot_is_fresh", return_value=True)
+    @patch.object(web_config, "load_operational_state")
+    def test_fresh_operational_group_is_filtered_by_regional(self, load_state, snapshot_fresh):
+        load_state.return_value = {
+            "groups": {
+                "switches": {
+                    "updated_at": "2026-09-16T10:00:00",
+                    "records": [
+                        {"nome": "SW-A", "regional": "REG_A"},
+                        {"nome": "SW-B", "regional": "REG_B"},
+                    ],
+                }
+            }
+        }
+
+        records = web_config._fresh_operational_records("switches", "reg_a")
+        self.assertEqual(["SW-A"], [item["nome"] for item in records])
+
+    def test_switch_groups_include_new_regionals_without_borrowing_devices(self):
+        regionals = {
+            "REG_CONTROL_ARAPIRACA": {
+                "nome": "REG_CONTROL_ARAPIRACA",
+                "descricao": "Regional Minas Gerais",
+            },
+            "REG_BELO_HORIZONTE": {
+                "nome": "REG_BELO_HORIZONTE",
+                "descricao": "Regional Minas Gerais",
+            },
+        }
+        switches = [{
+            "host": "SW-BH-01",
+            "regional": "REGIONAL BELO HORIZONTE",
+            "ip": "10.0.0.1",
+        }]
+
+        grouped = web_config._agrupar_switches_por_regionais_configuradas(switches, regionals)
+
+        self.assertEqual([], grouped["REG_CONTROL_ARAPIRACA"])
+        self.assertEqual(["SW-BH-01"], [item["host"] for item in grouped["REG_BELO_HORIZONTE"]])
+
+    @patch.object(web_config.gerenciador_regionais, "obter_regional")
+    @patch.object(web_config.gerenciador_regionais, "listar_regionais")
+    @patch.object(web_config, "_fresh_operational_records")
+    def test_regional_details_do_not_borrow_switches_when_snapshot_has_no_match(
+        self, fresh_records, list_regionals, get_regional
+    ):
+        list_regionals.return_value = ["REG_CONTROL_ARAPIRACA", "REG_BELO_HORIZONTE"]
+        get_regional.side_effect = lambda code: {"nome": code}
+        fresh_records.return_value = [{
+            "host": "SW-BH-01",
+            "regional": "REG_BELO_HORIZONTE",
+            "regional_zabbix": "REGIONAL BELO HORIZONTE",
+        }]
+
+        source, switches = web_config._obter_switches_detalhe_regional(
+            "REG_CONTROL_ARAPIRACA",
+            {"nome": "REG_CONTROL_ARAPIRACA", "descricao": "Regional Minas Gerais"},
+        )
+
+        self.assertEqual("REG_CONTROL_ARAPIRACA", source)
+        self.assertEqual([], switches)
+
+    def test_vpn_clear_filter_resets_search_and_notification_query(self):
+        source = (Path(__file__).parents[2] / "templates" / "vpn_ipsec.html").read_text(encoding="utf-8")
+        base_source = (Path(__file__).parents[2] / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("function limparFiltrosVpn()", source)
+        self.assertIn("$('#vpnSearchInput').val('')", source)
+        self.assertIn("clearNotificationSearchQuery()", source)
+        self.assertIn("function clearNotificationSearchQuery()", base_source)
+        self.assertIn("url.searchParams.delete('q')", base_source)
+        self.assertIn("id=\"btnAtualizarVPN\"", source)
+
+    def test_all_clear_filter_buttons_reset_search_and_notification_query(self):
+        templates_root = Path(__file__).parents[2] / "templates"
+        expected_handlers = {
+            "regionais.html": "limparFiltrosRegionais",
+            "antenas_simples.html": "limparFiltrosAntenas",
+            "switches.html": "limparFiltrosSwitches",
+            "vpn_ipsec.html": "limparFiltrosVpn",
+            "emails_contatos.html": "limparFiltroEspecial",
+        }
+
+        for filename, handler in expected_handlers.items():
+            with self.subTest(template=filename):
+                source = (templates_root / filename).read_text(encoding="utf-8")
+                self.assertIn(f"function {handler}()", source)
+                self.assertIn("clearNotificationSearchQuery()", source)
+
+    @patch.object(web_config, "publish_group_records")
+    @patch.object(web_config, "_prepare_vpn_operational_records")
+    @patch.object(web_config.gerenciador_fortigate, "obter_vpn_ipsec")
+    @patch.object(web_config.gerenciador_fortigate, "autenticar")
+    def test_vpn_refresh_publishes_result_before_reload(
+        self, authenticate, fetch_vpns, prepare_records, publish_records
+    ):
+        authenticate.return_value = True
+        fetch_vpns.return_value = {
+            "success": True,
+            "vpns": [{"tunel": "T001_TESTE", "status": "up"}],
+        }
+        prepare_records.return_value = [
+            {"tunel": "T001_TESTE", "status": "online", "regional": "REG_TESTE"}
+        ]
+
+        previous_state = {
+            "groups": {
+                "vpns": {
+                    "records": [{"tunel": "T001_TESTE", "regional": "SEM_REGIONAL"}]
+                }
+            }
+        }
+        with patch.object(web_config, "load_operational_state", return_value=previous_state), \
+                patch.object(web_config.gerenciador_regionais, "recarregar_regionais") as reload_regionals:
+            result = web_config._collect_and_publish_vpns()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["total_atualizado"], 1)
+        self.assertEqual(result["total_vinculado"], 1)
+        self.assertEqual(result["novos_vinculos"], 1)
+        self.assertEqual(result["total_sem_regional"], 0)
+        reload_regionals.assert_called_once_with()
+        publish_records.assert_called_once_with(
+            "vpns", prepare_records.return_value, source="vpn_manual"
+        )
+
+    def test_vpn_refresh_relinks_orphan_after_regional_is_created(self):
+        index = [{
+            "chave": "REG_NOVAUNIDADE",
+            "nome_exibicao": "NOVAUNIDADE",
+            "tokens": web_config._gerar_tokens_regional("REG_NOVAUNIDADE"),
+        }]
+        stale_orphan = {
+            "tunel": "T099_NOVAUNIDADE_01",
+            "status": "online",
+            "regional": "SEM_REGIONAL",
+        }
+
+        with patch.object(web_config, "_carregar_indice_regionais_vpn", return_value=index):
+            records = web_config._prepare_vpn_operational_records([stale_orphan])
+
+        self.assertEqual("REG_NOVAUNIDADE", records[0]["regional"])
+
     def test_control_regional_requires_the_specific_unit_name(self):
         devices = [
             {"name": "FGT_CTRLMACEIO", "hostname": "FGT_CTRLMACEIO", "ip": "10.0.0.1"},
@@ -36,6 +193,84 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertEqual("REG_CEARA_2", web_config._mapear_regional_vpn("CEARA", "T024", index)["chave"])
         self.assertEqual("REG_CONTROL_NANUQUE", web_config._mapear_regional_vpn("NANUQUE", "T062", index)["chave"])
         self.assertEqual("REG_CONTROL_MACEIO", web_config._mapear_regional_vpn("MCO", "T060", index)["chave"])
+
+    def test_fortigate_phase1_comments_are_parsed_by_tunnel(self):
+        output = '''
+config vpn ipsec phase1-interface
+    edit "V070_MONCLAR04"
+        set interface "WAN_MUNDIVOX"
+        set comments "Regional CONTROL - MONTES CLAROS"
+    next
+    edit "T068_ARAPIRA04"
+        set comments "Regional CONTROL - ARAPIRACA"
+    next
+end
+'''
+
+        comments = _parse_vpn_phase1_comments(output)
+
+        self.assertEqual("Regional CONTROL - MONTES CLAROS", comments["V070_MONCLAR04"])
+        self.assertEqual("Regional CONTROL - ARAPIRACA", comments["T068_ARAPIRA04"])
+
+    def test_vpn_comment_has_priority_and_tunnel_name_remains_fallback(self):
+        regional_codes = ["REG_CONTROL_MONTESCLAROS", "REG_CONTROL_ARAPIRACA"]
+        index = [
+            {
+                "chave": code,
+                "nome_exibicao": code,
+                "tokens": web_config._gerar_tokens_regional(code),
+            }
+            for code in regional_codes
+        ]
+
+        comment_match, comment_source = web_config._resolver_vinculo_regional_vpn({
+            "tunel": "T068_ARAPIRA04",
+            "comentario": "Regional CONTROL - MONTES CLAROS",
+        }, index)
+        fallback_match, fallback_source = web_config._resolver_vinculo_regional_vpn({
+            "tunel": "T068_ARAPIRA04",
+            "comentario": "",
+        }, index)
+
+        self.assertEqual("REG_CONTROL_MONTESCLAROS", comment_match["chave"])
+        self.assertEqual("comentario", comment_source)
+        self.assertEqual("REG_CONTROL_ARAPIRACA", fallback_match["chave"])
+        self.assertEqual("tunel", fallback_source)
+
+    def test_vpn_name_variations_map_only_to_a_clear_unique_regional(self):
+        regional_codes = [
+            "REG_CONTROL_MONTESCLAROS",
+            "REG_CONTROL_PONTENOVA",
+            "REG_CONTROL_ARAPIRACA",
+            "REG_CONTROL_NANUNQUE",
+            "REG_CONTROL_OUROPRETO",
+            "REG_CTRLPB",
+            "REG_ORMEC_PARA",
+            "REG_PARA",
+        ]
+        index = [
+            {
+                "chave": code,
+                "nome_exibicao": code,
+                "tokens": web_config._gerar_tokens_regional(code),
+            }
+            for code in regional_codes
+        ]
+        expected = {
+            "MONCLAR": "REG_CONTROL_MONTESCLAROS",
+            "PONTNOVA": "REG_CONTROL_PONTENOVA",
+            "ARAPIRA": "REG_CONTROL_ARAPIRACA",
+            "NANUQUE": "REG_CONTROL_NANUNQUE",
+            "OUROPRET": "REG_CONTROL_OUROPRETO",
+            "CRTLPB": "REG_CTRLPB",
+            "PARA": "REG_PARA",
+        }
+
+        for vpn_name, regional_code in expected.items():
+            with self.subTest(vpn_name=vpn_name):
+                mapped = web_config._mapear_regional_vpn(vpn_name, "T999", index)
+                self.assertIsNotNone(mapped)
+                self.assertEqual(regional_code, mapped["chave"])
 
     @patch.object(web_config, "_get_cached_fortimanager_device")
     def test_control_inventory_overrides_contaminated_link_and_firewall_cache(self, cached_device):
@@ -88,9 +323,9 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertEqual("REG_CONTROL_NANUQUE", web_config._resolver_regional_firewall("FGT_CONTROL_NANUQUE", regionals))
         self.assertEqual("REG_CONTROL_ARAPIRACA", web_config._resolver_regional_firewall("FGT_REGCONTROL_ARAPIRACA", regionals))
 
-    @patch.object(web_config, "records_for")
-    def test_regional_details_remap_vpns_from_stale_snapshot(self, records_for):
-        records_for.return_value = [
+    @patch.object(web_config, "_fresh_operational_records")
+    def test_regional_details_remap_vpns_from_stale_snapshot(self, fresh_operational_records):
+        fresh_operational_records.return_value = [
             {"tunel": "T024_CEARA2_01", "status": "online", "regional": "REG_CEARA"},
         ]
         index = [
@@ -153,9 +388,9 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertEqual("offline", status)
         self.assertEqual("monitor_zabbix_packet_loss", source)
 
-    @patch.object(web_config, "records_for")
-    def test_regional_details_do_not_restore_link_removed_from_canonical_cache(self, records_for):
-        records_for.return_value = [
+    @patch.object(web_config, "_fresh_operational_records")
+    def test_regional_details_do_not_restore_link_removed_from_canonical_cache(self, operational_records):
+        operational_records.return_value = [
             {"id": "wan1", "nome": "VIVO", "provedor": "VIVO", "ip": "186.1.1.1"},
             {"id": "wan2", "nome": "WCS", "provedor": "WCS", "ip": "187.1.1.1"},
         ]
@@ -174,7 +409,7 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         links = web_config._obter_links_detalhe_regional("REG_TESTE", regional)
 
         self.assertEqual(["VIVO"], [link["nome"] for link in links])
-        records_for.assert_not_called()
+        operational_records.assert_not_called()
 
     def test_link_mode_is_fallback_when_monitor_zabbix_is_missing(self):
         status, source = web_config._resolve_link_operational_status("online", "inactive")
