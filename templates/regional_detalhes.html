@@ -262,7 +262,7 @@
 
 <!-- Estatísticas da Regional -->
 <div class="row mb-4">
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-servidores-section')">
             <div class="stats-number" id="regional-servidores-total">{{ regional.servidores|length }}</div>
             <div class="stats-label">
@@ -272,7 +272,7 @@
         </button>
     </div>
     
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-links-section')" style="background: linear-gradient(135deg, #17a2b8, #20c997);">
             <div class="stats-number" id="regional-links-total">{{ regional.links|length }}</div>
             <div class="stats-label">
@@ -282,7 +282,7 @@
         </button>
     </div>
 
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-switches-section')" style="background: linear-gradient(135deg, #012E40, #0A4A63);">
             <div class="stats-number" id="regional-switches-total">{{ regional.switches|length }}</div>
             <div class="stats-label">
@@ -292,12 +292,22 @@
         </button>
     </div>
 
-    <div class="col-md-3 col-sm-6 mb-3">
+    <div class="col-md col-sm-6 mb-3">
         <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-firewalls-section')" style="background: linear-gradient(135deg, #495057, #0A4A63);">
             <div class="stats-number">{{ regional.firewalls|length }}</div>
             <div class="stats-label">
                 <i class="bi bi-shield-check me-1"></i>
                 Firewalls
+            </div>
+        </button>
+    </div>
+
+    <div class="col-md col-sm-6 mb-3">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-vpns-section')" style="background: linear-gradient(135deg, #0F6C8C, #2563eb);">
+            <div class="stats-number">{{ regional.vpns|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-shield-lock me-1"></i>
+                VPNs IPsec
             </div>
         </button>
     </div>
@@ -416,7 +426,7 @@
                 {% if regional.servidores %}
                 <div class="row">
                     {% for servidor in regional.servidores %}
-                    <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="col-md-6 col-lg-4 mb-4" data-notification-search="{{ servidor.nome }} {{ servidor.ip }} {{ servidor.id }}">
                         <div id="servidor-card-{{ servidor.id }}" class="card border-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} h-100">
                             <div id="servidor-card-header-{{ servidor.id }}" class="card-header bg-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} text-white d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 fw-bold">

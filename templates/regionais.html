@@ -429,7 +429,7 @@
         <strong>Filtro ativo:</strong>
         <span id="regionaisFilterSummaryText">Todas as regionais</span>
     </div>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="aplicarFiltroRegional('all')">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltrosRegionais()">
         Limpar filtro
     </button>
 </div>
@@ -1052,6 +1052,18 @@ function aplicarFiltroRegional(filtro) {
     if (regionaisSearchController) {
         regionaisSearchController.apply();
     }
+}
+
+function limparFiltrosRegionais() {
+    filtroRegionalAtual = 'all';
+    atualizarCardsFiltroRegional();
+    if (regionaisSearchController) {
+        regionaisSearchController.clear();
+    } else {
+        const input = document.getElementById('regionaisSearchInput');
+        if (input) input.value = '';
+    }
+    clearNotificationSearchQuery();
 }
 
 function excluirRegional(codigo) {

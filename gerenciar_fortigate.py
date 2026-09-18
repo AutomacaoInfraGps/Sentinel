@@ -12,6 +12,30 @@ import paramiko
 import re
 from datetime import datetime
 
+
+def _parse_vpn_phase1_comments(output):
+    comments_by_tunnel = {}
+    current_tunnel = None
+
+    for raw_line in str(output or "").splitlines():
+        line = raw_line.strip()
+        edit_match = re.match(r'^edit\s+(?:"([^"]+)"|(\S+))$', line)
+        if edit_match:
+            current_tunnel = edit_match.group(1) or edit_match.group(2)
+            continue
+        if line == "next":
+            current_tunnel = None
+            continue
+        if not current_tunnel:
+            continue
+
+        comments_match = re.match(r'^set\s+comments\s+(?:"(.*)"|(\S.*))$', line)
+        if comments_match:
+            value = comments_match.group(1) if comments_match.group(1) is not None else comments_match.group(2)
+            comments_by_tunnel[current_tunnel] = str(value or "").replace(r'\"', '"').strip()
+
+    return comments_by_tunnel
+
 # Importa o módulo de credenciais e configurações
 try:
     from credentials import get_credentials
@@ -569,6 +593,14 @@ class GerenciadorFortigate:
             )
 
             output = stdout.read().decode(errors="ignore")
+
+            comments_by_tunnel = {}
+            try:
+                _, config_stdout, _ = ssh.exec_command("show vpn ipsec phase1-interface")
+                config_output = config_stdout.read().decode(errors="ignore")
+                comments_by_tunnel = _parse_vpn_phase1_comments(config_output)
+            except Exception as comments_error:
+                print(f"Aviso: nao foi possivel obter comentarios das VPNs: {comments_error}")
             ssh.close()
 
             vpns = []
@@ -592,6 +624,7 @@ class GerenciadorFortigate:
 
                 vpns.append({
                     "tunel": name,
+                    "comentario": comments_by_tunnel.get(name, ""),
                     "interface": "N/A",
                     "status": status,
                     "ultima_verificacao": datetime.now().strftime("%H:%M:%S")

@@ -68,7 +68,14 @@ from gerenciar_vms import GerenciadorVMs
 from gerenciar_contatos_email import GerenciadorContatosEmail
 from switches_backup_utils import create_switch_backup
 from maintenance_status import apply_device_maintenance, apply_zabbix_maintenance, normalize_ip
-from operational_state import load_operational_state, publish_map_snapshot, records_for
+from operational_state import load_operational_state, publish_group_records, publish_map_snapshot
+from notification_center import (
+    build_notifications,
+    decorate_with_read_state,
+    dismiss_notifications,
+    mark_notifications_seen,
+    snapshot_is_fresh,
+)
 from services.unifi_models import normalizar_modelo_ap
 from regional_matching import find_regional_code
 from sofia import init_sofia
@@ -890,7 +897,7 @@ def _normalizar_texto_regional(valor):
 
 def _remover_prefixo_regional(valor):
     texto = str(valor or "").strip().upper()
-    return re.sub(r"^(RG|REG|REGIONAL)[_\s\-]*", "", texto).strip()
+    return re.sub(r"^(REGIONAL|REG|RG)[_\s\-]*", "", texto).strip()
 
 
 def _gerar_tokens_regional(valor):
@@ -927,6 +934,37 @@ def _gerar_tokens_regional(valor):
     return {token for token in tokens if token}
 
 
+def _identidade_principal_regional(valor):
+    texto = _remover_prefixo_regional(valor)
+    partes = [parte for parte in re.split(r"[_\s\-/&]+", texto.upper()) if parte]
+    partes = [
+        parte for parte in partes
+        if parte not in {"RG", "REG", "REGIONAL", "CONTROL", "DE", "DO", "DA", "DOS", "DAS", "E"}
+    ]
+    return _normalizar_texto_regional("".join(partes))
+
+
+def _pontuar_identidade_regional(candidato, identidade):
+    if not candidato or not identidade:
+        return 0.0
+    if candidato == identidade:
+        return 1.0
+
+    score = difflib.SequenceMatcher(None, candidato, identidade).ratio()
+    menor, maior = sorted((candidato, identidade), key=len)
+    maior_iter = iter(maior)
+    menor_e_subsequencia = all(char in maior_iter for char in menor)
+    if len(menor) >= 4 and maior.startswith(menor):
+        score = max(score, 0.90)
+    elif (
+        len(menor) >= 6
+        and candidato[:3] == identidade[:3]
+        and menor_e_subsequencia
+    ):
+        score = max(score, 0.86)
+    return score
+
+
 def _carregar_indice_regionais_vpn():
     estrutura_path = PROJECT_ROOT / "estrutura_regionais.json"
     if not estrutura_path.exists():
@@ -951,6 +989,14 @@ def _carregar_indice_regionais_vpn():
             "chave": chave,
             "nome_exibicao": nome_exibicao,
             "tokens": tokens,
+            "identidades": {
+                identidade
+                for identidade in (
+                    _identidade_principal_regional(chave),
+                    _identidade_principal_regional(nome),
+                )
+                if identidade
+            },
         })
 
     return indice
@@ -988,7 +1034,12 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
         regional_alias = _VPN_REGIONAL_ALIAS.get(candidato)
         if regional_alias:
             aliases = regional_alias if isinstance(regional_alias, (tuple, list)) else (regional_alias,)
-            return next((indice_por_chave[alias] for alias in aliases if alias in indice_por_chave), None)
+            regional_encontrada = next(
+                (indice_por_chave[alias] for alias in aliases if alias in indice_por_chave),
+                None,
+            )
+            if regional_encontrada:
+                return regional_encontrada
 
     for candidato in candidatos:
         correspondencias = [
@@ -998,13 +1049,48 @@ def _mapear_regional_vpn(nome_exibicao_vpn, codigo_vpn, indice_regionais):
         if len(correspondencias) == 1:
             return correspondencias[0]
 
-    # Sem correspondencia exata e unica, preserve a VPN sem vinculo. Aproximacoes
-    # podem associar uma unidade ainda nao cadastrada a outra regional existente.
+    identidade_vpn = _identidade_principal_regional(nome_exibicao_vpn)
+    if len(identidade_vpn) >= 4:
+        pontuacoes = []
+        for regional in indice_regionais:
+            identidades = regional.get("identidades") or {
+                _identidade_principal_regional(regional.get("chave")),
+                _identidade_principal_regional(regional.get("nome_exibicao")),
+            }
+            melhor_score = max(
+                (_pontuar_identidade_regional(identidade_vpn, identidade) for identidade in identidades if identidade),
+                default=0.0,
+            )
+            pontuacoes.append((melhor_score, regional))
+
+        pontuacoes.sort(key=lambda item: item[0], reverse=True)
+        melhor_score, melhor_regional = pontuacoes[0] if pontuacoes else (0.0, None)
+        segundo_score = pontuacoes[1][0] if len(pontuacoes) > 1 else 0.0
+        if melhor_regional and melhor_score >= 0.82 and melhor_score - segundo_score >= 0.08:
+            return melhor_regional
+
+    # Sem correspondencia unica e confiavel, preserve a VPN sem vinculo.
     return None
 
 
-def _agrupar_vpns_por_regional(vpns):
-    indice_regionais = _carregar_indice_regionais_vpn()
+def _resolver_vinculo_regional_vpn(vpn, indice_regionais):
+    comentario = str(vpn.get("comentario") or vpn.get("comments") or "").strip()
+    if comentario:
+        regional_comentario = _mapear_regional_vpn(comentario, "", indice_regionais)
+        if regional_comentario:
+            return regional_comentario, "comentario"
+
+    tunel = str(vpn.get("tunel") or vpn.get("nome") or "Desconhecido").strip()
+    codigo_vpn = _extrair_regional_vpn(tunel)
+    nome_regional = _extrair_nome_exibicao_regional_vpn(tunel)
+    regional_tunel = _mapear_regional_vpn(nome_regional, codigo_vpn, indice_regionais)
+    if regional_tunel:
+        return regional_tunel, "tunel"
+    return None, None
+
+
+def _agrupar_vpns_por_regional(vpns, indice_regionais=None):
+    indice_regionais = indice_regionais if indice_regionais is not None else _carregar_indice_regionais_vpn()
     regionais_cadastradas = {item.get("chave") for item in indice_regionais}
     vpns_por_regional = {}
 
@@ -1015,7 +1101,7 @@ def _agrupar_vpns_por_regional(vpns):
         regional_vpn = _extrair_regional_vpn(tunel)
         nome_exibicao_vpn = _extrair_nome_exibicao_regional_vpn(tunel)
 
-        regional_mapeada = _mapear_regional_vpn(nome_exibicao_vpn, regional_vpn, indice_regionais)
+        regional_mapeada, vinculo_origem = _resolver_vinculo_regional_vpn(vpn, indice_regionais)
         if regional_mapeada:
             regional = regional_mapeada["chave"]
             nome_exibicao = regional_mapeada["nome_exibicao"]
@@ -1032,7 +1118,9 @@ def _agrupar_vpns_por_regional(vpns):
         else:
             dados_regional["offline"] += 1
 
-        dados_regional["tunels"].append(vpn)
+        vpn_resolvida = dict(vpn)
+        vpn_resolvida["vinculo_regional_origem"] = vinculo_origem or "sem_vinculo"
+        dados_regional["tunels"].append(vpn_resolvida)
 
     for dados_regional in vpns_por_regional.values():
         dados_regional["tunels"].sort(key=lambda item: str(item.get("tunel") or ""))
@@ -2787,7 +2875,7 @@ def servidores():
         servidores_online_total = 0
         servidores_offline_total = 0
         servidores_maintenance_total = 0
-        servidores_operacionais = records_for("servidores")
+        servidores_operacionais = _fresh_operational_records("servidores")
         servidores_operacionais_por_regional = {}
         for servidor in servidores_operacionais:
             codigo = str(servidor.get("regional") or "")
@@ -3590,6 +3678,15 @@ def _montar_dados_mapa_monitoramento():
             resumo_vpn = _agrupar_vpns_por_regional(vpns)
             for codigo, dados_vpn in (resumo_vpn.get("vpns_por_regional") or {}).items():
                 if codigo not in regionais:
+                    for vpn in dados_vpn.get("tunels") or []:
+                        vpn_sem_regional = dict(vpn)
+                        vpn_sem_regional.update({
+                            "nome": vpn.get("tunel") or "VPN",
+                            "regional": "SEM_REGIONAL",
+                            "status": "online" if str(vpn.get("status") or "").strip().lower() == "up" else "offline",
+                            "descricao": "VPN sem vínculo automático com uma regional cadastrada",
+                        })
+                        unmapped["vpns"].append(vpn_sem_regional)
                     continue
                 regionais[codigo]["vpns"] = []
                 for vpn in dados_vpn.get("tunels") or []:
@@ -3750,6 +3847,144 @@ def api_operational_state():
         return jsonify({"success": False, "message": "Estado operacional ainda nao inicializado."}), 404
     payload["success"] = True
     return jsonify(payload)
+
+
+def _notification_orphan_vpn_names(vpns):
+    indice_regionais = _carregar_indice_regionais_vpn()
+    orphan_names = set()
+    for vpn in vpns or []:
+        tunel = str(vpn.get("tunel") or vpn.get("nome") or "").strip()
+        if not tunel or tunel.upper().startswith("VPN_IPSECCLI"):
+            continue
+        regional_mapeada, _ = _resolver_vinculo_regional_vpn(vpn, indice_regionais)
+        if not regional_mapeada:
+            orphan_names.add(tunel)
+    return orphan_names
+
+
+def _parse_operational_datetime(value):
+    try:
+        parsed = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _operational_record_is_newer(canonical, operational):
+    canonical_time = _parse_operational_datetime(
+        (canonical or {}).get("ultima_verificacao") or (canonical or {}).get("updated_at")
+    )
+    operational_time = _parse_operational_datetime(
+        (operational or {}).get("ultima_verificacao") or (operational or {}).get("updated_at")
+    )
+    if canonical_time and operational_time:
+        return operational_time >= canonical_time
+    return bool(operational_time) or not canonical_time
+
+
+def _fresh_operational_records(group, regional=None):
+    state = load_operational_state()
+    group_data = (state.get("groups") or {}).get(group) or {}
+    if not snapshot_is_fresh(group_data.get("updated_at")):
+        return []
+    records = [dict(item) for item in (group_data.get("records") or [])]
+    if regional is None:
+        return records
+    regional_norm = str(regional or "").strip().upper()
+    return [
+        item for item in records
+        if str(item.get("regional") or "").strip().upper() == regional_norm
+    ]
+
+
+def _reconcile_notification_servers(operational_servers):
+    reconciled = []
+    for operational in operational_servers or []:
+        item = dict(operational)
+        regional_code = str(item.get("regional") or "").strip()
+        regional = gerenciador_regionais.obter_regional(regional_code) or {}
+        canonical = next((
+            server
+            for server in regional.get("servidores", []) or []
+            if (
+                item.get("id") not in (None, "")
+                and str(server.get("id")) == str(item.get("id"))
+            ) or (
+                str(item.get("ip") or "").strip()
+                and str(server.get("ip") or "").strip() == str(item.get("ip") or "").strip()
+            )
+        ), None)
+        if canonical and not _operational_record_is_newer(canonical, item):
+            for field in ("status", "tempo_resposta", "erro", "ultima_verificacao"):
+                if field in canonical:
+                    item[field] = canonical[field]
+        reconciled.append(item)
+    return reconciled
+
+
+@app.route('/api/notifications')
+@login_required
+def api_notifications():
+    """Alertas do snapshot operacional, sem disparar novas coletas externas."""
+    state = load_operational_state()
+    groups = state.get("groups") or {}
+    notification_groups = {"links", "vpns", "aps", "switches", "firewalls", "servidores", "admins"}
+    records_by_group = {}
+    stale_groups = []
+    for group in notification_groups:
+        group_data = groups.get(group) or {}
+        if snapshot_is_fresh(group_data.get("updated_at")):
+            records_by_group[group] = group_data.get("records") or []
+        else:
+            records_by_group[group] = []
+            stale_groups.append(group)
+    records_by_group["servidores"] = _reconcile_notification_servers(
+        records_by_group.get("servidores") or []
+    )
+    snapshot_fresh = not stale_groups
+    notifications = build_notifications(
+        records_by_group,
+        orphan_vpn_names=_notification_orphan_vpn_names(records_by_group.get("vpns") or []),
+    )
+    if stale_groups:
+        _mapa_iniciar_refresh_background()
+    notifications, unread_count = decorate_with_read_state(current_user.get_id(), notifications)
+    return jsonify({
+        "success": True,
+        "notifications": notifications,
+        "unread_count": unread_count,
+        "updated_at": state.get("updated_at"),
+        "snapshot_fresh": snapshot_fresh,
+        "stale_groups": sorted(stale_groups),
+    })
+
+
+@app.route('/api/notifications/seen', methods=['POST'])
+@login_required
+def api_notifications_seen():
+    payload = request.get_json(silent=True) or {}
+    ids = [
+        str(notification_id)
+        for notification_id in (payload.get("ids") or [])[:500]
+        if isinstance(notification_id, str) and notification_id
+    ]
+    mark_notifications_seen(current_user.get_id(), ids)
+    return jsonify({"success": True, "seen_count": len(ids)})
+
+
+@app.route('/api/notifications/clear', methods=['POST'])
+@login_required
+def api_notifications_clear():
+    payload = request.get_json(silent=True) or {}
+    ids = [
+        str(notification_id)
+        for notification_id in (payload.get("ids") or [])[:500]
+        if isinstance(notification_id, str) and notification_id
+    ]
+    dismiss_notifications(current_user.get_id(), ids)
+    return jsonify({"success": True, "cleared_count": len(ids)})
 
 
 @app.route('/api/mapa/estados')
@@ -3944,8 +4179,9 @@ def listar_regionais():
         regionais_map = dict((gerenciador_regionais.regionais.get("regionais") or {}))
         firewalls_agrupados = _agrupar_firewalls_regionais_cache(regionais_map)
         vpns_agrupadas = (
-            _agrupar_vpns_por_regional(records_for("vpns")).get("vpns_por_regional") or {}
+            _agrupar_vpns_por_regional(_fresh_operational_records("vpns")).get("vpns_por_regional") or {}
         )
+        switches_operacionais_agrupados = _agrupar_switches_operacionais_atuais()
         firewalls_a_vencer = _obter_regionais_com_firewall_a_vencer()
         regionais_dados = []
         
@@ -3957,7 +4193,12 @@ def listar_regionais():
                     _preparar_link_para_template(link)
                     for link in _obter_links_internet_exibicao(regional_info)
                 ]
-                _, switches = _obter_switches_detalhe_regional(codigo_regional, regional_info)
+                _, switches = _obter_switches_detalhe_regional(
+                    codigo_regional,
+                    regional_info,
+                    switches_operacionais_agrupados=switches_operacionais_agrupados,
+                    agrupamento_precarregado=True,
+                )
                 vpns = [
                     dict(vpn)
                     for vpn in (vpns_agrupadas.get(codigo_regional, {}).get("tunels") or [])
@@ -4087,29 +4328,32 @@ def _resolver_regional_switches(codigo_regional, regional_info):
         _normalizar_chave_regional_switch(codigo_regional),
         _normalizar_chave_regional_switch(str(codigo_regional or "").replace("REG_", "")),
         _normalizar_chave_regional_switch((regional_info or {}).get("nome")),
-        _normalizar_chave_regional_switch((regional_info or {}).get("descricao")),
     }
     alvo_tokens.discard("")
 
-    melhor_regional = None
-    melhor_score = 0
     for regional_switch in gerenciador_switches.listar_regionais():
         chave_switch = _normalizar_chave_regional_switch(regional_switch)
         if not chave_switch:
             continue
         if chave_switch in alvo_tokens:
             return regional_switch
+    return None
 
-        for alvo in alvo_tokens:
-            if not alvo:
-                continue
-            if chave_switch in alvo or alvo in chave_switch:
-                score = min(len(chave_switch), len(alvo))
-                if score > melhor_score:
-                    melhor_regional = regional_switch
-                    melhor_score = score
 
-    return melhor_regional
+def _agrupar_switches_por_regionais_configuradas(switches, regionais_configuradas):
+    agrupados = {codigo: [] for codigo in regionais_configuradas}
+    for switch in switches or []:
+        regional_origem = str(
+            switch.get("regional_zabbix")
+            or switch.get("regional")
+            or "SEM_REGIONAL"
+        ).strip()
+        regional = (
+            _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_origem)
+            or regional_origem
+        )
+        agrupados.setdefault(regional, []).append(dict(switch))
+    return agrupados
 
 
 def _formatar_ultima_verificacao_switch(valor):
@@ -4125,10 +4369,32 @@ def _formatar_ultima_verificacao_switch(valor):
         return str(valor)
 
 
-def _obter_switches_detalhe_regional(codigo_regional, regional_info):
-    switches_operacionais = records_for("switches", codigo_regional)
-    if switches_operacionais:
-        switches = [dict(switch) for switch in switches_operacionais]
+def _agrupar_switches_operacionais_atuais():
+    switches_operacionais = _fresh_operational_records("switches")
+    if not switches_operacionais:
+        return None
+    regionais_configuradas = {
+        codigo: gerenciador_regionais.obter_regional(codigo) or {}
+        for codigo in gerenciador_regionais.listar_regionais()
+    }
+    return _agrupar_switches_por_regionais_configuradas(
+        switches_operacionais,
+        regionais_configuradas,
+    )
+
+
+def _obter_switches_detalhe_regional(
+    codigo_regional,
+    regional_info,
+    switches_operacionais_agrupados=None,
+    agrupamento_precarregado=False,
+):
+    agrupados = switches_operacionais_agrupados
+    if not agrupamento_precarregado:
+        agrupados = _agrupar_switches_operacionais_atuais()
+
+    if agrupados is not None:
+        switches = [dict(switch) for switch in agrupados.get(codigo_regional, [])]
         for switch in switches:
             switch.setdefault("host", switch.get("nome") or "Switch")
             switch["ultima_verificacao_formatada"] = _formatar_ultima_verificacao_switch(
@@ -4155,12 +4421,12 @@ def _obter_links_detalhe_regional(codigo_regional, regional_info):
     if isinstance((regional_info or {}).get("links_internet_auto"), list):
         return links_canonicos
 
-    links_operacionais = records_for("links", codigo_regional)
+    links_operacionais = _fresh_operational_records("links", codigo_regional)
     return links_operacionais or links_canonicos
 
 
 def _obter_vpns_detalhe_regional(codigo_regional):
-    vpns = records_for("vpns")
+    vpns = _fresh_operational_records("vpns")
     if not vpns:
         return []
     agrupadas = _agrupar_vpns_por_regional(vpns).get("vpns_por_regional") or {}
@@ -4199,7 +4465,7 @@ def detalhar_regional(codigo_regional):
         # NÃO verifica automaticamente aqui
         servidores_completos = []
 
-        servidores_operacionais = records_for("servidores", codigo_regional)
+        servidores_operacionais = _fresh_operational_records("servidores", codigo_regional)
         operacionais_por_id = {
             str(servidor.get("id")): servidor
             for servidor in servidores_operacionais
@@ -4224,7 +4490,7 @@ def detalhar_regional(codigo_regional):
                 operacionais_por_id.get(str(servidor.get("id")))
                 or operacionais_por_ip.get(str(servidor.get("ip") or "").strip())
             )
-            if operacional:
+            if operacional and _operational_record_is_newer(servidor, operacional):
                 for campo in campos_operacionais:
                     if campo in operacional:
                         servidor_completo[campo] = operacional[campo]
@@ -4374,7 +4640,7 @@ def detalhar_regional(codigo_regional):
             regional_info,
         )
 
-        firewalls_operacionais = records_for("firewalls", codigo_regional)
+        firewalls_operacionais = _fresh_operational_records("firewalls", codigo_regional)
         if firewalls_operacionais:
             firewalls_completos = firewalls_operacionais
 
@@ -4492,7 +4758,7 @@ def _obter_firewalls_regionais_cache(codigo_regional):
 
 
 def _agrupar_firewalls_regionais_cache(regionais_map):
-    firewalls = records_for("firewalls")
+    firewalls = _fresh_operational_records("firewalls")
     if not firewalls:
         cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}
         firewalls = [
@@ -5757,66 +6023,12 @@ def api_mapeamento_emails_contatos():
 @app.route('/switches/editar/<host>', methods=['GET', 'POST'])
 @login_required
 def editar_switch(host):
-    """Página para editar um switch existente"""
+    """Edita os metadados locais de um switch inventariado pelo Zabbix."""
     if request.method == 'POST':
         try:
-            gerenciador_switches._carregar_switches()
-
-            # Obtém os dados do formulário
-            ip = request.form.get('ip').strip()
-            regional = request.form.get('regional').strip().upper()
             modelo = request.form.get('modelo', '').strip()
             local = request.form.get('local', '').strip()
-            
-            # Validações básicas
-            if not ip:
-                flash('IP é obrigatório', 'error')
-                return redirect(url_for('editar_switch', host=host))
-            
-            if not regional:
-                flash('Regional é obrigatória', 'error')
-                return redirect(url_for('editar_switch', host=host))
-            
-            # Encontra o switch na lista
-            switch_encontrado = None
-            for switch in gerenciador_switches.switches:
-                if _normalizar_host_switch(switch["host"]) == _normalizar_host_switch(host):
-                    switch_encontrado = switch
-                    break
-            
-            if not switch_encontrado:
-                flash(f'Switch não encontrado: {host}', 'error')
-                return redirect(url_for('listar_switches'))
-            
-            # Carrega o arquivo Excel real configurado para switches
-            arquivo_excel, df = _carregar_planilha_switches()
-            
-            # Encontra o índice do switch no DataFrame
-            idx = _localizar_indice_switch(df, host)
-            if len(idx) == 0:
-                flash(f'Switch não encontrado no Excel: {host}', 'error')
-                return redirect(url_for('listar_switches'))
-            
-            # Atualiza os dados no DataFrame
-            df.loc[idx[0], 'IP'] = ip
-            df.loc[idx[0], 'Regional'] = regional
-            df.loc[idx[0], 'Modelo'] = modelo
-            df.loc[idx[0], 'Local'] = local
-            
-            # Cria backup do arquivo original em pasta dedicada
-            _criar_backup_switches(arquivo_excel)
-            
-            # Salva o DataFrame atualizado
-            with pd.ExcelWriter(arquivo_excel, engine='openpyxl') as writer:
-                # Adiciona linhas em branco no início
-                empty_df = pd.DataFrame()
-                empty_df.to_excel(writer, sheet_name='Switches', index=False)
-                
-                # Adiciona o DataFrame principal começando da linha 3
-                df.to_excel(writer, sheet_name='Switches', startrow=2, index=False)
-            
-            # Recarrega os switches
-            gerenciador_switches._carregar_switches()
+            gerenciador_switches.atualizar_metadados(host, modelo=modelo, local=local)
             
             flash(f'Switch {host} atualizado com sucesso!', 'success')
             return redirect(url_for('listar_switches'))
@@ -5825,15 +6037,9 @@ def editar_switch(host):
             flash(f'Erro ao atualizar switch: {str(e)}', 'error')
             return redirect(url_for('editar_switch', host=host))
     
-    # Método GET - exibe o formulário
-    gerenciador_switches._carregar_switches()
-
-    # Encontra o switch na lista
-    switch = None
-    for s in gerenciador_switches.switches:
-        if _normalizar_host_switch(s["host"]) == _normalizar_host_switch(host):
-            switch = s
-            break
+    switch = gerenciador_switches.obter_switch(host)
+    if not switch and gerenciador_switches._carregar_switches_api():
+        switch = gerenciador_switches.obter_switch(host)
     
     if not switch:
         flash(f'Switch não encontrado: {host}', 'error')
@@ -6028,32 +6234,18 @@ def listar_switches():
         if not switches_fonte:
             switches_fonte = [dict(switch) for switch in gerenciador_switches.switches]
         if not switches_fonte:
-            switches_fonte = records_for("switches")
+            switches_fonte = _fresh_operational_records("switches")
 
-        switches_por_regional_operacional = {}
-        for switch in switches_fonte:
-            regional_origem = str(
-                switch.get("regional_zabbix")
-                or switch.get("regional")
-                or "SEM_REGIONAL"
-            ).strip()
-            regional = (
-                _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_origem)
-                or regional_origem
-            )
-            switches_por_regional_operacional.setdefault(regional, []).append(dict(switch))
-
-        if not switches_por_regional_operacional:
+        if not switches_fonte:
             sucesso_api = gerenciador_switches._carregar_switches_api()
             if not sucesso_api:
                 gerenciador_switches._carregar_switches()
-            for switch in gerenciador_switches.switches:
-                regional_origem = str(switch.get("regional") or "SEM_REGIONAL").strip()
-                regional = (
-                    _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_origem)
-                    or regional_origem
-                )
-                switches_por_regional_operacional.setdefault(regional, []).append(dict(switch))
+            switches_fonte = [dict(switch) for switch in gerenciador_switches.switches]
+
+        switches_por_regional_operacional = _agrupar_switches_por_regionais_configuradas(
+            switches_fonte,
+            regionais_configuradas,
+        )
 
         regionais = sorted(switches_por_regional_operacional)
 
@@ -6473,7 +6665,7 @@ def listar_firewalls(return_data=False):
 
         force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
         if not force_refresh:
-            firewalls_operacionais = records_for("firewalls")
+            firewalls_operacionais = _fresh_operational_records("firewalls")
             cached = None
             if firewalls_operacionais:
                 firewalls_por_regional = {}
@@ -7198,21 +7390,97 @@ def vm_relatorio(vm_id):
 
 # === ROTAS DE VPN ===
 
+def _prepare_vpn_operational_records(vpns):
+    filtered_vpns = [
+        dict(vpn)
+        for vpn in (vpns or [])
+        if not str(vpn.get("tunel") or "").upper().startswith("VPN_IPSECCLI")
+    ]
+    indice_regionais = _carregar_indice_regionais_vpn()
+    grouped = _agrupar_vpns_por_regional(filtered_vpns, indice_regionais).get("vpns_por_regional") or {}
+    registered = {item.get("chave") for item in indice_regionais}
+    records = []
+    now = datetime.now().isoformat()
+    for regional_code, regional_data in grouped.items():
+        mapped_regional = regional_code if regional_code in registered else "SEM_REGIONAL"
+        for raw_vpn in regional_data.get("tunels") or []:
+            vpn = dict(raw_vpn)
+            vpn.update({
+                "nome": vpn.get("tunel") or "VPN",
+                "regional": mapped_regional,
+                "status": "online" if str(vpn.get("status") or "").strip().lower() in {"up", "online"} else "offline",
+                "ultima_verificacao": vpn.get("ultima_verificacao") or now,
+            })
+            records.append(vpn)
+    return records
+
+
+def _fresh_vpn_operational_records():
+    state = load_operational_state()
+    vpn_group = (state.get("groups") or {}).get("vpns") or {}
+    if not snapshot_is_fresh(vpn_group.get("updated_at")):
+        return []
+    return [dict(vpn) for vpn in (vpn_group.get("records") or [])]
+
+
+def _collect_and_publish_vpns():
+    previous_state = load_operational_state() or {}
+    previous_group = ((previous_state.get("groups") or {}).get("vpns") or {})
+    previous_orphans = {
+        str(vpn.get("tunel") or vpn.get("nome") or "").strip()
+        for vpn in (previous_group.get("records") or [])
+        if str(vpn.get("regional") or "").strip().upper() == "SEM_REGIONAL"
+    }
+
+    if not gerenciador_fortigate.autenticar():
+        return {"success": False, "message": "Falha na autenticação com o Fortigate"}
+    result = gerenciador_fortigate.obter_vpn_ipsec()
+    if not isinstance(result, dict):
+        return {"success": False, "message": "Resposta inválida do Fortigate"}
+    if not result.get("success", False):
+        return result
+
+    raw_vpns = result.get("vpns") or []
+    # Uma regional pode ter sido criada depois da ultima consulta. Recarregue o
+    # cadastro e refaca todos os vinculos usando a nomenclatura atual.
+    gerenciador_regionais.recarregar_regionais()
+    records = _prepare_vpn_operational_records(raw_vpns)
+    publish_group_records("vpns", records, source="vpn_manual")
+    total_unmapped = sum(
+        1 for vpn in records
+        if str(vpn.get("regional") or "").strip().upper() == "SEM_REGIONAL"
+    )
+    newly_linked = sum(
+        1 for vpn in records
+        if str(vpn.get("tunel") or vpn.get("nome") or "").strip() in previous_orphans
+        and str(vpn.get("regional") or "").strip().upper() != "SEM_REGIONAL"
+    )
+    total_linked = len(records) - total_unmapped
+    message = (
+        f"VPNs atualizadas: {len(records)} consultadas, {total_linked} vinculadas, "
+        f"{newly_linked} novo(s) vinculo(s) e {total_unmapped} sem regional."
+    )
+    return {
+        **result,
+        "success": True,
+        "message": message,
+        "vpns": records,
+        "total_atualizado": len(records),
+        "total_vinculado": total_linked,
+        "novos_vinculos": newly_linked,
+        "total_sem_regional": total_unmapped,
+    }
+
 @app.route('/vpn')
 @login_required
 def vpn_ipsec():
     try:
-        vpns = records_for("vpns")
+        vpns = _fresh_vpn_operational_records()
         if vpns:
             for vpn in vpns:
                 vpn["status"] = "up" if str(vpn.get("status") or "").lower() in {"up", "online"} else "down"
         else:
-            if not gerenciador_fortigate.autenticar():
-                flash("Falha na autenticação com o Fortigate", "error")
-                return render_template("vpn_ipsec.html", vpns=[])
-            resultado = gerenciador_fortigate.obter_vpn_ipsec()
-            if not resultado or not isinstance(resultado, dict):
-                raise ValueError("Resposta inválida do Fortigate")
+            resultado = _collect_and_publish_vpns()
             if not resultado.get("success", False):
                 flash(resultado.get("message", "Erro ao consultar VPN IPsec"), "error")
                 return render_template("vpn_ipsec.html", vpns=[])
@@ -7222,7 +7490,7 @@ def vpn_ipsec():
         for vpn in vpns:
             vpn.setdefault("tunel", "N/A")
             vpn.setdefault("interface", "N/A")
-            vpn.setdefault("status", "down")
+            vpn["status"] = "up" if str(vpn.get("status") or "").strip().lower() in {"up", "online"} else "down"
             vpn.setdefault("ultima_verificacao", datetime.now().strftime("%H:%M"))
 
         resumo_vpn = _agrupar_vpns_por_regional(vpns)
@@ -7261,13 +7529,8 @@ def vpn_ipsec():
 @login_required
 def api_verificar_vpn():
     try:
-        if not gerenciador_fortigate.autenticar():
-            return jsonify({
-                "success": False,
-                "message": "Falha na autenticação com o Fortigate"
-            })
-
-        return jsonify(gerenciador_fortigate.obter_vpn_ipsec())
+        result = _collect_and_publish_vpns()
+        return jsonify(result), (200 if result.get("success") else 502)
 
     except Exception as e:
         app.logger.exception("Erro ao verificar VPN")

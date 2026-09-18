@@ -7,6 +7,9 @@
     {% if sofia_enabled %}
         <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css') }}">
     {% endif %}
+    {% if current_user.is_authenticated %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='notifications/notifications.css') }}">
+    {% endif %}
     <title>{% block title %}Sistema de Automação{% endblock %}</title>
     
     <!-- Bootstrap CSS -->
@@ -78,6 +81,12 @@
             margin: 20px auto;
             padding: 30px;
             max-width: 1200px;
+        }
+
+        .notification-deep-link-target {
+            outline: 3px solid #13b9f2;
+            outline-offset: 3px;
+            box-shadow: 0 0 0 7px rgba(19, 185, 242, 0.16);
         }
 
         .card {
@@ -819,6 +828,10 @@
         </div>
     </div>
 
+    {% if current_user.is_authenticated %}
+        {% include 'components/notification_bell.html' %}
+    {% endif %}
+
     {% if sofia_enabled and current_user.is_authenticated %}
         {% include 'components/sofia_chat.html' %}
     {% endif %}
@@ -835,6 +848,9 @@
     {% if sofia_enabled and current_user.is_authenticated %}
         <script src="{{ url_for('static', filename='sofia/sofia.js') }}"></script>
     {% endif %}
+    {% if current_user.is_authenticated %}
+        <script src="{{ url_for('static', filename='notifications/notifications.js') }}"></script>
+    {% endif %}
     
     <!-- Custom JS -->
     <script>
@@ -844,6 +860,12 @@
                 .replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase()
                 .trim();
+        }
+
+        function clearNotificationSearchQuery() {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('q');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
         }
 
         function createPageSearch(config) {
@@ -1046,6 +1068,39 @@
                     }
                 }
             });
+        });
+
+        window.addEventListener('load', function() {
+            const params = new URLSearchParams(window.location.search);
+            const query = (params.get('q') || '').trim();
+            if (!query) return;
+
+            const searchInputIds = [
+                'vpnSearchInput',
+                'switchesSearchInput',
+                'antenasSearchInput',
+                'linksSearchInput',
+                'firewallSearchInput',
+                'searchInput'
+            ];
+            const searchInput = searchInputIds
+                .map((id) => document.getElementById(id))
+                .find(Boolean);
+            if (searchInput) {
+                searchInput.value = query;
+                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                searchInput.focus({ preventScroll: true });
+            }
+
+            const normalizedQuery = normalizeSearchText(query);
+            const deepLinkTarget = Array.from(document.querySelectorAll('[data-notification-search]'))
+                .find((item) => normalizeSearchText(item.dataset.notificationSearch).includes(normalizedQuery));
+            if (deepLinkTarget) {
+                deepLinkTarget.classList.add('notification-deep-link-target');
+                window.setTimeout(() => {
+                    deepLinkTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 120);
+            }
         });
     </script>
     

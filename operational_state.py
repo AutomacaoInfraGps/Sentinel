@@ -126,6 +126,41 @@ def publish_map_snapshot(map_data, source="mapa", path=None, collected_at=None):
         return payload
 
 
+def publish_group_records(group, records, source="manual", path=None, collected_at=None):
+    if group not in DEVICE_GROUPS:
+        raise ValueError(f"Grupo operacional invalido: {group}")
+
+    state_path = Path(path or STATE_FILE)
+    now = collected_at or _now_iso()
+    with _lock:
+        state = load_operational_state(state_path)
+        groups = state.setdefault("groups", {})
+        old_records = (groups.get(group) or {}).get("records") or []
+        old_by_key = {
+            (str(item.get("regional") or ""), _device_key(item)): item
+            for item in old_records
+            if _device_key(item)
+        }
+        published = []
+        for raw_record in records or []:
+            record = deepcopy(raw_record)
+            key = (str(record.get("regional") or ""), _device_key(record))
+            old = old_by_key.get(key)
+            changed = old is None or _device_signature(old) != _device_signature(record)
+            record["updated_at"] = now
+            record["changed_at"] = now if changed else old.get("changed_at") or now
+            published.append(record)
+
+        groups[group] = {
+            "source": source,
+            "updated_at": now,
+            "records": published,
+        }
+        state.update({"version": 1, "updated_at": now, "source": source})
+        _write_atomic(state, state_path)
+        return deepcopy(groups[group])
+
+
 def records_for(group, regional=None, path=None):
     records = load_operational_state(path).get("groups", {}).get(group, {}).get("records") or []
     if regional is None:
