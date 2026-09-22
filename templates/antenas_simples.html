@@ -166,11 +166,14 @@
                 <div class="card-header" style="background: linear-gradient(135deg,#012E40,#0A4A63); color:#fff;">
                     <div class="d-flex justify-content-between align-items-center">
                         <strong><i class="bi bi-broadcast me-2"></i>Interferência Co-Canal 5GHz por Regional</strong>
-                        <form action="/executar_unifi_direto" method="post">
+                        {% if sentinel_access.operator %}
+                        <form action="{{ url_for('executar_unifi_direto') }}" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-light btn-sm">
                                 <i class="bi bi-arrow-clockwise me-1"></i> Atualizar Dados
                             </button>
                         </form>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="card-body">
@@ -409,11 +412,14 @@
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <h5 class="mb-0">Lista de Antenas</h5>
-                        <form action="/executar_unifi_direto" method="post" class="mb-0">
+                        {% if sentinel_access.operator %}
+                        <form action="{{ url_for('executar_unifi_direto') }}" method="post" class="mb-0">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-outline-info btn-sm">
                                 <i class="bi bi-arrow-clockwise me-1"></i> Atualizar Antenas
                             </button>
                         </form>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="card-body">
