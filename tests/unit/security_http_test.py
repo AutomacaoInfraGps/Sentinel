@@ -47,6 +47,25 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertEqual(response.headers["X-Frame-Options"], "SAMEORIGIN")
         self.assertIn("default-src 'self'", response.headers["Content-Security-Policy"])
 
+    def test_expired_login_csrf_returns_to_form_with_a_new_token(self):
+        self.client.get("/login?next=/regionais")
+        response = self.client.post(
+            "/login?next=/regionais",
+            data={
+                "username": "admin.teste",
+                "password": "senha-nao-consultada",
+                "csrf_token": "token-expirado",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/login?next=/regionais"))
+
+        refreshed = self.client.get(response.headers["Location"])
+        self.assertEqual(refreshed.status_code, 200)
+        self.assertIn(b"A sess", refreshed.data)
+        self.assertIn(b'name="csrf_token"', refreshed.data)
+
     def test_unsafe_request_without_csrf_is_rejected(self):
         self._login_session("admin.csrf", ["SENTINEL_ADMINISTRATIVE_OU"])
         response = self.client.post("/api/regional", json={})

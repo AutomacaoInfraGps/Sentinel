@@ -1,18 +1,20 @@
 """Controles de segurança HTTP compartilhados pelo Sentinel."""
 
 import hmac
+import logging
 import os
 import secrets
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-from flask import jsonify, redirect, request, session, url_for
+from flask import flash, jsonify, redirect, request, session, url_for
 from flask_login import current_user
 
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 PUBLIC_ENDPOINTS = frozenset({"login", "static", "serve_branding_asset"})
+logger = logging.getLogger(__name__)
 
 
 def _load_or_create_secret(project_root):
@@ -100,8 +102,29 @@ def configure_security(app, project_root):
             return redirect(url_for("login", next=next_path))
 
         if request.method not in SAFE_METHODS and not _csrf_is_valid():
+            logger.warning(
+                "CSRF rejeitado: endpoint=%s path=%s token_sessao=%s "
+                "token_enviado=%s requisicao_https=%s cookie_secure=%s",
+                endpoint,
+                request.path,
+                bool(session.get("_csrf_token")),
+                bool(
+                    request.headers.get("X-CSRF-Token")
+                    or request.form.get("csrf_token")
+                ),
+                request.is_secure,
+                https_enabled,
+            )
             if request.path.startswith("/api/"):
                 return jsonify({"success": False, "message": "Requisição de segurança inválida."}), 400
+            if endpoint == "login":
+                # Uma aba aberta antes de um restart pode carregar um token
+                # assinado pela sessao anterior. Renove-o sem afrouxar o CSRF.
+                session.pop("_csrf_token", None)
+                flash("A sessão de login expirou. Tente entrar novamente.", "error")
+                next_page = request.args.get("next")
+                redirect_args = {"next": next_page} if is_safe_next_url(next_page) else {}
+                return redirect(url_for("login", **redirect_args))
             return "Requisição de segurança inválida.", 400
         return None
 
