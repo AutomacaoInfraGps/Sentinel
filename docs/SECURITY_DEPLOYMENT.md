@@ -16,6 +16,7 @@ Exemplo de variáveis do serviço:
 SECRET_KEY=<valor aleatório com pelo menos 64 caracteres>
 SENTINEL_HTTPS_ENABLED=true
 SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
+SENTINEL_SESSION_TIMEOUT_MINUTES=0
 AUTOMACAO_WEB_HOST=127.0.0.1
 AUTOMACAO_WEB_PORT=5000
 ```
@@ -27,7 +28,7 @@ AUTOMACAO_WEB_PORT=5000
 - Grupos `GGS_SUPORTE_*` enxergam somente as regionais associadas.
 - `Remote Desktop Users` e `Account Operators` têm visão ampla, mas não podem executar alterações administrativas no Sentinel.
 - `GGS_SUPORTE_CORPORATIVO`, administradores do domínio e usuários da OU administrativa podem operar o Sentinel.
-- Sessões expiram após uma hora. Alterações de grupo passam a valer no próximo login, no máximo após essa expiração.
+- Com `SENTINEL_SESSION_TIMEOUT_MINUTES=0`, a sessão não expira por inatividade e permanece ativa até logout, fechamento do navegador ou reinício do serviço. Um valor maior que zero reativa a expiração em minutos.
 
 ## Validação após publicar
 

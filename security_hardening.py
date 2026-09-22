@@ -20,6 +20,18 @@ PUBLIC_ENDPOINTS = frozenset({
     "serve_branding_asset",
 })
 logger = logging.getLogger(__name__)
+SESSION_BROWSER_LIFETIME = timedelta(days=3650)
+
+
+def _session_timeout_minutes():
+    raw_value = os.environ.get("SENTINEL_SESSION_TIMEOUT_MINUTES", "0").strip()
+    try:
+        return max(0, int(raw_value))
+    except ValueError:
+        logger.warning(
+            "SENTINEL_SESSION_TIMEOUT_MINUTES invalido; usando sessao sem prazo operacional"
+        )
+        return 0
 
 
 def _load_or_create_secret(project_root):
@@ -79,6 +91,13 @@ def configure_security(app, project_root):
     https_enabled = os.environ.get("SENTINEL_HTTPS_ENABLED", "").strip().lower() in {
         "1", "true", "yes", "on"
     }
+    session_timeout_minutes = _session_timeout_minutes()
+    permanent_session = session_timeout_minutes > 0
+    session_lifetime = (
+        timedelta(minutes=session_timeout_minutes)
+        if permanent_session
+        else SESSION_BROWSER_LIFETIME
+    )
     app.secret_key = _load_or_create_secret(project_root)
     trusted_hosts = [
         host.strip()
@@ -90,7 +109,9 @@ def configure_security(app, project_root):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Strict",
         SESSION_COOKIE_SECURE=https_enabled,
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=1),
+        SENTINEL_SESSION_PERMANENT=permanent_session,
+        PERMANENT_SESSION_LIFETIME=session_lifetime,
+        SESSION_REFRESH_EACH_REQUEST=permanent_session,
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
     )
     if trusted_hosts:
@@ -160,4 +181,7 @@ def configure_security(app, project_root):
             response.headers["Pragma"] = "no-cache"
         return response
 
-    return {"https_enabled": https_enabled}
+    return {
+        "https_enabled": https_enabled,
+        "session_timeout_minutes": session_timeout_minutes,
+    }
