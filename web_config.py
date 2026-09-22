@@ -155,6 +155,25 @@ def sentinel_health():
 init_auth(app)
 configure_security(app, PROJECT_ROOT)
 
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    """Retorna um erro coerente com o tipo de cliente, sem a tela crua do Flask."""
+    allowed_methods = sorted(
+        method for method in (getattr(error, "valid_methods", None) or [])
+        if method not in {"HEAD", "OPTIONS"}
+    )
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'message': 'Método não permitido para esta operação.',
+            'allowed_methods': allowed_methods,
+        }), 405
+    return render_template(
+        '405.html',
+        allowed_methods=allowed_methods,
+    ), 405
+
 @login_manager.user_loader
 def load_user(user_id):
     """Carrega usuário para Flask-Login"""

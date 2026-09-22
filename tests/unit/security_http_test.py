@@ -136,6 +136,38 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.headers["Location"].endswith("/login"))
 
+    def test_direct_logout_url_requires_confirmation_without_ending_session(self):
+        self._login_session("admin.logout.get", ["SENTINEL_ADMINISTRATIVE_OU"])
+
+        response = self.client.get("/logout")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'action="/logout"', response.data)
+        self.assertIn(b'name="csrf_token"', response.data)
+        self.assertEqual(self.client.get("/regionais").status_code, 200)
+
+    def test_page_method_not_allowed_uses_sentinel_layout(self):
+        self._login_session("admin.405", ["SENTINEL_ADMINISTRATIVE_OU"])
+
+        response = self.client.post(
+            "/regionais",
+            headers={"X-CSRF-Token": "test-csrf-token"},
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertIn(b"Opera", response.data)
+
+    def test_api_method_not_allowed_returns_json(self):
+        self._login_session("admin.api.405", ["SENTINEL_ADMINISTRATIVE_OU"])
+
+        response = self.client.patch(
+            "/api/test",
+            headers={"X-CSRF-Token": "test-csrf-token"},
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(response.get_json()["success"])
+
     def test_view_only_user_cannot_enumerate_routes(self):
         self._login_session(
             "viewer.test",

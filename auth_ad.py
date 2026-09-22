@@ -301,11 +301,14 @@ def init_auth(app):
         
         return render_template('login.html')
     
-    @app.route('/logout', methods=['POST'])
+    @app.route('/logout', methods=['GET', 'POST'])
     def logout():
         """Logout do usuário"""
-        from flask import redirect, url_for, flash
+        from flask import redirect, render_template, request, url_for, flash
         from flask_login import logout_user, current_user
+
+        if request.method == 'GET':
+            return render_template('logout_confirm.html')
         
         if current_user.is_authenticated:
             username = current_user.id
