@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime
 
 import web_config
-from gerenciar_fortigate import _parse_vpn_phase1_comments
+from gerenciar_fortigate import GerenciadorFortigate, _parse_vpn_phase1_comments
 
 
 class LinkFortimanagerStatusTest(unittest.TestCase):
@@ -212,6 +212,49 @@ end
         self.assertEqual("Regional CONTROL - MONTES CLAROS", comments["V070_MONCLAR04"])
         self.assertEqual("Regional CONTROL - ARAPIRACA", comments["T068_ARAPIRA04"])
 
+    @patch("gerenciar_fortigate.FortiManagerClient")
+    def test_vpn_comments_are_loaded_from_manager_device_matching_fortigate_ip(self, client_class):
+        manager = GerenciadorFortigate(
+            host="10.254.12.1",
+            username="admin",
+            password="test",
+        )
+        client = client_class.return_value.__enter__.return_value
+        client.list_devices.return_value = {
+            "result": [{
+                "data": [
+                    {"name": "FGT_OUTRO", "ip": "10.0.0.1"},
+                    {"name": "FTG_GLX_100F_MATRIZ", "ip": "10.254.12.1"},
+                ],
+            }],
+        }
+        client.get_vpn_phase1_comments.return_value = {
+            "T001_PR_01": "REG_PARANA",
+        }
+
+        comments = manager._obter_comentarios_vpn_fortimanager()
+
+        self.assertEqual(comments, {"T001_PR_01": "REG_PARANA"})
+        client.get_vpn_phase1_comments.assert_called_once_with("FTG_GLX_100F_MATRIZ")
+
+    def test_vpn_parana_is_linked_by_fortimanager_comment(self):
+        index = [{
+            "chave": "REG_PARANA",
+            "nome_exibicao": "PARANA",
+            "tokens": web_config._gerar_tokens_regional("REG_PARANA"),
+            "identidades": {web_config._identidade_principal_regional("REG_PARANA")},
+        }]
+
+        with patch.object(web_config, "_carregar_indice_regionais_vpn", return_value=index):
+            records = web_config._prepare_vpn_operational_records([{
+                "tunel": "T001_PR_01",
+                "comentario": "REG_PARANA",
+                "status": "up",
+            }])
+
+        self.assertEqual(records[0]["regional"], "REG_PARANA")
+        self.assertEqual(records[0]["vinculo_regional_origem"], "comentario")
+
     def test_vpn_comment_has_priority_and_tunnel_name_remains_fallback(self):
         regional_codes = ["REG_CONTROL_MONTESCLAROS", "REG_CONTROL_ARAPIRACA"]
         index = [
@@ -322,6 +365,41 @@ end
         self.assertEqual("REG_CEARA_2", web_config._resolver_regional_firewall("FGT_REGCEARA02ULTRA", regionals))
         self.assertEqual("REG_CONTROL_NANUQUE", web_config._resolver_regional_firewall("FGT_CONTROL_NANUQUE", regionals))
         self.assertEqual("REG_CONTROL_ARAPIRACA", web_config._resolver_regional_firewall("FGT_REGCONTROL_ARAPIRACA", regionals))
+
+    def test_firewalls_normalize_control_abbreviations_and_regional_prefix(self):
+        regionals = {
+            "REG_CONTROL_ARAPIRACA": {"nome": "REG_CONTROL_ARAPIRACA"},
+            "REG_CONTROL_JANAUBA": {"nome": "REG_CONTROL_JANAUBA"},
+            "REG_CONTROL_JANUARIA": {"nome": "REG_CONTROL_JANUARIA"},
+            "REG_CONTROL_MONTESCLAROS": {"nome": "REG_CONTROL_MONTESCLAROS"},
+            "REG_CONTROL_NANUNQUE": {"nome": "REG_CONTROL_NANUNQUE"},
+            "REG_REGIONAL BELO HORIZONTE": {"nome": "REG_REGIONAL BELO HORIZONTE"},
+        }
+
+        self.assertEqual(
+            "REG_CONTROL_ARAPIRACA",
+            web_config._resolver_regional_firewall("FGT_CTRLARAPIRACA", regionals),
+        )
+        self.assertEqual(
+            "REG_CONTROL_MONTESCLAROS",
+            web_config._resolver_regional_firewall("FGT_CTRLMCLAROS", regionals),
+        )
+        self.assertEqual(
+            "REG_CONTROL_NANUNQUE",
+            web_config._resolver_regional_firewall("FGT_CTRLNANUQUE", regionals),
+        )
+        self.assertEqual(
+            "REG_REGIONAL BELO HORIZONTE",
+            web_config._resolver_regional_firewall("FGT_REGBELOHORIZONTE", regionals),
+        )
+        self.assertEqual(
+            "REG_CONTROL_JANAUBA",
+            web_config._resolver_regional_firewall("FGT_CTRLJANAUBA", regionals),
+        )
+        self.assertEqual(
+            "REG_CONTROL_JANUARIA",
+            web_config._resolver_regional_firewall("FGT_CTRLJANUARIA", regionals),
+        )
 
     @patch.object(web_config, "_fresh_operational_records")
     def test_regional_details_remap_vpns_from_stale_snapshot(self, fresh_operational_records):
