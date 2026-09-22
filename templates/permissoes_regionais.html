@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Permissões Regionais - Sentinel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1"><i class="bi bi-shield-lock me-2"></i>Permissões Regionais</h1>
+        <p class="text-muted mb-0">Confirme grupos de suporte encontrados nos logins do Active Directory.</p>
+    </div>
+</div>
+
+<section class="mb-5">
+    <h2 class="h5 mb-3">Associações pendentes</h2>
+    {% if suggestions %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Grupo encontrado</th>
+                    <th>Sugestão</th>
+                    <th>Regional confirmada</th>
+                    <th class="text-end">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for suggestion in suggestions %}
+                <tr>
+                    <td><code>{{ suggestion.group }}</code></td>
+                    <td>
+                        {{ suggestion.suggested_regional or 'Sem sugestão' }}
+                        {% if suggestion.suggested_regional %}
+                        <small class="text-muted d-block">Similaridade: {{ (suggestion.score * 100)|round|int }}%</small>
+                        {% endif %}
+                    </td>
+                    <td colspan="2">
+                        <form method="post" class="d-flex gap-2 justify-content-end">
+                            <input type="hidden" name="group" value="{{ suggestion.group }}">
+                            <select name="regional" class="form-select" required aria-label="Regional para {{ suggestion.group }}">
+                                <option value="">Selecione a regional</option>
+                                {% for regional in regionais %}
+                                <option value="{{ regional }}" {% if regional == suggestion.suggested_regional %}selected{% endif %}>{{ regional }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg"></i> Confirmar
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-light border mb-0">Nenhum grupo novo aguardando confirmação.</div>
+    {% endif %}
+</section>
+
+<section>
+    <h2 class="h5 mb-3">Associações adicionadas</h2>
+    <form method="post" class="row g-2 align-items-end mb-4">
+        <div class="col-lg-5">
+            <label for="manualGroup" class="form-label">Grupo de suporte</label>
+            <input id="manualGroup" name="group" class="form-control" placeholder="GGS_SUPORTE_NOME" required>
+        </div>
+        <div class="col-lg-5">
+            <label for="manualRegional" class="form-label">Regional</label>
+            <select id="manualRegional" name="regional" class="form-select" required>
+                <option value="">Selecione a regional</option>
+                {% for regional in regionais %}
+                <option value="{{ regional }}">{{ regional }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-lg-2">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-plus-lg"></i> Adicionar
+            </button>
+        </div>
+    </form>
+    {% if dynamic_mappings %}
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead><tr><th>Grupo do AD</th><th>Regionais no Sentinel</th></tr></thead>
+            <tbody>
+                {% for group, mapped_regionals in dynamic_mappings|dictsort %}
+                <tr>
+                    <td><code>{{ group }}</code></td>
+                    <td>{{ mapped_regionals|sort|join(', ') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-light border mb-0">As associações iniciais continuam ativas. Nenhuma associação adicional foi criada.</div>
+    {% endif %}
+</section>
+{% endblock %}

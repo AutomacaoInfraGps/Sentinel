@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script src="{{ url_for('static', filename='security.js') }}"></script>
     <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='branding/sentinel_favicon.png') }}">
     {% if sofia_enabled %}
         <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css') }}">
@@ -579,6 +581,7 @@
                             <span>Gerenciar Regionais</span>
                         </a>
                     </li>
+                    {% if sentinel_access.operator %}
                     <li>
                         <a href="{{ url_for('nova_regional') }}" class="sidebar-sublink">
                             <i class="bi bi-plus-circle me-2"></i>
@@ -591,6 +594,7 @@
                             <span>Dashboard Hierárquico</span>
                         </a>
                     </li>
+                    {% endif %}
                 </ul>
             </li>
             
@@ -613,24 +617,28 @@
                             <span>Servidores</span>
                         </a>
                     </li>
+                    {% if sentinel_access.operator %}
                     <li>
                         <a href="{{ url_for('replicacao_ad') }}" class="sidebar-sublink">
                             <i class="bi bi-arrow-repeat me-2"></i>
                             <span>Replicação AD</span>
                         </a>
                     </li>
+                    {% endif %}
                     <li>
                         <a href="{{ url_for('antenas_unifi') }}" class="sidebar-sublink">
                             <i class="bi bi-wifi me-2"></i>
                             <span>Antenas UniFi</span>
                         </a>
                     </li>
+                    {% if sentinel_access.operator %}
                     <li>
                         <a href="{{ url_for('listar_vms') }}" class="sidebar-sublink">
                             <i class="bi bi-hdd-stack me-2"></i>
                             <span>Máquinas Virtuais</span>
                         </a>
                     </li>
+                    {% endif %}
                     <li>
                         <a href="{{ url_for('listar_links') }}" class="sidebar-sublink">
                             <i class="bi bi-globe me-2"></i>
@@ -655,6 +663,7 @@
                             <span>Firewalls</span>
                         </a>
                     </li>
+                    {% if sentinel_access.operator %}
                     <li>
                         <a href="{{ url_for('listar_admin_logins') }}" class="sidebar-sublink">
                             <i class="bi bi-person-badge me-2" style="color: #0F6C8C;"></i>
@@ -679,6 +688,7 @@
                             <span>Relatórios</span>
                         </a>
                     </li>
+                    {% endif %}
                 </ul>
             </li>
             
@@ -690,6 +700,7 @@
                 </a>
             </li> #}
             
+            {% if sentinel_access.operator %}
             <li class="sidebar-item">
                 <a href="{{ url_for('backup') }}" class="sidebar-link">
                     <i class="bi bi-cloud-download me-2"></i>
@@ -718,6 +729,7 @@
                     </li>
                 </ul>
             </li>
+            {% endif %}
             
             {% if current_user.is_authenticated %}
             <li class="sidebar-divider"></li>
@@ -735,14 +747,30 @@
                             <div>
                                 <div class="fw-bold">{{ current_user.display_name or current_user.id }}</div>
                                 <small class="text-muted">{{ current_user.id }}@galaxia.local</small>
+                                <small class="d-block text-muted">
+                                    {% if sentinel_access.corporate %}Acesso corporativo
+                                    {% elif sentinel_access.full_view %}Visão completa
+                                    {% else %}{{ sentinel_access.allowed|length }} regional(is){% endif %}
+                                </small>
                             </div>
                         </div>
                     </li>
+                    {% if sentinel_access.access_admin %}
                     <li>
-                        <a href="{{ url_for('logout') }}" class="sidebar-sublink text-danger">
+                        <a href="{{ url_for('permissoes_regionais') }}" class="sidebar-sublink">
+                            <i class="bi bi-shield-lock me-2"></i>
+                            <span>Permissões Regionais</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li>
+                        <form method="post" action="{{ url_for('logout') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="sidebar-sublink text-danger border-0 bg-transparent w-100 text-start">
                             <i class="bi bi-box-arrow-right me-2"></i>
                             <span>Sair</span>
-                        </a>
+                        </button>
+                        </form>
                     </li>
                 </ul>
             </li>
@@ -782,16 +810,32 @@
                                 <div>
                                     <div class="fw-bold">{{ current_user.display_name or current_user.id }}</div>
                                     <small class="text-muted">{{ current_user.id }}@galaxia.local</small>
+                                    <small class="d-block text-muted">
+                                        {% if sentinel_access.corporate %}Acesso corporativo
+                                        {% elif sentinel_access.full_view %}Visão completa
+                                        {% else %}{{ sentinel_access.allowed|length }} regional(is){% endif %}
+                                    </small>
                                 </div>
                             </div>
                         </div>
                     </li>
                     <li><hr class="dropdown-divider"></li>
+                    {% if sentinel_access.access_admin %}
                     <li>
-                        <a class="dropdown-item" href="{{ url_for('logout') }}">
+                        <a class="dropdown-item" href="{{ url_for('permissoes_regionais') }}">
+                            <i class="bi bi-shield-lock me-2"></i>
+                            Permissões Regionais
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li>
+                        <form method="post" action="{{ url_for('logout') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="dropdown-item" type="submit">
                             <i class="bi bi-box-arrow-right me-2 text-danger"></i>
                             Sair
-                        </a>
+                        </button>
+                        </form>
                     </li>
                 </ul>
             </div>

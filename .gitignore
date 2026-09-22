@@ -125,3 +125,4 @@ docs/*smartvc*.md
 
 # Variáveis de ambiente
 .env
+instance/

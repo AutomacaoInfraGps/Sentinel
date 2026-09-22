@@ -3,19 +3,61 @@ Módulo de Autenticação Active Directory
 Autentica usuários contra AD e verifica se estão na OU autorizada
 """
 
+import json
 import os
+import re
 import socket
 import subprocess
-from ldap3 import Server, Connection, ALL, NTLM, SIMPLE, SUBTREE
-from ldap3.core.exceptions import LDAPException
+import time
+from collections import defaultdict, deque
+from threading import Lock
 from typing import Optional, Dict, Tuple
 import logging
 
 from user_model import User, get_user, remove_user, save_user
+from regional_access import (
+    effective_user_groups,
+    has_sentinel_login_access,
+    is_administrative_ou_dn,
+    observe_support_groups,
+)
+from security_hardening import is_safe_next_url
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+LOGIN_FAILURE_LIMIT = 3
+LOGIN_FAILURE_WINDOW_SECONDS = 15 * 60
+_login_failures = defaultdict(deque)
+_login_failures_lock = Lock()
+
+
+def _login_key(username):
+    return str(username or "").strip().casefold()
+
+
+def _prune_login_failures(username, now=None):
+    now = now if now is not None else time.monotonic()
+    history = _login_failures[_login_key(username)]
+    while history and now - history[0] >= LOGIN_FAILURE_WINDOW_SECONDS:
+        history.popleft()
+    return history
+
+
+def _login_is_limited(username):
+    with _login_failures_lock:
+        return len(_prune_login_failures(username)) >= LOGIN_FAILURE_LIMIT
+
+
+def _record_login_failure(username):
+    with _login_failures_lock:
+        _prune_login_failures(username).append(time.monotonic())
+
+
+def _clear_login_failures(username):
+    with _login_failures_lock:
+        _login_failures.pop(_login_key(username), None)
 
 class AuthAD:
     """Classe para autenticação Active Directory"""
@@ -61,132 +103,79 @@ class AuthAD:
             
             return None
     
-    def _tentar_autenticacao_windows(self, username: str, password: str) -> Tuple[bool, str]:
-        """Tenta autenticação usando comandos nativos do Windows (sem MD4)"""
+    def _buscar_dados_usuario_powershell(self, username: str, password: str) -> Optional[Dict]:
+        """Consulta o AD nativo quando o bind LDAP da aplicação não é aceito."""
+        script = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$plainPassword = [Console]::In.ReadToEnd()
+$securePassword = ConvertTo-SecureString $plainPassword -AsPlainText -Force
+$credential = New-Object System.Management.Automation.PSCredential(
+    ($env:SENTINEL_AD_USER + '@' + $env:SENTINEL_AD_DOMAIN),
+    $securePassword
+)
+$user = Get-ADUser `
+    -Identity $env:SENTINEL_AD_USER `
+    -Server $env:SENTINEL_AD_SERVER `
+    -Credential $credential `
+    -Properties DisplayName,mail,memberOf
+$groups = @($user.memberOf | ForEach-Object { [string]$_ })
+try {
+    $groups += @(
+        Get-ADPrincipalGroupMembership `
+            -Identity $user `
+            -Server $env:SENTINEL_AD_SERVER `
+            -Credential $credential | ForEach-Object { [string]$_.DistinguishedName }
+    )
+} catch {
+    # memberOf continua sendo uma fonte segura quando a expansão não está disponível.
+}
+$payload = [ordered]@{
+    username = $env:SENTINEL_AD_USER
+    display_name = [string]$user.DisplayName
+    email = [string]$user.mail
+    dn = [string]$user.DistinguishedName
+    groups = @($groups | Select-Object -Unique)
+}
+$payload | ConvertTo-Json -Compress -Depth 4
+"""
+        process_env = os.environ.copy()
+        process_env.update({
+            "SENTINEL_AD_DOMAIN": self.domain,
+            "SENTINEL_AD_USER": username,
+            "SENTINEL_AD_SERVER": self.dc_server,
+        })
         try:
-            # Usa net use para testar credenciais
-            cmd = f'net use \\\\{self.dc_server}\\IPC$ /user:{self.domain_netbios}\\{username} "{password}"'
-            
             result = subprocess.run(
-                cmd,
-                shell=True,
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    script,
+                ],
+                input=password,
                 capture_output=True,
                 text=True,
-                timeout=30
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                env=process_env,
             )
-            
-            # Limpa a conexão
-            subprocess.run(
-                f'net use \\\\{self.dc_server}\\IPC$ /delete',
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if result.returncode == 0:
-                logger.info(f"Autenticação Windows bem-sucedida para {username}")
-                return True, "Autenticação bem-sucedida"
-            else:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                logger.error(f"Falha na autenticação Windows: {error_msg}")
-                return False, "Usuário ou senha inválidos"
-                
-        except subprocess.TimeoutExpired:
-            return False, "Timeout na autenticação"
-        except Exception as e:
-            logger.error(f"Erro na autenticação Windows: {e}")
-            return False, f"Erro interno: {str(e)}"
-
-    def _tentar_autenticacao_ntlm(self, username: str, password: str) -> Tuple[bool, str]:
-        """Tenta autenticação NTLM direta no Active Directory."""
-        if not self.server_ip:
-            return False, "Servidor AD não encontrado"
-
-        conn = None
-        try:
-            server = Server(
-                self.server_ip,
-                port=389,
-                get_info=ALL,
-                use_ssl=False
-            )
-
-            user_format = f"{self.domain_netbios}\\{username}"
-            logger.info(f"Tentando autenticação NTLM com: {user_format}")
-
-            conn = Connection(
-                server,
-                user=user_format,
-                password=password,
-                authentication=NTLM,
-                auto_bind=True,
-                raise_exceptions=True
-            )
-
-            logger.info(f"Autenticação NTLM bem-sucedida para {username}")
-            return True, "Autenticação bem-sucedida"
-        except Exception as e:
-            logger.error(f"Falha na autenticação NTLM para {username}: {e}")
-            return False, "Usuário ou senha inválidos"
-        finally:
-            if conn is not None:
-                try:
-                    conn.unbind()
-                except Exception:
-                    pass
-    
-    def _buscar_dados_usuario_ldap(self, username: str) -> Optional[Dict]:
-        """Busca dados do usuário via LDAP simples (sem NTLM)"""
-        if not self.server_ip:
-            return None
-            
-        try:
-            # Usa conexão anônima ou simples
-            server = Server(
-                self.server_ip,
-                port=389,
-                get_info=ALL,
-                use_ssl=False
-            )
-            
-            # Tenta conexão anônima primeiro
-            conn = Connection(server)
-            if not conn.bind():
-                logger.warning("Conexão anônima falhou")
+            if result.returncode != 0:
+                logger.warning(
+                    "Consulta nativa ao AD falhou para %s: %s",
+                    username,
+                    (result.stderr or result.stdout).strip(),
+                )
                 return None
-            
-            # Busca informações do usuário
-            search_base = "DC=Galaxia,DC=local"
-            search_filter = f"(sAMAccountName={username})"
-            
-            conn.search(
-                search_base=search_base,
-                search_filter=search_filter,
-                search_scope=SUBTREE,
-                attributes=['cn', 'displayName', 'mail', 'distinguishedName', 'memberOf']
-            )
-            
-            if not conn.entries:
-                conn.unbind()
+            payload = json.loads(result.stdout.lstrip("\ufeff").strip())
+            if not payload.get("dn"):
                 return None
-            
-            user_entry = conn.entries[0]
-            user_dn_full = str(user_entry.distinguishedName)
-            
-            user_data = {
-                'username': username,
-                'display_name': str(user_entry.displayName) if user_entry.displayName else username,
-                'email': str(user_entry.mail) if user_entry.mail else '',
-                'dn': user_dn_full,
-                'groups': [str(group) for group in user_entry.memberOf] if user_entry.memberOf else []
-            }
-            
-            conn.unbind()
-            return user_data
-            
-        except Exception as e:
-            logger.error(f"Erro ao buscar dados do usuário: {e}")
+            payload["groups"] = list(dict.fromkeys(payload.get("groups") or []))
+            return payload
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+            logger.warning("Erro na consulta nativa ao AD para %s: %s", username, exc)
             return None
     
     def autenticar_usuario(self, username: str, password: str) -> Tuple[bool, Optional[Dict], str]:
@@ -198,110 +187,63 @@ class AuthAD:
         """
         if not username or not password:
             return False, None, "Usuário e senha são obrigatórios"
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", username) or len(password) > 512:
+            return False, None, "Usuário ou senha inválidos"
         
         if not self.server_ip:
             return False, None, "Servidor AD não encontrado"
-        
-        # Método 1: autenticação NTLM direta no AD
-        auth_success, auth_message = self._tentar_autenticacao_ntlm(username, password)
 
-        # Método 2: fallback via comandos Windows, preservando compatibilidade
-        if not auth_success:
-            logger.info(f"NTLM falhou, tentando autenticação Windows para: {username}")
-            auth_success, auth_message = self._tentar_autenticacao_windows(username, password)
-        
-        if not auth_success:
-            return False, None, auth_message
-        
-        # Se autenticação foi bem-sucedida, busca dados do usuário
-        user_data = self._buscar_dados_usuario_ldap(username)
+        if _login_is_limited(username):
+            return False, None, "Muitas tentativas. Aguarde 15 minutos antes de tentar novamente"
+
+        # A consulta nativa valida a credencial e retorna OU e grupos na mesma
+        # operação, sem colocar a senha na linha de comando.
+        user_data = self._buscar_dados_usuario_powershell(username, password)
         
         if not user_data:
-            # Se não conseguiu buscar via LDAP, cria dados básicos
-            user_data = {
-                'username': username,
-                'display_name': username,
-                'email': '',
-                'dn': f"CN={username},OU=Usuarios Administrativos,OU=Galaxia,DC=Galaxia,DC=local",
-                'groups': []
-            }
+            _record_login_failure(username)
+            logger.warning("Credencial inválida ou consulta ao AD recusada para %s", username)
+            return False, None, "Usuário ou senha inválidos"
+
+        _clear_login_failures(username)
         
-        # Verifica se o usuário está na OU autorizada
-        if self._usuario_na_ou_autorizada(user_data['dn']):
-            logger.info(f"Usuário {username} autorizado (OU: {self.ou_autorizada})")
+        # Contas administrativas legadas continuam autorizadas pela OU. Contas
+        # privilegiadas e suportes regionais também podem entrar pelos grupos.
+        autorizado_por_ou = self._usuario_na_ou_autorizada(user_data['dn'])
+        user_data['groups'] = list(effective_user_groups(
+            user_data.get('groups'),
+            user_data.get('dn'),
+        ))
+        autorizado_por_grupo = has_sentinel_login_access(username, user_data.get('groups'))
+        if autorizado_por_ou or autorizado_por_grupo:
+            origem = "OU administrativa" if autorizado_por_ou else "grupo de segurança"
+            logger.info("Usuário %s autorizado por %s", username, origem)
             return True, user_data, "Autenticação bem-sucedida"
         else:
-            logger.warning(f"Usuário {username} não está na OU autorizada")
+            logger.warning("Usuário %s não possui OU ou grupo autorizado", username)
             return False, None, "Usuário não possui permissão para acessar este sistema"
     
     def _usuario_na_ou_autorizada(self, user_dn: str) -> bool:
         """Verifica se o usuário está na OU autorizada"""
-        # Normaliza as strings para comparação
-        user_dn_lower = user_dn.lower()
-        ou_autorizada_lower = self.ou_autorizada.lower()
-        
-        # Verifica se a OU autorizada está contida no DN do usuário
-        return ou_autorizada_lower in user_dn_lower
+        return is_administrative_ou_dn(user_dn, self.ou_autorizada)
     
     def testar_conexao(self) -> Tuple[bool, str]:
-        """Testa a conexão com o servidor AD"""
+        """Testa o canal usado pelo módulo ActiveDirectory do PowerShell."""
         if not self.server_ip:
             return False, "Servidor AD não encontrado"
-        
+
         try:
-            server = Server(
-                self.server_ip,
-                port=389,
-                get_info=ALL,
-                use_ssl=False
-            )
-            
-            # Tenta uma conexão anônima para testar
-            conn = Connection(server)
-            conn.bind()
-            conn.unbind()
-            
-            return True, f"Conexão com {self.dc_server} ({self.server_ip}) bem-sucedida"
-        
-        except Exception as e:
-            return False, f"Erro ao conectar com AD: {str(e)}"
+            with socket.create_connection((self.server_ip, 9389), timeout=5):
+                pass
+            return True, f"Conexão segura com {self.dc_server} ({self.server_ip}) bem-sucedida"
+        except OSError:
+            logger.exception("Falha ao testar o canal AD Web Services")
+            return False, "Não foi possível conectar ao serviço seguro do Active Directory"
     
     def listar_usuarios_ou(self) -> list:
-        """Lista usuários da OU autorizada (para debug/admin)"""
-        if not self.server_ip:
-            return []
-        
-        try:
-            # Usa conexão anônima
-            server = Server(self.server_ip, port=389, get_info=ALL, use_ssl=False)
-            conn = Connection(server)
-            
-            if not conn.bind():
-                logger.warning("Não foi possível conectar para listar usuários")
-                return []
-            
-            # Busca usuários na OU específica
-            conn.search(
-                search_base=self.ou_autorizada,
-                search_filter="(objectClass=user)",
-                search_scope=SUBTREE,
-                attributes=['sAMAccountName', 'displayName', 'mail']
-            )
-            
-            usuarios = []
-            for entry in conn.entries:
-                usuarios.append({
-                    'username': str(entry.sAMAccountName),
-                    'display_name': str(entry.displayName) if entry.displayName else '',
-                    'email': str(entry.mail) if entry.mail else ''
-                })
-            
-            conn.unbind()
-            return usuarios
-        
-        except Exception as e:
-            logger.error(f"Erro ao listar usuários da OU: {e}")
-            return []
+        """A enumeração anônima de usuários foi desativada por segurança."""
+        logger.warning("Tentativa de usar a listagem legada de usuários do AD")
+        return []
 
 # Instância global
 auth_ad = AuthAD()
@@ -320,7 +262,7 @@ def init_auth(app):
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         """Página de login com autenticação AD"""
-        from flask import request, render_template, redirect, url_for, flash
+        from flask import request, render_template, redirect, url_for, flash, session
         from flask_login import login_user, current_user
         
         # Se já está logado, redireciona
@@ -340,21 +282,24 @@ def init_auth(app):
             
             if sucesso:
                 # Cria usuário e faz login
+                session.clear()
                 user = User(user_info)
                 save_user(user)
                 login_user(user)
+                session.permanent = True
+                observe_support_groups(user.groups)
                 
                 flash(f'Bem-vindo, {user.display_name}!', 'success')
                 
                 # Redireciona para página solicitada ou dashboard
                 next_page = request.args.get('next')
-                return redirect(next_page) if next_page else redirect(url_for('index'))
+                return redirect(next_page) if is_safe_next_url(next_page) else redirect(url_for('index'))
             else:
                 flash(f'Erro de autenticação: {mensagem}', 'error')
         
         return render_template('login.html')
     
-    @app.route('/logout')
+    @app.route('/logout', methods=['POST'])
     def logout():
         """Logout do usuário"""
         from flask import redirect, url_for, flash

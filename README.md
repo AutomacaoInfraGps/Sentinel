@@ -1,6 +1,6 @@
 # Sentinel - Automacao e Monitoramento de Infraestrutura
 
-> Referencia viva do projeto. Atualizado em 01/09/2026. Toda alteracao
+> Referencia viva do projeto. Atualizado em 22/09/2026. Toda alteracao
 > funcional, operacional ou estrutural deve atualizar este arquivo no mesmo
 > commit.
 
@@ -193,6 +193,8 @@ referencia segura de configuracao.
 Automacao/
 |-- run_web_service.py
 |-- web_config.py
+|-- security_hardening.py  # sessao, CSRF e seguranca HTTP
+|-- regional_access.py     # permissoes e escopo regional pelo AD
 |-- gerenciador_atualizacoes.py
 |-- executar_tudo.py
 |-- services/              # servicos de dominio ativos
@@ -222,6 +224,7 @@ estao em [docs/ESTRUTURA_PROJETO.md](docs/ESTRUTURA_PROJETO.md).
 - [Guia de configuracao](GUIA_CONFIGURACAO.md)
 - [Autenticacao](README_AUTH.md)
 - [Seguranca](GUIA_SEGURANCA.md)
+- [Implantacao segura](docs/SECURITY_DEPLOYMENT.md)
 - [Fluxo do desenvolvedor JR](GUIA_JR_HOMOLOGACAO.md)
 - [Producao e homologacao](GUIA_AMBIENTES_PROD_HML.md)
 - [Changelog](CHANGELOG.md)
@@ -234,6 +237,98 @@ Revise `git status` antes de cada commit.
 
 Arquivos como `diagnostico.json`, `resultados_verificacao.json`,
 `status_servidores.html` e `.venv/` sao locais e estao no `.gitignore`.
+
+### Componentes carregados automaticamente
+
+Os arquivos abaixo fazem parte da aplicacao e nao devem ser executados
+separadamente:
+
+- `security_hardening.py`: exige autenticacao por padrao, valida CSRF, protege
+  sessao e cookies e adiciona cabecalhos HTTP de seguranca.
+- `regional_access.py`: converte os grupos do Active Directory em visao
+  corporativa, visao completa, operacao administrativa ou escopo regional.
+- `static/security.js`: envia o token CSRF nos formularios, `fetch` e chamadas
+  AJAX da interface.
+- `auth_ad.py`: autentica no AD pelo modulo ActiveDirectory do PowerShell, sem
+  colocar a senha na linha de comando.
+
+O `web_config.py` importa e inicializa esses componentes ao subir o Sentinel.
+Os arquivos antigos `web_config_hierarquico.py` e os equivalentes em `web/`
+sao somente pontos de compatibilidade e encaminham para a aplicacao principal.
+
+### Matriz resumida de acesso
+
+- `GGS_SUPORTE_*`: acesso somente as regionais associadas ao grupo.
+- `Remote Desktop Users` e `Account Operators`: visao completa, sem operacoes
+  administrativas.
+- OU `Usuarios Administrativos`: visao completa e operacoes do Sentinel.
+- `GGS_SUPORTE_CORPORATIVO` e administradores do dominio: visao e operacao
+  completas; administradores autorizados tambem gerenciam associacoes.
+
+Alteracoes de grupos do AD passam a valer em um novo login. A sessao expira
+automaticamente depois de uma hora.
+
+### HTTPS e producao
+
+O codigo esta preparado para cookies seguros e HSTS, mas a protecao da senha
+na rede depende da publicacao por HTTPS. Enquanto o acesso ocorrer por
+`http://<ip>:5000`, a comunicacao entre navegador e servidor nao estara
+criptografada.
+
+Em producao, configure no servico:
+
+```text
+SECRET_KEY=<chave aleatoria com pelo menos 64 caracteres>
+SENTINEL_HTTPS_ENABLED=true
+SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
+AUTOMACAO_WEB_HOST=127.0.0.1
+AUTOMACAO_WEB_PORT=5000
+```
+
+O proxy reverso deve publicar o HTTPS e redirecionar HTTP para HTTPS. Consulte
+[docs/SECURITY_DEPLOYMENT.md](docs/SECURITY_DEPLOYMENT.md) antes de publicar.
+
+### Testes automatizados de seguranca
+
+Os arquivos em `tests/unit/` nao sao servicos e nao ficam executando em
+background. Eles devem ser executados durante o desenvolvimento, antes do push
+ou durante a homologacao.
+
+Para executar somente os testes de autenticacao, permissoes e HTTP:
+
+```powershell
+python -m unittest tests.unit.auth_ad_access_test tests.unit.regional_access_test tests.unit.security_http_test
+```
+
+Para executar toda a suite automatizada:
+
+```powershell
+python -m unittest discover -s tests -p "*_test.py"
+```
+
+Esses testes utilizam simulacoes de usuario e nao precisam da senha real do AD.
+Eles verificam, entre outros pontos, acesso anonimo, CSRF, redirecionamento,
+separacao entre visualizacao e operacao e bloqueio entre regionais.
+
+### Auditoria de dependencias
+
+`pip check` verifica somente se as versoes instaladas sao compativeis entre si:
+
+```powershell
+python -m pip check
+```
+
+`pip-audit` consulta uma base externa de vulnerabilidades conhecidas. Essa
+verificacao e manual e nao deve ser colocada na inicializacao do Sentinel:
+
+```powershell
+python -m pip install pip-audit
+python -m pip_audit -r requirements.txt
+```
+
+Se o proxy corporativo interceptar HTTPS, configure o certificado raiz
+corporativo no Python antes da instalacao. Nao use `--trusted-host` e nao
+desative a validacao TLS apenas para contornar o erro de certificado.
 
 ## Validacao antes do push
 

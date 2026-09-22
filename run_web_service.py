@@ -38,6 +38,7 @@ def _resolve_web_port() -> int:
 def main():
     _configure_stdio()
     port = _resolve_web_port()
+    host = str(os.environ.get("AUTOMACAO_WEB_HOST") or "0.0.0.0").strip()
     project_dir = Path(__file__).resolve().parent
     log_dir = project_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -61,9 +62,9 @@ def main():
                 f.write(f"[{datetime.now().isoformat()}] Falha ao iniciar gerenciador de atualizações: {exc}\n")
 
         with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"[{datetime.now().isoformat()}] Iniciando serviço web em 0.0.0.0:{port}\n")
+            f.write(f"[{datetime.now().isoformat()}] Iniciando serviço web em {host}:{port}\n")
 
-        serve(app, listen=f"0.0.0.0:{port}", threads=8, channel_timeout=1200)
+        serve(app, listen=f"{host}:{port}", threads=8, channel_timeout=1200)
     except Exception as exc:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"[{datetime.now().isoformat()}] Erro no serviço web: {exc}\n")

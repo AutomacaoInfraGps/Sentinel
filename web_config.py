@@ -27,8 +27,24 @@ from gerenciar_fortigate import GerenciadorFortigate
 from fortimanager_client import FortiManagerClient, FortiManagerClientError
 from fortianalyzer_client import FortiAnalyzerClient
 from config import ENV_CONFIG
-from flask import Flask, render_template, jsonify, request, redirect, url_for, current_app, make_response, send_file, send_from_directory, session, flash, has_app_context, Response
+from flask import Flask, render_template, jsonify, request, redirect, url_for, current_app, make_response, send_file, send_from_directory, session, flash, has_app_context, has_request_context, Response
 from flask_login import LoginManager, login_required, current_user
+from regional_access import (
+    approve_group_mapping,
+    access_scope,
+    can_access_regional,
+    dynamic_group_mapping,
+    effective_user_groups,
+    filter_map_payload,
+    filter_operational_payload,
+    filter_records,
+    can_manage_regional_access,
+    can_operate_sentinel,
+    is_corporate,
+    normalize_regional_code,
+    pending_group_suggestions,
+)
+from security_hardening import configure_security
 
 try:
     from credentials import get_credentials
@@ -98,8 +114,6 @@ if static_dir:
 else:
     app = Flask(__name__, template_folder=str(template_dir))
 
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
-
 sofia_config = ENV_CONFIG.get("sofia", {}) if isinstance(ENV_CONFIG.get("sofia", {}), dict) else {}
 sofia_env = os.environ.get("SENTINEL_SOFIA_ENABLED")
 if sofia_env is None:
@@ -133,6 +147,7 @@ login_manager.login_message_category = 'info'
 
 # Inicializa autenticação AD
 init_auth(app)
+configure_security(app, PROJECT_ROOT)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -147,6 +162,235 @@ dashboard_hierarquico = DashboardHierarquico()
 gerenciador_switches = GerenciadorSwitches()
 gerenciador_fortigate = GerenciadorFortigate()
 gerenciador_contatos_email = GerenciadorContatosEmail()
+
+
+def _available_regional_codes():
+    return gerenciador_regionais.listar_regionais()
+
+
+def _current_user_groups():
+    if not has_request_context() or not current_user.is_authenticated:
+        return ()
+    return effective_user_groups(
+        getattr(current_user, "groups", ()) or (),
+        getattr(current_user, "dn", ""),
+    )
+
+
+def _current_access_scope():
+    return access_scope(_current_user_groups(), _available_regional_codes())
+
+
+def _current_user_can_access_regional(codigo_regional):
+    return can_access_regional(
+        _current_user_groups(),
+        codigo_regional,
+        _available_regional_codes(),
+    )
+
+
+def _filter_regional_dict_for_current_user(items):
+    if not has_request_context() or not current_user.is_authenticated:
+        return dict(items or {})
+    return {
+        codigo: valor for codigo, valor in (items or {}).items()
+        if _current_user_can_access_regional(codigo)
+    }
+
+
+def _resolve_regional_reference(value):
+    regionais = {
+        codigo: gerenciador_regionais.obter_regional(codigo) or {}
+        for codigo in _available_regional_codes()
+    }
+    return find_regional_code(regionais, value, normalize_regional_code)
+
+
+def _forbidden_response(message="Você não possui permissão para esta operação."):
+    if request.path.startswith("/api/"):
+        return jsonify({"success": False, "message": message}), 403
+    return render_template("403.html", message=message), 403
+
+
+@app.before_request
+def enforce_regional_scope():
+    """Impede acesso direto a rotas regionais fora do escopo do usuário."""
+    if not current_user.is_authenticated or not request.view_args:
+        return None
+    codigo = request.view_args.get("codigo_regional")
+    if not codigo and request.endpoint == "api_verificar_switches_regional":
+        codigo = _resolve_regional_reference(request.view_args.get("regional"))
+    if not codigo and request.endpoint == "api_verificar_switch":
+        switch = gerenciador_switches.obter_switch(request.view_args.get("host"))
+        codigo = _resolve_regional_reference((switch or {}).get("regional"))
+        if not codigo and not (_current_access_scope().get("full_view") or _current_access_scope().get("corporate")):
+            return _forbidden_response("O switch não possui uma regional autorizada para seu usuário.")
+    if not codigo or _current_user_can_access_regional(codigo):
+        return None
+    return _forbidden_response("Acesso não autorizado para esta regional.")
+
+
+_SELF_SERVICE_UNSAFE_ENDPOINTS = {
+    "logout",
+    "api_notifications_seen",
+    "api_notifications_clear",
+    "sofia.chat",
+}
+
+_REGIONAL_OPERATION_ENDPOINTS = {
+    "api_verificar_regional",
+    "api_verificar_switch",
+    "api_verificar_switches_regional",
+    "api_testar_servidor_regional",
+    "api_testar_todos_servidores",
+    "api_sincronizar_links_regional",
+}
+
+_OPERATOR_ONLY_ENDPOINTS = {
+    "permissoes_regionais",
+    "configuracoes",
+    "api_salvar_configuracoes",
+    "backup",
+    "api_exportar_backup",
+    "cadastro_emails_contatos",
+    "api_salvar_config_emails_contatos",
+    "api_atualizar_emails_contatos",
+    "api_cadastrar_emails_contatos",
+    "listar_admin_logins",
+    "admin_aprovar_usuario",
+    "admin_remover_baseline",
+    "admin_definir_baseline",
+    "admin_logins_debug",
+    "listar_vms",
+    "vm_relatorio",
+    "cadastrar_vm",
+    "api_listar_vms",
+    "api_listar_vms_regional",
+    "api_detalhes_vm",
+    "api_servicos_vm",
+    "api_relatorio_vm",
+    "api_logs_vm",
+    "api_conectar_vm",
+    "api_verificar_vm",
+    "api_relatorio_vms",
+    "api_cadastrar_vm",
+    "api_remover_vm",
+    "serve_output_files",
+    "api_dashboard_hierarquico",
+    "api_fortigate_wan_status",
+    "api_executar_completo",
+    "executar_completo",
+    "replicacao_ad",
+    "executar_replicacao_direto",
+    "executar_replicacao",
+    "executar_unifi_direto",
+    "executar_unifi",
+    "verificar_antenas",
+    "api_rotas",
+    "listar_rotas",
+    "test_api_page",
+    "debug_antenas_page",
+    "debug_api_page",
+    "teste_api",
+    "teste_cards",
+    "mapa_checklist_preview",
+    "validade_certificados",
+    "api_certificados_refresh",
+    "api_mapeamento_emails_contatos",
+    "editar_switch",
+    "cadastrar_switch",
+    "api_fortimanager_devices",
+    "api_fortimanager_adoms",
+    "debug_fortimanager_firewall_licenca",
+    "api_maintenance_devices",
+    "relatorios_infra",
+    "antenas_unifi_simples",
+    "antenas_unifi_jquery",
+    "antenas_unifi_basico",
+    "antenas_publico",
+    "antenas_direto",
+    "status_unifi",
+    "antenas_teste_page",
+    "api_check_file",
+    "api_test",
+    "api_public_status_replicacao",
+    "api_public_status_unifi",
+    "api_public_status_atualizacao",
+    "api_public_status_relatorios",
+    "wan_status_page",
+    "dashboard_hierarquico_web",
+    "nova_regional",
+    "editar_regional",
+    "novo_servidor_regional",
+    "editar_servidor_regional",
+    "novo_link_regional",
+    "editar_link_regional",
+}
+
+
+@app.before_request
+def enforce_operation_permissions():
+    if not current_user.is_authenticated or not request.endpoint:
+        return None
+    groups = _current_user_groups()
+    operator = can_operate_sentinel(groups)
+    if request.endpoint in _OPERATOR_ONLY_ENDPOINTS and not operator:
+        return _forbidden_response()
+    if request.method not in {"GET", "HEAD", "OPTIONS", "TRACE"}:
+        if request.endpoint in _SELF_SERVICE_UNSAFE_ENDPOINTS:
+            return None
+        if request.endpoint in _REGIONAL_OPERATION_ENDPOINTS:
+            return None
+        if not operator:
+            return _forbidden_response()
+    return None
+
+
+@app.context_processor
+def inject_regional_access():
+    if not current_user.is_authenticated:
+        return {"sentinel_access": {"corporate": False, "operator": False, "allowed": set()}}
+    scope = _current_access_scope()
+    scope["operator"] = can_operate_sentinel(_current_user_groups())
+    return {"sentinel_access": scope}
+
+
+@app.route('/permissoes-regionais', methods=['GET', 'POST'])
+@login_required
+def permissoes_regionais():
+    if not can_manage_regional_access(_current_user_groups()):
+        return render_template(
+            "403.html",
+            message="Seu grupo do AD não permite gerenciar associações regionais.",
+        ), 403
+
+    regionais = sorted(_available_regional_codes())
+    if request.method == 'POST':
+        group = request.form.get('group', '').strip()
+        submitted = request.form.get('regional', '').strip()
+        regional_by_normalized = {
+            normalize_regional_code(code): code for code in regionais
+        }
+        regional = regional_by_normalized.get(normalize_regional_code(submitted))
+        if not regional:
+            flash('Regional inválida para a associação.', 'error')
+            return redirect(url_for('permissoes_regionais'))
+        try:
+            approved = approve_group_mapping(group, regional)
+            flash(
+                f"{approved['group']} associado a {regional} com sucesso.",
+                'success',
+            )
+        except ValueError as exc:
+            flash(str(exc), 'error')
+        return redirect(url_for('permissoes_regionais'))
+
+    return render_template(
+        'permissoes_regionais.html',
+        suggestions=pending_group_suggestions(regionais),
+        dynamic_mappings=dynamic_group_mapping(),
+        regionais=regionais,
+    )
 
 configurar_ferramentas_sentinel(
     regionais_manager=gerenciador_regionais,
@@ -190,6 +434,11 @@ def _create_background_job(kind, total=0, message=None, detail=None, meta=None):
             'partial_results': {},
             'error': None,
             'meta': dict(meta or {}),
+            'owner': (
+                str(current_user.get_id())
+                if has_request_context() and current_user.is_authenticated
+                else None
+            ),
             'created_at': now,
             'updated_at': now,
         }
@@ -2865,7 +3114,10 @@ def servidores():
     """Página principal - Dashboard hierárquico"""
     try:
         # Carrega regionais diretamente
-        regionais = gerenciador_regionais.listar_regionais()
+        regionais = [
+            codigo for codigo in gerenciador_regionais.listar_regionais()
+            if _current_user_can_access_regional(codigo)
+        ]
         
         # Estatísticas básicas
         total_servidores = 0
@@ -3807,26 +4059,26 @@ def api_mapa_dados():
             cached["cache_status"] = "refreshing" if refresh_started else "stale_refreshing"
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = "Atualizacao iniciada em segundo plano."
-            return jsonify(cached)
+            return jsonify(filter_map_payload(cached, _current_user_groups(), _available_regional_codes()))
 
         if cached and not force_refresh:
             if _mapa_cache_esta_fresco(idade):
                 cached["cache_status"] = "fresh"
                 cached["cache_idade_segundos"] = int(idade or 0)
-                return jsonify(cached)
+                return jsonify(filter_map_payload(cached, _current_user_groups(), _available_regional_codes()))
 
             refresh_started = _mapa_iniciar_refresh_background()
             cached["cache_status"] = "refreshing" if refresh_started else "stale_refreshing"
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = "Cache antigo entregue enquanto o mapa atualiza em segundo plano."
-            return jsonify(cached)
+            return jsonify(filter_map_payload(cached, _current_user_groups(), _available_regional_codes()))
 
         _mapa_atualizar_fontes_operacionais()
         dados = _montar_dados_mapa_monitoramento()
         dados = _mapa_salvar_cache(dados)
         dados["cache_status"] = "fresh"
         dados["cache_idade_segundos"] = 0
-        return jsonify(dados)
+        return jsonify(filter_map_payload(dados, _current_user_groups(), _available_regional_codes()))
     except Exception as exc:
         current_app.logger.exception("Falha ao montar dados do mapa")
         cached, idade = _mapa_carregar_cache()
@@ -3834,7 +4086,7 @@ def api_mapa_dados():
             cached["cache_status"] = "stale_error"
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
-            return jsonify(cached)
+            return jsonify(filter_map_payload(cached, _current_user_groups(), _available_regional_codes()))
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
@@ -3845,6 +4097,7 @@ def api_operational_state():
     payload = load_operational_state()
     if not payload:
         return jsonify({"success": False, "message": "Estado operacional ainda nao inicializado."}), 404
+    payload = filter_operational_payload(payload, _current_user_groups(), _available_regional_codes())
     payload["success"] = True
     return jsonify(payload)
 
@@ -3890,6 +4143,12 @@ def _fresh_operational_records(group, regional=None):
     if not snapshot_is_fresh(group_data.get("updated_at")):
         return []
     records = [dict(item) for item in (group_data.get("records") or [])]
+    if has_request_context() and current_user.is_authenticated:
+        records = filter_records(
+            records,
+            _current_user_groups(),
+            available_regionals=_available_regional_codes(),
+        )
     if regional is None:
         return records
     regional_norm = str(regional or "").strip().upper()
@@ -3940,6 +4199,12 @@ def api_notifications():
         else:
             records_by_group[group] = []
             stale_groups.append(group)
+    for group in notification_groups:
+        records_by_group[group] = filter_records(
+            records_by_group.get(group) or [],
+            _current_user_groups(),
+            available_regionals=_available_regional_codes(),
+        )
     records_by_group["servidores"] = _reconcile_notification_servers(
         records_by_group.get("servidores") or []
     )
@@ -4175,7 +4440,10 @@ def _obter_regionais_com_firewall_a_vencer():
 def listar_regionais():
     """Página de listagem de regionais"""
     try:
-        regionais = gerenciador_regionais.listar_regionais()
+        regionais = [
+            codigo for codigo in gerenciador_regionais.listar_regionais()
+            if can_access_regional(_current_user_groups(), codigo, gerenciador_regionais.listar_regionais())
+        ]
         regionais_map = dict((gerenciador_regionais.regionais.get("regionais") or {}))
         firewalls_agrupados = _agrupar_firewalls_regionais_cache(regionais_map)
         vpns_agrupadas = (
@@ -6246,6 +6514,9 @@ def listar_switches():
             switches_fonte,
             regionais_configuradas,
         )
+        switches_por_regional_operacional = _filter_regional_dict_for_current_user(
+            switches_por_regional_operacional
+        )
 
         regionais = sorted(switches_por_regional_operacional)
 
@@ -6474,10 +6745,18 @@ def api_background_job_status(job_id):
     job = _get_background_job(job_id)
     if not job:
         return jsonify({'success': False, 'message': 'Job não encontrado'}), 404
+    if (
+        job.get('owner')
+        and job.get('owner') != str(current_user.get_id())
+        and not can_operate_sentinel(_current_user_groups())
+    ):
+        return jsonify({'success': False, 'message': 'Job não encontrado'}), 404
 
+    public_job = dict(job)
+    public_job.pop('owner', None)
     return jsonify({
         'success': True,
-        'job': job
+        'job': public_job
     })
 
 # === ROTAS DE LINKS DE INTERNET ===
@@ -6498,12 +6777,31 @@ def listar_links():
                 resumo_links={}
             )
 
+        links_permitidos = [
+            link for link in resultado.get('links', [])
+            if _current_user_can_access_regional(link.get('codigo_regional') or link.get('regional'))
+        ]
+        links_por_regional = {
+            regional: links
+            for regional, links in resultado.get('links_por_regional', {}).items()
+            if links and _current_user_can_access_regional(
+                links[0].get('codigo_regional') or links[0].get('regional') or regional
+            )
+        }
+        resumo_links = {
+            'total_regionais': len(links_por_regional),
+            'total_links': len(links_permitidos),
+            'links_online': sum(1 for link in links_permitidos if link.get('status') == 'online'),
+            'links_offline': sum(1 for link in links_permitidos if link.get('status') == 'offline'),
+            'links_inativos': sum(1 for link in links_permitidos if link.get('status') not in {'online', 'offline'}),
+        }
+
         return render_template(
             'links_internet.html',
-            links=resultado.get('links', []),
-            links_por_regional=resultado.get('links_por_regional', {}),
-            sd_wan_por_regional=resultado.get('sd_wan_por_regional', {}),
-            resumo_links=resultado.get('resumo', {})
+            links=links_permitidos,
+            links_por_regional=links_por_regional,
+            sd_wan_por_regional=_filter_regional_dict_for_current_user(resultado.get('sd_wan_por_regional', {})),
+            resumo_links=resumo_links
         )
 
     except Exception as e:
@@ -6682,7 +6980,9 @@ def listar_firewalls(return_data=False):
             if not cached:
                 cached = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
             if cached:
-                cached_firewalls = cached.get("firewalls_por_regional", {})
+                cached_firewalls = _filter_regional_dict_for_current_user(
+                    cached.get("firewalls_por_regional", {})
+                )
                 _conciliar_manutencao_firewalls(cached_firewalls)
                 _preparar_datas_firewalls(cached_firewalls)
                 resumo_firewalls_cache = _recalcular_totais_firewalls(cached_firewalls)
@@ -6900,6 +7200,9 @@ def listar_firewalls(return_data=False):
             _salvar_cache_dashboard("firewalls", firewall_snapshot)
         if return_data:
             return firewall_snapshot
+
+        firewalls_por_regional = _filter_regional_dict_for_current_user(firewalls_por_regional)
+        resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
 
         return render_template(
             'firewalls.html',
@@ -7485,6 +7788,12 @@ def vpn_ipsec():
                 flash(resultado.get("message", "Erro ao consultar VPN IPsec"), "error")
                 return render_template("vpn_ipsec.html", vpns=[])
             vpns = resultado.get("vpns", [])
+
+        vpns = filter_records(
+            vpns,
+            _current_user_groups(),
+            available_regionals=_available_regional_codes(),
+        )
 
         # Normaliza campos esperados pelo template
         for vpn in vpns:
@@ -8795,6 +9104,22 @@ def antenas_unifi():
     # pode estar mais antigo quando o usuario atualiza somente as antenas.
     unifi_data = load_data("unifi") or {}
     unifi_data = _filtrar_antenas_unifi_ocultas(unifi_data)
+
+    regionais_map = {
+        codigo: gerenciador_regionais.obter_regional(codigo) or {}
+        for codigo in _available_regional_codes()
+    }
+    aps_permitidos = []
+    for ap in unifi_data.get("aps") or []:
+        codigo = _mapa_encontrar_regional_unifi(regionais_map, ap.get("site"))
+        if codigo and _current_user_can_access_regional(codigo):
+            aps_permitidos.append(ap)
+    unifi_data["aps"] = aps_permitidos
+    unifi_data["total_aps"] = len(aps_permitidos)
+    unifi_data["aps_online"] = sum(1 for ap in aps_permitidos if str(ap.get("status") or "").lower() == "online")
+    unifi_data["aps_offline"] = sum(1 for ap in aps_permitidos if str(ap.get("status") or "").lower() == "offline")
+    unifi_data["aps_maintenance"] = sum(1 for ap in aps_permitidos if ap.get("em_manutencao"))
+    unifi_data["clientes_conectados"] = sum(int(ap.get("clientes") or 0) for ap in aps_permitidos)
 
     # Agrupa APs por site para o template
     from collections import defaultdict
@@ -11371,9 +11696,9 @@ if __name__ == '__main__':
     print("🏢 Sistema organizado por Regionais → Servidores")
     
     app.run(
-        host='0.0.0.0',
+        host=os.getenv("AUTOMACAO_WEB_HOST", "127.0.0.1"),
         port=web_port,
-        debug=os.getenv("DEBUG", "False").lower() == "true",
+        debug=False,
         threaded=True
     )
 

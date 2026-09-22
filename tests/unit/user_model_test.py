@@ -39,6 +39,18 @@ class UserModelTests(unittest.TestCase):
         self.assertEqual(restored.dn, original.dn)
         self.assertEqual(restored.groups, original.groups)
 
+    def test_ou_administrativa_recebe_permissao_de_operador(self):
+        user = User({
+            "username": "admin.ou",
+            "dn": (
+                "CN=Administrador,OU=Usuarios Administrativos,"
+                "OU=Galaxia,DC=Galaxia,DC=local"
+            ),
+            "groups": ["CN=Remote Desktop Users,CN=Builtin,DC=Galaxia,DC=local"],
+        })
+
+        self.assertIn("SENTINEL_ADMINISTRATIVE_OU", user.groups)
+
 
 if __name__ == "__main__":
     unittest.main()
