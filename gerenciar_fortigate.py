@@ -11,6 +11,7 @@ from pathlib import Path
 import paramiko
 import re
 from datetime import datetime
+from fortimanager_client import FortiManagerClient
 
 
 def _parse_vpn_phase1_comments(output):
@@ -110,6 +111,35 @@ class GerenciadorFortigate:
         self.last_login = None
         self.session_timeout = 900  # 15 minutos em segundos
         self.request_timeout = int(os.environ.get('FORTIGATE_REQUEST_TIMEOUT', '15'))
+
+    def _obter_comentarios_vpn_fortimanager(self):
+        fm_cfg = ENV_CONFIG.get("fortimanager", {})
+        if not isinstance(fm_cfg, dict) or not fm_cfg.get("host"):
+            return {}
+
+        adom = str(fm_cfg.get("adom") or "root").strip()
+        device_configurado = str(fm_cfg.get("vpn_hub_device") or "").strip()
+        with FortiManagerClient() as client:
+            device_name = device_configurado
+            if not device_name:
+                payload = client.list_devices(adom)
+                result = payload.get("result", []) if isinstance(payload, dict) else []
+                first = result[0] if result and isinstance(result[0], dict) else {}
+                devices = first.get("data", []) if isinstance(first, dict) else []
+                host_alvo = str(self.host or "").strip().lower()
+                device = next(
+                    (
+                        item for item in devices
+                        if isinstance(item, dict)
+                        and str(item.get("ip") or "").strip().lower() == host_alvo
+                    ),
+                    None,
+                )
+                device_name = str((device or {}).get("name") or "").strip()
+
+            if not device_name:
+                return {}
+            return client.get_vpn_phase1_comments(device_name)
 
     def _session_get(self, url, headers=None, timeout=None, **kwargs):
         if not self.session:
@@ -601,6 +631,11 @@ class GerenciadorFortigate:
                 comments_by_tunnel = _parse_vpn_phase1_comments(config_output)
             except Exception as comments_error:
                 print(f"Aviso: nao foi possivel obter comentarios das VPNs: {comments_error}")
+            try:
+                manager_comments = self._obter_comentarios_vpn_fortimanager()
+                comments_by_tunnel.update(manager_comments)
+            except Exception as comments_error:
+                print(f"Aviso: nao foi possivel obter comentarios das VPNs no FortiManager: {comments_error}")
             ssh.close()
 
             vpns = []

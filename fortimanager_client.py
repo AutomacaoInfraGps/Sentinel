@@ -127,6 +127,28 @@ class FortiManagerClient:
     def list_device_interfaces(self, adom, device_name):
         return self._request("get", f"/pm/config/device/{device_name}/global/system/interface", {})
 
+    def get_vpn_phase1_comments(self, device_name, vdom="root"):
+        """Retorna os comentarios das VPNs configuradas no banco do FortiManager."""
+        payload = self._request(
+            "get",
+            f"/pm/config/device/{device_name}/vdom/{vdom}/vpn/ipsec/phase1-interface",
+        )
+        result = payload.get("result", []) if isinstance(payload, dict) else []
+        first = result[0] if result and isinstance(result[0], dict) else {}
+        data = first.get("data", [])
+        if isinstance(data, dict):
+            data = list(data.values())
+
+        comments = {}
+        for item in data if isinstance(data, list) else []:
+            if not isinstance(item, dict):
+                continue
+            tunnel = str(item.get("name") or "").strip()
+            comment = str(item.get("comments") or item.get("comment") or "").strip()
+            if tunnel and comment:
+                comments[tunnel] = comment
+        return comments
+
     def proxy_monitor_interfaces(self, adom: str, device_name: str) -> dict:
         """Consulta /api/v2/monitor/system/interface no dispositivo via proxy do FortiManager.
         Retorna mapa interface_name -> dados runtime da interface.

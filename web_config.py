@@ -3505,8 +3505,12 @@ def _mapa_atualizar_fontes_operacionais():
         if not isinstance(firewall_snapshot, dict):
             raise RuntimeError("Coletor de firewalls nao retornou um snapshot valido.")
         resultados["firewalls"] = {
-            "success": bool((firewall_snapshot or {}).get("total_firewalls")),
+            "success": bool((firewall_snapshot or {}).get(
+                "success",
+                (firewall_snapshot or {}).get("total_firewalls"),
+            )),
             "total": (firewall_snapshot or {}).get("total_firewalls", 0),
+            "message": (firewall_snapshot or {}).get("message"),
         }
     except Exception as exc:
         current_app.logger.exception("Falha ao atualizar firewalls para o estado operacional: %s", exc)
@@ -5086,6 +5090,9 @@ def _normalizar_identidade_firewall(valor):
     texto = _normalizar_texto_regional(valor)
     texto = re.sub(r"^(?:FGT|FTG)(?:REG)?", "", texto)
     texto = re.sub(r"^REG", "", texto)
+    texto = re.sub(r"^REGIONAL", "", texto)
+    texto = re.sub(r"^CTRL", "CONTROL", texto)
+    texto = texto.replace("MCLAROS", "MONTESCLAROS")
     return re.sub(r"\d+", lambda match: str(int(match.group(0))), texto)
 
 
@@ -5114,6 +5121,9 @@ def _resolver_regional_firewall(device_name, regionais_map):
                 score = 1000 + len(regional_norm)
             elif len(device_norm) >= 4 and regional_norm.startswith(device_norm):
                 score = 500 + len(device_norm)
+            elif min(len(device_norm), len(regional_norm)) >= 8:
+                similaridade = difflib.SequenceMatcher(None, device_norm, regional_norm).ratio()
+                score = 100 + int(similaridade * 100) if similaridade >= 0.94 else 0
             else:
                 continue
             if score > melhor_score:
@@ -7024,6 +7034,37 @@ def listar_firewalls(return_data=False):
                 )
 
         cache_firewalls_anterior = _carregar_cache_dashboard("firewalls") or {}
+
+        def _retornar_ultimo_snapshot_firewalls(mensagem):
+            firewalls_anteriores = cache_firewalls_anterior.get("firewalls_por_regional") or {}
+            if not firewalls_anteriores:
+                return None
+
+            snapshot_anterior = dict(cache_firewalls_anterior)
+            snapshot_anterior.update({
+                "success": False,
+                "message": mensagem,
+                "usando_cache": True,
+            })
+            if return_data:
+                return snapshot_anterior
+
+            firewalls_visiveis = _filter_regional_dict_for_current_user(firewalls_anteriores)
+            _conciliar_manutencao_firewalls(firewalls_visiveis)
+            _preparar_datas_firewalls(firewalls_visiveis)
+            resumo_anterior = _recalcular_totais_firewalls(firewalls_visiveis)
+            flash(
+                f"Não foi possível atualizar os firewalls. Exibindo a última coleta válida. Detalhe: {mensagem}",
+                "warning",
+            )
+            return render_template(
+                'firewalls.html',
+                firewalls_por_regional=firewalls_visiveis,
+                **resumo_anterior,
+                cache_atualizado_em=cache_firewalls_anterior.get("atualizado_em"),
+                usando_cache=True,
+            )
+
         print("[FIREWALL] Coleta iniciada")
         current_app.logger.info("[FIREWALL] Coleta iniciada")
         firewalls_por_regional = {}
@@ -7034,6 +7075,7 @@ def listar_firewalls(return_data=False):
         print(f"[FIREWALL] ADOM = {adom}")
         current_app.logger.info("[FIREWALL] ADOM = %s", adom)
         
+        erro_coleta = None
         try:
             print("[FIREWALL] Conectando ao FortiManager...")
             current_app.logger.info("[FIREWALL] Conectando ao FortiManager...")
@@ -7049,6 +7091,8 @@ def listar_firewalls(return_data=False):
             devices_data = fm_devices_list.get('data', []) if isinstance(fm_devices_list, dict) else []
             print(f"[FIREWALL] Total de devices = {len(devices_data)}")
             current_app.logger.info("[FIREWALL] Total de devices = %s", len(devices_data))
+            if not devices_data:
+                raise FortiManagerClientError("FortiManager retornou o inventario de firewalls vazio")
             
             # Mapear regionais para facilitar busca
             regionais_map = {}
@@ -7074,13 +7118,8 @@ def listar_firewalls(return_data=False):
                 if not device_name:
                     continue
                 
-                # Override manual para casos de abreviação impossível de inferir
-                if device_name in DEVICE_REGIONAL_OVERRIDE:
-                    regional_encontrada = DEVICE_REGIONAL_OVERRIDE[device_name]
-                    print(f"   -> OVERRIDE: {device_name} -> {regional_encontrada}")
-                else:
-                    regional_encontrada = _resolver_regional_firewall(device_name, regionais_map)
-                    print(f"   -> MATCH: {device_name} -> {regional_encontrada}")
+                regional_encontrada = _resolver_regional_firewall(device_name, regionais_map)
+                print(f"   -> MATCH: {device_name} -> {regional_encontrada}")
                 
                 # Se encontrou regional, buscar licenças
                 if regional_encontrada:
@@ -7211,12 +7250,44 @@ def listar_firewalls(return_data=False):
         except Exception as e:
             print(f"[AVISO] Erro ao conectar FortiManager: {str(e)}")
             current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
+            erro_coleta = str(e)
+
+        if not erro_coleta and not total_firewalls and cache_firewalls_anterior.get("firewalls_por_regional"):
+            erro_coleta = "A coleta nao retornou nenhum firewall valido"
+
+        if erro_coleta:
+            fallback = _retornar_ultimo_snapshot_firewalls(erro_coleta)
+            if fallback is not None:
+                return fallback
+            if return_data:
+                return {
+                    "success": False,
+                    "message": erro_coleta,
+                    "atualizado_em": datetime.now().isoformat(),
+                    "firewalls_por_regional": {},
+                    "total_firewalls": 0,
+                }
+            flash(f"Erro ao atualizar firewalls: {erro_coleta}", "error")
+            return render_template(
+                'firewalls.html',
+                firewalls_por_regional={},
+                total_firewalls=0,
+                total_firewalls_online=0,
+                total_firewalls_offline=0,
+                total_firewalls_inativos=0,
+                total_firewalls_maintenance=0,
+                total_alertas=0,
+                total_expirados=0,
+                cache_atualizado_em=None,
+                usando_cache=False,
+            )
         
         _conciliar_manutencao_firewalls(firewalls_por_regional)
         resumo_firewalls = _recalcular_totais_firewalls(firewalls_por_regional)
         _preparar_datas_firewalls(firewalls_por_regional)
 
         firewall_snapshot = {
+                "success": True,
                 "atualizado_em": datetime.now().isoformat(),
                 "firewalls_por_regional": firewalls_por_regional,
                 **resumo_firewalls,
