@@ -265,8 +265,11 @@ sao somente pontos de compatibilidade e encaminham para a aplicacao principal.
 - `GGS_SUPORTE_CORPORATIVO` e administradores do dominio: visao e operacao
   completas; administradores autorizados tambem gerenciam associacoes.
 
-Alteracoes de grupos do AD passam a valer em um novo login. A sessao expira
-automaticamente depois de uma hora.
+Alteracoes de grupos do AD passam a valer em um novo login. Por padrao, a
+sessao permanece ativa ate o logout, fechamento do navegador ou reinicio do
+servico, permitindo paineis de monitoramento continuamente abertos. Para
+reativar um prazo, defina `SENTINEL_SESSION_TIMEOUT_MINUTES` com um valor maior
+que zero.
 
 ### HTTPS e producao
 
@@ -281,6 +284,7 @@ Em producao, configure no servico:
 SECRET_KEY=<chave aleatoria com pelo menos 64 caracteres>
 SENTINEL_HTTPS_ENABLED=true
 SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
+SENTINEL_SESSION_TIMEOUT_MINUTES=0
 AUTOMACAO_WEB_HOST=127.0.0.1
 AUTOMACAO_WEB_PORT=5000
 ```

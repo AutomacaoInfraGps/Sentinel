@@ -262,7 +262,7 @@ def init_auth(app):
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         """Página de login com autenticação AD"""
-        from flask import request, render_template, redirect, url_for, flash, session
+        from flask import current_app, request, render_template, redirect, url_for, flash, session
         from flask_login import login_user, current_user
         
         # Se já está logado, redireciona
@@ -286,7 +286,9 @@ def init_auth(app):
                 user = User(user_info)
                 save_user(user)
                 login_user(user)
-                session.permanent = True
+                session.permanent = bool(
+                    current_app.config.get("SENTINEL_SESSION_PERMANENT", False)
+                )
                 observe_support_groups(user.groups)
                 
                 flash(f'Bem-vindo, {user.display_name}!', 'success')

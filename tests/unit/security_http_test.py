@@ -56,6 +56,44 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertEqual(response.headers["X-Frame-Options"], "SAMEORIGIN")
         self.assertIn("default-src 'self'", response.headers["Content-Security-Policy"])
 
+    @patch("auth_ad.verificar_usuario_ad")
+    def test_login_session_has_no_operational_expiration_by_default(self, authenticate):
+        authenticate.return_value = (
+            True,
+            {
+                "username": "admin.kiosk",
+                "display_name": "Painel Kiosk",
+                "dn": (
+                    "CN=Painel Kiosk,OU=Usuarios Administrativos,"
+                    "OU=Galaxia,DC=Galaxia,DC=local"
+                ),
+                "groups": ["SENTINEL_ADMINISTRATIVE_OU"],
+            },
+            "Autenticacao bem-sucedida",
+        )
+        self.user_ids.append("admin.kiosk")
+        self.client.get("/login")
+        with self.client.session_transaction() as login_session:
+            csrf = login_session["_csrf_token"]
+
+        response = self.client.post(
+            "/login",
+            data={
+                "username": "admin.kiosk",
+                "password": "senha-simulada",
+                "csrf_token": csrf,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        session_cookie = next(
+            header
+            for header in response.headers.getlist("Set-Cookie")
+            if header.startswith("sentinel_session=")
+        )
+        self.assertNotIn("Expires=", session_cookie)
+        self.assertNotIn("Max-Age=", session_cookie)
+
     def test_expired_login_csrf_returns_to_form_with_a_new_token(self):
         self.client.get("/login?next=/regionais")
         response = self.client.post(
