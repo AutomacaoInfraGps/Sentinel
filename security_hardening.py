@@ -13,7 +13,12 @@ from flask_login import current_user
 
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-PUBLIC_ENDPOINTS = frozenset({"login", "static", "serve_branding_asset"})
+PUBLIC_ENDPOINTS = frozenset({
+    "login",
+    "sentinel_health",
+    "static",
+    "serve_branding_asset",
+})
 logger = logging.getLogger(__name__)
 
 

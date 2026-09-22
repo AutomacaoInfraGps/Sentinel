@@ -146,6 +146,12 @@ login_manager.login_message = 'Faça login para acessar esta página.'
 login_manager.login_message_category = 'info'
 
 # Inicializa autenticação AD
+@app.get('/healthz')
+def sentinel_health():
+    """Healthcheck mínimo para o supervisor local do processo web."""
+    return jsonify({'status': 'ok'})
+
+
 init_auth(app)
 configure_security(app, PROJECT_ROOT)
 
