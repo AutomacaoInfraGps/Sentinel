@@ -7,6 +7,7 @@ from threading import RLock
 from typing import Dict, Optional
 
 from flask_login import UserMixin
+from regional_access import effective_user_groups
 
 class User(UserMixin):
     """Classe de usuário para Flask-Login"""
@@ -17,10 +18,9 @@ class User(UserMixin):
         self.display_name = user_data.get('display_name', self.username)
         self.email = user_data.get('email', '')
         self.dn = str(user_data.get('dn') or '').strip()
-        self.groups = tuple(
-            str(group).strip()
-            for group in (user_data.get('groups') or [])
-            if str(group).strip()
+        self.groups = effective_user_groups(
+            user_data.get('groups'),
+            self.dn,
         )
         self.login_time = datetime.now()
     

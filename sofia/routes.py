@@ -10,6 +10,8 @@ from flask_login import current_user, login_required
 from .audit import registrar_evento_sofia
 from .engine import processar_mensagem_sofia
 from .permissions import usuario_pode_executar
+from .tools_sentinel import codigos_regionais
+from regional_access import access_scope
 
 
 sofia_bp = Blueprint("sofia", __name__)
@@ -107,7 +109,12 @@ def chat():
         return _json_response({"error": "Você não possui permissão para consultar dados do Sentinel."}, 403)
 
     try:
-        reply = processar_mensagem_sofia(usuario=username, mensagem=message)
+        scope = access_scope(getattr(current_user, "groups", ()), codigos_regionais())
+        reply = processar_mensagem_sofia(
+            usuario=username,
+            mensagem=message,
+            allowed_regionals=scope["allowed"],
+        )
         registrar_evento_sofia(
             usuario=username,
             status="sucesso",

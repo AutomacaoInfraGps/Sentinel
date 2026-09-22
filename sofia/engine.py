@@ -186,28 +186,28 @@ def _formatar_status(resumo, labels):
     return ", ".join(parts)
 
 
-def _resumo_regional(codigo):
-    regional = nome_regional(codigo)
+def _resumo_regional(codigo, allowed_regionals=None):
+    regional = nome_regional(codigo, allowed_regionals)
     servidores = _formatar_status(
-        resumo_servidores(codigo),
+        resumo_servidores(codigo, allowed_regionals),
         (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
     )
     links = _formatar_status(
-        resumo_links(codigo),
+        resumo_links(codigo, allowed_regionals),
         (("online", "online"), ("offline", "offline"), ("inativo", "inativos"), ("desconhecido", "sem status")),
     )
     switches = _formatar_status(
-        resumo_switches(codigo),
+        resumo_switches(codigo, allowed_regionals),
         (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
     )
     return f"Resumo da {regional}: servidores: {servidores}; links de internet: {links}; switches: {switches}."
 
 
-def processar_mensagem_sofia(*, usuario, mensagem):
+def processar_mensagem_sofia(*, usuario, mensagem, allowed_regionals=None):
     """Classify an allowed topic without invoking tools or external models."""
     del usuario
     msg = _normalizar_mensagem(mensagem)
-    regional_code = identificar_regional(msg)
+    regional_code = identificar_regional(msg, allowed_regionals)
 
     if _contem_termo(msg, "ola", "oi", "bom", "boa"):
         return SOFIA_INITIAL_REPLY
@@ -224,7 +224,7 @@ def processar_mensagem_sofia(*, usuario, mensagem):
             return resposta
 
     if regional_code and not _contem_termo(msg, "servidor", "servidores", "vm", "vms", "switch", "switches", "link", "links", "vpn", "vpns", "ipsec", "zabbix", "alerta", "alertas"):
-        return _resumo_regional(regional_code)
+        return _resumo_regional(regional_code, allowed_regionals)
 
     if _contem_termo(msg, "regional", "regionais") and not _contem_termo(
         msg,
@@ -233,20 +233,20 @@ def processar_mensagem_sofia(*, usuario, mensagem):
         "vpn", "vpns", "ipsec", "zabbix",
         "alerta", "alertas", "problema", "problemas",
     ):
-        return f"O Sentinel possui {total_regionais()} regionais cadastradas. Você pode informar o nome de uma regional para consultar o resumo."
+        return f"O Sentinel possui {total_regionais(allowed_regionals)} regionais disponíveis para seu acesso. Você pode informar o nome de uma regional para consultar o resumo."
 
     if _contem_termo(msg, "servidor", "servidores", "vm", "vms"):
-        summary = resumo_servidores(regional_code)
-        scope = f" na {nome_regional(regional_code)}" if regional_code else ""
+        summary = resumo_servidores(regional_code, allowed_regionals)
+        scope = f" na {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
         return "Servidores" + scope + ": " + _formatar_status(
             summary,
             (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
         ) + "."
 
     if _contem_termo(msg, "zabbix", "alerta", "alertas", "problema", "problemas"):
-        alerts = alertas_switches_ativos(regional_code)
+        alerts = alertas_switches_ativos(regional_code, allowed_regionals=allowed_regionals)
         if not alerts:
-            scope = f" para {nome_regional(regional_code)}" if regional_code else ""
+            scope = f" para {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
             return f"NÃ£o hÃ¡ alertas ativos de switches no cache do Zabbix{scope}."
         details = "; ".join(
             f"{item['switch']} ({item['regional']}): {item['alerta']}"
@@ -255,16 +255,16 @@ def processar_mensagem_sofia(*, usuario, mensagem):
         return f"Encontrei {len(alerts)} alerta(s) ativo(s) de switches: {details}."
 
     if _contem_termo(msg, "switch", "switches"):
-        summary = resumo_switches(regional_code)
-        scope = f" na {nome_regional(regional_code)}" if regional_code else ""
+        summary = resumo_switches(regional_code, allowed_regionals)
+        scope = f" na {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
         return "Switches" + scope + ": " + _formatar_status(
             summary,
             (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
         ) + "."
 
     if _contem_termo(msg, "link", "links"):
-        summary = resumo_links(regional_code)
-        scope = f" na {nome_regional(regional_code)}" if regional_code else ""
+        summary = resumo_links(regional_code, allowed_regionals)
+        scope = f" na {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
         return "Links de internet" + scope + ": " + _formatar_status(
             summary,
             (("online", "online"), ("offline", "offline"), ("inativo", "inativos"), ("desconhecido", "sem status")),

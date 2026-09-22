@@ -25,18 +25,26 @@ def _normalizar(value):
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
-def _regionais():
+def _regionais(allowed_regionals=None):
     if _regionais_manager is None:
         return {}
     _regionais_manager.recarregar_regionais()
-    return dict((_regionais_manager.regionais or {}).get("regionais") or {})
+    regionais = dict((_regionais_manager.regionais or {}).get("regionais") or {})
+    if allowed_regionals is None:
+        return regionais
+    allowed = {str(code).strip().upper() for code in allowed_regionals}
+    return {code: data for code, data in regionais.items() if str(code).strip().upper() in allowed}
 
 
-def identificar_regional(mensagem):
+def codigos_regionais():
+    return list(_regionais())
+
+
+def identificar_regional(mensagem, allowed_regionals=None):
     """Resolve a regional mentioned in free text using code or display name."""
     normalized_message = f" {_normalizar(mensagem)} "
     candidates = []
-    for code, regional in _regionais().items():
+    for code, regional in _regionais(allowed_regionals).items():
         aliases = {
             _normalizar(code),
             _normalizar(str(code).replace("REG_", "")),
@@ -50,13 +58,13 @@ def identificar_regional(mensagem):
     return max(candidates, default=(0, None))[1]
 
 
-def total_regionais():
-    return len(_regionais())
+def total_regionais(allowed_regionals=None):
+    return len(_regionais(allowed_regionals))
 
 
-def listar_nomes_regionais(limite=50):
+def listar_nomes_regionais(limite=50, allowed_regionals=None):
     items = []
-    for code, regional in sorted(_regionais().items()):
+    for code, regional in sorted(_regionais(allowed_regionals).items()):
         items.append(str((regional or {}).get("nome") or code))
     return items[: max(0, int(limite))]
 
@@ -70,8 +78,8 @@ def _status_servidor(server):
     return "desconhecido"
 
 
-def resumo_servidores(codigo_regional=None):
-    regionals = _regionais()
+def resumo_servidores(codigo_regional=None, allowed_regionals=None):
+    regionals = _regionais(allowed_regionals)
     selected = {codigo_regional: regionals.get(codigo_regional)} if codigo_regional else regionals
     statuses = Counter()
     for regional in selected.values():
@@ -99,8 +107,8 @@ def _status_link(link):
     return status if status in {"online", "offline", "inativo"} else "desconhecido"
 
 
-def resumo_links(codigo_regional=None):
-    regionals = _regionais()
+def resumo_links(codigo_regional=None, allowed_regionals=None):
+    regionals = _regionais(allowed_regionals)
     selected = {codigo_regional: regionals.get(codigo_regional)} if codigo_regional else regionals
     statuses = Counter()
     for regional in selected.values():
@@ -120,10 +128,14 @@ def _status_switch(switch):
     return "desconhecido"
 
 
-def _switches(codigo_regional=None):
+def _switches(codigo_regional=None, allowed_regionals=None):
     if _switches_manager is None:
         return []
     if codigo_regional:
+        if allowed_regionals is not None and str(codigo_regional).strip().upper() not in {
+            str(code).strip().upper() for code in allowed_regionals
+        }:
+            return []
         normalized_target = _normalizar(codigo_regional).replace("reg ", "")
         matches = []
         for regional, switches in (_switches_manager.regionais or {}).items():
@@ -131,17 +143,20 @@ def _switches(codigo_regional=None):
             if normalized_regional == normalized_target:
                 matches.extend(switches or [])
         return matches
-    return list(_switches_manager.switches or [])
+    switches = []
+    for code in _regionais(allowed_regionals):
+        switches.extend(_switches(code))
+    return switches
 
 
-def resumo_switches(codigo_regional=None):
-    statuses = Counter(_status_switch(item) for item in _switches(codigo_regional))
+def resumo_switches(codigo_regional=None, allowed_regionals=None):
+    statuses = Counter(_status_switch(item) for item in _switches(codigo_regional, allowed_regionals))
     return dict(statuses, total=sum(statuses.values()))
 
 
-def alertas_switches_ativos(codigo_regional=None, limite=5):
+def alertas_switches_ativos(codigo_regional=None, limite=5, allowed_regionals=None):
     alerts = []
-    for switch in _switches(codigo_regional):
+    for switch in _switches(codigo_regional, allowed_regionals):
         if _status_switch(switch) != "warning":
             continue
         alerts.append({
@@ -152,7 +167,7 @@ def alertas_switches_ativos(codigo_regional=None, limite=5):
     return alerts[: max(0, int(limite))]
 
 
-def nome_regional(codigo_regional):
-    regional = _regionais().get(codigo_regional) or {}
+def nome_regional(codigo_regional, allowed_regionals=None):
+    regional = _regionais(allowed_regionals).get(codigo_regional) or {}
     return str(regional.get("nome") or codigo_regional or "Regional")
 

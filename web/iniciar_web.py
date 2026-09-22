@@ -123,15 +123,10 @@ def main():
     import threading
     threading.Thread(target=abrir_navegador, daemon=True).start()
     
-    # Inicia servidor Flask
+    # Usa o mesmo servidor WSGI e a mesma aplicação endurecida da produção.
     try:
-        from web_config import app
-        app.run(
-            host='0.0.0.0',
-            port=5000,
-            debug=False,
-            use_reloader=False
-        )
+        from run_web_service import main as iniciar_servico_seguro
+        iniciar_servico_seguro()
     except KeyboardInterrupt:
         print("\n\n✅ Servidor web encerrado")
     except Exception as e:
