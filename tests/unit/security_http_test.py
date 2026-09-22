@@ -39,6 +39,15 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login?next=", response.headers["Location"])
 
+    def test_healthcheck_is_public_and_contains_no_application_data(self):
+        response = self.client.get("/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"status": "ok"})
+
+    def test_legacy_api_test_remains_protected(self):
+        response = self.client.get("/api/test")
+        self.assertEqual(response.status_code, 401)
+
     def test_login_form_and_security_headers_are_present(self):
         response = self.client.get("/login")
         self.assertEqual(response.status_code, 200)

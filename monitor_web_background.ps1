@@ -6,7 +6,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pythonExe = Join-Path $projectDir ".venv\Scripts\python.exe"
+$pythonExe = @(
+    (Join-Path $projectDir ".venv\Scripts\python.exe"),
+    (Join-Path $projectDir "venv\Scripts\python.exe")
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
 $runner = Join-Path $projectDir "run_web_service.py"
 $logDir = Join-Path $projectDir "logs"
 $monitorLog = Join-Path $logDir "web_monitor.log"
@@ -22,6 +25,10 @@ if ($PublicBase) {
 }
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+if (-not $pythonExe) {
+    throw "Python do ambiente virtual nao encontrado em .venv ou venv."
+}
 
 function Write-MonitorLog([string]$message) {
     $timestamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ss"
@@ -41,7 +48,7 @@ function Get-WebListeners {
 
 function Test-WebHealth {
     try {
-        $response = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}/api/test" -f $port) -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        $response = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}/healthz" -f $port) -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
         return ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400)
     } catch {
         return $false
