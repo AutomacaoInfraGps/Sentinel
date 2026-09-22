@@ -209,6 +209,56 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertNotIn(b">Backup<", response.data)
 
+    def test_regional_user_does_not_receive_global_infrastructure_controls(self):
+        self._login_session("suporte.bahia.dashboard", ["GGS_SUPORTE_BAHIA"])
+        regional = {
+            "nome": "Bahia",
+            "descricao": "Bahia",
+            "servidores": [],
+        }
+        manager = __import__("web_config").gerenciador_regionais
+        with patch.object(manager, "listar_regionais", return_value=["REG_BAHIA"]), \
+                patch.object(manager, "obter_regional", return_value=regional):
+            response = self.client.get("/servidores")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b'id="global-infrastructure-panel"', response.data)
+        self.assertNotIn(b'id="global-execution-panel"', response.data)
+        self.assertNotIn(b"carregarDadosInfraestrutura();", response.data)
+
+    def test_unifi_page_filters_interference_for_regional_user(self):
+        self._login_session("suporte.bahia.unifi", ["GGS_SUPORTE_BAHIA"])
+        payload = {
+            "aps": [
+                {"nome": "AP Bahia", "site": "V021_BAHIA", "status": "online"},
+                {"nome": "AP Goias", "site": "V023_GOIAS", "status": "online"},
+            ],
+            "sites": [
+                {"nome": "V021_BAHIA"},
+                {"nome": "V023_GOIAS"},
+            ],
+            "interferencia_5ghz_por_site": {
+                "V021_BAHIA": [{"canal": 36, "aps": []}],
+                "V023_GOIAS": [{"canal": 44, "aps": []}],
+            },
+        }
+        regionais = {
+            "REG_BAHIA": {"nome": "Bahia", "descricao": "Bahia"},
+            "REG_GOIAS": {"nome": "Goias", "descricao": "Goias"},
+        }
+        module = __import__("web_config")
+        manager = module.gerenciador_regionais
+        with patch.object(module, "load_data", return_value=payload), \
+                patch.object(module, "_filtrar_antenas_unifi_ocultas", side_effect=lambda data: data), \
+                patch.object(manager, "listar_regionais", return_value=list(regionais)), \
+                patch.object(manager, "obter_regional", side_effect=regionais.get):
+            response = self.client.get("/antenas")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"V021_BAHIA", response.data)
+        self.assertNotIn(b"V023_GOIAS", response.data)
+        self.assertNotIn(b"Atualizar Antenas", response.data)
+
     def test_view_only_user_cannot_open_management_form(self):
         self._login_session(
             "viewer.management",

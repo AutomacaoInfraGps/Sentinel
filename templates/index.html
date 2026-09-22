@@ -202,7 +202,8 @@
 
 
 <!-- Infraestrutura Complementar -->
-<div class="row mb-4">
+{% if sentinel_access.operator %}
+<div id="global-infrastructure-panel" class="row mb-4">
     <div class="col-12">
         <h3 class="mb-3">
             <i class="bi bi-diagram-3 me-2"></i>
@@ -347,7 +348,7 @@
 </div>
 
 <!-- Execução Completa -->
-<div class="row mb-4">
+<div id="global-execution-panel" class="row mb-4">
     <div class="col-md-6 mb-3">
         <div class="card">
             <div class="card-header">
@@ -401,6 +402,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Status da Configuração -->
 <div class="row">
@@ -884,6 +886,7 @@ function carregarDadosInfraestrutura() {
 
 // Inicialização da página
 $(document).ready(function() {
+    {% if sentinel_access.operator %}
     // Carrega dados iniciais
     console.log('📄 Página carregada, iniciando carregamento...');
     carregarDadosInfraestrutura();
@@ -898,8 +901,10 @@ $(document).ready(function() {
             </div>
         `);
     }
+    {% endif %}
 });
 
+{% if sentinel_access.operator %}
 // Auto-refresh das estatísticas a cada 5 minutos
 setInterval(function() {
     $.get('/api/dashboard/hierarquico')
@@ -916,5 +921,6 @@ setInterval(function() {
 
 // Auto-refresh dos dados de infraestrutura a cada 15 segundos
 setInterval(carregarDadosInfraestrutura, 15000);
+{% endif %}
 </script>
 {% endblock %}

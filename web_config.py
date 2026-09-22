@@ -9121,6 +9121,51 @@ def _filtrar_antenas_unifi_ocultas(unifi_data):
     return dados
 
 
+def _filtrar_unifi_por_escopo_regional(unifi_data, regionais, pode_acessar):
+    """Aplica o mesmo escopo regional ao inventario e aos dados derivados UniFi."""
+    dados = dict(unifi_data or {})
+    regionais = dict(regionais or {})
+    cache_sites = {}
+
+    def site_permitido(nome_site):
+        chave = str(nome_site or "").strip()
+        if chave not in cache_sites:
+            codigo = _mapa_encontrar_regional_unifi(regionais, chave)
+            cache_sites[chave] = bool(codigo and pode_acessar(codigo))
+        return cache_sites[chave]
+
+    aps_permitidos = [
+        ap for ap in (dados.get("aps") or [])
+        if site_permitido(ap.get("site") or ap.get("regional") or ap.get("nome"))
+    ]
+    dados["aps"] = aps_permitidos
+    dados["sites"] = [
+        site for site in (dados.get("sites") or [])
+        if site_permitido(site.get("nome") or site.get("name"))
+    ]
+    dados["interferencia_5ghz_por_site"] = {
+        site: canais
+        for site, canais in (dados.get("interferencia_5ghz_por_site") or {}).items()
+        if site_permitido(site)
+    }
+    dados["total_aps"] = len(aps_permitidos)
+    dados["aps_online"] = sum(
+        1 for ap in aps_permitidos
+        if str(ap.get("status") or "").lower() == "online"
+    )
+    dados["aps_offline"] = sum(
+        1 for ap in aps_permitidos
+        if str(ap.get("status") or "").lower() == "offline"
+    )
+    dados["aps_maintenance"] = sum(
+        1 for ap in aps_permitidos if ap.get("em_manutencao")
+    )
+    dados["clientes_conectados"] = sum(
+        int(ap.get("clientes") or 0) for ap in aps_permitidos
+    )
+    return dados
+
+
 @app.route('/antenas')
 @login_required
 def antenas_unifi():
@@ -9134,17 +9179,12 @@ def antenas_unifi():
         codigo: gerenciador_regionais.obter_regional(codigo) or {}
         for codigo in _available_regional_codes()
     }
-    aps_permitidos = []
-    for ap in unifi_data.get("aps") or []:
-        codigo = _mapa_encontrar_regional_unifi(regionais_map, ap.get("site"))
-        if codigo and _current_user_can_access_regional(codigo):
-            aps_permitidos.append(ap)
-    unifi_data["aps"] = aps_permitidos
-    unifi_data["total_aps"] = len(aps_permitidos)
-    unifi_data["aps_online"] = sum(1 for ap in aps_permitidos if str(ap.get("status") or "").lower() == "online")
-    unifi_data["aps_offline"] = sum(1 for ap in aps_permitidos if str(ap.get("status") or "").lower() == "offline")
-    unifi_data["aps_maintenance"] = sum(1 for ap in aps_permitidos if ap.get("em_manutencao"))
-    unifi_data["clientes_conectados"] = sum(int(ap.get("clientes") or 0) for ap in aps_permitidos)
+    codigos_permitidos = _current_access_scope().get("allowed", set())
+    unifi_data = _filtrar_unifi_por_escopo_regional(
+        unifi_data,
+        regionais_map,
+        lambda codigo: normalize_regional_code(codigo) in codigos_permitidos,
+    )
 
     # Agrupa APs por site para o template
     from collections import defaultdict
