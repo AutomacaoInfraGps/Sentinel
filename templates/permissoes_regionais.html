@@ -3,6 +3,17 @@
 {% block title %}Permissões Regionais - Sentinel{% endblock %}
 
 {% block content %}
+<style>
+    .mapping-icon-button {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h3 mb-1"><i class="bi bi-shield-lock me-2"></i>Permissões Regionais</h1>
@@ -58,8 +69,9 @@
 </section>
 
 <section>
-    <h2 class="h5 mb-3">Associações adicionadas</h2>
+    <h2 class="h5 mb-3">Nova associação</h2>
     <form method="post" class="row g-2 align-items-end mb-4">
+        <input type="hidden" name="action" value="add">
         <div class="col-lg-5">
             <label for="manualGroup" class="form-label">Grupo de suporte</label>
             <input id="manualGroup" name="group" class="form-control" placeholder="GGS_SUPORTE_NOME" required>
@@ -79,22 +91,154 @@
             </button>
         </div>
     </form>
-    {% if dynamic_mappings %}
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h2 class="h5 mb-1">Base de vínculos</h2>
+            <p class="text-muted mb-0">Relações efetivas entre grupos do Active Directory e regionais do Sentinel.</p>
+        </div>
+        {% set active_count = mapping_inventory|selectattr('active')|list|length %}
+        <span class="badge bg-primary">{{ active_count }} ativos</span>
+    </div>
+    {% if mapping_inventory %}
     <div class="table-responsive">
-        <table class="table align-middle">
-            <thead><tr><th>Grupo do AD</th><th>Regionais no Sentinel</th></tr></thead>
-            <tbody>
-                {% for group, mapped_regionals in dynamic_mappings|dictsort %}
+        <table class="table table-hover align-middle">
+            <thead>
                 <tr>
-                    <td><code>{{ group }}</code></td>
-                    <td>{{ mapped_regionals|sort|join(', ') }}</td>
+                    <th>Grupo do AD</th>
+                    <th>Regional vinculada</th>
+                    <th>Origem</th>
+                    <th>Status</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mapping in mapping_inventory %}
+                <tr class="{% if not mapping.active %}table-light text-muted{% endif %}">
+                    <td><code>{{ mapping.group }}</code></td>
+                    <td>
+                        <strong>{{ mapping.regional }}</strong>
+                        {% if not mapping.regional_exists %}
+                        <span class="badge bg-warning text-dark ms-1">Regional não cadastrada</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if mapping.source == 'base' %}
+                        <span class="badge bg-secondary">Base inicial</span>
+                        {% else %}
+                        <span class="badge bg-info text-dark">Adicional</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if mapping.active %}
+                        <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                        <span class="badge bg-light text-dark border">Desativado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center justify-content-end gap-2">
+                            {% if mapping.active %}
+                            <form method="post" class="d-flex align-items-center gap-2">
+                                <input type="hidden" name="action" value="update">
+                                <input type="hidden" name="group" value="{{ mapping.group }}">
+                                <input type="hidden" name="old_regional" value="{{ mapping.regional }}">
+                                <select name="regional" class="form-select form-select-sm" required aria-label="Corrigir regional de {{ mapping.group }}">
+                                    {% for regional in regionais %}
+                                    <option value="{{ regional }}" {% if regional == mapping.regional %}selected{% endif %}>{{ regional }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-primary mapping-icon-button" title="Salvar correção" aria-label="Salvar correção">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                            </form>
+                            <form method="post" class="d-flex align-items-center" onsubmit="return confirm('Desativar este vínculo regional?');">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="group" value="{{ mapping.group }}">
+                                <input type="hidden" name="old_regional" value="{{ mapping.regional }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger mapping-icon-button" title="Desativar vínculo" aria-label="Desativar vínculo">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <form method="post">
+                                <input type="hidden" name="action" value="restore">
+                                <input type="hidden" name="group" value="{{ mapping.group }}">
+                                <input type="hidden" name="old_regional" value="{{ mapping.regional }}">
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Restaurar vínculo">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
     {% else %}
-    <div class="alert alert-light border mb-0">As associações iniciais continuam ativas. Nenhuma associação adicional foi criada.</div>
+    <div class="alert alert-light border mb-0">Nenhum vínculo regional configurado.</div>
+    {% endif %}
+</section>
+
+<section class="mt-5">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h2 class="h5 mb-1">Últimas alterações</h2>
+            <p class="text-muted mb-0">Histórico das mudanças realizadas nos vínculos regionais.</p>
+        </div>
+        <span class="badge bg-secondary">{{ mapping_audit|length }} recentes</span>
+    </div>
+    {% if mapping_audit %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Data e hora</th>
+                    <th>Usuário</th>
+                    <th>Ação</th>
+                    <th>Grupo do AD</th>
+                    <th>Alteração</th>
+                    <th>IP de origem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in mapping_audit %}
+                <tr>
+                    <td class="text-nowrap">{{ event.timestamp[:19]|replace('T', ' ') }}</td>
+                    <td>
+                        <strong>{{ event.actor_display or event.actor }}</strong>
+                        {% if event.actor_display and event.actor_display != event.actor %}
+                        <small class="text-muted d-block">{{ event.actor }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if event.action == 'add' %}
+                        <span class="badge bg-success">Adicionado</span>
+                        {% elif event.action == 'update' %}
+                        <span class="badge bg-primary">Corrigido</span>
+                        {% elif event.action == 'delete' %}
+                        <span class="badge bg-danger">Desativado</span>
+                        {% else %}
+                        <span class="badge bg-info text-dark">Restaurado</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ event.group }}</code></td>
+                    <td class="text-nowrap">
+                        {% if event.old_regional %}<span>{{ event.old_regional }}</span>{% endif %}
+                        {% if event.old_regional and event.new_regional %}<span class="text-muted mx-1">&rarr;</span>{% endif %}
+                        {% if event.new_regional %}<strong>{{ event.new_regional }}</strong>{% endif %}
+                        {% if event.action == 'delete' %}<span class="text-muted">desativado</span>{% endif %}
+                    </td>
+                    <td><code>{{ event.source_ip or '-' }}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-light border mb-0">Nenhuma alteração auditada até o momento.</div>
     {% endif %}
 </section>
 {% endblock %}

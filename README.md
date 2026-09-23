@@ -265,6 +265,13 @@ sao somente pontos de compatibilidade e encaminham para a aplicacao principal.
 - `GGS_SUPORTE_CORPORATIVO` e administradores do dominio: visao e operacao
   completas; administradores autorizados tambem gerenciam associacoes.
 
+A tela `Permissoes Regionais` apresenta a base inicial e os vinculos adicionais.
+Correcoes, desativacoes e restauracoes sao persistidas em
+`output/regional_access_mappings.json`; inclua esse arquivo na rotina de backup
+do ambiente de producao. A trilha das ultimas alteracoes, com usuario, data,
+acao e IP de origem, fica em `output/regional_access_audit.json`; esse arquivo
+tambem deve fazer parte do backup para preservar o historico administrativo.
+
 Alteracoes de grupos do AD passam a valer em um novo login. Por padrao, a
 sessao permanece ativa ate o logout, fechamento do navegador ou reinicio do
 servico, permitindo paineis de monitoramento continuamente abertos. Para

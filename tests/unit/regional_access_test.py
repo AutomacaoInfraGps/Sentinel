@@ -8,6 +8,8 @@ from regional_access import (
     can_operate_sentinel,
     approve_group_mapping,
     dynamic_group_mapping,
+    group_mapping_inventory,
+    mapping_audit_log,
     effective_user_groups,
     can_access_regional,
     filter_map_payload,
@@ -17,6 +19,10 @@ from regional_access import (
     has_sentinel_login_access,
     observe_support_groups,
     pending_group_suggestions,
+    record_mapping_audit,
+    remove_group_mapping,
+    restore_group_mapping,
+    update_group_mapping,
 )
 
 
@@ -147,6 +153,106 @@ class RegionalAccessTest(unittest.TestCase):
                 dynamic_path=mappings,
             )
             self.assertEqual(scope["allowed"], {"REG_CONTROL_NANUNQUE"})
+
+    def test_base_mapping_can_be_disabled_and_restored_without_losing_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mappings = Path(temp_dir) / "mappings.json"
+
+            remove_group_mapping(
+                "GGS_SUPORTE_CEARA",
+                "REG_CEARA_2",
+                mappings_path=mappings,
+            )
+            scope = access_scope(
+                ["GGS_SUPORTE_CEARA"],
+                ["REG_CEARA", "REG_CEARA_2"],
+                dynamic_path=mappings,
+            )
+            self.assertEqual({"REG_CEARA"}, scope["allowed"])
+            disabled = [
+                row for row in group_mapping_inventory(
+                    ["REG_CEARA", "REG_CEARA_2"],
+                    path=mappings,
+                )
+                if row["group"] == "GGS_SUPORTE_CEARA"
+                and row["regional"] == "REG_CEARA_2"
+            ][0]
+            self.assertFalse(disabled["active"])
+            self.assertEqual("base", disabled["source"])
+
+            restore_group_mapping(
+                "GGS_SUPORTE_CEARA",
+                "REG_CEARA_2",
+                mappings_path=mappings,
+            )
+            restored_scope = access_scope(
+                ["GGS_SUPORTE_CEARA"],
+                ["REG_CEARA", "REG_CEARA_2"],
+                dynamic_path=mappings,
+            )
+            self.assertEqual({"REG_CEARA", "REG_CEARA_2"}, restored_scope["allowed"])
+
+    def test_dynamic_mapping_can_be_corrected_and_deleted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mappings = Path(temp_dir) / "mappings.json"
+            discovery = Path(temp_dir) / "discovered.json"
+            approve_group_mapping(
+                "GGS_SUPORTE_TESTE",
+                "REG_A",
+                mappings_path=mappings,
+                discovered_path=discovery,
+            )
+
+            update_group_mapping(
+                "GGS_SUPORTE_TESTE",
+                "REG_A",
+                "REG_B",
+                mappings_path=mappings,
+                discovered_path=discovery,
+            )
+            self.assertEqual(
+                {"REG_B"},
+                dynamic_group_mapping(mappings)["GGS_SUPORTE_TESTE"],
+            )
+
+            remove_group_mapping(
+                "GGS_SUPORTE_TESTE",
+                "REG_B",
+                mappings_path=mappings,
+            )
+            self.assertNotIn("GGS_SUPORTE_TESTE", dynamic_group_mapping(mappings))
+
+    def test_mapping_audit_records_actor_change_and_returns_newest_first(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audit = Path(temp_dir) / "audit.json"
+            record_mapping_audit(
+                "add",
+                "GGS_Suporte_Teste",
+                "admin.pimentel",
+                new_regional="REG_A",
+                source_ip="10.0.0.10",
+                actor_display="Roosevelt Pimentel",
+                path=audit,
+            )
+            record_mapping_audit(
+                "update",
+                "GGS_Suporte_Teste",
+                "admin.satiro",
+                old_regional="REG_A",
+                new_regional="REG_B",
+                source_ip="10.0.0.11",
+                path=audit,
+            )
+
+            events = mapping_audit_log(path=audit)
+            self.assertEqual(2, len(events))
+            self.assertEqual("admin.satiro", events[0]["actor"])
+            self.assertEqual("update", events[0]["action"])
+            self.assertEqual("REG_A", events[0]["old_regional"])
+            self.assertEqual("REG_B", events[0]["new_regional"])
+            self.assertEqual("Roosevelt Pimentel", events[1]["actor_display"])
+            self.assertEqual("10.0.0.10", events[1]["source_ip"])
+            self.assertEqual(1, len(mapping_audit_log(limit=1, path=audit)))
 
 
 if __name__ == "__main__":

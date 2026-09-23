@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-O dashboard do Sentinel consolida informacoes operacionais de infraestrutura, seguranca e monitoramento.
+O dashboard do Sentinel consolida informações operacionais de infraestrutura, segurança e monitoramento.
 
 ## Temas que a SofIA Pode Explicar
 
@@ -15,8 +15,8 @@ O dashboard do Sentinel consolida informacoes operacionais de infraestrutura, se
 - firewalls;
 - monitor de admins;
 - validade de certificados;
-- replicacao AD;
-- relatorios.
+- replicação AD;
+- relatórios.
 
 ## Perguntas Exemplo
 
@@ -31,4 +31,4 @@ O que o monitor de admins mostra?
 
 A SofIA responde de forma simples que pode explicar telas e indicadores do Sentinel.
 
-Melhoria futura: responder por tela com explicacao detalhada e orientar o usuario sobre onde clicar.
+Melhoria futura: responder por tela com explicação detalhada e orientar o usuário sobre onde clicar.

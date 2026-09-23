@@ -11,7 +11,7 @@ A SofIA usa os dados carregados pelo gerenciador de regionais.
 Ela pode consultar:
 
 - total de regionais;
-- nome/codigo de uma regional;
+- nome/código de uma regional;
 - resumo de servidores;
 - resumo de links;
 - resumo de switches.
@@ -21,7 +21,7 @@ Ela pode consultar:
 ```text
 Quantas regionais temos?
 Resumo da regional ABC
-Como esta a regional Macae?
+Como está a regional Macaé?
 ```
 
 ## Comportamento Esperado
@@ -32,7 +32,7 @@ Quando identificar uma regional, a SofIA deve responder com um resumo consolidad
 Resumo da REG_ABC: servidores: X no total; links de internet: Y no total; switches: Z no total.
 ```
 
-## Fonte Tecnica
+## Fonte Técnica
 
 ```text
 sofia/tools_sentinel.py
