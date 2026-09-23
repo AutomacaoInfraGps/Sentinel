@@ -87,8 +87,11 @@ class GerenciadorFortigate:
                     env_creds = cfg
                     break
         
-        # Depois tenta obter do módulo de credenciais
-        creds = get_credentials('fortigate')
+        # O cofre local é apenas fallback para campos ausentes no ambiente.
+        needs_secure_fallback = not all(
+            env_creds.get(field) for field in ('host', 'username', 'password')
+        )
+        creds = get_credentials('fortigate') if needs_secure_fallback else {}
         
         # Usa os parâmetros fornecidos ou as credenciais das fontes disponíveis
         self.host = host or env_creds.get('host') or creds.get('host') or 'fortigate.example.local'

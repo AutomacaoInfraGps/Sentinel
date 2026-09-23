@@ -253,7 +253,10 @@ pyinstaller --add-data "*.ps1;." executar_tudo.py
 ### 3. **Erro: Credenciais não encontradas**
 ```bash
 # Solução: Incluir arquivos de configuração
-pyinstaller --add-data "*.json;." --add-data ".credentials;.credentials" executar_tudo.py
+pyinstaller --add-data "*.json;." executar_tudo.py
+
+> Nunca inclua `.credentials`, senhas, tokens ou chaves no executável. As
+> credenciais devem ser configuradas separadamente em cada ambiente.
 ```
 
 ### 4. **Erro: Templates HTML não encontrados**

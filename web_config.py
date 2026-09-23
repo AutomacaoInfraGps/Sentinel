@@ -2717,13 +2717,21 @@ def _load_regional_interfaces(
 
 def _resolve_fortigate_credentials() -> dict:
     env_fg = ENV_CONFIG.get("fortigate", {})
+    selected = {}
     if isinstance(env_fg, dict) and env_fg.get("host"):
-        return env_fg
+        selected = env_fg
     if isinstance(env_fg, dict):
         for cfg in env_fg.values():
             if isinstance(cfg, dict) and cfg.get("host"):
-                return cfg
-    return get_credentials("fortigate") or {}
+                selected = cfg
+                break
+    if all(selected.get(field) for field in ("host", "username", "password")):
+        return selected
+    secure = get_credentials("fortigate") or {}
+    return {
+        **secure,
+        **{key: value for key, value in selected.items() if value not in (None, "")},
+    }
 
 
 def _get_fortimanager_adom() -> str:
@@ -7586,7 +7594,11 @@ def listar_firewalls(return_data=False):
 # ---------------------------------------------------------------------------
 def _get_faz_client() -> FortiAnalyzerClient:
     faz_cfg = ENV_CONFIG.get("fortianalyzer", {})
-    secure_credentials = get_credentials("fortianalyzer") or {}
+    has_environment_auth = bool(
+        faz_cfg.get("api_key")
+        or (faz_cfg.get("username") and faz_cfg.get("password"))
+    )
+    secure_credentials = {} if has_environment_auth else (get_credentials("fortianalyzer") or {})
     return FortiAnalyzerClient(
         host=faz_cfg.get("host", ""),
         api_key=faz_cfg.get("api_key", ""),
