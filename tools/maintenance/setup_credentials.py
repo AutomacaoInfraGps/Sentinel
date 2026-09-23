@@ -143,20 +143,22 @@ def setup_master_password():
     while True:
         password = getpass.getpass("Nova senha mestra: ")
         confirm = getpass.getpass("Confirme a senha mestra: ")
+
+        if len(password) < 32:
+            print("\nA senha mestra deve ter pelo menos 32 caracteres.\n")
+            continue
         
         if password == confirm:
-            # Obtém as credenciais atuais
+            # Credenciais antigas só são preservadas quando a chave atual está
+            # corretamente configurada. Arquivos legados não são migrados com
+            # uma senha padrão conhecida.
             credentials = decrypt_credentials()
-            
-            # Criptografa com a nova senha
+            os.environ['AUTOMATION_MASTER_PASSWORD'] = password
             encrypt_credentials(credentials, password)
             
-            # Define a variável de ambiente
-            os.environ['AUTOMATION_MASTER_PASSWORD'] = password
-            
             print("\n✅ Senha mestra configurada com sucesso!")
-            print("   Para usar esta senha em execuções futuras, defina a variável de ambiente:")
-            print(f"   AUTOMATION_MASTER_PASSWORD='{password}'")
+            print("   Configure AUTOMATION_MASTER_PASSWORD de forma persistente no serviço.")
+            print("   O valor não será exibido nem salvo pelo assistente.")
             break
         else:
             print("\n❌ As senhas não coincidem. Tente novamente.\n")

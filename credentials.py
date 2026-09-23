@@ -12,6 +12,7 @@ from pathlib import Path
 import json
 import base64
 import getpass
+import logging
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -22,7 +23,7 @@ CREDENTIALS_DIR = get_credentials_dir()
 
 # Garante que o diretório existe
 if not CREDENTIALS_DIR.exists():
-    CREDENTIALS_DIR.mkdir(exist_ok=True)
+    CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Arquivo de credenciais criptografadas
 CREDENTIALS_FILE = CREDENTIALS_DIR / 'encrypted_credentials.json'
@@ -30,13 +31,34 @@ CREDENTIALS_FILE = CREDENTIALS_DIR / 'encrypted_credentials.json'
 # Arquivo de salt para derivação de chave
 SALT_FILE = CREDENTIALS_DIR / 'salt.bin'
 
-# Senha mestra para criptografia (pode ser definida como variável de ambiente)
-MASTER_PASSWORD = os.environ.get('AUTOMATION_MASTER_PASSWORD', 'default_password_change_me')
+LOGGER = logging.getLogger(__name__)
+MASTER_PASSWORD_ENV = 'AUTOMATION_MASTER_PASSWORD'
+MIN_MASTER_PASSWORD_LENGTH = 32
 DOCS_FORTIGATE_HOST = 'fortigate.example.local'
 DOCS_ZABBIX_URL = 'https://zabbix.example.local/zabbix'
 
+
+class CredentialConfigurationError(RuntimeError):
+    """Indica que o armazenamento seguro ainda não foi configurado."""
+
+
+def _resolve_master_password(password=None):
+    pwd = password if password is not None else os.environ.get(MASTER_PASSWORD_ENV, '')
+    pwd = str(pwd).strip()
+    if not pwd:
+        raise CredentialConfigurationError(
+            f'Defina {MASTER_PASSWORD_ENV} antes de acessar as credenciais.'
+        )
+    if len(pwd) < MIN_MASTER_PASSWORD_LENGTH:
+        raise CredentialConfigurationError(
+            f'{MASTER_PASSWORD_ENV} deve ter pelo menos {MIN_MASTER_PASSWORD_LENGTH} caracteres.'
+        )
+    return pwd
+
 def get_encryption_key(password=None):
     """Gera uma chave de criptografia a partir da senha mestra"""
+    # Falha antes de criar qualquer artefato quando a chave não foi definida.
+    pwd = _resolve_master_password(password)
     if not SALT_FILE.exists():
         # Gera um novo salt se não existir
         salt = os.urandom(16)
@@ -46,9 +68,6 @@ def get_encryption_key(password=None):
         # Carrega o salt existente
         with open(SALT_FILE, 'rb') as f:
             salt = f.read()
-    
-    # Usa a senha fornecida ou a senha mestra
-    pwd = password or MASTER_PASSWORD
     
     # Deriva a chave a partir da senha e do salt
     kdf = PBKDF2HMAC(
@@ -70,11 +89,17 @@ def encrypt_credentials(credentials, password=None):
     json_data = json.dumps(credentials).encode()
     encrypted_data = f.encrypt(json_data)
     
-    # Salva no arquivo
-    with open(CREDENTIALS_FILE, 'wb') as file:
+    # Grava de forma atômica para não deixar um arquivo parcial.
+    temporary = CREDENTIALS_FILE.with_suffix('.tmp')
+    with open(temporary, 'wb') as file:
         file.write(encrypted_data)
-    
-    print(f"✅ Credenciais salvas com segurança em {CREDENTIALS_FILE}")
+    try:
+        os.chmod(temporary, 0o600)
+    except OSError:
+        pass
+    os.replace(temporary, CREDENTIALS_FILE)
+
+    LOGGER.info("Credenciais criptografadas foram atualizadas.")
 
 def decrypt_credentials(password=None):
     """Descriptografa e retorna as credenciais"""
@@ -94,8 +119,11 @@ def decrypt_credentials(password=None):
         credentials = json.loads(json_data)
         
         return credentials
-    except Exception as e:
-        print(f"❌ Erro ao descriptografar credenciais: {str(e)}")
+    except CredentialConfigurationError as exc:
+        LOGGER.error("Armazenamento de credenciais não configurado: %s", exc)
+        return {}
+    except Exception:
+        LOGGER.error("Não foi possível descriptografar o arquivo de credenciais.")
         return {}
 
 def get_credentials(service, prompt_if_missing=False):

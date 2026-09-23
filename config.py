@@ -157,22 +157,28 @@ DOCS_APPGATE_HOST = "203.0.113.10"
 DOCS_NAOS_USER = "EXEMPLO\\admin"
 DOCS_UNIFI_USER = "admin"
 
-# Configurações do servidor NAOS
-naos_creds = get_credentials('naos')
-NAOS_CONFIG = ENV_CONFIG.get("naos_server", {
-    "ip": naos_creds.get('host', DOCS_NAOS_IP),
-    "usuario": naos_creds.get('username', DOCS_NAOS_USER),
-    "senha": naos_creds.get('password', ""),
-})
+# Configurações do servidor NAOS. O cofre legado só é consultado quando a
+# seção local não existe, evitando dependências ocultas e descriptografias
+# desnecessárias.
+NAOS_CONFIG = ENV_CONFIG.get("naos_server")
+if not isinstance(NAOS_CONFIG, dict) or not NAOS_CONFIG:
+    naos_creds = get_credentials('naos')
+    NAOS_CONFIG = {
+        "ip": naos_creds.get('host', DOCS_NAOS_IP),
+        "usuario": naos_creds.get('username', DOCS_NAOS_USER),
+        "senha": naos_creds.get('password', ""),
+    }
 
-# Configurações do controlador UniFi
-unifi_creds = get_credentials('unifi')
-UNIFI_CONFIG = ENV_CONFIG.get("unifi_controller", {
-    "host": unifi_creds.get('host', DOCS_UNIFI_HOST),
-    "port": unifi_creds.get('port', 8443),
-    "username": unifi_creds.get('username', DOCS_UNIFI_USER),
-    "password": unifi_creds.get('password', "")
-})
+# Configurações do controlador UniFi seguem a mesma regra.
+UNIFI_CONFIG = ENV_CONFIG.get("unifi_controller")
+if not isinstance(UNIFI_CONFIG, dict) or not UNIFI_CONFIG:
+    unifi_creds = get_credentials('unifi')
+    UNIFI_CONFIG = {
+        "host": unifi_creds.get('host', DOCS_UNIFI_HOST),
+        "port": unifi_creds.get('port', 8443),
+        "username": unifi_creds.get('username', DOCS_UNIFI_USER),
+        "password": unifi_creds.get('password', "")
+    }
 
 UNIFI_CLIENTS_DASHBOARD = ENV_CONFIG.get("unifi_clients_dashboard", {
     "site": "brihqlgm",
