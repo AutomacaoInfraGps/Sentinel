@@ -1,0 +1,606 @@
+{% extends "base.html" %}
+
+{% block title %}Atualizar Switch - Sentinel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .switch-update-page-title {
+        color: #20272d;
+        font-weight: 300;
+    }
+
+    .switch-update-page-title i {
+        color: #198754;
+    }
+
+    .switch-update-container {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 30px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(1, 46, 64, 0.12);
+    }
+
+    .switch-update-header {
+        padding: 20px;
+        margin-bottom: 28px;
+        color: #fff;
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        border-radius: 6px;
+    }
+
+    .switch-update-header h2 {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .switch-update-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem 1.5rem;
+        margin-top: 10px;
+        color: rgba(255, 255, 255, 0.86);
+        font-size: 0.94rem;
+    }
+
+    .switch-update-form .form-label {
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .switch-update-form .form-control {
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        padding: 12px;
+    }
+
+    .switch-update-form .form-control:focus {
+        border-color: #0A4A63;
+        box-shadow: 0 0 0 0.2rem rgba(15, 108, 140, 0.14);
+    }
+
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+    }
+
+    .immediate-update-warning {
+        color: #c82333;
+        font-weight: 800;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+
+    .switch-update-actions .btn {
+        min-width: 128px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+
+    .switch-update-continue {
+        color: #fff;
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        border: 0;
+    }
+
+    .switch-update-continue:hover,
+    .switch-update-continue:focus {
+        color: #fff;
+        background: linear-gradient(135deg, #012432, #083d52, #0c5872);
+    }
+
+    .switch-update-progress {
+        display: none;
+        margin-top: 24px;
+        padding: 20px;
+        border: 1px solid rgba(15, 108, 140, 0.15);
+        border-radius: 10px;
+        background: #f7fafb;
+    }
+
+    .switch-update-progress .progress {
+        height: 12px;
+        background-color: #dfe9ed;
+    }
+
+    .switch-update-progress .progress-bar {
+        background: linear-gradient(90deg, #0F6C8C, #198754);
+    }
+
+    .switch-update-progress .progress-bar.job-progress-success {
+        background: #198754;
+    }
+
+    .switch-update-progress .progress-bar.job-progress-danger {
+        background: #dc3545;
+    }
+
+    .switch-update-result-code {
+        font-family: Consolas, "Courier New", monospace;
+        font-weight: 700;
+    }
+
+    .firmware-confirmation-summary {
+        border-left: 4px solid #0F6C8C;
+        background: #f3f8fa;
+    }
+
+    @media (max-width: 576px) {
+        .switch-update-container {
+            padding: 20px 16px;
+        }
+
+        .switch-update-actions {
+            gap: 12px;
+        }
+
+        .switch-update-actions .btn {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 text-center mb-3 switch-update-page-title">
+            <i class="bi bi-arrow-up-circle me-3" aria-hidden="true"></i>
+            Atualizar Switch
+        </h1>
+        <p class="lead text-center text-muted mb-0">
+            Selecione e agende o firmware que será instalado no switch.
+        </p>
+    </div>
+</div>
+
+<div class="switch-update-container">
+    <div class="switch-update-header">
+        <h2>
+            <i class="bi bi-hdd-network me-2" aria-hidden="true"></i>
+            {{ switch.host }}
+        </h2>
+        <div class="switch-update-meta">
+            <span><strong>Regional:</strong> {{ switch.regional or 'Não informada' }}</span>
+            <span><strong>Modelo:</strong> {{ switch.modelo or 'Não informado' }}</span>
+        </div>
+    </div>
+
+    <div id="workerHealthAlert" class="alert alert-danger d-none" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+        <span id="workerHealthMessage"></span>
+    </div>
+
+    <form id="switchUpdateForm" class="switch-update-form" novalidate>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="switchUsername" class="form-label required-field">Login</label>
+                <input type="text"
+                       class="form-control"
+                       id="switchUsername"
+                       autocomplete="username"
+                       maxlength="128"
+                       required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="switchPassword" class="form-label required-field">Senha</label>
+                <input type="password"
+                       class="form-control"
+                       id="switchPassword"
+                       autocomplete="current-password"
+                       maxlength="256"
+                       required>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="switchFirmware" class="form-label required-field">
+                Firmware para atualização
+            </label>
+            <input type="file"
+                   class="form-control"
+                   id="switchFirmware"
+                   accept=".swi"
+                   required>
+            <div class="form-text">
+                Selecione um arquivo oficial <strong>.swi</strong> compatível com o modelo informado.
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="switchScheduledAt" class="form-label">
+                Agendamento <span class="text-muted fw-normal">(Horário de Brasília)</span>
+            </label>
+            <input type="datetime-local" class="form-control" id="switchScheduledAt">
+            <div class="form-text">
+                Deixe vazio para iniciar assim que a solicitação for confirmada.
+            </div>
+        </div>
+
+        <div id="immediateUpdateWarning" class="immediate-update-warning text-center mt-4" role="status">
+            Atenção: o update não foi agendado e será realizado imediatamente.
+        </div>
+
+        <div class="d-flex justify-content-between switch-update-actions mt-4">
+            <a href="{{ url_for('listar_switches') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2" aria-hidden="true"></i>
+                Voltar
+            </a>
+            <button type="submit" id="continueUpdateButton" class="btn switch-update-continue">
+                <span class="spinner-border spinner-border-sm me-2 d-none" id="continueSpinner" aria-hidden="true"></span>
+                <i class="bi bi-arrow-right-circle me-2" id="continueIcon" aria-hidden="true"></i>
+                Continuar
+            </button>
+        </div>
+    </form>
+
+    <section id="switchUpdateProgress" class="switch-update-progress" aria-live="polite">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong id="jobStatusLabel">Atualização registrada</strong>
+            <span id="jobPercent">0%</span>
+        </div>
+        <div class="progress" role="progressbar" aria-label="Progresso da atualização" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="jobProgressBar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        <p id="jobMessage" class="mt-3 mb-1 text-muted"></p>
+        <p id="jobResult" class="mb-0 d-none">
+            Código: <span id="jobResultCode" class="switch-update-result-code"></span>
+        </p>
+        <div id="reviewActions" class="d-none mt-3 flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary" id="recheckJobButton">
+                <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+                Verificar novamente
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="acknowledgeJobButton">
+                Confirmar revisão manual
+            </button>
+        </div>
+    </section>
+</div>
+
+<div class="modal fade" id="firmwareConfirmationModal" tabindex="-1" aria-labelledby="firmwareConfirmationTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="firmwareConfirmationTitle">Confirmar atualização</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="firmware-confirmation-summary rounded p-3 mb-3">
+                    <div><strong>Switch:</strong> {{ switch.host }}</div>
+                    <div><strong>Versão atual:</strong> <span id="currentFirmwareVersion">—</span></div>
+                    <div><strong>Versão de destino:</strong> <span id="targetFirmwareVersion">—</span></div>
+                </div>
+                <p id="firmwareConfirmationMessage" class="mb-0"></p>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="confirmFirmwareButton">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="confirmSpinner" aria-hidden="true"></span>
+                    <span id="confirmFirmwareLabel">Confirmar</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    'use strict';
+
+    const switchHost = {{ switch.host|tojson }};
+    const urls = {
+        csrf: {{ url_for('switch_firmware_v01.csrf_token')|tojson }},
+        health: {{ url_for('switch_firmware_v01.firmware_health')|tojson }},
+        preflight: {{ url_for('switch_firmware_v01.firmware_preflight', host=switch.host)|tojson }},
+        createJob: {{ url_for('switch_firmware_v01.create_firmware_job', host=switch.host)|tojson }},
+        job: {{ url_for('switch_firmware_v01.firmware_job_status', job_id='__JOB_ID__')|tojson }},
+        deleteDraft: {{ url_for('switch_firmware_v01.cancel_firmware_draft', draft_id='__DRAFT_ID__')|tojson }},
+        recheck: {{ url_for('switch_firmware_v01.recheck_firmware_job', job_id='__JOB_ID__')|tojson }},
+        acknowledge: {{ url_for('switch_firmware_v01.acknowledge_firmware_review', job_id='__JOB_ID__')|tojson }}
+    };
+
+    const form = document.getElementById('switchUpdateForm');
+    const usernameInput = document.getElementById('switchUsername');
+    const passwordInput = document.getElementById('switchPassword');
+    const firmwareInput = document.getElementById('switchFirmware');
+    const scheduledInput = document.getElementById('switchScheduledAt');
+    const immediateWarning = document.getElementById('immediateUpdateWarning');
+    const continueButton = document.getElementById('continueUpdateButton');
+    const continueSpinner = document.getElementById('continueSpinner');
+    const continueIcon = document.getElementById('continueIcon');
+    const confirmButton = document.getElementById('confirmFirmwareButton');
+    const confirmSpinner = document.getElementById('confirmSpinner');
+    const confirmationModalElement = document.getElementById('firmwareConfirmationModal');
+    const confirmationModal = new bootstrap.Modal(confirmationModalElement);
+    const progressSection = document.getElementById('switchUpdateProgress');
+    const progressBar = document.getElementById('jobProgressBar');
+    const progressRoot = progressBar.closest('.progress');
+    const healthAlert = document.getElementById('workerHealthAlert');
+    const healthMessage = document.getElementById('workerHealthMessage');
+
+    let csrfToken = null;
+    let draft = null;
+    let activeJob = null;
+    let pollTimer = null;
+    let confirmingDraft = false;
+
+    const stageLabels = {
+        scheduled: 'Atualização agendada',
+        starting: 'Preparando atualização',
+        identity: 'Validando switch e versão',
+        authentication: 'Autenticando',
+        upload_setup: 'Preparando envio',
+        transfer: 'Transferindo firmware',
+        restart: 'Reiniciando switch',
+        waiting_ping: 'Aguardando retorno do switch',
+        verifying_web: 'Confirmando versão instalada',
+        saving: 'Salvando configuração',
+        completed: 'Atualização concluída',
+        complete: 'Atualização concluída',
+        completed_after_review: 'Atualização confirmada após nova verificação',
+        failed: 'Atualização não concluída',
+        needs_review: 'Atualização precisa de verificação',
+        cancelled: 'Atualização cancelada',
+        reviewed: 'Revisão manual registrada'
+    };
+
+    const terminalStatuses = new Set(['completed', 'failed', 'cancelled', 'reviewed', 'needs_review']);
+
+    function replaceToken(template, token, value) {
+        return template.replace(token, encodeURIComponent(value));
+    }
+
+    async function apiRequest(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            ...options
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success === false) {
+            throw new Error(payload.message || `Falha na solicitação (HTTP ${response.status}).`);
+        }
+        return payload;
+    }
+
+    async function ensureCsrfToken() {
+        if (!csrfToken) {
+            const response = await apiRequest(urls.csrf);
+            csrfToken = response.csrf_token;
+        }
+        return csrfToken;
+    }
+
+    function setContinueLoading(loading) {
+        continueButton.disabled = loading;
+        continueSpinner.classList.toggle('d-none', !loading);
+        continueIcon.classList.toggle('d-none', loading);
+    }
+
+    function setConfirmLoading(loading) {
+        confirmButton.disabled = loading;
+        confirmSpinner.classList.toggle('d-none', !loading);
+    }
+
+    function showPageError(message) {
+        healthMessage.textContent = message;
+        healthAlert.classList.remove('d-none');
+        healthAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function updateImmediateWarning() {
+        immediateWarning.classList.toggle('d-none', Boolean(scheduledInput.value));
+    }
+
+    function confirmationText(decision, currentVersion, targetVersion) {
+        if (decision === 'same_version') {
+            return `${targetVersion} já está instalada. Reinstalar o firmware e reiniciar o switch?`;
+        }
+        if (decision === 'downgrade') {
+            return `Será feito downgrade de ${currentVersion} para ${targetVersion}. Continuar e reiniciar o switch?`;
+        }
+        return `Atualizar de ${currentVersion} para ${targetVersion} e reiniciar o switch?`;
+    }
+
+    function confirmationLabel(decision) {
+        const scheduled = Boolean(scheduledInput.value);
+        if (decision === 'same_version') return scheduled ? 'Agendar reinstalação' : 'Reinstalar agora';
+        if (decision === 'downgrade') return scheduled ? 'Agendar downgrade' : 'Fazer downgrade';
+        return scheduled ? 'Agendar atualização' : 'Atualizar agora';
+    }
+
+    async function removeDraft() {
+        if (!draft) return;
+        const draftId = draft.draft_token;
+        draft = null;
+        try {
+            await apiRequest(replaceToken(urls.deleteDraft, '__DRAFT_ID__', draftId), {
+                method: 'DELETE',
+                headers: { 'X-CSRF-Token': await ensureCsrfToken() }
+            });
+        } catch (error) {
+            console.warn('Não foi possível remover o rascunho de firmware.', error);
+        }
+    }
+
+    async function runPreflight(event) {
+        event.preventDefault();
+        healthAlert.classList.add('d-none');
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+
+        const selectedFirmware = firmwareInput.files[0];
+        if (!selectedFirmware || !selectedFirmware.name.toLowerCase().endsWith('.swi')) {
+            showPageError('Selecione um arquivo de firmware com extensão .swi.');
+            return;
+        }
+
+        setContinueLoading(true);
+        try {
+            await removeDraft();
+            const body = new FormData();
+            body.append('firmware', selectedFirmware, selectedFirmware.name);
+            const response = await apiRequest(urls.preflight, {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': await ensureCsrfToken() },
+                body
+            });
+            draft = response.draft;
+            document.getElementById('currentFirmwareVersion').textContent = draft.current_version;
+            document.getElementById('targetFirmwareVersion').textContent = draft.expected_version;
+            document.getElementById('firmwareConfirmationMessage').textContent = confirmationText(
+                draft.decision,
+                draft.current_version,
+                draft.expected_version
+            );
+            document.getElementById('confirmFirmwareLabel').textContent = confirmationLabel(draft.decision);
+            confirmationModal.show();
+        } catch (error) {
+            showPageError(error.message);
+        } finally {
+            setContinueLoading(false);
+        }
+    }
+
+    async function createJob() {
+        if (!draft) return;
+        setConfirmLoading(true);
+        confirmingDraft = true;
+        try {
+            const payload = {
+                draft_token: draft.draft_token,
+                username: usernameInput.value.trim(),
+                password: passwordInput.value,
+                confirmed_decision: draft.decision
+            };
+            if (scheduledInput.value) payload.scheduled_at = scheduledInput.value;
+
+            const response = await apiRequest(urls.createJob, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': await ensureCsrfToken()
+                },
+                body: JSON.stringify(payload)
+            });
+            draft = null;
+            activeJob = response.job;
+            passwordInput.value = '';
+            firmwareInput.value = '';
+            confirmationModal.hide();
+            form.classList.add('d-none');
+            renderJob(activeJob);
+            startPolling();
+        } catch (error) {
+            showPageError(error.message);
+        } finally {
+            confirmingDraft = false;
+            setConfirmLoading(false);
+        }
+    }
+
+    function renderJob(job) {
+        if (!job) return;
+        progressSection.style.display = 'block';
+        const percent = Math.max(0, Math.min(100, Number(job.percent || 0)));
+        const stage = job.stage || job.status || 'scheduled';
+        document.getElementById('jobStatusLabel').textContent = stageLabels[stage] || job.status || 'Atualização registrada';
+        document.getElementById('jobPercent').textContent = `${percent}%`;
+        document.getElementById('jobMessage').textContent = job.message || '';
+        progressBar.style.width = `${percent}%`;
+        progressRoot.setAttribute('aria-valuenow', String(percent));
+
+        const resultLine = document.getElementById('jobResult');
+        const resultCode = document.getElementById('jobResultCode');
+        if (job.result_code) {
+            resultCode.textContent = job.result_code;
+            resultLine.classList.remove('d-none');
+        } else {
+            resultLine.classList.add('d-none');
+        }
+
+        const reviewActions = document.getElementById('reviewActions');
+        const needsReview = job.status === 'needs_review';
+        reviewActions.classList.toggle('d-none', !needsReview);
+        reviewActions.classList.toggle('d-flex', needsReview);
+        progressBar.classList.toggle('job-progress-success', job.status === 'completed');
+        progressBar.classList.toggle('job-progress-danger', job.status === 'failed');
+    }
+
+    async function refreshJob() {
+        if (!activeJob) return;
+        try {
+            const response = await apiRequest(replaceToken(urls.job, '__JOB_ID__', activeJob.id));
+            activeJob = response.job;
+            renderJob(activeJob);
+            if (terminalStatuses.has(activeJob.status)) stopPolling();
+        } catch (error) {
+            document.getElementById('jobMessage').textContent = error.message;
+        }
+    }
+
+    function startPolling() {
+        stopPolling();
+        pollTimer = window.setInterval(refreshJob, 1500);
+        refreshJob();
+    }
+
+    function stopPolling() {
+        if (pollTimer) window.clearInterval(pollTimer);
+        pollTimer = null;
+    }
+
+    async function reviewJob(actionUrl) {
+        if (!activeJob) return;
+        try {
+            const response = await apiRequest(replaceToken(actionUrl, '__JOB_ID__', activeJob.id), {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': await ensureCsrfToken() }
+            });
+            activeJob = response.job;
+            renderJob(activeJob);
+        } catch (error) {
+            document.getElementById('jobMessage').textContent = error.message;
+        }
+    }
+
+    async function checkWorkerHealth() {
+        try {
+            const response = await apiRequest(urls.health);
+            if (response.execution_mode === 'windows_task' && response.worker && !response.worker.available) {
+                continueButton.disabled = true;
+                showPageError(
+                    'O serviço de atualização ainda não está disponível. A tarefa do Windows precisa ser instalada antes de criar um job.'
+                );
+            }
+        } catch (error) {
+            continueButton.disabled = true;
+            showPageError(error.message);
+        }
+    }
+
+    scheduledInput.addEventListener('input', updateImmediateWarning);
+    form.addEventListener('submit', runPreflight);
+    confirmButton.addEventListener('click', createJob);
+    document.getElementById('recheckJobButton').addEventListener('click', () => reviewJob(urls.recheck));
+    document.getElementById('acknowledgeJobButton').addEventListener('click', () => reviewJob(urls.acknowledge));
+    confirmationModalElement.addEventListener('hidden.bs.modal', () => {
+        if (!confirmingDraft) removeDraft();
+    });
+    window.addEventListener('beforeunload', stopPolling);
+
+    updateImmediateWarning();
+    const localNow = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+    scheduledInput.min = localNow.toISOString().slice(0, 16);
+    checkWorkerHealth();
+})();
+</script>
+{% endblock %}

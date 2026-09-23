@@ -99,6 +99,13 @@ from notification_center import (
     snapshot_is_fresh,
 )
 from services.unifi_models import normalizar_modelo_ap
+from services.switch_update_v01.scheduler import SchedulerSettings, SwitchUpdateScheduler
+from services.switch_update_v01.sentinel_backend import install_switch_update_backend
+from services.switch_update_v01.windows_task import (
+    DEFAULT_TASK_NAME as SWITCH_UPDATE_DEFAULT_TASK_NAME,
+    trigger_worker_task,
+    worker_task_health,
+)
 from regional_matching import find_regional_code
 from sofia import init_sofia
 from sofia.tools_sentinel import configurar_ferramentas_sentinel
@@ -1016,6 +1023,98 @@ def _run_executar_completo_job(job_id):
 
 def _normalizar_host_switch(host):
     return re.sub(r'\s+', ' ', str(host or '').strip()).casefold()
+
+
+def _resolver_switch_update(host):
+    """Resolve o alvo exclusivamente pelo inventario carregado no Sentinel."""
+    switch = gerenciador_switches.obter_switch(host)
+    if isinstance(switch, dict):
+        return dict(switch)
+
+    target = _normalizar_host_switch(host)
+    switches_cache = _mapa_ler_json_output("switches_status_cache.json")
+    for cached_host, cached_switch in (switches_cache or {}).items():
+        if not isinstance(cached_switch, dict):
+            continue
+        identifiers = {
+            _normalizar_host_switch(cached_host),
+            _normalizar_host_switch(cached_switch.get('host')),
+            _normalizar_host_switch(cached_switch.get('zabbix_host')),
+            _normalizar_host_switch(cached_switch.get('zabbix_name')),
+        }
+        if target in identifiers:
+            return {'host': cached_host, **dict(cached_switch)}
+    return None
+
+
+def _usuario_pode_atualizar_switch(user_id):
+    """Permite firmware somente aos perfis operacionais definidos pelo AD."""
+    usuario = get_user(str(user_id or '').strip())
+    if usuario is None:
+        return False
+    grupos = effective_user_groups(usuario.groups, usuario.dn)
+    return can_operate_sentinel(grupos)
+
+
+_switch_update_config = (
+    ENV_CONFIG.get('switch_update', {})
+    if isinstance(ENV_CONFIG.get('switch_update', {}), dict)
+    else {}
+)
+
+
+def _switch_update_number(name, default, converter, minimum):
+    try:
+        value = converter(_switch_update_config.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value >= minimum else default
+
+
+def _switch_update_bool(name, default=False):
+    value = _switch_update_config.get(name, default)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().casefold() in {'1', 'true', 'yes', 'on', 'sim'}
+
+
+_switch_update_root = Path(base_dir) / 'data' / 'switch_updates'
+_switch_update_driver = str(_switch_update_config.get('driver_path') or '').strip()
+if _switch_update_driver:
+    _switch_update_driver = Path(_switch_update_driver)
+    if not _switch_update_driver.is_absolute():
+        _switch_update_driver = Path(base_dir) / _switch_update_driver
+else:
+    _switch_update_driver = None
+_switch_update_task_name = str(
+    _switch_update_config.get('task_name') or SWITCH_UPDATE_DEFAULT_TASK_NAME
+).strip()
+
+switch_update_scheduler = SwitchUpdateScheduler(
+    SchedulerSettings(
+        database_path=_switch_update_root / 'scheduled_updates.sqlite3',
+        firmware_dir=_switch_update_root / 'firmware',
+        log_dir=_switch_update_root / 'SwitchUpdateLogs',
+        poll_interval_seconds=1.0,
+        http_timeout=_switch_update_number('http_timeout', 10.0, float, 0.1),
+        reboot_timeout=_switch_update_number('reboot_timeout', 7 * 60, int, 1),
+        transfer_timeout=_switch_update_number('transfer_timeout', 15 * 60, int, 1),
+        insecure_tls=_switch_update_bool('insecure_tls'),
+        driver_path=_switch_update_driver,
+        draft_ttl_seconds=_switch_update_number('draft_ttl_seconds', 15 * 60, int, 60),
+        log_retention_months=_switch_update_number('log_retention_months', 12, int, 1),
+    )
+)
+
+install_switch_update_backend(
+    app,
+    switch_update_scheduler,
+    resolve_switch=_resolver_switch_update,
+    is_authorized=_usuario_pode_atualizar_switch,
+    start_scheduler=False,
+    trigger_worker=lambda: trigger_worker_task(_switch_update_task_name),
+    worker_health=lambda: worker_task_health(_switch_update_task_name),
+)
 
 
 def _obter_arquivo_switches():
@@ -6474,6 +6573,30 @@ def editar_switch(host):
     
     regionais = gerenciador_switches.listar_regionais()
     return render_template('editar_switch.html', switch=switch, regionais=regionais)
+
+
+@app.route('/switches/atualizar/<path:host>')
+@login_required
+def atualizar_switch(host):
+    """Exibe a pagina segura de preflight e agendamento de firmware."""
+    if not _usuario_pode_atualizar_switch(current_user.get_id()):
+        flash(
+            'Seu acesso ao Active Directory não permite atualizar firmware de switches.',
+            'error',
+        )
+        return redirect(url_for('listar_switches'))
+
+    switch = _resolver_switch_update(host)
+    if not switch and gerenciador_switches._carregar_switches_api():
+        switch = _resolver_switch_update(host)
+    if not switch:
+        flash(f'Switch não encontrado: {host}', 'error')
+        return redirect(url_for('listar_switches'))
+
+    switch.setdefault('host', host)
+    switch.setdefault('regional', 'Regional não informada')
+    switch.setdefault('modelo', 'Modelo não informado')
+    return render_template('atualizar_switch.html', switch=switch)
 
 @app.route('/api/switches/excluir/<host>', methods=['DELETE'])
 @login_required
