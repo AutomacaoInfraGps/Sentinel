@@ -71,6 +71,7 @@ PyYAML==6.0.2
 requests==2.32.4
 scikit-image==0.25.2
 scipy==1.16.0
+selenium==4.49.0
 setuptools==80.9.0
 shapely==2.1.1
 six==1.17.0

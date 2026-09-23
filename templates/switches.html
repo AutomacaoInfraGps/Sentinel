@@ -111,6 +111,27 @@
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.1);
     }
+
+    .switch-card-actions {
+        width: 100%;
+        gap: 0.35rem;
+    }
+
+    .switch-verify-button {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .switch-icon-button {
+        width: 38px;
+        height: 32px;
+        flex: 0 0 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border-radius: 7px;
+    }
     
     .status-badge {
         width: 12px;
@@ -571,15 +592,23 @@
                         </p>
                     </div>
                     <div class="card-footer">
-                        <div class="d-flex justify-content-between mb-2">
-                            <button class="btn btn-sm btn-outline-primary flex-grow-1 me-1" onclick="verificarSwitch('{{ switch.host }}', '{{ regional.nome }}')">
+                        <div class="d-flex align-items-center switch-card-actions mb-2">
+                            <button class="btn btn-sm btn-outline-primary switch-verify-button" onclick="verificarSwitch('{{ switch.host }}', '{{ regional.nome }}')">
                                 <i class="bi bi-arrow-clockwise me-1"></i>
                                 Verificar
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="editarSwitch('{{ switch.host }}')">
+                            {% if sentinel_access.operator %}
+                                <a class="btn btn-sm btn-outline-success switch-icon-button"
+                                   href="{{ url_for('atualizar_switch', host=switch.host) }}"
+                                   title="Atualizar firmware"
+                                   aria-label="Atualizar firmware do switch {{ switch.host }}">
+                                    <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
+                                </a>
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-secondary switch-icon-button" onclick="editarSwitch('{{ switch.host }}')" title="Editar switch" aria-label="Editar switch {{ switch.host }}">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger ms-1" onclick="confirmarExclusao('{{ switch.host }}')">
+                            <button class="btn btn-sm btn-outline-danger switch-icon-button" onclick="confirmarExclusao('{{ switch.host }}')" title="Excluir switch" aria-label="Excluir switch {{ switch.host }}">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>

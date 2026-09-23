@@ -71,6 +71,16 @@
       "profile"
     ]
   },
+  "switch_update": {
+    "task_name": "SentinelSwitchUpdateWorker",
+    "driver_path": null,
+    "insecure_tls": false,
+    "http_timeout": 10,
+    "reboot_timeout": 420,
+    "transfer_timeout": 900,
+    "draft_ttl_seconds": 900,
+    "log_retention_months": 12
+  },
   "app_host_ip": "203.0.113.63",
   "timeouts": {
     "connection_timeout": 10,
