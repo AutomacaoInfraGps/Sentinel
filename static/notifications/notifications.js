@@ -95,10 +95,14 @@
     };
 
     const markVisibleAsRead = async () => {
-        const ids = notifications.filter((item) => !item.read).map((item) => item.id);
+        const ids = notifications
+            .filter((item) => !item.read && !item.persistent)
+            .map((item) => item.id);
         if (!ids.length) return;
-        notifications = notifications.map((item) => ({ ...item, read: true }));
-        setCount(0);
+        notifications = notifications.map((item) => (
+            item.persistent ? item : { ...item, read: true }
+        ));
+        setCount(notifications.filter((item) => !item.read).length);
         render();
         try {
             await fetch(widget.dataset.seenUrl, {

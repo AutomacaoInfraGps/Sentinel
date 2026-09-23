@@ -104,9 +104,15 @@ def build_notifications(records_by_group, orphan_vpn_names=None):
 
             item_title = title
             item_severity = severity
+            item_type = group
+            item_persistent = False
             if group == "firewalls" and status in {"warning", "alerta"}:
                 item_title = "Licença de firewall requer atenção"
                 item_severity = "important"
+            if group == "admins" and item.get("baseline_pending"):
+                item_title = "Administrador fora da baseline"
+                item_type = "admin_baseline"
+                item_persistent = True
 
             reason = item.get("warning_resumo") or item.get("status_reason") or item.get("descricao")
             message = f"{name} está {status}."
@@ -114,18 +120,23 @@ def build_notifications(records_by_group, orphan_vpn_names=None):
                 message = f"{name}: {str(reason).strip()}"
             notifications.append({
                 "id": _notification_id(group, item),
-                "type": group,
+                "type": item_type,
                 "severity": item_severity,
                 "icon": icon,
                 "title": item_title,
                 "message": message,
                 "regional": regional,
                 "device": name,
+                "persistent": item_persistent,
                 "occurred_at": item.get("changed_at") or item.get("ultima_verificacao") or item.get("updated_at"),
                 "url": _notification_url(group, target, name, regional),
             })
 
+    # Pendencias que exigem acao ficam sempre no topo. A data continua
+    # ordenando os alertas dentro de cada nivel de prioridade.
+    priority = {"vpn_orphan": 0, "admin_baseline": 1}
     notifications.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
+    notifications.sort(key=lambda item: priority.get(item.get("type"), 2))
     return notifications
 
 
@@ -157,11 +168,13 @@ def decorate_with_read_state(username, notifications, path=None):
     user_state = ((state.get("users") or {}).get(str(username), {}) or {})
     seen = set(user_state.get("seen_ids") or [])
     dismissed = set(user_state.get("dismissed_ids") or [])
-    decorated = [
-        {**item, "read": item["id"] in seen}
-        for item in notifications
-        if item.get("persistent") or item["id"] not in dismissed
-    ]
+    decorated = []
+    for item in notifications:
+        persistent = bool(item.get("persistent"))
+        if not persistent and item["id"] in dismissed:
+            continue
+        # Visualizar ou limpar nao resolve uma pendencia persistente.
+        decorated.append({**item, "read": False if persistent else item["id"] in seen})
     return decorated, sum(1 for item in decorated if not item["read"])
 
 

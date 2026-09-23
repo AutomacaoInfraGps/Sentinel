@@ -575,6 +575,47 @@ def _build_switches_resumo(resultados):
     }
 
 
+def _switches_da_regional_manager(manager, regional):
+    """Resolve uma regional Sentinel ou Zabbix para os switches do manager."""
+    regional_text = str(regional or "").strip()
+    if regional_text in manager.regionais:
+        return list(manager.regionais.get(regional_text) or [])
+
+    regionais_configuradas = {
+        codigo: gerenciador_regionais.obter_regional(codigo) or {}
+        for codigo in gerenciador_regionais.listar_regionais()
+    }
+    codigo = (
+        regional_text if regional_text in regionais_configuradas
+        else _mapa_encontrar_regional_por_nome(regionais_configuradas, regional_text)
+    )
+    if not codigo:
+        return []
+    agrupados = _agrupar_switches_por_regionais_configuradas(
+        manager.switches,
+        regionais_configuradas,
+    )
+    return list(agrupados.get(codigo) or [])
+
+
+def _verificar_switches_manager_regional(manager, regional, progress_callback=None):
+    switches = _switches_da_regional_manager(manager, regional)
+    if not switches:
+        return {"error": f"Regional {regional} nao encontrada ou sem switches"}
+
+    resultados = {}
+    total_switches = len(switches)
+    for indice, switch in enumerate(switches, start=1):
+        host_name = switch.get("host") or switch.get("nome")
+        if not host_name:
+            continue
+        resultado = manager.verificar_switch(host_name)
+        resultados[host_name] = resultado
+        if callable(progress_callback):
+            progress_callback(indice, total_switches, host_name, resultado)
+    return resultados
+
+
 def _publicar_switches_atualizados(manager):
     """Propaga a leitura mais recente do Zabbix para o estado comum do Sentinel."""
     with gerenciador_switches._switches_load_lock:
@@ -637,7 +678,7 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
             return
 
         if mode == 'regional':
-            switches_regional = manager.regionais.get(regional, [])
+            switches_regional = _switches_da_regional_manager(manager, regional)
             total_switches = len(switches_regional)
             _update_background_job(
                 job_id,
@@ -658,7 +699,11 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
                     patch_results={host_name: resultado}
                 )
 
-            resultados = manager.verificar_regional(regional, progress_callback=regional_progress)
+            resultados = _verificar_switches_manager_regional(
+                manager,
+                regional,
+                progress_callback=regional_progress,
+            )
             if isinstance(resultados, dict) and 'error' in resultados:
                 _fail_background_job(job_id, resultados['error'], message=f'Falha ao verificar a regional {regional}')
                 return
@@ -4144,6 +4189,36 @@ def _notification_orphan_vpn_names(vpns):
     return orphan_names
 
 
+def _notification_central_admin_baseline_records():
+    """Retorna divergencias centrais que permanecem ativas ate a aprovacao."""
+    cache = _carregar_cache_dashboard("admins") or {}
+    updated_at = cache.get("atualizado_em")
+    records = []
+    for device_key, device in (cache.get("dispositivos") or {}).items():
+        if str(device.get("tipo") or "").lower() not in {"fortimanager", "fortianalyzer"}:
+            continue
+        novos = list(device.get("novos") or [])
+        removidos = list(device.get("removidos") or [])
+        if not novos and not removidos:
+            continue
+        parts = []
+        if novos:
+            parts.append(f"{len(novos)} novo(s) aguardando aprovacao")
+        if removidos:
+            parts.append(f"{len(removidos)} removido(s) aguardando revisao")
+        name = str(device.get("nome") or device_key).strip()
+        records.append({
+            "nome": name,
+            "regional": name,
+            "status": "alerta",
+            "descricao": "; ".join(parts),
+            "baseline_pending": True,
+            "changed_at": updated_at,
+            "ultima_verificacao": updated_at,
+        })
+    return records
+
+
 def _parse_operational_datetime(value):
     try:
         parsed = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
@@ -4237,6 +4312,17 @@ def api_notifications():
     records_by_group["servidores"] = _reconcile_notification_servers(
         records_by_group.get("servidores") or []
     )
+    if can_operate_sentinel(_current_user_groups()):
+        central_admins = _notification_central_admin_baseline_records()
+        central_names = {
+            str(item.get("nome") or "").strip().lower()
+            for item in central_admins
+        }
+        regional_admins = [
+            item for item in records_by_group.get("admins") or []
+            if str(item.get("nome") or "").strip().lower() not in central_names
+        ]
+        records_by_group["admins"] = central_admins + regional_admins
     snapshot_fresh = not stale_groups
     notifications = build_notifications(
         records_by_group,
@@ -6729,7 +6815,7 @@ def api_verificar_switches_regional(regional):
         if _background_async_requested():
             job_id = _create_background_job(
                 'switches-regional',
-                total=len(gerenciador_switches.regionais.get(regional, [])),
+                total=len(_switches_da_regional_manager(gerenciador_switches, regional)),
                 message='Preparando verificação da regional...',
                 detail=f'Criando job para consultar os switches da regional {regional}.',
                 meta={'regional': regional}
@@ -6745,7 +6831,7 @@ def api_verificar_switches_regional(regional):
             return jsonify({'success': False, 'message': 'Falha na autenticação com o Zabbix'})
         
         # Verifica switches da regional
-        resultados = gerenciador_switches.verificar_regional(regional)
+        resultados = _verificar_switches_manager_regional(gerenciador_switches, regional)
         
         if isinstance(resultados, dict) and 'error' in resultados:
             return jsonify({'success': False, 'message': resultados['error']})
@@ -7339,14 +7425,42 @@ def listar_firewalls(return_data=False):
 # ---------------------------------------------------------------------------
 def _get_faz_client() -> FortiAnalyzerClient:
     faz_cfg = ENV_CONFIG.get("fortianalyzer", {})
+    secure_credentials = get_credentials("fortianalyzer") or {}
     return FortiAnalyzerClient(
         host=faz_cfg.get("host", ""),
         api_key=faz_cfg.get("api_key", ""),
         adom=faz_cfg.get("adom", "GPS_UNIDADES"),
         verify_ssl=bool(faz_cfg.get("verify_ssl", False)),
-        username=faz_cfg.get("username", ""),
-        password=faz_cfg.get("password", ""),
+        username=faz_cfg.get("username") or secure_credentials.get("username", ""),
+        password=faz_cfg.get("password") or secure_credentials.get("password", ""),
     )
+
+
+def _reconcile_faz_admin_snapshot(faz_result, baseline_admins, previous=None, previous_updated_at=None):
+    previous = previous or {}
+    admins = list((faz_result or {}).get("admins") or [])
+    complete = bool((faz_result or {}).get("visibilidade_completa"))
+    api_only = bool((faz_result or {}).get("apenas_contas_api"))
+    baseline = set(baseline_admins or [])
+
+    if complete:
+        new_admins = sorted(set(admins) - baseline)
+        removed_admins = [] if api_only else sorted(baseline - set(admins))
+        last_valid = datetime.now().isoformat()
+    else:
+        admins = list(previous.get("admins") or [])
+        new_admins = list(previous.get("novos") or [])
+        removed_admins = list(previous.get("removidos") or [])
+        last_valid = previous.get("ultima_coleta_valida") or previous_updated_at
+
+    return {
+        "admins": admins,
+        "novos": new_admins,
+        "removidos": removed_admins,
+        "complete": complete,
+        "api_only": api_only,
+        "last_valid": last_valid,
+    }
 
 
 def _get_faz_minutes_back() -> int:
@@ -7537,17 +7651,32 @@ def listar_admin_logins(return_data=False):
         faz_base   = set(baseline.get("__fortianalyzer__", []))
         visibilidade_completa = bool(faz_result.get("visibilidade_completa"))
         apenas_contas_api     = bool(faz_result.get("apenas_contas_api"))
+        faz_anterior = dispositivos_anteriores.get("__fortianalyzer__", {})
+        faz_snapshot = _reconcile_faz_admin_snapshot(
+            faz_result,
+            faz_base,
+            previous=faz_anterior,
+            previous_updated_at=cache_anterior.get("atualizado_em"),
+        )
+        faz_admins = faz_snapshot["admins"]
+        novos_faz = faz_snapshot["novos"]
+        removidos_faz = faz_snapshot["removidos"]
+        visibilidade_completa = faz_snapshot["complete"]
+        apenas_contas_api = faz_snapshot["api_only"]
         dispositivos["__fortianalyzer__"] = {
             "nome":     "FortiAnalyzer",
             "tipo":     "fortianalyzer",
             "admins":   faz_admins,
             # Com visibilidade parcial (só contas REST), não reportar removidos pois
             # admins locais simplesmente não são visíveis via Bearer token.
-            "novos":    sorted(set(faz_admins) - faz_base) if visibilidade_completa else [],
-            "removidos": [] if apenas_contas_api else (sorted(faz_base - set(faz_admins)) if visibilidade_completa else []),
+            "novos":    novos_faz,
+            "removidos": removidos_faz,
             "offline":  False,
             "sem_permissao": not visibilidade_completa,
             "monitoramento_limitado": apenas_contas_api,
+            "consulta_indisponivel": not visibilidade_completa,
+            "consulta_valida": visibilidade_completa,
+            "ultima_coleta_valida": faz_snapshot["last_valid"],
             "motivo": faz_result.get("motivo") or "",
         }
     except Exception as exc:

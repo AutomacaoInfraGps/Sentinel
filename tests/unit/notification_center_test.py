@@ -137,8 +137,51 @@ class NotificationCenterTests(unittest.TestCase):
             visible, unread = decorate_with_read_state("user.one", notifications, path)
 
         self.assertEqual(1, len(visible))
-        self.assertTrue(visible[0]["read"])
-        self.assertEqual(0, unread)
+        self.assertFalse(visible[0]["read"])
+        self.assertEqual(1, unread)
+
+    def test_orphan_vpn_has_priority_and_stays_a_pending_count(self):
+        notifications = build_notifications({
+            "links": [{
+                "nome": "WAN1", "regional": "REG_TESTE", "status": "offline",
+                "changed_at": "2026-09-16T12:00:00",
+            }],
+            "vpns": [{
+                "tunel": "T999_SEM_REGIONAL", "regional": "SEM_REGIONAL", "status": "online",
+                "changed_at": "2026-09-16T10:00:00",
+            }],
+        }, {"T999_SEM_REGIONAL"})
+        self.assertEqual("vpn_orphan", notifications[0]["type"])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "notification_state.json"
+            mark_notifications_seen("user.one", [item["id"] for item in notifications], path)
+            visible, unread = decorate_with_read_state("user.one", notifications, path)
+
+        self.assertFalse(visible[0]["read"])
+        self.assertEqual(1, unread)
+
+    def test_admin_baseline_alert_is_persistent_and_second_priority(self):
+        notifications = build_notifications({
+            "admins": [{
+                "nome": "FortiManager", "regional": "FortiManager", "status": "alerta",
+                "baseline_pending": True, "descricao": "1 novo aguardando aprovacao",
+                "changed_at": "2026-09-16T11:00:00",
+            }],
+            "vpns": [{
+                "tunel": "T999_SEM_REGIONAL", "regional": "SEM_REGIONAL", "status": "online",
+                "changed_at": "2026-09-16T10:00:00",
+            }],
+            "links": [{
+                "nome": "WAN1", "regional": "REG_TESTE", "status": "offline",
+                "changed_at": "2026-09-16T12:00:00",
+            }],
+        }, {"T999_SEM_REGIONAL"})
+
+        self.assertEqual(["vpn_orphan", "admin_baseline", "links"], [
+            item["type"] for item in notifications
+        ])
+        self.assertTrue(notifications[1]["persistent"])
 
 
 if __name__ == "__main__":
