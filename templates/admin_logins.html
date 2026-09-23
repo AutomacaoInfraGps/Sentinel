@@ -314,13 +314,13 @@
                 <strong class="ms-1">{{ d.nome }}</strong>
 
                 <!-- Status badge -->
-                {% if d.consulta_indisponivel %}
+                {% if d.consulta_indisponivel and not tem_alerta %}
                     <span class="badge text-white ms-2" style="background:#d69e2e"><i class="fas fa-exclamation-circle me-1"></i>Consulta indisponível</span>
-                {% elif d.offline %}
+                {% elif d.offline and not tem_alerta %}
                     <span class="badge badge-offline text-white ms-2"><i class="fas fa-plug me-1"></i>Offline</span>
-                {% elif d.sem_permissao %}
+                {% elif d.sem_permissao and not tem_alerta %}
                     <span class="badge text-white ms-2" style="background:#6610f2"><i class="fas fa-eye-slash me-1"></i>{{ 'Visibilidade limitada' if d.tipo == 'fortianalyzer' else 'Sem permissão na API key' }}</span>
-                {% elif d.monitoramento_limitado %}
+                {% elif d.monitoramento_limitado and not tem_alerta %}
                     <span class="badge text-dark ms-2" style="background:#0dcaf0"><i class="fas fa-info-circle me-1"></i>Monitoramento limitado</span>
                 {% elif tem_alerta %}
                     <span class="badge badge-alerta text-white ms-2">
