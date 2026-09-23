@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Permitir que a SofIA responda perguntas sobre switches e alertas do Zabbix ja carregados pelo Sentinel.
+Permitir que a SofIA responda perguntas sobre switches e alertas do Zabbix já carregados pelo Sentinel.
 
 ## Status Considerados
 
@@ -15,7 +15,7 @@ Permitir que a SofIA responda perguntas sobre switches e alertas do Zabbix ja ca
 ## Perguntas Exemplo
 
 ```text
-Como estao os switches?
+Como estão os switches?
 Switches da regional ABC
 Tem alerta no Zabbix?
 Tem problema de switch?
@@ -25,7 +25,7 @@ Tem problema de switch?
 
 A SofIA resume switches por status e pode listar alertas ativos de switches em cache.
 
-## Fonte Tecnica
+## Fonte Técnica
 
 ```text
 sofia/tools_sentinel.py
@@ -37,4 +37,4 @@ nome_regional()
 
 ## Limites Atuais
 
-A SofIA nao consulta o Zabbix em tempo real neste fluxo e nao executa acoes em switches.
+A SofIA não consulta o Zabbix em tempo real neste fluxo e não executa ações em switches.

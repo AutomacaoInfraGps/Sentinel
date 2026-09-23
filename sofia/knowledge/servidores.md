@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Permitir que a SofIA responda perguntas sobre a saude dos servidores e VMs cadastrados no Sentinel.
+Permitir que a SofIA responda perguntas sobre a saúde dos servidores e VMs cadastrados no Sentinel.
 
 ## Status Considerados
 
@@ -15,16 +15,16 @@ Permitir que a SofIA responda perguntas sobre a saude dos servidores e VMs cadas
 ## Perguntas Exemplo
 
 ```text
-Como estao os servidores?
+Como estão os servidores?
 Servidores da regional ABC
 Tem VM offline?
 ```
 
 ## Comportamento Atual
 
-A SofIA resume contagens por status, podendo usar uma regional especifica quando ela for identificada na pergunta.
+A SofIA resume contagens por status, podendo usar uma regional específica quando ela for identificada na pergunta.
 
-## Fonte Tecnica
+## Fonte Técnica
 
 ```text
 sofia/tools_sentinel.py
@@ -35,4 +35,4 @@ nome_regional()
 
 ## Limites Atuais
 
-A SofIA ainda nao executa verificacao em tempo real, restart de servico, acesso remoto ou comando em servidor.
+A SofIA ainda não executa verificação em tempo real, reinicialização de serviço, acesso remoto ou comando em servidor.

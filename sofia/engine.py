@@ -56,7 +56,7 @@ _KNOWLEDGE_TOPICS = {
     "seguranca": {
         "file": "seguranca.md",
         "terms": ("seguranca", "seguro", "permissao", "permissoes", "auditoria", "rbac", "ad"),
-        "title": "Seguranca da SofIA",
+        "title": "Segurança da SofIA",
     },
 }
 
@@ -144,6 +144,7 @@ def _resposta_conhecimento(topico):
         _extrair_secao(markdown, "Comportamento Atual")
         or _extrair_secao(markdown, "Temas que a SofIA Pode Explicar")
         or _extrair_secao(markdown, "Estado Atual")
+        or _extrair_secao(markdown, "Princípio")
         or _extrair_secao(markdown, "Principio")
     )
 
@@ -157,16 +158,16 @@ def _resposta_conhecimento(topico):
 
 def _resposta_ajuda_guiada():
     return (
-        "Ainda nao entendi essa pergunta com seguranca.\n\n"
+        "Ainda não entendi essa pergunta com segurança.\n\n"
         "Hoje posso responder, por exemplo:\n"
         "- Quantas regionais temos?\n"
         "- Resumo da regional ABC\n"
-        "- Como estao os servidores?\n"
-        "- Como estao os links de internet?\n"
+        "- Como estão os servidores?\n"
+        "- Como estão os links de internet?\n"
         "- Tem alerta de switch?\n"
         "- Me explica o dashboard\n"
-        "- Como funciona a seguranca da SofIA?\n\n"
-        "Por enquanto trabalho em modo somente leitura e nao executo acoes reais."
+        "- Como funciona a segurança da SofIA?\n\n"
+        "Por enquanto trabalho em modo somente leitura e não executo ações reais."
     )
 
 
@@ -190,7 +191,7 @@ def _resumo_regional(codigo, allowed_regionals=None):
     regional = nome_regional(codigo, allowed_regionals)
     servidores = _formatar_status(
         resumo_servidores(codigo, allowed_regionals),
-        (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
+        (("online", "online"), ("offline", "offline"), ("warning", "em atenção"), ("inativo", "inativos"), ("desconhecido", "sem status")),
     )
     links = _formatar_status(
         resumo_links(codigo, allowed_regionals),
@@ -198,7 +199,7 @@ def _resumo_regional(codigo, allowed_regionals=None):
     )
     switches = _formatar_status(
         resumo_switches(codigo, allowed_regionals),
-        (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
+        (("online", "online"), ("offline", "offline"), ("warning", "em atenção"), ("inativo", "inativos"), ("desconhecido", "sem status")),
     )
     return f"Resumo da {regional}: servidores: {servidores}; links de internet: {links}; switches: {switches}."
 
@@ -240,14 +241,14 @@ def processar_mensagem_sofia(*, usuario, mensagem, allowed_regionals=None):
         scope = f" na {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
         return "Servidores" + scope + ": " + _formatar_status(
             summary,
-            (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
+            (("online", "online"), ("offline", "offline"), ("warning", "em atenção"), ("inativo", "inativos"), ("desconhecido", "sem status")),
         ) + "."
 
     if _contem_termo(msg, "zabbix", "alerta", "alertas", "problema", "problemas"):
         alerts = alertas_switches_ativos(regional_code, allowed_regionals=allowed_regionals)
         if not alerts:
             scope = f" para {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
-            return f"NÃ£o hÃ¡ alertas ativos de switches no cache do Zabbix{scope}."
+            return f"Não há alertas ativos de switches no cache do Zabbix{scope}."
         details = "; ".join(
             f"{item['switch']} ({item['regional']}): {item['alerta']}"
             for item in alerts
@@ -259,7 +260,7 @@ def processar_mensagem_sofia(*, usuario, mensagem, allowed_regionals=None):
         scope = f" na {nome_regional(regional_code, allowed_regionals)}" if regional_code else ""
         return "Switches" + scope + ": " + _formatar_status(
             summary,
-            (("online", "online"), ("offline", "offline"), ("warning", "em warning"), ("inativo", "inativos"), ("desconhecido", "sem status")),
+            (("online", "online"), ("offline", "offline"), ("warning", "em atenção"), ("inativo", "inativos"), ("desconhecido", "sem status")),
         ) + "."
 
     if _contem_termo(msg, "link", "links"):

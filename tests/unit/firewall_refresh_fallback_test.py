@@ -93,6 +93,60 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
         self.assertIn("Atualizar\n", template)
         self.assertNotIn("Atualizar Forti", template)
 
+    def test_license_summary_and_filter_flags_use_same_sixty_day_rule(self):
+        firewalls = {
+            "REG_A": [
+                {
+                    "nome": "FGT_WARNING",
+                    "status": "online",
+                    "licencas": [
+                        {"status": "licensed", "dias_restantes": 30},
+                        {"status": "licensed", "dias_restantes": 60},
+                    ],
+                },
+                {
+                    "nome": "FGT_ZERO",
+                    "status": "online",
+                    "licencas": [{"status": "licensed", "dias_restantes": 0}],
+                },
+                {
+                    "nome": "FGT_FUTURE",
+                    "status": "online",
+                    "licencas": [{"status": "licensed", "dias_restantes": 61}],
+                },
+                {
+                    "nome": "FGT_UNAVAILABLE",
+                    "status": "online",
+                    "licencas": [{"status": "indisponivel", "dias_restantes": 0}],
+                },
+                {
+                    "nome": "FGT_EXPIRED",
+                    "status": "online",
+                    "licencas": [{"status": "expired", "dias_restantes": 0}],
+                },
+            ],
+        }
+
+        summary = web_config._recalcular_totais_firewalls(firewalls)
+
+        self.assertEqual(1, summary["total_alertas"])
+        self.assertEqual(1, summary["total_expirados"])
+        self.assertTrue(firewalls["REG_A"][0]["licencas"][0]["alerta_vencimento"])
+        self.assertTrue(firewalls["REG_A"][0]["licencas"][1]["alerta_vencimento"])
+        self.assertFalse(firewalls["REG_A"][1]["licencas"][0]["alerta_vencimento"])
+        self.assertFalse(firewalls["REG_A"][2]["licencas"][0]["alerta_vencimento"])
+        self.assertTrue(firewalls["REG_A"][3]["licencas"][0]["status_indisponivel"])
+
+    def test_normalized_license_marks_sixty_days_as_expiring(self):
+        future = web_config.datetime.now().timestamp() + (60 * 24 * 60 * 60)
+
+        license_data = web_config._normalizar_licenca_firewall(
+            "forticare",
+            {"status": "licensed", "expires": future},
+        )
+
+        self.assertTrue(license_data["notificacao_critica"])
+
 
 if __name__ == "__main__":
     unittest.main()

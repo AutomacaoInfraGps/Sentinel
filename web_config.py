@@ -34,6 +34,8 @@ from regional_access import (
     access_scope,
     can_access_regional,
     dynamic_group_mapping,
+    group_mapping_inventory,
+    mapping_audit_log,
     effective_user_groups,
     filter_map_payload,
     filter_operational_payload,
@@ -43,6 +45,10 @@ from regional_access import (
     is_corporate,
     normalize_regional_code,
     pending_group_suggestions,
+    record_mapping_audit,
+    remove_group_mapping,
+    restore_group_mapping,
+    update_group_mapping,
 )
 from security_hardening import configure_security
 
@@ -391,20 +397,44 @@ def permissoes_regionais():
 
     regionais = sorted(_available_regional_codes())
     if request.method == 'POST':
+        action = request.form.get('action', 'add').strip().lower()
         group = request.form.get('group', '').strip()
         submitted = request.form.get('regional', '').strip()
+        old_regional = request.form.get('old_regional', '').strip()
         regional_by_normalized = {
             normalize_regional_code(code): code for code in regionais
         }
-        regional = regional_by_normalized.get(normalize_regional_code(submitted))
-        if not regional:
+        regional = regional_by_normalized.get(normalize_regional_code(submitted)) if submitted else None
+        if action in {'add', 'update'} and not regional:
             flash('Regional inválida para a associação.', 'error')
             return redirect(url_for('permissoes_regionais'))
         try:
-            approved = approve_group_mapping(group, regional)
-            flash(
-                f"{approved['group']} associado a {regional} com sucesso.",
-                'success',
+            audit_details = None
+            if action == 'delete':
+                removed = remove_group_mapping(group, old_regional)
+                audit_details = (removed['group'], removed['regional'], None)
+                flash(f"Vínculo {removed['group']} -> {removed['regional']} desativado.", 'success')
+            elif action == 'restore':
+                restored = restore_group_mapping(group, old_regional)
+                audit_details = (restored['group'], None, restored['regional'])
+                flash(f"Vínculo {restored['group']} -> {restored['regional']} restaurado.", 'success')
+            elif action == 'update':
+                updated = update_group_mapping(group, old_regional, regional)
+                audit_details = (updated['group'], old_regional, regional)
+                flash(f"Vínculo de {updated['group']} atualizado para {regional}.", 'success')
+            else:
+                approved = approve_group_mapping(group, regional)
+                action = 'add'
+                audit_details = (approved['group'], None, regional)
+                flash(f"{approved['group']} associado a {regional} com sucesso.", 'success')
+            record_mapping_audit(
+                action,
+                audit_details[0],
+                current_user.get_id(),
+                old_regional=audit_details[1],
+                new_regional=audit_details[2],
+                source_ip=request.remote_addr,
+                actor_display=getattr(current_user, 'display_name', ''),
             )
         except ValueError as exc:
             flash(str(exc), 'error')
@@ -414,6 +444,8 @@ def permissoes_regionais():
         'permissoes_regionais.html',
         suggestions=pending_group_suggestions(regionais),
         dynamic_mappings=dynamic_group_mapping(),
+        mapping_inventory=group_mapping_inventory(regionais),
+        mapping_audit=mapping_audit_log(),
         regionais=regionais,
     )
 
@@ -4993,7 +5025,7 @@ def detalhar_regional(codigo_regional):
                                 }
                                 if lic_obj['notificacao_expirada']:
                                     firewall_info['licencas_expiradas'] += 1
-                                elif dias_rest <= 30 and dias_rest > 0:
+                                elif 0 < dias_rest <= _FIREWALL_ALERTA_DIAS:
                                     lic_obj['notificacao_critica'] = True
                                     firewall_info['licencas_criticas'] += 1
                                 firewall_info['licencas'].append(lic_obj)
@@ -5255,7 +5287,7 @@ def _normalizar_licenca_firewall(license_key, license_info):
         'dias_restantes': dias_rest,
         'expiracao': expires_timestamp if expires_timestamp else 'N/A',
         'tipo_licenca': license_info.get('type', 'unknown'),
-        'notificacao_critica': dias_rest <= 30 and dias_rest > 0 and lic_status not in ('expired', 'no_license'),
+        'notificacao_critica': 0 < dias_rest <= _FIREWALL_ALERTA_DIAS and lic_status not in ('expired', 'no_license'),
         'notificacao_expirada': lic_status in ('expired', 'no_license'),
     }
 
@@ -5547,25 +5579,31 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
                 total_firewalls_inativos += 1
 
             licencas = firewall.get("licencas") or []
-            tem_expirada = any(
-                bool(lic.get("notificacao_expirada"))
-                and str(lic.get("status") or "").lower() != "offline"
-                for lic in licencas
-                if isinstance(lic, dict)
-            )
-            criticas = sum(
-                1 for lic in licencas
-                if isinstance(lic, dict)
-                and (
-                    bool(lic.get("notificacao_critica"))
-                    or (
-                        isinstance(lic.get("dias_restantes"), (int, float))
-                        and 0 < lic["dias_restantes"] <= _FIREWALL_ALERTA_DIAS
-                    )
+            criticas = 0
+            tem_expirada = False
+            for lic in licencas:
+                if not isinstance(lic, dict):
+                    continue
+                status_licenca = str(lic.get("status") or "").strip().lower()
+                indisponivel = status_licenca in _LICENCA_STATUS_INDISPONIVEL
+                expirada = not indisponivel and (
+                    bool(lic.get("notificacao_expirada"))
+                    or status_licenca in {"expired", "no_license"}
                 )
-                and not bool(lic.get("notificacao_expirada"))
-                and str(lic.get("status") or "").lower() != "offline"
-            )
+                dias_restantes = lic.get("dias_restantes")
+                a_vencer = (
+                    not indisponivel
+                    and not expirada
+                    and isinstance(dias_restantes, (int, float))
+                    and 0 < dias_restantes <= _FIREWALL_ALERTA_DIAS
+                )
+                lic["status_indisponivel"] = indisponivel
+                lic["alerta_vencimento"] = a_vencer
+                lic["notificacao_expirada"] = expirada
+                if a_vencer:
+                    criticas += 1
+                if expirada:
+                    tem_expirada = True
 
             firewall["licencas_expiradas"] = 1 if tem_expirada else 0
             firewall["licencas_criticas"] = criticas
@@ -5573,7 +5611,7 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
             if tem_expirada:
                 total_expirados += 1
             elif criticas:
-                total_alertas += criticas
+                total_alertas += 1
 
     return {
         "total_firewalls": total_firewalls,
@@ -7298,8 +7336,8 @@ def listar_firewalls(return_data=False):
                                 if lic_status in ('expired', 'no_license'):
                                     lic_obj['notificacao_expirada'] = True
                                     firewall_info['licencas_expiradas'] += 1
-                                # Marca como crítica se vai expirar em menos de 30 dias
-                                elif dias_rest <= 30 and dias_rest > 0:
+                                # Marca para alerta se vai expirar em ate 60 dias.
+                                elif 0 < dias_rest <= _FIREWALL_ALERTA_DIAS:
                                     lic_obj['notificacao_critica'] = True
                                     firewall_info['licencas_criticas'] += 1
                                 
@@ -11468,8 +11506,8 @@ def api_obter_firewalls_licencas(codigo_regional):
                                                 'notificacao_critica': False
                                             }
                                             
-                                            # Marca como crítica se vai expirar em menos de 30 dias
-                                            if dias_rest <= 30 and dias_rest > 0:
+                                            # Marca para alerta se vai expirar em ate 60 dias.
+                                            if 0 < dias_rest <= _FIREWALL_ALERTA_DIAS:
                                                 lic_obj['notificacao_critica'] = True
                                             
                                             firewall_info['licencas'].append(lic_obj)

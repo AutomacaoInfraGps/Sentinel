@@ -14,7 +14,7 @@ Permitir que a SofIA responda perguntas sobre links de internet cadastrados nas 
 ## Perguntas Exemplo
 
 ```text
-Como estao os links?
+Como estão os links?
 Links de internet da regional ABC
 Tem link offline?
 ```
@@ -23,7 +23,7 @@ Tem link offline?
 
 A SofIA resume a quantidade de links por status, considerando todos os links ou apenas uma regional identificada.
 
-## Fonte Tecnica
+## Fonte Técnica
 
 ```text
 sofia/tools_sentinel.py
@@ -34,4 +34,4 @@ nome_regional()
 
 ## Limites Atuais
 
-A SofIA nao altera SD-WAN, nao reinicia link e nao executa comandos no firewall.
+A SofIA não altera SD-WAN, não reinicia link e não executa comandos no firewall.

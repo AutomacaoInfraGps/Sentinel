@@ -6,27 +6,27 @@ Documentar a capacidade futura de consulta de VPNs/IPsec pela SofIA.
 
 ## Estado Atual
 
-A consulta real de VPNs ainda nao esta habilitada na SofIA.
+A consulta real de VPNs ainda não está habilitada na SofIA.
 
 Resposta atual:
 
 ```text
-A consulta real de VPNs ainda nao esta habilitada nesta versao da SofIA.
+A consulta real de VPNs ainda não está habilitada nesta versão da SofIA.
 ```
 
 ## Perguntas Planejadas
 
 ```text
-Como estao as VPNs?
+Como estão as VPNs?
 VPN da regional ABC
 Tem IPsec offline?
-Quais regionais estao com VPN fora?
+Quais regionais estão com VPN fora?
 ```
 
 ## Requisitos Antes de Implementar
 
 - definir fonte oficial dos dados;
 - padronizar status;
-- definir se a consulta sera cacheada ou sob demanda;
+- definir se a consulta será armazenada em cache ou feita sob demanda;
 - registrar auditoria;
-- garantir que seja somente leitura na primeira versao.
+- garantir que seja somente leitura na primeira versão.

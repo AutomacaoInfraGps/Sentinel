@@ -35,6 +35,8 @@ ACCESS_ADMIN_GROUPS = {
 OPERATOR_GROUPS = ACCESS_ADMIN_GROUPS | {ADMINISTRATIVE_OU_MARKER}
 DYNAMIC_MAPPINGS_FILE = PROJECT_ROOT / "output" / "regional_access_mappings.json"
 DISCOVERED_GROUPS_FILE = PROJECT_ROOT / "output" / "regional_access_discovered.json"
+MAPPINGS_AUDIT_FILE = PROJECT_ROOT / "output" / "regional_access_audit.json"
+MAPPINGS_AUDIT_MAX_EVENTS = 1000
 _files_lock = Lock()
 
 GROUP_REGIONALS = {
@@ -146,14 +148,105 @@ def dynamic_group_mapping(path=None):
     }
 
 
+def excluded_group_mapping(path=None):
+    payload = _load_json(path or DYNAMIC_MAPPINGS_FILE)
+    return {
+        normalize_group_name(group): {
+            normalize_regional_code(code) for code in (codes or [])
+        }
+        for group, codes in (payload.get("excluded") or {}).items()
+        if normalize_group_name(group).startswith("GGS_SUPORTE_")
+    }
+
+
 def normalized_group_mapping(dynamic_path=None):
     mapping = {
         normalize_group_name(group): {normalize_regional_code(code) for code in codes}
         for group, codes in GROUP_REGIONALS.items()
     }
+    for group, codes in excluded_group_mapping(dynamic_path).items():
+        mapping.setdefault(group, set()).difference_update(codes)
     for group, codes in dynamic_group_mapping(dynamic_path).items():
         mapping.setdefault(group, set()).update(codes)
     return mapping
+
+
+def group_mapping_inventory(available_regionals=None, path=None):
+    available = {
+        normalize_regional_code(code) for code in (available_regionals or [])
+    }
+    base = {
+        normalize_group_name(group): {normalize_regional_code(code) for code in codes}
+        for group, codes in GROUP_REGIONALS.items()
+    }
+    dynamic = dynamic_group_mapping(path)
+    excluded = excluded_group_mapping(path)
+    rows = []
+    for group in sorted(set(base) | set(dynamic) | set(excluded)):
+        regionals = sorted(base.get(group, set()) | dynamic.get(group, set()) | excluded.get(group, set()))
+        for regional in regionals:
+            in_base = regional in base.get(group, set())
+            in_dynamic = regional in dynamic.get(group, set())
+            is_excluded = regional in excluded.get(group, set()) and not in_dynamic
+            rows.append({
+                "group": group,
+                "regional": regional,
+                "source": "base" if in_base else "additional",
+                "active": not is_excluded,
+                "regional_exists": not available or regional in available,
+            })
+    return rows
+
+
+def record_mapping_audit(
+    action,
+    group,
+    actor,
+    old_regional=None,
+    new_regional=None,
+    source_ip=None,
+    actor_display=None,
+    path=None,
+):
+    """Registra uma alteracao administrativa nos vinculos regionais."""
+    action_name = str(action or "").strip().lower()
+    if action_name not in {"add", "update", "delete", "restore"}:
+        raise ValueError("Acao de auditoria invalida.")
+
+    event = {
+        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "actor": str(actor or "").strip() or "desconhecido",
+        "actor_display": str(actor_display or "").strip(),
+        "source_ip": str(source_ip or "").strip(),
+        "action": action_name,
+        "group": normalize_group_name(group),
+        "old_regional": normalize_regional_code(old_regional),
+        "new_regional": normalize_regional_code(new_regional),
+    }
+    audit_path = Path(path or MAPPINGS_AUDIT_FILE)
+    with _files_lock:
+        payload = _load_json(audit_path)
+        events = payload.setdefault("events", [])
+        if not isinstance(events, list):
+            events = []
+            payload["events"] = events
+        events.append(event)
+        payload["events"] = events[-MAPPINGS_AUDIT_MAX_EVENTS:]
+        payload["updated_at"] = event["timestamp"]
+        _write_json(payload, audit_path)
+    return event
+
+
+def mapping_audit_log(limit=50, path=None):
+    """Retorna os eventos mais recentes, do mais novo para o mais antigo."""
+    try:
+        safe_limit = max(0, min(int(limit), MAPPINGS_AUDIT_MAX_EVENTS))
+    except (TypeError, ValueError):
+        safe_limit = 50
+    events = _load_json(path or MAPPINGS_AUDIT_FILE).get("events") or []
+    if not isinstance(events, list):
+        return []
+    return [event for event in reversed(events) if isinstance(event, dict)][:safe_limit]
 
 
 def is_corporate(groups):
@@ -264,6 +357,11 @@ def approve_group_mapping(group, regional, mappings_path=None, discovered_path=N
         if regional_code not in current:
             current.append(regional_code)
             current.sort()
+        excluded = mappings.setdefault("excluded", {}).get(group_name, [])
+        if regional_code in excluded:
+            excluded.remove(regional_code)
+        if not excluded:
+            mappings.get("excluded", {}).pop(group_name, None)
         mappings["updated_at"] = datetime.now().isoformat()
         _write_json(mappings, mapping_path)
 
@@ -272,6 +370,72 @@ def approve_group_mapping(group, regional, mappings_path=None, discovered_path=N
         record.update({"status": "approved", "approved_regional": regional_code, "approved_at": datetime.now().isoformat()})
         _write_json(discovered, discovery_path)
     return {"group": group_name, "regional": regional_code}
+
+
+def remove_group_mapping(group, regional, mappings_path=None):
+    group_name = normalize_group_name(group)
+    regional_code = normalize_regional_code(regional)
+    if not group_name.startswith("GGS_SUPORTE_") or group_name == normalize_group_name(CORPORATE_GROUP):
+        raise ValueError("Grupo de suporte invÃ¡lido.")
+    if not regional_code:
+        raise ValueError("Regional invÃ¡lida.")
+
+    mapping_path = Path(mappings_path or DYNAMIC_MAPPINGS_FILE)
+    base_codes = {
+        normalize_regional_code(code) for code in GROUP_REGIONALS.get(group_name, set())
+    }
+    with _files_lock:
+        mappings = _load_json(mapping_path)
+        dynamic_codes = mappings.setdefault("mappings", {}).get(group_name, [])
+        if regional_code in dynamic_codes:
+            dynamic_codes.remove(regional_code)
+        if not dynamic_codes:
+            mappings.get("mappings", {}).pop(group_name, None)
+
+        if regional_code in base_codes:
+            excluded = mappings.setdefault("excluded", {}).setdefault(group_name, [])
+            if regional_code not in excluded:
+                excluded.append(regional_code)
+                excluded.sort()
+
+        mappings["updated_at"] = datetime.now().isoformat()
+        _write_json(mappings, mapping_path)
+    return {"group": group_name, "regional": regional_code}
+
+
+def restore_group_mapping(group, regional, mappings_path=None):
+    group_name = normalize_group_name(group)
+    regional_code = normalize_regional_code(regional)
+    if not group_name.startswith("GGS_SUPORTE_") or group_name == normalize_group_name(CORPORATE_GROUP):
+        raise ValueError("Grupo de suporte invÃ¡lido.")
+    if not regional_code:
+        raise ValueError("Regional invÃ¡lida.")
+    mapping_path = Path(mappings_path or DYNAMIC_MAPPINGS_FILE)
+    with _files_lock:
+        mappings = _load_json(mapping_path)
+        excluded = mappings.setdefault("excluded", {}).get(group_name, [])
+        if regional_code in excluded:
+            excluded.remove(regional_code)
+        if not excluded:
+            mappings.get("excluded", {}).pop(group_name, None)
+        mappings["updated_at"] = datetime.now().isoformat()
+        _write_json(mappings, mapping_path)
+    return {"group": group_name, "regional": regional_code}
+
+
+def update_group_mapping(group, old_regional, new_regional, mappings_path=None, discovered_path=None):
+    old_code = normalize_regional_code(old_regional)
+    new_code = normalize_regional_code(new_regional)
+    if not old_code or not new_code:
+        raise ValueError("Regional invÃ¡lida.")
+    if old_code != new_code:
+        remove_group_mapping(group, old_code, mappings_path=mappings_path)
+    return approve_group_mapping(
+        group,
+        new_code,
+        mappings_path=mappings_path,
+        discovered_path=discovered_path,
+    )
 
 
 def access_scope(groups, available_regionals=None, dynamic_path=None):

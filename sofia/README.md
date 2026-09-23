@@ -67,6 +67,7 @@ sofia/
 |-- tools_sentinel.py    # Ferramentas read-only para dados do Sentinel
 |-- audit.py             # Auditoria em logs/sofia_audit.jsonl
 |-- README.md            # Documentacao do modulo
+|-- ARQUITETURA_FASES_3_4.md # Evolucao segura com LLM, n8n, WhatsApp e acoes
 |-- PERMISSOES.md
 |-- PERGUNTAS_SUPORTADAS.md
 |-- knowledge/           # Base de conhecimento por tema
@@ -120,6 +121,17 @@ sofia/permissions_matrix.json
 ```
 
 Atualmente apenas acoes de baixo risco estao habilitadas. Acoes de AD, execucao e alteracao permanecem desabilitadas.
+
+O plano oficial para evoluir a SofIA com LLM, n8n, WhatsApp e ações reais está
+documentado em:
+
+```text
+sofia/ARQUITETURA_FASES_3_4.md
+```
+
+Esse documento define as fronteiras de confiança, identidade por canal,
+confirmação humana, executor isolado, conta técnica, auditoria e critérios que
+devem ser atendidos antes de qualquer ação de escrita.
 
 O modelo autenticado preserva a OU no `dn` e os grupos retornados pelo AD. Esses
 campos formam a identidade usada pela futura autorizacao por escopo, mas ainda
