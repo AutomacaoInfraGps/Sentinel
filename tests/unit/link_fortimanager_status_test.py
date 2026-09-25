@@ -280,7 +280,7 @@ end
         self.assertEqual("REG_CONTROL_ARAPIRACA", fallback_match["chave"])
         self.assertEqual("tunel", fallback_source)
 
-    def test_ambiguous_vpn_remains_visible_without_incorrect_regional(self):
+    def test_known_tunnel_code_resolves_ambiguous_regional_name(self):
         regional_codes = ["REG_SAO_LEOPOLDO", "REG_LEOPOLDO_B2"]
         index = [
             {
@@ -298,9 +298,38 @@ end
             "status": "up",
         }], index)
 
-        self.assertIn("SEM_REGIONAL", grouped["regionais"])
-        self.assertEqual(grouped["vpns_por_regional"]["SEM_REGIONAL"]["online"], 1)
-        self.assertEqual(grouped["total_regionais"], 0)
+        self.assertIn("REG_SAO_LEOPOLDO", grouped["regionais"])
+        self.assertEqual(grouped["vpns_por_regional"]["REG_SAO_LEOPOLDO"]["online"], 1)
+        self.assertEqual(grouped["total_regionais"], 1)
+
+    def test_known_tunnel_codes_map_without_fortimanager_comments(self):
+        expected_by_tunnel = {
+            "T001_PR_01": "REG_PARANA",
+            "T019_LEOPOLDO01": "REG_SAO_LEOPOLDO",
+            "T026_CMP1_01": "REG_CAMPINAS",
+            "T028_CAM_B2_01": "REG_CAMPINAS_02",
+            "T037_AMZ_01": "REG_AMAZONAS",
+            "T046_RN_02": "REG_RIO_GRANDE_DO_NORTE",
+            "T055_LC_01": "REG_GRSA_MACAE",
+        }
+        index = [
+            {
+                "chave": code,
+                "nome_exibicao": code,
+                "tokens": web_config._gerar_tokens_regional(code),
+                "identidades": {web_config._identidade_principal_regional(code)},
+            }
+            for code in set(expected_by_tunnel.values())
+        ]
+
+        for tunnel, expected_regional in expected_by_tunnel.items():
+            with self.subTest(tunnel=tunnel):
+                match, source = web_config._resolver_vinculo_regional_vpn({
+                    "tunel": tunnel,
+                    "comentario": "",
+                }, index)
+                self.assertEqual(expected_regional, match["chave"])
+                self.assertEqual("tunel", source)
 
     def test_vpn_name_variations_map_only_to_a_clear_unique_regional(self):
         regional_codes = [
