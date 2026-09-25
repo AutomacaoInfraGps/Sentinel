@@ -62,16 +62,405 @@
         box-shadow: 0 0 0 0.2rem rgba(15, 108, 140, 0.14);
     }
 
+    .switch-file-control,
+    .switch-attempt-control {
+        display: grid;
+        min-height: 50px;
+        overflow: hidden;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: #fff;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .switch-file-control {
+        position: relative;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+    }
+
+    .switch-file-control:focus-within,
+    .switch-attempt-control:focus-within {
+        border-color: #0A4A63;
+        box-shadow: 0 0 0 0.2rem rgba(15, 108, 140, 0.14);
+    }
+
+    .switch-file-name {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        padding: 12px;
+        color: #687980;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .switch-file-name.has-file {
+        color: #20272d;
+        font-weight: 600;
+    }
+
+    .switch-file-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .switch-file-button,
+    .switch-attempt-step {
+        color: #0F6C8C;
+        border: 0;
+        background: #edf5f7;
+        font-weight: 700;
+        transition: color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .switch-file-button {
+        min-width: 170px;
+        padding: 0 18px;
+        border-left: 1px solid #d9e4e8;
+        white-space: nowrap;
+    }
+
+    .switch-file-button:hover,
+    .switch-file-button:focus,
+    .switch-attempt-step:hover,
+    .switch-attempt-step:focus {
+        color: #fff;
+        background: #0F6C8C;
+    }
+
+    .switch-attempt-step:disabled {
+        color: #98a7ad;
+        background: #f3f6f7;
+        cursor: not-allowed;
+    }
+
+    .switch-attempt-control {
+        grid-template-columns: 52px minmax(80px, 1fr) 52px;
+    }
+
+    .switch-attempt-control .form-control {
+        min-width: 0;
+        padding: 12px 8px;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        text-align: center;
+        font-size: 1rem;
+        font-weight: 700;
+        appearance: textfield;
+        -moz-appearance: textfield;
+    }
+
+    .switch-attempt-control .form-control::-webkit-inner-spin-button,
+    .switch-attempt-control .form-control::-webkit-outer-spin-button {
+        margin: 0;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+
+    .switch-attempt-control .form-control:focus {
+        border: 0;
+        box-shadow: none;
+    }
+
+    .switch-attempt-step:first-child {
+        border-right: 1px solid #d9e4e8;
+    }
+
+    .switch-attempt-step:last-child {
+        border-left: 1px solid #d9e4e8;
+    }
+
     .required-field::after {
         content: " *";
         color: #dc3545;
     }
 
-    .immediate-update-warning {
-        color: #c82333;
+    .switch-schedule-card {
+        margin-top: 24px;
+        border: 1px solid #d9e4e8;
+        border-radius: 10px;
+        background: #f7fafb;
+    }
+
+    .switch-schedule-heading {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 15px 18px;
+        color: #fff;
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+        border-radius: 9px 9px 0 0;
+    }
+
+    .switch-schedule-heading i {
+        font-size: 1.25rem;
+    }
+
+    .switch-schedule-heading h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+
+    .switch-schedule-body {
+        padding: 18px;
+    }
+
+    .switch-schedule-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #34434a;
+    }
+
+    .switch-schedule-label i {
+        color: #0F6C8C;
+    }
+
+    .switch-date-picker {
+        position: relative;
+    }
+
+    .switch-date-control {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 48px;
+        overflow: hidden;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: #fff;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .switch-date-control:focus-within {
+        border-color: #0A4A63;
+        box-shadow: 0 0 0 0.2rem rgba(15, 108, 140, 0.14);
+    }
+
+    .switch-date-control .form-control {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .switch-date-control .form-control:focus {
+        border: 0;
+        box-shadow: none;
+    }
+
+    .switch-calendar-toggle {
+        color: #0F6C8C;
+        border: 0;
+        border-left: 1px solid #d9e4e8;
+        background: #edf5f7;
+        font-size: 1.05rem;
+    }
+
+    .switch-calendar-toggle:hover,
+    .switch-calendar-toggle:focus,
+    .switch-calendar-toggle[aria-expanded="true"] {
+        color: #fff;
+        background: #0F6C8C;
+    }
+
+    .switch-calendar-popover {
+        position: absolute;
+        z-index: 1080;
+        top: calc(100% + 8px);
+        left: 0;
+        width: 320px;
+        max-width: calc(100vw - 64px);
+        padding: 14px;
+        border: 1px solid #cbdbe1;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 14px 32px rgba(1, 46, 64, 0.2);
+    }
+
+    .switch-calendar-popover[hidden] {
+        display: none;
+    }
+
+    .switch-calendar-toolbar {
+        display: grid;
+        grid-template-columns: 36px 1fr 36px;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .switch-calendar-toolbar strong {
+        color: #012E40;
+        text-align: center;
+        text-transform: capitalize;
+    }
+
+    .switch-calendar-nav {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        color: #0F6C8C;
+        border: 1px solid #b9d0d8;
+        border-radius: 50%;
+        background: #fff;
+    }
+
+    .switch-calendar-nav:hover,
+    .switch-calendar-nav:focus {
+        color: #fff;
+        border-color: #0F6C8C;
+        background: #0F6C8C;
+    }
+
+    .switch-calendar-nav:disabled {
+        color: #98a7ad;
+        border-color: #dce5e8;
+        background: #f3f6f7;
+        cursor: not-allowed;
+    }
+
+    .switch-calendar-weekdays,
+    .switch-calendar-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+
+    .switch-calendar-weekdays {
+        margin-bottom: 5px;
+        color: #687980;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-align: center;
+        text-transform: uppercase;
+    }
+
+    .switch-calendar-weekdays span,
+    .switch-calendar-empty,
+    .switch-calendar-day {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+    }
+
+    .switch-calendar-day {
+        padding: 0;
+        color: #263940;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        font-size: 0.88rem;
+    }
+
+    .switch-calendar-day:hover,
+    .switch-calendar-day:focus {
+        color: #0F6C8C;
+        border-color: #82b6c8;
+        background: #edf6f8;
+    }
+
+    .switch-calendar-day.is-today {
+        color: #0F6C8C;
+        border-color: #82b6c8;
         font-weight: 800;
-        text-decoration: underline;
-        text-underline-offset: 3px;
+    }
+
+    .switch-calendar-day.is-selected {
+        color: #fff;
+        border-color: #0F6C8C;
+        background: #0F6C8C;
+        font-weight: 800;
+    }
+
+    .switch-calendar-day:disabled {
+        color: #b3bec2;
+        background: #f5f7f8;
+        cursor: not-allowed;
+    }
+
+    .switch-time-control {
+        display: grid;
+        grid-template-columns: auto minmax(100px, 1fr) auto;
+        overflow: hidden;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: #fff;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .switch-time-control:focus-within {
+        border-color: #0A4A63;
+        box-shadow: 0 0 0 0.2rem rgba(15, 108, 140, 0.14);
+    }
+
+    .switch-time-control .form-control {
+        min-width: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        text-align: center;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+    }
+
+    .switch-time-control .form-control:focus {
+        border: 0;
+        box-shadow: none;
+    }
+
+    .switch-time-step {
+        min-width: 92px;
+        padding: 10px 12px;
+        color: #0F6C8C;
+        border: 0;
+        background: #edf5f7;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .switch-time-step:first-child {
+        border-right: 1px solid #d9e4e8;
+    }
+
+    .switch-time-step:last-child {
+        border-left: 1px solid #d9e4e8;
+    }
+
+    .switch-time-step:hover,
+    .switch-time-step:focus {
+        color: #fff;
+        background: #0F6C8C;
+    }
+
+    .immediate-update-warning {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        color: #74520b;
+        border: 1px solid #ead49c;
+        border-left: 4px solid #d9a21b;
+        border-radius: 8px;
+        background: #fff8e5;
+        font-weight: 600;
+        line-height: 1.4;
+        text-align: left;
+    }
+
+    .immediate-update-warning i {
+        flex: 0 0 auto;
+        color: #b57d00;
+        font-size: 1.05rem;
     }
 
     .switch-update-actions .btn {
@@ -90,6 +479,24 @@
     .switch-update-continue:focus {
         color: #fff;
         background: linear-gradient(135deg, #012432, #083d52, #0c5872);
+    }
+
+    .switch-progress-actions .btn {
+        min-width: 128px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+
+    .switch-update-cancel {
+        color: #fff;
+        border: 0;
+        background: linear-gradient(135deg, #a71d2a, #c82333, #dc3545);
+    }
+
+    .switch-update-cancel:hover,
+    .switch-update-cancel:focus {
+        color: #fff;
+        background: linear-gradient(135deg, #861721, #a71d2a, #bd2130);
     }
 
     .switch-update-progress {
@@ -123,6 +530,10 @@
         font-weight: 700;
     }
 
+    .switch-update-result-message {
+        font-weight: 700;
+    }
+
     .firmware-confirmation-summary {
         border-left: 4px solid #0F6C8C;
         background: #f3f8fa;
@@ -141,6 +552,26 @@
             flex: 1 1 auto;
             min-width: 0;
         }
+
+        .switch-progress-actions .btn {
+            min-width: 0;
+        }
+
+        .switch-schedule-body {
+            padding: 16px;
+        }
+
+        .switch-time-step {
+            min-width: 68px;
+            padding-inline: 8px;
+            font-size: 0.82rem;
+        }
+
+        .switch-file-button {
+            min-width: 0;
+            padding-inline: 14px;
+        }
+
     }
 </style>
 {% endblock %}
@@ -175,7 +606,7 @@
         <span id="workerHealthMessage"></span>
     </div>
 
-    <form id="switchUpdateForm" class="switch-update-form" novalidate>
+    <form id="switchUpdateForm" class="switch-update-form d-none" novalidate>
         <div class="row">
             <div class="col-md-6 mb-3">
                 <label for="switchUsername" class="form-label required-field">Login</label>
@@ -201,28 +632,152 @@
             <label for="switchFirmware" class="form-label required-field">
                 Firmware para atualização
             </label>
-            <input type="file"
-                   class="form-control"
-                   id="switchFirmware"
-                   accept=".swi"
-                   required>
+            <div class="switch-file-control">
+                <span class="switch-file-name" id="switchFirmwareName">Nenhum arquivo selecionado</span>
+                <button type="button"
+                        class="switch-file-button"
+                        id="chooseFirmwareButton"
+                        aria-label="Escolher arquivo de firmware">
+                    <i class="bi bi-folder2-open me-1" aria-hidden="true"></i>
+                    <span>Escolher arquivo</span>
+                </button>
+                <input type="file"
+                       class="switch-file-input"
+                       id="switchFirmware"
+                       accept=".swi">
+            </div>
             <div class="form-text">
                 Selecione um arquivo oficial <strong>.swi</strong> compatível com o modelo informado.
             </div>
         </div>
 
         <div class="mb-3">
-            <label for="switchScheduledAt" class="form-label">
-                Agendamento <span class="text-muted fw-normal">(Horário de Brasília)</span>
+            <label for="switchMaxAttempts" class="form-label required-field">
+                Tentativas de atualização
             </label>
-            <input type="datetime-local" class="form-control" id="switchScheduledAt">
+            <div class="switch-attempt-control">
+                <button type="button"
+                        class="switch-attempt-step"
+                        id="decreaseMaxAttempts"
+                        aria-label="Remover uma tentativa">
+                    <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                </button>
+                <input type="number"
+                       class="form-control"
+                       id="switchMaxAttempts"
+                       value="3"
+                       min="1"
+                       max="5"
+                       step="1"
+                       inputmode="numeric"
+                       aria-label="Quantidade de tentativas, de 1 a 5"
+                       required>
+                <button type="button"
+                        class="switch-attempt-step"
+                        id="increaseMaxAttempts"
+                        aria-label="Adicionar uma tentativa">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                </button>
+            </div>
             <div class="form-text">
-                Deixe vazio para iniciar assim que a solicitação for confirmada.
+                Em falhas transitórias antes da reinicialização, o Sentinel tentará novamente após cinco minutos. Falhas após o restart exigem verificação manual.
             </div>
         </div>
 
-        <div id="immediateUpdateWarning" class="immediate-update-warning text-center mt-4" role="status">
-            Atenção: o update não foi agendado e será realizado imediatamente.
+        <section class="switch-schedule-card" aria-labelledby="switchScheduleTitle">
+            <div class="switch-schedule-heading">
+                <i class="bi bi-calendar2-week" aria-hidden="true"></i>
+                <h3 id="switchScheduleTitle">Selecione data e hora</h3>
+            </div>
+            <div class="switch-schedule-body">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label for="switchScheduleDate" class="form-label switch-schedule-label">
+                            <i class="bi bi-calendar3" aria-hidden="true"></i>
+                            Data
+                        </label>
+                        <div class="switch-date-picker" id="switchDatePicker">
+                            <div class="switch-date-control">
+                                <input type="text"
+                                       class="form-control"
+                                       id="switchScheduleDate"
+                                       inputmode="numeric"
+                                       maxlength="10"
+                                       placeholder="DD/MM/AAAA"
+                                       autocomplete="off"
+                                       aria-describedby="switchScheduleHelp"
+                                       aria-label="Data no formato dia, mês e ano">
+                                <button type="button"
+                                        class="switch-calendar-toggle"
+                                        id="toggleScheduleCalendar"
+                                        aria-label="Abrir calendário"
+                                        aria-haspopup="dialog"
+                                        aria-expanded="false">
+                                    <i class="bi bi-calendar3" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="switch-calendar-popover"
+                                 id="switchCalendarPopover"
+                                 role="dialog"
+                                 aria-label="Selecione a data do agendamento"
+                                 hidden>
+                                <div class="switch-calendar-toolbar">
+                                    <button type="button" class="switch-calendar-nav" id="previousCalendarMonth" aria-label="Mês anterior">
+                                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                                    </button>
+                                    <strong id="switchCalendarMonth" aria-live="polite"></strong>
+                                    <button type="button" class="switch-calendar-nav" id="nextCalendarMonth" aria-label="Próximo mês">
+                                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <div class="switch-calendar-weekdays" aria-hidden="true">
+                                    <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span>
+                                    <span>Qui</span><span>Sex</span><span>Sáb</span>
+                                </div>
+                                <div class="switch-calendar-days" id="switchCalendarDays"></div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="switchScheduleDateIso">
+                    </div>
+                    <div class="col-md-7">
+                        <label for="switchScheduleTime" class="form-label switch-schedule-label">
+                            <i class="bi bi-clock" aria-hidden="true"></i>
+                            Horário <span class="text-muted fw-normal">(Brasília)</span>
+                        </label>
+                        <div class="switch-time-control">
+                            <button type="button"
+                                    class="switch-time-step"
+                                    id="subtractThirtyMinutes"
+                                    aria-label="Remover 30 minutos">
+                                <i class="bi bi-dash-lg" aria-hidden="true"></i> 30 min
+                            </button>
+                            <input type="text"
+                                   class="form-control"
+                                   id="switchScheduleTime"
+                                   inputmode="numeric"
+                                   maxlength="5"
+                                   placeholder="HH:MM"
+                                   autocomplete="off"
+                                   aria-label="Horário no formato horas e minutos">
+                            <button type="button"
+                                    class="switch-time-step"
+                                    id="addThirtyMinutes"
+                                    aria-label="Adicionar 30 minutos">
+                                <i class="bi bi-plus-lg" aria-hidden="true"></i> 30 min
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" id="switchScheduledAt">
+                <div class="form-text mt-2" id="switchScheduleHelp">
+                    Digite o horário no formato <strong>HH:MM</strong> ou ajuste em intervalos de 30 minutos. Valores fora do limite são corrigidos automaticamente. Deixe data e horário vazios para iniciar imediatamente.
+                </div>
+            </div>
+        </section>
+
+        <div id="immediateUpdateWarning" class="immediate-update-warning mt-4" role="status">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <span>A atualização não possui agendamento definido e será executada imediatamente.</span>
         </div>
 
         <div class="d-flex justify-content-between switch-update-actions mt-4">
@@ -246,10 +801,25 @@
         <div class="progress" role="progressbar" aria-label="Progresso da atualização" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div id="jobProgressBar" class="progress-bar" style="width: 0%"></div>
         </div>
-        <p id="jobMessage" class="mt-3 mb-1 text-muted"></p>
-        <p id="jobResult" class="mb-0 d-none">
-            Código: <span id="jobResultCode" class="switch-update-result-code"></span>
+        <p class="mt-3 mb-1">
+            <i class="bi bi-calendar-event me-1" aria-hidden="true"></i>
+            <strong>Agendado para:</strong> <span id="jobScheduledAt">—</span>
         </p>
+        <p class="mb-1">
+            <i class="bi bi-person me-1" aria-hidden="true"></i>
+            <strong>Solicitado por:</strong> <span id="jobRequestedBy">—</span>
+        </p>
+        <p class="mb-1">
+            <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>
+            <strong>Tentativa:</strong> <span id="jobAttempt">—</span>
+        </p>
+        <p id="jobMessage" class="mt-3 mb-1 text-muted"></p>
+        <div id="jobResult" class="alert mt-3 mb-0 d-none" role="status">
+            <div id="jobResultMessage" class="switch-update-result-message"></div>
+            <small class="d-block mt-1">
+                Código técnico: <span id="jobResultCode" class="switch-update-result-code"></span>
+            </small>
+        </div>
         <div id="reviewActions" class="d-none mt-3 flex-wrap gap-2">
             <button type="button" class="btn btn-outline-primary" id="recheckJobButton">
                 <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
@@ -258,6 +828,18 @@
             <button type="button" class="btn btn-outline-secondary" id="acknowledgeJobButton">
                 Confirmar revisão manual
             </button>
+        </div>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mt-4 switch-progress-actions">
+            <a href="{{ url_for('listar_switches') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2" aria-hidden="true"></i>
+                Voltar
+            </a>
+            <div id="scheduledActions" class="d-none">
+                <button type="button" class="btn switch-update-cancel" id="cancelScheduledJobButton">
+                    <i class="bi bi-x-circle me-2" aria-hidden="true"></i>
+                    Cancelar agendamento
+                </button>
+            </div>
         </div>
     </section>
 </div>
@@ -274,6 +856,7 @@
                     <div><strong>Switch:</strong> {{ switch.host }}</div>
                     <div><strong>Versão atual:</strong> <span id="currentFirmwareVersion">—</span></div>
                     <div><strong>Versão de destino:</strong> <span id="targetFirmwareVersion">—</span></div>
+                    <div><strong>Tentativas:</strong> <span id="confirmedMaxAttempts">—</span></div>
                 </div>
                 <p id="firmwareConfirmationMessage" class="mb-0"></p>
             </div>
@@ -282,6 +865,28 @@
                 <button type="button" class="btn btn-success" id="confirmFirmwareButton">
                     <span class="spinner-border spinner-border-sm me-2 d-none" id="confirmSpinner" aria-hidden="true"></span>
                     <span id="confirmFirmwareLabel">Confirmar</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="cancelScheduleConfirmationModal" tabindex="-1" aria-labelledby="cancelScheduleConfirmationTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="cancelScheduleConfirmationTitle">Cancelar agendamento?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Tem certeza de que deseja cancelar a atualização agendada deste switch?</p>
+                <p class="mb-0 text-muted">O firmware reservado será removido e o formulário ficará disponível para um novo agendamento.</p>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Manter agendamento</button>
+                <button type="button" class="btn btn-danger" id="confirmCancelScheduledJobButton">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="cancelScheduledJobSpinner" aria-hidden="true"></span>
+                    Confirmar cancelamento
                 </button>
             </div>
         </div>
@@ -298,9 +903,11 @@
     const urls = {
         csrf: {{ url_for('switch_firmware_v01.csrf_token')|tojson }},
         health: {{ url_for('switch_firmware_v01.firmware_health')|tojson }},
+        activeJob: {{ url_for('switch_firmware_v01.active_firmware_job', host=switch.host)|tojson }},
         preflight: {{ url_for('switch_firmware_v01.firmware_preflight', host=switch.host)|tojson }},
         createJob: {{ url_for('switch_firmware_v01.create_firmware_job', host=switch.host)|tojson }},
         job: {{ url_for('switch_firmware_v01.firmware_job_status', job_id='__JOB_ID__')|tojson }},
+        cancelJob: {{ url_for('switch_firmware_v01.cancel_firmware_job', job_id='__JOB_ID__')|tojson }},
         deleteDraft: {{ url_for('switch_firmware_v01.cancel_firmware_draft', draft_id='__DRAFT_ID__')|tojson }},
         recheck: {{ url_for('switch_firmware_v01.recheck_firmware_job', job_id='__JOB_ID__')|tojson }},
         acknowledge: {{ url_for('switch_firmware_v01.acknowledge_firmware_review', job_id='__JOB_ID__')|tojson }}
@@ -310,7 +917,24 @@
     const usernameInput = document.getElementById('switchUsername');
     const passwordInput = document.getElementById('switchPassword');
     const firmwareInput = document.getElementById('switchFirmware');
+    const firmwareName = document.getElementById('switchFirmwareName');
+    const chooseFirmwareButton = document.getElementById('chooseFirmwareButton');
+    const maxAttemptsInput = document.getElementById('switchMaxAttempts');
+    const decreaseMaxAttemptsButton = document.getElementById('decreaseMaxAttempts');
+    const increaseMaxAttemptsButton = document.getElementById('increaseMaxAttempts');
     const scheduledInput = document.getElementById('switchScheduledAt');
+    const scheduleDateInput = document.getElementById('switchScheduleDate');
+    const scheduleDateIsoInput = document.getElementById('switchScheduleDateIso');
+    const scheduleTimeInput = document.getElementById('switchScheduleTime');
+    const datePicker = document.getElementById('switchDatePicker');
+    const calendarToggle = document.getElementById('toggleScheduleCalendar');
+    const calendarPopover = document.getElementById('switchCalendarPopover');
+    const calendarMonthLabel = document.getElementById('switchCalendarMonth');
+    const calendarDays = document.getElementById('switchCalendarDays');
+    const previousCalendarMonthButton = document.getElementById('previousCalendarMonth');
+    const nextCalendarMonthButton = document.getElementById('nextCalendarMonth');
+    const subtractThirtyMinutesButton = document.getElementById('subtractThirtyMinutes');
+    const addThirtyMinutesButton = document.getElementById('addThirtyMinutes');
     const immediateWarning = document.getElementById('immediateUpdateWarning');
     const continueButton = document.getElementById('continueUpdateButton');
     const continueSpinner = document.getElementById('continueSpinner');
@@ -318,10 +942,21 @@
     const confirmButton = document.getElementById('confirmFirmwareButton');
     const confirmSpinner = document.getElementById('confirmSpinner');
     const confirmationModalElement = document.getElementById('firmwareConfirmationModal');
+    const cancelConfirmationModalElement = document.getElementById('cancelScheduleConfirmationModal');
+    // A main-container do Sentinel usa backdrop-filter e cria um contexto de
+    // empilhamento próprio. O Bootstrap anexa o backdrop diretamente ao body;
+    // portanto, o modal também precisa ficar nesse nível para permanecer acima
+    // da camada escura e receber os cliques.
+    document.body.appendChild(confirmationModalElement);
+    document.body.appendChild(cancelConfirmationModalElement);
     const confirmationModal = new bootstrap.Modal(confirmationModalElement);
+    const cancelConfirmationModal = new bootstrap.Modal(cancelConfirmationModalElement);
     const progressSection = document.getElementById('switchUpdateProgress');
     const progressBar = document.getElementById('jobProgressBar');
     const progressRoot = progressBar.closest('.progress');
+    const cancelScheduledJobButton = document.getElementById('cancelScheduledJobButton');
+    const confirmCancelScheduledJobButton = document.getElementById('confirmCancelScheduledJobButton');
+    const cancelScheduledJobSpinner = document.getElementById('cancelScheduledJobSpinner');
     const healthAlert = document.getElementById('workerHealthAlert');
     const healthMessage = document.getElementById('workerHealthMessage');
 
@@ -329,10 +964,16 @@
     let draft = null;
     let activeJob = null;
     let pollTimer = null;
+    let pingCountdownTimer = null;
+    let pingRemainingSeconds = null;
+    let lastPingServerMessage = null;
     let confirmingDraft = false;
+    let calendarViewDate = new Date();
+    calendarViewDate.setDate(1);
 
     const stageLabels = {
         scheduled: 'Atualização agendada',
+        retry_scheduled: 'Nova tentativa agendada',
         starting: 'Preparando atualização',
         identity: 'Validando switch e versão',
         authentication: 'Autenticando',
@@ -344,7 +985,7 @@
         saving: 'Salvando configuração',
         completed: 'Atualização concluída',
         complete: 'Atualização concluída',
-        completed_after_review: 'Atualização confirmada após nova verificação',
+        completed_after_review: 'Atualização concluída',
         failed: 'Atualização não concluída',
         needs_review: 'Atualização precisa de verificação',
         cancelled: 'Atualização cancelada',
@@ -355,6 +996,53 @@
 
     function replaceToken(template, token, value) {
         return template.replace(token, encodeURIComponent(value));
+    }
+
+    function formatRemainingTime(totalSeconds) {
+        const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+        const minutes = Math.floor(safeSeconds / 60);
+        const seconds = safeSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} minutos`;
+    }
+
+    function stopPingCountdown() {
+        if (pingCountdownTimer) window.clearInterval(pingCountdownTimer);
+        pingCountdownTimer = null;
+        pingRemainingSeconds = null;
+        lastPingServerMessage = null;
+    }
+
+    function renderJobMessage(stage, message) {
+        const element = document.getElementById('jobMessage');
+        if (stage !== 'waiting_ping') {
+            stopPingCountdown();
+            element.textContent = stage === 'completed_after_review'
+                ? 'Atualização concluída com sucesso.'
+                : (message || '');
+            return;
+        }
+
+        const match = String(message || '').match(/Restam\s+(\d+)\s+segundos/i);
+        if (match && message !== lastPingServerMessage) {
+            pingRemainingSeconds = Number(match[1]);
+            lastPingServerMessage = message;
+        }
+        const updateText = () => {
+            if (pingRemainingSeconds === null) {
+                element.textContent = message || 'Aguardando resposta do switch por ping.';
+                return;
+            }
+            element.textContent = `Aguardando resposta do switch por ping. Tempo restante: ${formatRemainingTime(pingRemainingSeconds)}.`;
+        };
+        updateText();
+        if (!pingCountdownTimer) {
+            pingCountdownTimer = window.setInterval(() => {
+                if (pingRemainingSeconds !== null && pingRemainingSeconds > 0) {
+                    pingRemainingSeconds -= 1;
+                    updateText();
+                }
+            }, 1000);
+        }
     }
 
     async function apiRequest(url, options = {}) {
@@ -389,13 +1077,381 @@
     }
 
     function showPageError(message) {
+        healthAlert.classList.remove('alert-warning');
+        healthAlert.classList.add('alert-danger');
         healthMessage.textContent = message;
         healthAlert.classList.remove('d-none');
         healthAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
+    function updateFirmwareName() {
+        const selectedFirmware = firmwareInput.files[0];
+        firmwareName.textContent = selectedFirmware ? selectedFirmware.name : 'Nenhum arquivo selecionado';
+        firmwareName.classList.toggle('has-file', Boolean(selectedFirmware));
+        firmwareName.title = selectedFirmware ? selectedFirmware.name : '';
+    }
+
+    function syncAttemptButtons() {
+        const attempts = Number.parseInt(maxAttemptsInput.value, 10);
+        decreaseMaxAttemptsButton.disabled = Number.isFinite(attempts) && attempts <= 1;
+        increaseMaxAttemptsButton.disabled = Number.isFinite(attempts) && attempts >= 5;
+    }
+
+    function normalizeMaxAttempts() {
+        const parsedAttempts = Number.parseInt(maxAttemptsInput.value, 10);
+        const attempts = Math.min(5, Math.max(1, Number.isFinite(parsedAttempts) ? parsedAttempts : 1));
+        maxAttemptsInput.value = String(attempts);
+        syncAttemptButtons();
+        return attempts;
+    }
+
+    function adjustMaxAttempts(delta) {
+        const attempts = normalizeMaxAttempts();
+        maxAttemptsInput.value = String(Math.min(5, Math.max(1, attempts + delta)));
+        syncAttemptButtons();
+    }
+
+    function showWorkerWarning(message) {
+        healthAlert.classList.remove('alert-danger');
+        healthAlert.classList.add('alert-warning');
+        healthMessage.textContent = message;
+        healthAlert.classList.remove('d-none');
+    }
+
+    function localDateAtMidnight(value = new Date()) {
+        return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+
+    function scheduleDateToIso(value) {
+        const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!match) return null;
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+        const parsed = new Date(year, month - 1, day);
+        if (
+            parsed.getFullYear() !== year
+            || parsed.getMonth() !== month - 1
+            || parsed.getDate() !== day
+        ) return null;
+
+        return {
+            date: parsed,
+            iso: `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        };
+    }
+
+    function formatScheduleDate(date) {
+        return [
+            String(date.getDate()).padStart(2, '0'),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getFullYear()).padStart(4, '0')
+        ].join('/');
+    }
+
+    function setScheduleDate(date) {
+        scheduleDateInput.value = formatScheduleDate(date);
+        scheduleDateIsoInput.value = [
+            String(date.getFullYear()).padStart(4, '0'),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('-');
+        calendarViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        renderCalendar();
+        syncScheduledAt();
+    }
+
+    function formatDateWhileTyping() {
+        const digits = scheduleDateInput.value.replace(/\D/g, '').slice(0, 8);
+        const parts = [];
+        if (digits.length) parts.push(digits.slice(0, 2));
+        if (digits.length > 2) parts.push(digits.slice(2, 4));
+        if (digits.length > 4) parts.push(digits.slice(4, 8));
+        scheduleDateInput.value = parts.join('/');
+
+        if (digits.length === 8) {
+            normalizeScheduleDate();
+            return;
+        }
+
+        const parsed = scheduleDateToIso(scheduleDateInput.value);
+        scheduleDateIsoInput.value = parsed ? parsed.iso : '';
+        if (parsed) calendarViewDate = new Date(parsed.date.getFullYear(), parsed.date.getMonth(), 1);
+        syncScheduledAt();
+    }
+
+    function normalizeScheduleDate() {
+        const digits = scheduleDateInput.value.replace(/\D/g, '').slice(0, 8);
+        if (!digits) {
+            scheduleDateInput.value = '';
+            scheduleDateIsoInput.value = '';
+            syncScheduledAt();
+            return null;
+        }
+        if (digits.length !== 8) {
+            syncScheduledAt();
+            return null;
+        }
+
+        let day = Number(digits.slice(0, 2));
+        let month = Number(digits.slice(2, 4));
+        let year = Number(digits.slice(4, 8));
+        year = Math.max(1000, Math.min(9999, year));
+        month = Math.max(1, Math.min(12, month));
+        const lastDay = new Date(year, month, 0).getDate();
+        day = Math.max(1, Math.min(lastDay, day));
+
+        let normalized = new Date(year, month - 1, day);
+        const today = localDateAtMidnight();
+        if (normalized < today) normalized = today;
+        setScheduleDate(normalized);
+        return normalized;
+    }
+
+    function renderCalendar() {
+        const monthNames = [
+            'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+            'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+        ];
+        const year = calendarViewDate.getFullYear();
+        const month = calendarViewDate.getMonth();
+        const firstWeekday = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const today = localDateAtMidnight();
+        const selected = scheduleDateIsoInput.value;
+
+        calendarMonthLabel.textContent = `${monthNames[month]} de ${year}`;
+        calendarDays.replaceChildren();
+
+        for (let blank = 0; blank < firstWeekday; blank += 1) {
+            const empty = document.createElement('span');
+            empty.className = 'switch-calendar-empty';
+            empty.setAttribute('aria-hidden', 'true');
+            calendarDays.appendChild(empty);
+        }
+
+        for (let day = 1; day <= daysInMonth; day += 1) {
+            const date = new Date(year, month, day);
+            const iso = [year, String(month + 1).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'switch-calendar-day';
+            button.textContent = String(day);
+            button.dataset.date = iso;
+            button.setAttribute('aria-label', `${day} de ${monthNames[month]} de ${year}`);
+            button.disabled = date < today;
+            if (date.getTime() === today.getTime()) button.classList.add('is-today');
+            if (iso === selected) button.classList.add('is-selected');
+            button.addEventListener('click', () => {
+                setScheduleDate(date);
+                closeCalendar();
+                scheduleTimeInput.focus();
+            });
+            calendarDays.appendChild(button);
+        }
+
+        previousCalendarMonthButton.disabled = (
+            year < today.getFullYear()
+            || (year === today.getFullYear() && month <= today.getMonth())
+        );
+    }
+
+    function openCalendar() {
+        const parsed = scheduleDateToIso(scheduleDateInput.value);
+        const base = parsed ? parsed.date : localDateAtMidnight();
+        calendarViewDate = new Date(base.getFullYear(), base.getMonth(), 1);
+        renderCalendar();
+        calendarPopover.hidden = false;
+        calendarToggle.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeCalendar() {
+        calendarPopover.hidden = true;
+        calendarToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function changeCalendarMonth(offset) {
+        calendarViewDate = new Date(
+            calendarViewDate.getFullYear(),
+            calendarViewDate.getMonth() + offset,
+            1
+        );
+        renderCalendar();
+    }
+
+    function parseScheduleTime(value) {
+        const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) return null;
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        if (hours > 23 || minutes > 59) return null;
+        return { hours, minutes };
+    }
+
+    function formatScheduleTime(hours, minutes) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    function syncScheduledAt() {
+        const dateText = scheduleDateInput.value.trim();
+        const date = scheduleDateToIso(dateText);
+        const timeText = scheduleTimeInput.value.trim();
+        const time = parseScheduleTime(timeText);
+
+        scheduleDateInput.setCustomValidity('');
+        scheduleTimeInput.setCustomValidity('');
+        scheduledInput.value = '';
+        scheduleDateIsoInput.value = date ? date.iso : '';
+
+        if (dateText && !date) {
+            scheduleDateInput.setCustomValidity('Informe uma data válida no formato DD/MM/AAAA.');
+        } else if (date && date.date < localDateAtMidnight()) {
+            scheduleDateInput.setCustomValidity('Selecione a data de hoje ou uma data futura.');
+        } else if (date && !timeText) {
+            scheduleTimeInput.setCustomValidity('Informe o horário do agendamento.');
+        } else if (!dateText && timeText) {
+            scheduleDateInput.setCustomValidity('Selecione a data do agendamento.');
+        } else if (timeText && !time) {
+            scheduleTimeInput.setCustomValidity('Informe um horário válido no formato HH:MM.');
+        } else if (date && time) {
+            const scheduledDate = new Date(
+                date.date.getFullYear(),
+                date.date.getMonth(),
+                date.date.getDate(),
+                time.hours,
+                time.minutes
+            );
+            if (scheduledDate <= new Date()) {
+                scheduleTimeInput.setCustomValidity('Selecione um horário futuro para o agendamento.');
+            } else {
+                scheduledInput.value = `${date.iso}T${formatScheduleTime(time.hours, time.minutes)}`;
+            }
+        }
+
+        updateImmediateWarning();
+    }
+
+    function formatTimeWhileTyping() {
+        const raw = scheduleTimeInput.value.replace(/[^\d:]/g, '');
+        const digits = raw.replace(/\D/g, '').slice(0, 4);
+        if (!raw.includes(':') && digits.length === 4) {
+            scheduleTimeInput.value = digits;
+            normalizeScheduleTime();
+            normalizeScheduleToFuture();
+            return;
+        } else {
+            scheduleTimeInput.value = raw.slice(0, 5);
+        }
+        syncScheduledAt();
+    }
+
+    function normalizeScheduleTime() {
+        const compact = scheduleTimeInput.value.trim();
+        const digits = compact.replace(/\D/g, '');
+        if (!digits) {
+            scheduleTimeInput.value = '';
+            syncScheduledAt();
+            return null;
+        }
+
+        let hours;
+        let minutes;
+        if (compact.includes(':')) {
+            const parts = compact.split(':');
+            hours = Number(parts[0] || 0);
+            minutes = Number(parts[1] || 0);
+        } else if (digits.length <= 2) {
+            hours = Number(digits);
+            minutes = 0;
+        } else {
+            hours = Number(digits.slice(0, -2));
+            minutes = Number(digits.slice(-2));
+        }
+
+        if (hours > 23) {
+            hours = 23;
+            minutes = 59;
+        } else {
+            hours = Math.max(0, hours);
+            minutes = Math.max(0, Math.min(59, minutes));
+        }
+
+        scheduleTimeInput.value = formatScheduleTime(hours, minutes);
+        syncScheduledAt();
+        return { hours, minutes };
+    }
+
+    function normalizeScheduleToFuture() {
+        const date = scheduleDateToIso(scheduleDateInput.value);
+        const time = parseScheduleTime(scheduleTimeInput.value);
+        if (!date || !time) {
+            syncScheduledAt();
+            return;
+        }
+
+        const scheduledDate = new Date(
+            date.date.getFullYear(),
+            date.date.getMonth(),
+            date.date.getDate(),
+            time.hours,
+            time.minutes
+        );
+        const now = new Date();
+        if (scheduledDate <= now) {
+            const nearestFuture = new Date(now);
+            nearestFuture.setSeconds(0, 0);
+            nearestFuture.setMinutes(nearestFuture.getMinutes() + 1);
+            scheduleDateInput.value = formatScheduleDate(nearestFuture);
+            scheduleDateIsoInput.value = [
+                String(nearestFuture.getFullYear()).padStart(4, '0'),
+                String(nearestFuture.getMonth() + 1).padStart(2, '0'),
+                String(nearestFuture.getDate()).padStart(2, '0')
+            ].join('-');
+            scheduleTimeInput.value = formatScheduleTime(
+                nearestFuture.getHours(),
+                nearestFuture.getMinutes()
+            );
+            calendarViewDate = new Date(
+                nearestFuture.getFullYear(), nearestFuture.getMonth(), 1
+            );
+            renderCalendar();
+        }
+        syncScheduledAt();
+    }
+
+    function adjustScheduleTime(deltaMinutes) {
+        const current = parseScheduleTime(scheduleTimeInput.value);
+        const now = new Date();
+        const baseMinutes = current
+            ? (current.hours * 60) + current.minutes
+            : (now.getHours() * 60) + now.getMinutes();
+        const totalMinutes = baseMinutes + deltaMinutes;
+        const dayOffset = Math.floor(totalMinutes / 1440);
+        const adjustedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+        scheduleTimeInput.value = formatScheduleTime(
+            Math.floor(adjustedMinutes / 60),
+            adjustedMinutes % 60
+        );
+        const selectedDate = scheduleDateToIso(scheduleDateInput.value);
+        if (selectedDate && dayOffset) {
+            const adjustedDate = new Date(selectedDate.date);
+            adjustedDate.setDate(adjustedDate.getDate() + dayOffset);
+            setScheduleDate(adjustedDate);
+        }
+        normalizeScheduleToFuture();
+        scheduleTimeInput.focus();
+    }
+
     function updateImmediateWarning() {
-        immediateWarning.classList.toggle('d-none', Boolean(scheduledInput.value));
+        const hasScheduleDraft = Boolean(
+            scheduleDateInput.value.trim() || scheduleTimeInput.value.trim()
+        );
+        immediateWarning.classList.toggle(
+            'd-none',
+            hasScheduleDraft || Boolean(scheduledInput.value)
+        );
     }
 
     function confirmationText(decision, currentVersion, targetVersion) {
@@ -432,8 +1488,13 @@
     async function runPreflight(event) {
         event.preventDefault();
         healthAlert.classList.add('d-none');
+        normalizeMaxAttempts();
+        normalizeScheduleDate();
+        normalizeScheduleTime();
+        normalizeScheduleToFuture();
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
+            form.reportValidity();
             return;
         }
 
@@ -456,6 +1517,7 @@
             draft = response.draft;
             document.getElementById('currentFirmwareVersion').textContent = draft.current_version;
             document.getElementById('targetFirmwareVersion').textContent = draft.expected_version;
+            document.getElementById('confirmedMaxAttempts').textContent = maxAttemptsInput.value;
             document.getElementById('firmwareConfirmationMessage').textContent = confirmationText(
                 draft.decision,
                 draft.current_version,
@@ -464,7 +1526,8 @@
             document.getElementById('confirmFirmwareLabel').textContent = confirmationLabel(draft.decision);
             confirmationModal.show();
         } catch (error) {
-            showPageError(error.message);
+            const locked = await loadActiveJob();
+            if (!locked) showPageError(error.message);
         } finally {
             setContinueLoading(false);
         }
@@ -479,7 +1542,8 @@
                 draft_token: draft.draft_token,
                 username: usernameInput.value.trim(),
                 password: passwordInput.value,
-                confirmed_decision: draft.decision
+                confirmed_decision: draft.decision,
+                max_attempts: Number(maxAttemptsInput.value)
             };
             if (scheduledInput.value) payload.scheduled_at = scheduledInput.value;
 
@@ -495,12 +1559,18 @@
             activeJob = response.job;
             passwordInput.value = '';
             firmwareInput.value = '';
+            updateFirmwareName();
             confirmationModal.hide();
             form.classList.add('d-none');
             renderJob(activeJob);
             startPolling();
         } catch (error) {
-            showPageError(error.message);
+            const locked = await loadActiveJob();
+            if (locked) {
+                confirmationModal.hide();
+            } else {
+                showPageError(error.message);
+            }
         } finally {
             confirmingDraft = false;
             setConfirmLoading(false);
@@ -509,28 +1579,62 @@
 
     function renderJob(job) {
         if (!job) return;
+        form.classList.add('d-none');
         progressSection.style.display = 'block';
         const percent = Math.max(0, Math.min(100, Number(job.percent || 0)));
         const stage = job.stage || job.status || 'scheduled';
         document.getElementById('jobStatusLabel').textContent = stageLabels[stage] || job.status || 'Atualização registrada';
         document.getElementById('jobPercent').textContent = `${percent}%`;
-        document.getElementById('jobMessage').textContent = job.message || '';
+        renderJobMessage(stage, job.message || '');
         progressBar.style.width = `${percent}%`;
         progressRoot.setAttribute('aria-valuenow', String(percent));
 
+        const scheduledAt = job.scheduled_at_brasilia
+            ? new Date(job.scheduled_at_brasilia).toLocaleString('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+            : 'Não informado';
+        document.getElementById('jobScheduledAt').textContent = scheduledAt;
+        document.getElementById('jobRequestedBy').textContent = job.requested_by || 'Não informado';
+        document.getElementById('jobAttempt').textContent = (
+            `${Number(job.attempt_count || 0)} de ${Number(job.max_attempts || 1)}`
+        );
+
         const resultLine = document.getElementById('jobResult');
         const resultCode = document.getElementById('jobResultCode');
+        const resultMessage = document.getElementById('jobResultMessage');
         if (job.result_code) {
             resultCode.textContent = job.result_code;
+            resultMessage.textContent = job.result_code === 'SWU411'
+                ? 'Atualização concluída com sucesso.'
+                : (job.result_description
+                    || 'O processo foi finalizado. Consulte o código técnico se precisar de suporte.');
+            resultLine.classList.remove('alert-success', 'alert-danger', 'alert-warning');
+            resultLine.classList.add(
+                job.status === 'completed'
+                    ? 'alert-success'
+                    : job.status === 'needs_review'
+                        ? 'alert-warning'
+                        : 'alert-danger'
+            );
             resultLine.classList.remove('d-none');
         } else {
             resultLine.classList.add('d-none');
         }
 
         const reviewActions = document.getElementById('reviewActions');
-        const needsReview = job.status === 'needs_review';
+        const needsReview = job.status === 'needs_review' && job.can_review !== false;
         reviewActions.classList.toggle('d-none', !needsReview);
         reviewActions.classList.toggle('d-flex', needsReview);
+        document.getElementById('scheduledActions').classList.toggle(
+            'd-none',
+            job.status !== 'scheduled' || !job.can_cancel
+        );
         progressBar.classList.toggle('job-progress-success', job.status === 'completed');
         progressBar.classList.toggle('job-progress-danger', job.status === 'failed');
     }
@@ -556,6 +1660,56 @@
     function stopPolling() {
         if (pollTimer) window.clearInterval(pollTimer);
         pollTimer = null;
+        if (!activeJob || activeJob.stage !== 'waiting_ping') stopPingCountdown();
+    }
+
+    async function loadActiveJob() {
+        try {
+            const response = await apiRequest(urls.activeJob);
+            if (!response.job) {
+                form.classList.remove('d-none');
+                return false;
+            }
+            activeJob = response.job;
+            renderJob(activeJob);
+            startPolling();
+            return true;
+        } catch (error) {
+            showPageError(error.message);
+            return false;
+        }
+    }
+
+    function requestCancelScheduledJob() {
+        if (!activeJob || activeJob.status !== 'scheduled') return;
+        cancelConfirmationModal.show();
+    }
+
+    async function cancelScheduledJob() {
+        if (!activeJob || activeJob.status !== 'scheduled') return;
+        cancelScheduledJobButton.disabled = true;
+        confirmCancelScheduledJobButton.disabled = true;
+        cancelScheduledJobSpinner.classList.remove('d-none');
+        try {
+            await apiRequest(replaceToken(urls.cancelJob, '__JOB_ID__', activeJob.id), {
+                method: 'DELETE',
+                headers: { 'X-CSRF-Token': await ensureCsrfToken() }
+            });
+            stopPolling();
+            cancelConfirmationModal.hide();
+            activeJob = null;
+            progressSection.style.display = 'none';
+            form.classList.remove('d-none');
+            showWorkerWarning('Agendamento cancelado. O formulário foi liberado para uma nova configuração.');
+        } catch (error) {
+            cancelConfirmationModal.hide();
+            document.getElementById('jobMessage').textContent = error.message;
+            await loadActiveJob();
+        } finally {
+            cancelScheduledJobButton.disabled = false;
+            confirmCancelScheduledJobButton.disabled = false;
+            cancelScheduledJobSpinner.classList.add('d-none');
+        }
     }
 
     async function reviewJob(actionUrl) {
@@ -576,31 +1730,77 @@
         try {
             const response = await apiRequest(urls.health);
             if (response.execution_mode === 'windows_task' && response.worker && !response.worker.available) {
-                continueButton.disabled = true;
-                showPageError(
-                    'O serviço de atualização ainda não está disponível. A tarefa do Windows precisa ser instalada antes de criar um job.'
+                showWorkerWarning(
+                    'O worker de atualização não registrou atividade recente. '
+                    + 'O pedido continuará disponível e será processado quando o worker voltar a responder.'
                 );
             }
         } catch (error) {
-            continueButton.disabled = true;
-            showPageError(error.message);
+            showWorkerWarning(
+                'Não foi possível consultar o worker agora. O formulário permanece disponível, '
+                + 'mas confirme o log da tarefa após criar o pedido.'
+            );
         }
     }
 
-    scheduledInput.addEventListener('input', updateImmediateWarning);
+    scheduleDateInput.addEventListener('input', formatDateWhileTyping);
+    scheduleDateInput.addEventListener('blur', () => {
+        normalizeScheduleDate();
+        normalizeScheduleToFuture();
+    });
+    scheduleDateInput.addEventListener('click', openCalendar);
+    scheduleTimeInput.addEventListener('input', formatTimeWhileTyping);
+    scheduleTimeInput.addEventListener('blur', () => {
+        normalizeScheduleTime();
+        normalizeScheduleToFuture();
+    });
+    calendarToggle.addEventListener('click', () => {
+        if (calendarPopover.hidden) openCalendar();
+        else closeCalendar();
+    });
+    previousCalendarMonthButton.addEventListener('click', () => changeCalendarMonth(-1));
+    nextCalendarMonthButton.addEventListener('click', () => changeCalendarMonth(1));
+    subtractThirtyMinutesButton.addEventListener('click', () => adjustScheduleTime(-30));
+    addThirtyMinutesButton.addEventListener('click', () => adjustScheduleTime(30));
+    chooseFirmwareButton.addEventListener('click', () => firmwareInput.click());
+    firmwareInput.addEventListener('change', updateFirmwareName);
+    decreaseMaxAttemptsButton.addEventListener('click', () => adjustMaxAttempts(-1));
+    increaseMaxAttemptsButton.addEventListener('click', () => adjustMaxAttempts(1));
+    maxAttemptsInput.addEventListener('input', () => {
+        if (!maxAttemptsInput.value) {
+            syncAttemptButtons();
+            return;
+        }
+        normalizeMaxAttempts();
+    });
+    maxAttemptsInput.addEventListener('blur', normalizeMaxAttempts);
     form.addEventListener('submit', runPreflight);
     confirmButton.addEventListener('click', createJob);
+    cancelScheduledJobButton.addEventListener('click', requestCancelScheduledJob);
+    confirmCancelScheduledJobButton.addEventListener('click', cancelScheduledJob);
     document.getElementById('recheckJobButton').addEventListener('click', () => reviewJob(urls.recheck));
     document.getElementById('acknowledgeJobButton').addEventListener('click', () => reviewJob(urls.acknowledge));
     confirmationModalElement.addEventListener('hidden.bs.modal', () => {
         if (!confirmingDraft) removeDraft();
     });
     window.addEventListener('beforeunload', stopPolling);
+    document.addEventListener('click', (event) => {
+        if (!datePicker.contains(event.target)) closeCalendar();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !calendarPopover.hidden) {
+            closeCalendar();
+            calendarToggle.focus();
+        }
+    });
 
-    updateImmediateWarning();
-    const localNow = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-    scheduledInput.min = localNow.toISOString().slice(0, 16);
-    checkWorkerHealth();
+    updateFirmwareName();
+    normalizeMaxAttempts();
+    syncScheduledAt();
+    renderCalendar();
+    loadActiveJob().then((hasActiveJob) => {
+        if (!hasActiveJob) checkWorkerHealth();
+    });
 })();
 </script>
 {% endblock %}

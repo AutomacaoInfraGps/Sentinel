@@ -47,10 +47,14 @@ def create_switch_update_blueprint(
     *,
     resolve_switch: SwitchResolver,
     is_authorized: AuthorizationCheck,
+    default_protocol: str = "https",
     trigger_worker: WorkerTrigger | None = None,
     worker_health: WorkerHealth | None = None,
     execution_mode: str = "internal_thread",
 ) -> Blueprint:
+    normalized_default_protocol = str(default_protocol or "").strip().casefold()
+    if normalized_default_protocol not in {"http", "https"}:
+        raise ValueError("O protocolo padrao da WebUI deve ser http ou https.")
     blueprint = Blueprint("switch_firmware_v01", __name__)
     # Compartilha o token global do Sentinel. O security.js envia este valor
     # automaticamente e o before_request principal também o valida.
@@ -81,7 +85,7 @@ def create_switch_update_blueprint(
         if not expected or not provided or not secrets.compare_digest(expected, provided):
             abort(403, description="Token CSRF ausente ou invalido.")
 
-    def switch_url(host: str) -> tuple[dict, str]:
+    def switch_url(host: str, *, require_online: bool = True) -> tuple[dict, str]:
         record = resolve_switch(host)
         if not isinstance(record, dict):
             abort(404, description="Switch nao encontrado no inventario do Sentinel.")
@@ -89,12 +93,34 @@ def create_switch_update_blueprint(
         if not ip:
             abort(400, description="Switch sem IP cadastrado.")
         status = str(record.get("status") or "").strip().casefold()
-        if status and status not in {"online", "warning", "atencao", "atenção"}:
+        local_only = record.get("local_only") is True
+        if (
+            require_online
+            and not local_only
+            and status
+            and status not in {"online", "warning", "atencao", "atenção"}
+        ):
             abort(409, description="O switch precisa estar online para iniciar o preflight.")
-        protocol = str(record.get("protocol") or record.get("protocolo") or "https").lower()
+        protocol = str(
+            record.get("protocol")
+            or record.get("protocolo")
+            or normalized_default_protocol
+        ).strip().casefold()
         if protocol not in {"http", "https"}:
-            protocol = "https"
+            protocol = normalized_default_protocol
         return record, f"{protocol}://{ip}"
+
+    def shared_job(job: dict, viewer: str) -> dict:
+        """Remove dados operacionais desnecessários da visão compartilhada."""
+        payload = dict(job)
+        payload.pop("username", None)
+        payload["requested_by"] = payload.get("owner")
+        payload["can_cancel"] = payload.get("status") == "scheduled"
+        payload["can_review"] = (
+            payload.get("status") == "needs_review"
+            and payload.get("requested_by") == viewer
+        )
+        return payload
 
     def json_error(message: str, status: int):
         return jsonify({"success": False, "message": message}), status
@@ -120,8 +146,10 @@ def create_switch_update_blueprint(
     @blueprint.get("/api/switches/firmware/csrf")
     def csrf_token():
         require_authorized_user()
-        token = secrets.token_urlsafe(32)
-        session[csrf_session_key] = token
+        token = str(session.get(csrf_session_key) or "")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session[csrf_session_key] = token
         return jsonify({"success": True, "csrf_token": token})
 
     @blueprint.get("/api/switches/firmware/health")
@@ -148,6 +176,12 @@ def create_switch_update_blueprint(
         owner = require_authorized_user()
         validate_csrf()
         switch, url = switch_url(host)
+        active = scheduler.get_active_schedule_for_host(url.split("://", 1)[1])
+        if active:
+            return json_error(
+                "Ja existe uma atualizacao pendente ou em andamento para este switch.",
+                409,
+            )
         if request.content_length and request.content_length > MAX_FIRMWARE_BYTES + 1024 * 1024:
             abort(413, description="Upload excede o limite permitido.")
         uploaded = request.files.get("firmware")
@@ -214,6 +248,10 @@ def create_switch_update_blueprint(
             scheduled_at = payload.get("scheduled_at")
             if not scheduled_at:
                 scheduled_at = scheduler.now()
+            try:
+                max_attempts = int(payload.get("max_attempts", 1))
+            except (TypeError, ValueError):
+                return json_error("A quantidade de tentativas e invalida.", 400)
             result = scheduler.schedule_from_draft(
                 draft_id=draft["draft_token"],
                 owner=owner,
@@ -221,6 +259,7 @@ def create_switch_update_blueprint(
                 username=str(payload.get("username") or ""),
                 password=password,
                 confirmed_decision=str(payload.get("confirmed_decision") or ""),
+                max_attempts=max_attempts,
             )
         finally:
             password = ""
@@ -234,7 +273,7 @@ def create_switch_update_blueprint(
         return jsonify(
             {
                 "success": True,
-                "job": result,
+                "job": shared_job(result, owner),
                 "worker_triggered": worker_triggered,
             }
         ), 202
@@ -246,29 +285,47 @@ def create_switch_update_blueprint(
 
     @blueprint.get("/api/switches/firmware/jobs/<job_id>")
     def firmware_job_status(job_id: str):
-        owner = require_authorized_user()
-        return jsonify({"success": True, "job": scheduler.get_schedule(job_id, owner=owner)})
+        viewer = require_authorized_user()
+        return jsonify(
+            {"success": True, "job": shared_job(scheduler.get_schedule(job_id), viewer)}
+        )
+
+    @blueprint.get("/api/switches/<path:host>/firmware/active-job")
+    def active_firmware_job(host: str):
+        viewer = require_authorized_user()
+        _, url = switch_url(host, require_online=False)
+        job = scheduler.get_active_schedule_for_host(url.split("://", 1)[1])
+        return jsonify(
+            {"success": True, "job": shared_job(job, viewer) if job else None}
+        )
 
     @blueprint.delete("/api/switches/firmware/jobs/<job_id>")
     def cancel_firmware_job(job_id: str):
-        owner = require_authorized_user()
+        operator = require_authorized_user()
         validate_csrf()
-        result = scheduler.cancel_schedule(job_id, owner=owner)
-        return jsonify({"success": True, "job": result})
+        job = scheduler.get_schedule(job_id)
+        result = scheduler.cancel_schedule(job_id, owner=str(job["owner"]))
+        LOGGER.info(
+            "Agendamento de switch %s criado por %s foi cancelado por %s.",
+            job_id,
+            job["owner"],
+            operator,
+        )
+        return jsonify({"success": True, "job": shared_job(result, operator)})
 
     @blueprint.post("/api/switches/firmware/jobs/<job_id>/acknowledge-review")
     def acknowledge_firmware_review(job_id: str):
         owner = require_authorized_user()
         validate_csrf()
         result = scheduler.acknowledge_review(job_id, owner=owner)
-        return jsonify({"success": True, "job": result})
+        return jsonify({"success": True, "job": shared_job(result, owner)})
 
     @blueprint.post("/api/switches/firmware/jobs/<job_id>/recheck")
     def recheck_firmware_job(job_id: str):
         owner = require_authorized_user()
         validate_csrf()
         result = scheduler.recheck_review(job_id, owner=owner)
-        return jsonify({"success": True, "job": result})
+        return jsonify({"success": True, "job": shared_job(result, owner)})
 
     @blueprint.delete("/api/switches/firmware/drafts/<draft_id>")
     def cancel_firmware_draft(draft_id: str):
@@ -286,6 +343,7 @@ def install_switch_update_backend(
     *,
     resolve_switch: SwitchResolver,
     is_authorized: AuthorizationCheck,
+    default_protocol: str = "https",
     start_scheduler: bool = True,
     trigger_worker: WorkerTrigger | None = None,
     worker_health: WorkerHealth | None = None,
@@ -298,6 +356,7 @@ def install_switch_update_backend(
         scheduler,
         resolve_switch=resolve_switch,
         is_authorized=is_authorized,
+        default_protocol=default_protocol,
         trigger_worker=trigger_worker,
         worker_health=worker_health,
         execution_mode="internal_thread" if start_scheduler else "windows_task",

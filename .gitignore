@@ -73,6 +73,7 @@ data/*.json
 data/switch_updates/
 diagnostics/
 *.swi
+tools/chromedriver/
 auditoria_*.json
 relatorio_*.json
 admin_baseline.json

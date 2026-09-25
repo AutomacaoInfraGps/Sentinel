@@ -75,10 +75,12 @@
   "switch_update": {
     "task_name": "SentinelSwitchUpdateWorker",
     "driver_path": null,
+    "webui_protocol_fallback": "https",
     "insecure_tls": false,
     "http_timeout": 10,
     "reboot_timeout": 420,
-    "transfer_timeout": 900,
+    "transfer_timeout": 1200,
+    "transfer_stall_timeout": 300,
     "draft_ttl_seconds": 900,
     "log_retention_months": 12
   },

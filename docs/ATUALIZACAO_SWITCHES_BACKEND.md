@@ -11,7 +11,7 @@ os logs por job e as rotas Flask.
 - `services/switch_update_v01/scheduler.py`: fila, SQLite, DPAPI e auditoria;
 - `services/switch_update_v01/sentinel_backend.py`: API Flask autenticada;
 - `services/switch_update_v01/worker.py`: passagem não interativa da fila;
-- `services/switch_update_v01/windows_task.py`: consulta e disparo da tarefa;
+- `services/switch_update_v01/windows_task.py`: heartbeat e disparo da tarefa;
 - `executar_switch_update_worker.bat`: lançador com diretório absoluto;
 - `agendar_atualizacao_switches.ps1`: instalação e operação da tarefa Windows.
 
@@ -33,9 +33,12 @@ Instalação requer PowerShell elevado:
 .\agendar_atualizacao_switches.ps1 -Action status
 ```
 
-A tarefa usa `SYSTEM`, a mesma identidade da tarefa web atual. Se o Sentinel
-for migrado para uma conta de serviço, as duas tarefas precisam ser migradas
-juntas antes de criar jobs, pois o DPAPI vincula a senha à identidade Windows.
+A tarefa usa `SYSTEM`, mas a identidade não precisa ser a mesma do processo web.
+As novas credenciais são protegidas pelo DPAPI no escopo da máquina, portanto o
+backend e o worker podem usar contas Windows diferentes desde que executem no
+mesmo servidor. O arquivo do banco continua exigindo ACL restrita: qualquer
+conta local que obtenha acesso ao blob protegido pode solicitar sua descriptografia
+ao Windows nessa máquina.
 
 ## Configuração
 
@@ -43,6 +46,12 @@ As opções não sensíveis ficam na seção `switch_update` do
 `environment.json`; veja `environment.example.json`. Produção mantém
 `insecure_tls=false`. Quando o Selenium Manager não puder acessar a internet,
 instale um ChromeDriver compatível e configure `driver_path`.
+
+`webui_protocol_fallback` define somente o protocolo inicial quando o
+inventário não informa um. Redirecionamentos da WebUI para HTTP ou HTTPS são
+aceitos apenas no mesmo IP, e o protocolo final retornado passa a ser usado no
+job. A transferência possui limite total de 1.200 segundos e limite de 300
+segundos sem progresso, além da verificação de conectividade durante o envio.
 
 O servidor precisa de Google Chrome e da dependência `selenium==4.49.0`.
 
@@ -54,9 +63,10 @@ O servidor precisa de Google Chrome e da dependência `selenium==4.49.0`.
 - Mantenha `insecure_tls=false` em produção. A exceção deve ser temporária,
   documentada e restrita a um equipamento conhecido.
 - Restrinja a escrita no repositório, nos scripts do worker e em
-  `data/switch_updates` aos administradores e à conta de serviço. Como a tarefa
-  executa como `SYSTEM`, permitir que um usuário comum altere esses arquivos
-  possibilita elevação de privilégio.
+  `data/switch_updates` aos administradores, à conta do backend e a `SYSTEM`.
+  Além do risco de elevação de privilégio pela alteração dos scripts, o DPAPI
+  no escopo da máquina torna a confidencialidade das credenciais dependente
+  dessas permissões de arquivo.
 - Os diagnósticos podem conter capturas de tela, HTML e dados da interface do
   switch. Guarde-os somente pelo tempo necessário para análise e não os envie
   ao Git.
