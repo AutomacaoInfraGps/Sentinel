@@ -16,7 +16,7 @@ packages = [
 
 # Módulos do projeto
 project_modules = [
-    "config", "credentials", "data_store", "vm_manager",
+    "config", "data_store", "vm_manager",
     "gerenciar_servidores", "gerenciar_switches", "gerenciar_vms",
     "gerenciar_regionais", "gerenciar_fortigate", "auth_ad",
     "dashboard_hierarquico", "web_config", "templates_configuracao"

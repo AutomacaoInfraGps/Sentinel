@@ -62,7 +62,6 @@ def testar_imports_principais():
     
     modulos_principais = [
         "config",
-        "credentials", 
         "gerenciar_servidores",
         "web_config"
     ]

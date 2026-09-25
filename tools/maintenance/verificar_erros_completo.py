@@ -108,7 +108,7 @@ class VerificadorErros:
                         modulo = import_items.split(',')[0].strip()
                     
                     # Verifica se é módulo local
-                    if modulo.startswith('.') or modulo in ['config', 'credentials', 'auth_ad']:
+                    if modulo.startswith('.') or modulo in ['config', 'auth_ad']:
                         continue
                     
                     # Tenta importar
@@ -322,7 +322,6 @@ class VerificadorErros:
         # Testa importação dos módulos principais
         modulos_principais = [
             "config",
-            "credentials", 
             "gerenciar_servidores",
             "web_config"
         ]

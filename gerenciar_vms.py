@@ -43,21 +43,6 @@ except ImportError:
 # Desativa avisos de certificado SSL inválido
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-# Importa o módulo de credenciais
-try:
-    from credentials import get_credentials
-except ImportError:
-    # Fallback para caso o módulo não esteja disponível
-    def get_credentials(service, prompt_if_missing=False):
-        if service == 'server_manager':
-            return {
-                'host': '203.0.113.20',
-                'username': 'admin',
-                'password': '',
-                'regional': 'Regional Exemplo'
-            }
-        return {'username': '', 'password': ''}
-
 # Tenta importar configurações do environment.json
 try:
     from pathlib import Path
@@ -82,14 +67,11 @@ class GerenciadorVMs:
         # Primeiro tenta obter do environment.json
         env_creds = ENV_CONFIG.get('server_manager', {})
         
-        # Depois tenta obter do módulo de credenciais
-        creds = get_credentials('server_manager')
-        
-        # Usa os parâmetros fornecidos ou as credenciais das fontes disponíveis
-        self.host = host or env_creds.get('host') or creds.get('host') or '203.0.113.20'
-        self.username = username or env_creds.get('username') or creds.get('username') or 'admin'
-        self.password = password or env_creds.get('password') or creds.get('password') or ''
-        self.regional = regional or env_creds.get('regional') or creds.get('regional') or 'Regional Exemplo'
+        # Usa parâmetros explícitos ou a configuração local do ambiente.
+        self.host = host or env_creds.get('host') or '203.0.113.20'
+        self.username = username or env_creds.get('username') or 'admin'
+        self.password = password or env_creds.get('password') or ''
+        self.regional = regional or env_creds.get('regional') or 'Regional Exemplo'
         
         # Log das configurações (sem a senha)
         print(f"🔧 Configurações do Server Manager:")

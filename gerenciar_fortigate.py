@@ -37,21 +37,6 @@ def _parse_vpn_phase1_comments(output):
 
     return comments_by_tunnel
 
-# Importa o módulo de credenciais e configurações
-try:
-    from credentials import get_credentials
-except ImportError:
-    # Fallback para caso o módulo não esteja disponível
-    def get_credentials(service, prompt_if_missing=False):
-        if service == 'fortigate':
-            return {
-                'host': 'fortigate.example.local',
-                'port': 20443,
-                'username': 'admin',
-                'password': ''
-            }
-        return {'username': '', 'password': ''}
-
 # Tenta importar configurações do environment.json
 try:
     import json
@@ -87,17 +72,11 @@ class GerenciadorFortigate:
                     env_creds = cfg
                     break
         
-        # O cofre local é apenas fallback para campos ausentes no ambiente.
-        needs_secure_fallback = not all(
-            env_creds.get(field) for field in ('host', 'username', 'password')
-        )
-        creds = get_credentials('fortigate') if needs_secure_fallback else {}
-        
-        # Usa os parâmetros fornecidos ou as credenciais das fontes disponíveis
-        self.host = host or env_creds.get('host') or creds.get('host') or 'fortigate.example.local'
-        self.port = port or env_creds.get('port') or creds.get('port') or 20443
-        self.username = username or env_creds.get('username') or creds.get('username') or 'admin'
-        self.password = password or env_creds.get('password') or creds.get('password') or ''
+        # Usa parâmetros explícitos ou a configuração local do ambiente.
+        self.host = host or env_creds.get('host') or 'fortigate.example.local'
+        self.port = port or env_creds.get('port') or 20443
+        self.username = username or env_creds.get('username') or 'admin'
+        self.password = password or env_creds.get('password') or ''
         
         # Log das configurações (sem a senha)
         print(f"   Configurações do Fortigate:")
@@ -143,6 +122,94 @@ class GerenciadorFortigate:
             if not device_name:
                 return {}
             return client.get_vpn_phase1_comments(device_name)
+
+    @staticmethod
+    def _nomes_vpn_ativas(payload):
+        nomes = set()
+
+        def _walk(value):
+            if isinstance(value, dict):
+                yield value
+                for child in value.values():
+                    yield from _walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from _walk(child)
+
+        for item in _walk(payload):
+            for field in ("name", "parent", "p1name", "phase1name", "phase1-name"):
+                value = str(item.get(field) or "").strip()
+                if value:
+                    nomes.add(value.casefold())
+        return nomes
+
+    def obter_vpn_ipsec_fortimanager(self):
+        """Obtem configuracao e status das VPNs usando somente o FortiManager."""
+        fm_cfg = ENV_CONFIG.get("fortimanager", {})
+        if not isinstance(fm_cfg, dict) or not fm_cfg.get("host"):
+            return {"success": False, "message": "FortiManager nao configurado", "source": "fortimanager"}
+
+        adom = str(fm_cfg.get("adom") or "root").strip()
+        device_name = str(fm_cfg.get("vpn_hub_device") or "").strip()
+
+        try:
+            with FortiManagerClient() as client:
+                if not device_name:
+                    payload = client.list_devices(adom)
+                    result = payload.get("result", []) if isinstance(payload, dict) else []
+                    first = result[0] if result and isinstance(result[0], dict) else {}
+                    devices = first.get("data", []) if isinstance(first, dict) else []
+                    host_alvo = str(self.host or "").strip().casefold()
+                    device = next(
+                        (
+                            item for item in devices
+                            if isinstance(item, dict)
+                            and str(item.get("ip") or "").strip().casefold() == host_alvo
+                        ),
+                        None,
+                    )
+                    device_name = str((device or {}).get("name") or "").strip()
+
+                if not device_name:
+                    return {
+                        "success": False,
+                        "message": "Hub de VPN nao identificado no FortiManager",
+                        "source": "fortimanager",
+                    }
+
+                configured = client.get_vpn_phase1_interfaces(device_name)
+                monitor = client.proxy_monitor_vpn_ipsec(adom, device_name)
+
+            active_names = self._nomes_vpn_ativas(monitor.get("results"))
+            now = datetime.now().strftime("%H:%M:%S")
+            vpns = []
+            for tunnel in configured:
+                name = str(tunnel.get("name") or "").strip()
+                if not name:
+                    continue
+                vpns.append({
+                    "tunel": name,
+                    "comentario": str(tunnel.get("comments") or "").strip(),
+                    "interface": "N/A",
+                    "status": "up" if name.casefold() in active_names else "down",
+                    "ultima_verificacao": now,
+                })
+
+            return {
+                "success": True,
+                "vpns": vpns,
+                "total": len(vpns),
+                "ativos": sum(1 for vpn in vpns if vpn["status"] == "up"),
+                "inativos": sum(1 for vpn in vpns if vpn["status"] == "down"),
+                "source": "fortimanager_proxy",
+                "device": device_name,
+            }
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": f"Falha ao consultar VPNs pelo FortiManager: {exc}",
+                "source": "fortimanager",
+            }
 
     def _session_get(self, url, headers=None, timeout=None, **kwargs):
         if not self.session:
@@ -218,11 +285,13 @@ class GerenciadorFortigate:
                     # Faz a requisição de login
                     login_response = self._session_post(login_url, data=login_data)
                     
-                    # Verifica cookies de sessão
-                    cookies = str(self.session.cookies)
-                    print(f"   Cookies recebidos: {cookies[:100]}")
-                    
-                    if 'APSCOOKIE_' in cookies:
+                    # Nunca registre cookies de sessao; eles equivalem a credenciais temporarias.
+                    has_session_cookie = any(
+                        str(cookie.name).startswith("APSCOOKIE_")
+                        for cookie in self.session.cookies
+                    )
+
+                    if has_session_cookie:
                         self.last_login = time.time()
                         print(f"[OK] Autenticação alternativa bem-sucedida no Fortigate {self.host}")
                         return True

@@ -55,20 +55,6 @@ def print(*args, **kwargs):
     except UnicodeEncodeError:
         _ORIGINAL_PRINT(*(_sanitize_console_text(arg) for arg in args), **kwargs)
 
-# Importa o módulo de credenciais
-try:
-    from credentials import get_credentials
-except ImportError:
-    # Fallback para caso o módulo não esteja disponível
-    def get_credentials(service, prompt_if_missing=False):
-        if service == 'zabbix':
-            return {
-                'url': 'https://zabbix.example.local/zabbix/api_jsonrpc.php',
-                'username': 'admin',
-                'password': ''
-            }
-        return {'username': '', 'password': ''}
-
 class GerenciadorSwitches:
     """Gerencia informações de switches via Zabbix"""
     
@@ -478,17 +464,6 @@ class GerenciadorSwitches:
                     self.zabbix_url = self.zabbix_url or config.get('zabbix_url')
                     self.username = self.username or config.get('username')
                     self.password = self.password or config.get('password')
-            
-            # Se não encontrou no arquivo ou se algum valor estiver faltando,
-            # tenta obter do módulo de credenciais
-            if not self.zabbix_url or not self.username or not self.password:
-                creds = get_credentials('zabbix')
-                self.zabbix_url = self.zabbix_url or creds.get('url')
-                self.username = self.username or creds.get('username')
-                self.password = self.password or creds.get('password')
-                
-                if self.zabbix_url and self.username and self.password:
-                    self.salvar_config()
             
             # Se ainda estiver faltando algum valor, usa valores padrão
             if not self.zabbix_url:
