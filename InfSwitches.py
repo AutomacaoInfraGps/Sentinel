@@ -9,14 +9,9 @@ except ImportError:
 import requests
 import datetime
 from config import ENV_CONFIG
-try:
-    from credentials import get_credentials
-except ImportError:
-    def get_credentials(service, prompt_if_missing=False):
-        return {}
 
 # === CONFIGURAÇÕES ===
-zabbix_creds = ENV_CONFIG.get("zabbix", {}) or get_credentials("zabbix") or {}
+zabbix_creds = ENV_CONFIG.get("zabbix", {}) or {}
 ZABBIX_URL = zabbix_creds.get("url", "https://zabbix.example.local/zabbix/api_jsonrpc.php")
 USERNAME = zabbix_creds.get("username", "")
 PASSWORD = zabbix_creds.get("password", "")
@@ -27,7 +22,7 @@ arquivo_excel = Path("C:/Users/m.vbatista/Desktop/Projetos Automação/ChekList 
 # === AUTENTICAÇÃO NA API DO ZABBIX ===
 def get_auth_token():
     if not ZABBIX_URL or not USERNAME or not PASSWORD:
-        raise RuntimeError("Configure as credenciais do Zabbix no environment.json ou no cofre de credenciais.")
+        raise RuntimeError("Configure as credenciais do Zabbix no environment.json.")
     payload = {
         "jsonrpc": "2.0",
         "method": "user.login",

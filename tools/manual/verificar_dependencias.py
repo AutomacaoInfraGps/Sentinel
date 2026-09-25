@@ -38,7 +38,7 @@ def listar_dependencias_projeto():
     
     # Módulos do próprio projeto
     modulos_projeto = [
-        'config', 'credentials', 'data_store', 'vm_manager',
+        'config', 'data_store', 'vm_manager',
         'gerenciar_servidores', 'gerenciar_switches', 'gerenciar_vms',
         'gerenciar_regionais', 'gerenciar_fortigate'
     ]

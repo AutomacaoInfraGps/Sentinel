@@ -337,7 +337,7 @@
         </div>
         <div class="vpn-region-body">
         {% for vpn in dados.tunels %}
-            <article class="vpn-tunnel-row vpn-search-item {{ 'up' if vpn.status == 'up' else 'down' }}" data-status="{{ 'online' if vpn.status == 'up' else 'offline' }}" data-search-text="{{ dados.nome_exibicao or regional }} {{ vpn.tunel }} {{ vpn.interface or '' }} {{ vpn.status }} {{ vpn.ultima_verificacao or '' }}">
+            <article class="vpn-tunnel-row vpn-search-item {{ 'up' if vpn.status == 'up' else 'down' }}" data-status="{{ 'online' if vpn.status == 'up' else 'offline' }}" data-search-text="{{ dados.nome_exibicao or regional }} {{ vpn.tunel }} {{ vpn.comentario or vpn.comments or '' }} {{ vpn.interface or '' }} {{ vpn.status }} {{ vpn.ultima_verificacao or '' }}">
                 <div>
                     <div class="vpn-tunnel-name">{{ vpn.tunel }}</div>
                     <div class="vpn-tunnel-meta">Última verificação: {{ vpn.ultima_verificacao }}</div>

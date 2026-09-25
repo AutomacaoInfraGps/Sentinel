@@ -14,17 +14,16 @@ Exemplo de variáveis do serviço:
 
 ```text
 SECRET_KEY=<valor aleatório com pelo menos 64 caracteres>
-AUTOMATION_MASTER_PASSWORD=<valor aleatório exclusivo com pelo menos 32 caracteres>
 SENTINEL_HTTPS_ENABLED=true
 SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
 AUTOMACAO_WEB_HOST=127.0.0.1
 AUTOMACAO_WEB_PORT=5000
 ```
 
-`AUTOMATION_MASTER_PASSWORD` protege o arquivo local `.credentials`. A pasta
-`.credentials/` não deve ser versionada, copiada para executáveis ou incluída
-em imagens. Após trocar essa chave, cadastre novamente as credenciais de cada
-integração e reinicie o serviço.
+As configurações das integrações ficam exclusivamente no `environment.json`,
+que não deve ser versionado, copiado para executáveis ou incluído em imagens.
+Restrinja sua leitura à conta do serviço e mantenha o `environment.example.json`
+somente com valores fictícios.
 
 ## Active Directory
 

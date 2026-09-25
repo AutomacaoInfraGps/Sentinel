@@ -30,6 +30,7 @@
     "username": "admin.exemplo",
     "password": "ALTERE_AQUI",
     "adom": "ADOM_EXEMPLO",
+    "vpn_hub_device": "FORTIGATE_HUB_EXEMPLO",
     "use_proxy_for_links": true
   },
   "zabbix": {

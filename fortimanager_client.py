@@ -129,6 +129,14 @@ class FortiManagerClient:
 
     def get_vpn_phase1_comments(self, device_name, vdom="root"):
         """Retorna os comentarios das VPNs configuradas no banco do FortiManager."""
+        return {
+            item["name"]: item.get("comments", "")
+            for item in self.get_vpn_phase1_interfaces(device_name, vdom=vdom)
+            if item.get("comments")
+        }
+
+    def get_vpn_phase1_interfaces(self, device_name, vdom="root"):
+        """Retorna os tuneis configurados no banco do FortiManager."""
         payload = self._request(
             "get",
             f"/pm/config/device/{device_name}/vdom/{vdom}/vpn/ipsec/phase1-interface",
@@ -139,15 +147,41 @@ class FortiManagerClient:
         if isinstance(data, dict):
             data = list(data.values())
 
-        comments = {}
+        tunnels = []
         for item in data if isinstance(data, list) else []:
             if not isinstance(item, dict):
                 continue
             tunnel = str(item.get("name") or "").strip()
             comment = str(item.get("comments") or item.get("comment") or "").strip()
-            if tunnel and comment:
-                comments[tunnel] = comment
-        return comments
+            if tunnel:
+                tunnels.append({"name": tunnel, "comments": comment})
+        return tunnels
+
+    def proxy_monitor_vpn_ipsec(self, adom: str, device_name: str, vdom="root") -> dict:
+        """Consulta tuneis IPsec ativos pelo proxy somente leitura do FortiManager."""
+        payload = {
+            "id": 1,
+            "method": "exec",
+            "params": [{
+                "url": "/sys/proxy/json",
+                "data": {
+                    "target": [f"adom/{adom}/device/{device_name}"],
+                    "action": "get",
+                    "resource": f"/api/v2/monitor/vpn/ipsec?vdom={vdom}",
+                },
+            }],
+            "session": self.sessionid,
+        }
+        response = self.session.post(self.base_url, json=payload, timeout=30)
+        response.raise_for_status()
+        body = self._proxy_response_body(response.json())
+        if not isinstance(body, dict):
+            raise FortiManagerClientError("Monitor IPsec retornou uma resposta invalida")
+        if str(body.get("status") or "success").lower() not in {"success", "ok"}:
+            raise FortiManagerClientError(
+                body.get("message") or "FortiManager nao conseguiu consultar o monitor IPsec"
+            )
+        return body
 
     def proxy_monitor_interfaces(self, adom: str, device_name: str) -> dict:
         """Consulta /api/v2/monitor/system/interface no dispositivo via proxy do FortiManager.

@@ -52,12 +52,6 @@ from regional_access import (
 )
 from security_hardening import configure_security
 
-try:
-    from credentials import get_credentials
-except ImportError:
-    def get_credentials(service, prompt_if_missing=False):
-        return {}
-
 # Importa o módulo de gerenciamento de VMs
 from vm_manager import verificar_vm_online, obter_servicos_vm, obter_logs_vm, obter_detalhes_vm, verificar_vm_completo, gerar_relatorio_completo, gerar_relatorio_simples
 
@@ -1556,8 +1550,8 @@ def _agrupar_vpns_por_regional(vpns, indice_regionais=None):
             regional = regional_mapeada["chave"]
             nome_exibicao = regional_mapeada["nome_exibicao"]
         else:
-            regional = regional_vpn
-            nome_exibicao = nome_exibicao_vpn
+            regional = "SEM_REGIONAL"
+            nome_exibicao = "VPNs sem regional"
 
         dados_regional = vpns_por_regional.setdefault(
             regional,
@@ -1577,15 +1571,19 @@ def _agrupar_vpns_por_regional(vpns, indice_regionais=None):
 
     regionais_ordenadas = sorted(vpns_por_regional.keys(), key=lambda chave: str(vpns_por_regional[chave].get("nome_exibicao") or chave))
     regionais_mapeadas = [regional for regional in regionais_ordenadas if regional in regionais_cadastradas]
-    regionais_exibicao = regionais_mapeadas if regionais_mapeadas else regionais_ordenadas
-    regionais_com_offline = [regional for regional in regionais_exibicao if vpns_por_regional[regional]["offline"] > 0]
+    regionais_nao_mapeadas = [regional for regional in regionais_ordenadas if regional not in regionais_cadastradas]
+    regionais_exibicao = regionais_mapeadas + regionais_nao_mapeadas
+    regionais_com_offline = [
+        regional for regional in regionais_mapeadas
+        if vpns_por_regional[regional]["offline"] > 0
+    ]
 
     return {
         "regionais": regionais_exibicao,
         "vpns_por_regional": vpns_por_regional,
         "regionais_com_offline": regionais_com_offline,
-        "total_regionais": len(regionais_exibicao),
-        "regionais_sem_offline": max(len(regionais_exibicao) - len(regionais_com_offline), 0),
+        "total_regionais": len(regionais_mapeadas),
+        "regionais_sem_offline": max(len(regionais_mapeadas) - len(regionais_com_offline), 0),
     }
 
 
@@ -2725,13 +2723,7 @@ def _resolve_fortigate_credentials() -> dict:
             if isinstance(cfg, dict) and cfg.get("host"):
                 selected = cfg
                 break
-    if all(selected.get(field) for field in ("host", "username", "password")):
-        return selected
-    secure = get_credentials("fortigate") or {}
-    return {
-        **secure,
-        **{key: value for key, value in selected.items() if value not in (None, "")},
-    }
+    return selected
 
 
 def _get_fortimanager_adom() -> str:
@@ -4133,8 +4125,8 @@ def _montar_dados_mapa_monitoramento():
         regionais[codigo]["aps"].append(ap_mapa)
 
     try:
-        if gerenciador_fortigate.autenticar():
-            resultado_vpn = gerenciador_fortigate.obter_vpn_ipsec()
+        resultado_vpn = _obter_vpns_operacionais()
+        if resultado_vpn.get("success"):
             vpns = resultado_vpn.get("vpns", []) if isinstance(resultado_vpn, dict) and resultado_vpn.get("success") else []
             vpns = [
                 vpn for vpn in vpns
@@ -7594,18 +7586,13 @@ def listar_firewalls(return_data=False):
 # ---------------------------------------------------------------------------
 def _get_faz_client() -> FortiAnalyzerClient:
     faz_cfg = ENV_CONFIG.get("fortianalyzer", {})
-    has_environment_auth = bool(
-        faz_cfg.get("api_key")
-        or (faz_cfg.get("username") and faz_cfg.get("password"))
-    )
-    secure_credentials = {} if has_environment_auth else (get_credentials("fortianalyzer") or {})
     return FortiAnalyzerClient(
         host=faz_cfg.get("host", ""),
         api_key=faz_cfg.get("api_key", ""),
         adom=faz_cfg.get("adom", "GPS_UNIDADES"),
         verify_ssl=bool(faz_cfg.get("verify_ssl", False)),
-        username=faz_cfg.get("username") or secure_credentials.get("username", ""),
-        password=faz_cfg.get("password") or secure_credentials.get("password", ""),
+        username=faz_cfg.get("username", ""),
+        password=faz_cfg.get("password", ""),
     )
 
 
@@ -8124,6 +8111,30 @@ def _fresh_vpn_operational_records():
     return [dict(vpn) for vpn in (vpn_group.get("records") or [])]
 
 
+def _obter_vpns_operacionais():
+    result = gerenciador_fortigate.obter_vpn_ipsec_fortimanager()
+    if result.get("success"):
+        return result
+
+    fortimanager_error = result.get("message") or "Falha desconhecida no FortiManager"
+    current_app.logger.warning(
+        "Consulta de VPN pelo FortiManager indisponivel; usando fallback direto temporario: %s",
+        fortimanager_error,
+    )
+    if not gerenciador_fortigate.autenticar():
+        return {
+            "success": False,
+            "message": f"{fortimanager_error}. Fallback direto sem autenticacao.",
+            "source": "unavailable",
+        }
+
+    fallback = gerenciador_fortigate.obter_vpn_ipsec()
+    if isinstance(fallback, dict) and fallback.get("success"):
+        fallback["source"] = "fortigate_direct_fallback"
+        fallback["warning"] = fortimanager_error
+    return fallback
+
+
 def _collect_and_publish_vpns():
     previous_state = load_operational_state() or {}
     previous_group = ((previous_state.get("groups") or {}).get("vpns") or {})
@@ -8133,11 +8144,9 @@ def _collect_and_publish_vpns():
         if str(vpn.get("regional") or "").strip().upper() == "SEM_REGIONAL"
     }
 
-    if not gerenciador_fortigate.autenticar():
-        return {"success": False, "message": "Falha na autenticação com o Fortigate"}
-    result = gerenciador_fortigate.obter_vpn_ipsec()
+    result = _obter_vpns_operacionais()
     if not isinstance(result, dict):
-        return {"success": False, "message": "Resposta inválida do Fortigate"}
+        return {"success": False, "message": "Resposta inválida da consulta de VPN"}
     if not result.get("success", False):
         return result
 
@@ -8157,9 +8166,11 @@ def _collect_and_publish_vpns():
         and str(vpn.get("regional") or "").strip().upper() != "SEM_REGIONAL"
     )
     total_linked = len(records) - total_unmapped
+    source = result.get("source") or "unknown"
+    source_label = "FortiManager" if source == "fortimanager_proxy" else "fallback direto temporário"
     message = (
         f"VPNs atualizadas: {len(records)} consultadas, {total_linked} vinculadas, "
-        f"{newly_linked} novo(s) vinculo(s) e {total_unmapped} sem regional."
+        f"{newly_linked} novo(s) vinculo(s) e {total_unmapped} sem regional. Fonte: {source_label}."
     )
     return {
         **result,
@@ -8170,6 +8181,7 @@ def _collect_and_publish_vpns():
         "total_vinculado": total_linked,
         "novos_vinculos": newly_linked,
         "total_sem_regional": total_unmapped,
+        "source": source,
     }
 
 @app.route('/vpn')
@@ -11692,6 +11704,7 @@ def wan_status_page():
 
 
 @app.route('/api/fortigate/wan/status')
+@login_required
 def api_fortigate_wan_status():
     """API para obter status das interfaces WAN do Fortigate com SD-WAN e SLA"""
     try:
@@ -12035,60 +12048,8 @@ def api_salvar_configuracoes():
             }
         }
         
-        # Atualiza as credenciais no sistema de credenciais seguras
-        try:
-            from credentials import get_credentials, encrypt_credentials, decrypt_credentials
-            
-            # Obtém as credenciais atuais
-            credentials = decrypt_credentials()
-            
-            # Atualiza as credenciais do Fortigate
-            credentials['fortigate'] = {
-                'host': data.get('fortigate_host', 'fortigate.example.local'),
-                'port': int(data.get('fortigate_porta', 20443)),
-                'username': data.get('fortigate_usuario', 'admin'),
-                'password': senha_ou_atual('fortigate_senha', 'fortigate')
-            }
-            
-            # Atualiza as credenciais do Zabbix
-            credentials['zabbix'] = {
-                'url': data.get('zabbix_url', 'https://zabbix.example.local/zabbix/api_jsonrpc.php'),
-                'username': data.get('zabbix_usuario', 'admin'),
-                'password': senha_ou_atual('zabbix_senha', 'zabbix'),
-                'excel_file': data.get('zabbix_arquivo_excel', 'switches_zabbix.xlsx')
-            }
-            
-            # Atualiza as credenciais do NAOS
-            credentials['naos'] = {
-                'host': data.get('naos_ip', ''),
-                'username': data.get('naos_usuario', ''),
-                'password': senha_ou_atual('naos_senha', 'naos_server', 'senha')
-            }
-            
-            # Atualiza as credenciais do UniFi
-            credentials['unifi'] = {
-                'host': data.get('unifi_host', ''),
-                'port': int(data.get('unifi_port', 8443)),
-                'username': data.get('unifi_usuario', ''),
-                'password': senha_ou_atual('unifi_senha', 'unifi_controller')
-            }
-            
-            # Atualiza as credenciais do Server Manager
-            credentials['server_manager'] = {
-                'host': data.get('server_manager_host', '203.0.113.20'),
-                'username': data.get('server_manager_usuario', 'admin'),
-                'password': senha_ou_atual('server_manager_senha', 'server_manager'),
-                'regional': data.get('server_manager_regional', 'Paraná')
-            }
-            
-            # Salva as credenciais
-            encrypt_credentials(credentials)
-            print("✅ Credenciais atualizadas com sucesso!")
-        except Exception as e:
-            print(f"⚠️ Erro ao atualizar credenciais: {str(e)}")
-            # Continua mesmo se houver erro nas credenciais
-        
         # Salva configuração
+        config = {**config_atual, **config}
         env_file = PROJECT_ROOT / "environment.json"
         with open(env_file, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)

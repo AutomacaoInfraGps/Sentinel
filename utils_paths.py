@@ -38,9 +38,3 @@ def get_environment_file():
     Retorna o caminho para o arquivo environment.json
     """
     return get_file_path("environment.json")
-
-def get_credentials_dir():
-    """
-    Retorna o diretório de credenciais
-    """
-    return get_file_path(".credentials")

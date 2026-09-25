@@ -50,7 +50,6 @@ def verificar_arquivos_necessarios():
     ]
     
     arquivos_opcionais = [
-        "credentials.py",
         "data_store.py",
         "vm_manager.py",
     ]
@@ -121,7 +120,6 @@ hiddenimports = [
     'webbrowser',
     'datetime',
     'config',
-    'credentials',
     'data_store',
     'vm_manager',
     'gerenciar_servidores',

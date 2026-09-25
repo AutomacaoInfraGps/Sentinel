@@ -130,8 +130,20 @@ preservada sem transformar o equipamento automaticamente em offline.
 
 ### Links e VPNs
 
-Consulta FortiManager/FortiGate, interfaces WAN e tuneis IPsec. Os dados sao
-associados e persistidos na regional correspondente.
+As interfaces WAN são consultadas pelo FortiManager. Para VPNs, configure
+`fortimanager.vpn_hub_device` com o nome exato do FortiGate hub no inventário do
+FortiManager. O Sentinel lê os túneis configurados e seus comentários no banco
+do FortiManager e consulta os túneis ativos pelo proxy somente leitura
+`/sys/proxy/json`, usando o monitor `/api/v2/monitor/vpn/ipsec`.
+
+O perfil associado à API key precisa ter acesso de leitura ao ADOM, à
+configuração `vpn/ipsec/phase1-interface` do hub e ao proxy de monitoramento do
+dispositivo. Enquanto essa permissão não estiver disponível, a atualização usa
+temporariamente a conexão direta legada com o FortiGate e informa essa origem
+na mensagem exibida após a atualização. As credenciais diretas só devem ser
+removidas depois que a mensagem confirmar `Fonte: FortiManager`.
+
+Os dados coletados são associados e persistidos na regional correspondente.
 Se a listagem de devices do FortiManager ficar temporariamente indisponivel, o
 ultimo cache de firewalls e usado somente para resolver nome e IP do FortiGate;
 a situacao atual das interfaces continua sendo consultada no FortiManager.

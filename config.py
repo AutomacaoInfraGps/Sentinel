@@ -143,41 +143,29 @@ def load_environment_config():
 ENV_CONFIG = load_environment_config()
 
 # === CONFIGURAÇÕES DE SERVIDOR ===
-# Importa o módulo de credenciais
-try:
-    from credentials import get_credentials
-except ImportError:
-    # Fallback para caso o módulo não esteja disponível
-    def get_credentials(service, prompt_if_missing=False):
-        return {}
-
 DOCS_NAOS_IP = "192.0.2.10"
 DOCS_UNIFI_HOST = "198.51.100.10"
 DOCS_APPGATE_HOST = "203.0.113.10"
 DOCS_NAOS_USER = "EXEMPLO\\admin"
 DOCS_UNIFI_USER = "admin"
 
-# Configurações do servidor NAOS. O cofre legado só é consultado quando a
-# seção local não existe, evitando dependências ocultas e descriptografias
-# desnecessárias.
+# Configurações do servidor NAOS vêm exclusivamente do ambiente local.
 NAOS_CONFIG = ENV_CONFIG.get("naos_server")
 if not isinstance(NAOS_CONFIG, dict) or not NAOS_CONFIG:
-    naos_creds = get_credentials('naos')
     NAOS_CONFIG = {
-        "ip": naos_creds.get('host', DOCS_NAOS_IP),
-        "usuario": naos_creds.get('username', DOCS_NAOS_USER),
-        "senha": naos_creds.get('password', ""),
+        "ip": DOCS_NAOS_IP,
+        "usuario": DOCS_NAOS_USER,
+        "senha": "",
     }
 
 # Configurações do controlador UniFi seguem a mesma regra.
 UNIFI_CONFIG = ENV_CONFIG.get("unifi_controller")
 if not isinstance(UNIFI_CONFIG, dict) or not UNIFI_CONFIG:
-    unifi_creds = get_credentials('unifi')
     UNIFI_CONFIG = {
-        "host": unifi_creds.get('host', DOCS_UNIFI_HOST),
-        "port": unifi_creds.get('port', 8443),
-        "username": unifi_creds.get('username', DOCS_UNIFI_USER),
-        "password": unifi_creds.get('password', "")
+        "host": DOCS_UNIFI_HOST,
+        "port": 8443,
+        "username": DOCS_UNIFI_USER,
+        "password": ""
     }
 
 UNIFI_CLIENTS_DASHBOARD = ENV_CONFIG.get("unifi_clients_dashboard", {

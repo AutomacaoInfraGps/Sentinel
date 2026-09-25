@@ -112,15 +112,14 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
 
     @patch.object(web_config, "publish_group_records")
     @patch.object(web_config, "_prepare_vpn_operational_records")
-    @patch.object(web_config.gerenciador_fortigate, "obter_vpn_ipsec")
-    @patch.object(web_config.gerenciador_fortigate, "autenticar")
+    @patch.object(web_config, "_obter_vpns_operacionais")
     def test_vpn_refresh_publishes_result_before_reload(
-        self, authenticate, fetch_vpns, prepare_records, publish_records
+        self, fetch_vpns, prepare_records, publish_records
     ):
-        authenticate.return_value = True
         fetch_vpns.return_value = {
             "success": True,
             "vpns": [{"tunel": "T001_TESTE", "status": "up"}],
+            "source": "fortimanager_proxy",
         }
         prepare_records.return_value = [
             {"tunel": "T001_TESTE", "status": "online", "regional": "REG_TESTE"}
@@ -142,6 +141,7 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
         self.assertEqual(result["total_vinculado"], 1)
         self.assertEqual(result["novos_vinculos"], 1)
         self.assertEqual(result["total_sem_regional"], 0)
+        self.assertEqual(result["source"], "fortimanager_proxy")
         reload_regionals.assert_called_once_with()
         publish_records.assert_called_once_with(
             "vpns", prepare_records.return_value, source="vpn_manual"
@@ -279,6 +279,28 @@ end
         self.assertEqual("comentario", comment_source)
         self.assertEqual("REG_CONTROL_ARAPIRACA", fallback_match["chave"])
         self.assertEqual("tunel", fallback_source)
+
+    def test_ambiguous_vpn_remains_visible_without_incorrect_regional(self):
+        regional_codes = ["REG_SAO_LEOPOLDO", "REG_LEOPOLDO_B2"]
+        index = [
+            {
+                "chave": code,
+                "nome_exibicao": code,
+                "tokens": web_config._gerar_tokens_regional(code),
+                "identidades": {web_config._identidade_principal_regional(code)},
+            }
+            for code in regional_codes
+        ]
+
+        grouped = web_config._agrupar_vpns_por_regional([{
+            "tunel": "T019_LEOPOLDO01",
+            "comentario": "",
+            "status": "up",
+        }], index)
+
+        self.assertIn("SEM_REGIONAL", grouped["regionais"])
+        self.assertEqual(grouped["vpns_por_regional"]["SEM_REGIONAL"]["online"], 1)
+        self.assertEqual(grouped["total_regionais"], 0)
 
     def test_vpn_name_variations_map_only_to_a_clear_unique_regional(self):
         regional_codes = [
