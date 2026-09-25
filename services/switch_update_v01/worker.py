@@ -8,18 +8,49 @@ from __future__ import annotations
 
 import argparse
 from contextlib import AbstractContextManager
+import ctypes
 import json
 import logging
 import msvcrt
 import os
 from pathlib import Path
 
+from .power import keep_system_awake
 from .scheduler import SchedulerSettings, SwitchUpdateScheduler
 
 
 LOGGER = logging.getLogger("sentinel.switch-update.worker")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNTIME_DIR = PROJECT_ROOT / "data" / "switch_updates"
+_IDLE_PRIORITY_CLASS = 0x00000040
+_NORMAL_PRIORITY_CLASS = 0x00000020
+_BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+
+
+def ensure_normal_process_priority() -> None:
+    """Evita que a tarefa do Windows limite o worker e seus processos filhos."""
+    if os.name != "nt":
+        return
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    kernel32.GetPriorityClass.argtypes = (ctypes.c_void_p,)
+    kernel32.GetPriorityClass.restype = ctypes.c_uint32
+    kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+    kernel32.SetPriorityClass.restype = ctypes.c_int
+
+    process = kernel32.GetCurrentProcess()
+    current_priority = kernel32.GetPriorityClass(process)
+    if current_priority not in {_IDLE_PRIORITY_CLASS, _BELOW_NORMAL_PRIORITY_CLASS}:
+        return
+
+    if not kernel32.SetPriorityClass(process, _NORMAL_PRIORITY_CLASS):
+        LOGGER.warning(
+            "Nao foi possivel elevar a prioridade do worker para normal (erro Windows %s).",
+            ctypes.get_last_error(),
+        )
+        return
+    LOGGER.info("Prioridade do worker ajustada de segundo plano para normal.")
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -99,7 +130,10 @@ def build_scheduler(
             poll_interval_seconds=1.0,
             http_timeout=_config_number(config, "http_timeout", 10.0, float, 0.1),
             reboot_timeout=_config_number(config, "reboot_timeout", 7 * 60, int, 1),
-            transfer_timeout=_config_number(config, "transfer_timeout", 15 * 60, int, 1),
+            transfer_timeout=_config_number(config, "transfer_timeout", 20 * 60, int, 1),
+            transfer_stall_timeout=_config_number(
+                config, "transfer_stall_timeout", 5 * 60, int, 1
+            ),
             insecure_tls=insecure_tls,
             driver_path=Path(driver_path).resolve() if driver_path else None,
             draft_ttl_seconds=_config_number(
@@ -128,16 +162,17 @@ def load_project_config(path: str | Path | None = None) -> dict:
 def run_once(scheduler: SwitchUpdateScheduler, *, lock_path: str | Path) -> list[str]:
     """Recupera quedas, mantem o runtime e esvazia a fila ja vencida."""
     with WorkerFileLock(lock_path):
-        recovered = scheduler.recover_interrupted()
-        if recovered:
-            LOGGER.warning(
-                "%s job(s) interrompido(s) foram movidos para needs_review.",
-                recovered,
-            )
-        scheduler.perform_maintenance()
-        processed = scheduler.run_all_due()
-        scheduler.perform_maintenance()
-        return processed
+        with keep_system_awake():
+            recovered = scheduler.recover_interrupted()
+            if recovered:
+                LOGGER.warning(
+                    "%s job(s) interrompido(s) foram movidos para needs_review.",
+                    recovered,
+                )
+            scheduler.perform_maintenance()
+            processed = scheduler.run_all_due()
+            scheduler.perform_maintenance()
+            return processed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -170,6 +205,7 @@ def main() -> int:
     args = build_parser().parse_args()
     runtime_dir = args.runtime_dir.resolve()
     try:
+        ensure_normal_process_priority()
         config = load_project_config()
         configured_driver = str(config.get("driver_path") or "").strip()
         driver_path = args.driver_path or (Path(configured_driver) if configured_driver else None)

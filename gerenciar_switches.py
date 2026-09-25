@@ -139,6 +139,14 @@ class GerenciadorSwitches:
         descriptor = None
         temporary_file = None
         try:
+            # Entradas locais de laboratório não existem no Zabbix e precisam
+            # sobreviver às recargas do inventário oficial.
+            cache_atual = self._carregar_status_cache()
+            cache_para_salvar = dict(cache or {})
+            for host, switch in cache_atual.items():
+                if isinstance(switch, dict) and switch.get("local_only") is True:
+                    cache_para_salvar.setdefault(host, switch)
+
             descriptor, temporary_name = tempfile.mkstemp(
                 prefix=f".{self.status_cache_file.stem}-",
                 suffix=".tmp",
@@ -147,7 +155,7 @@ class GerenciadorSwitches:
             temporary_file = Path(temporary_name)
             with os.fdopen(descriptor, 'w', encoding='utf-8') as f:
                 descriptor = None
-                json.dump(cache, f, indent=2, ensure_ascii=False)
+                json.dump(cache_para_salvar, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(temporary_file, self.status_cache_file)

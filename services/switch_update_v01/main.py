@@ -29,7 +29,12 @@ from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 SUPPORTED_MODELS = frozenset({"1830", "1930"})
 DEFAULT_REBOOT_TIMEOUT = 7 * 60
+DEFAULT_TRANSFER_TIMEOUT = 20 * 60
 MAX_FIRMWARE_BYTES = 128 * 1024 * 1024
+TRANSFER_STATUS_POLL_SECONDS = 60
+TRANSFER_CONNECTIVITY_POLL_SECONDS = 10
+TRANSFER_CONNECTIVITY_FAILURE_LIMIT = 3
+TRANSFER_STALL_TIMEOUT_SECONDS = 5 * 60
 __version__ = "0.1.0"
 
 LOGGER = logging.getLogger("att-switches")
@@ -106,6 +111,7 @@ class ProgressReporter:
     callback: Callable[[str, int, str], None] | None = None
     last_stage: str = "starting"
     last_percent: int = 0
+    failure_stage: str | None = None
 
     def emit(self, stage: str, percent: int, message: str) -> None:
         percent = max(0, min(100, percent))
@@ -119,8 +125,8 @@ class ProgressReporter:
             print(f"PROGRESS_JSON={json.dumps(payload, ensure_ascii=False)}", flush=True)
 
     def fail(self, message: str) -> None:
+        self.failure_stage = self.last_stage
         self.emit("failed", self.last_percent, message)
-
 
 def concise_exception_message(exc: Exception) -> str:
     if isinstance(exc, UpdateError):
@@ -142,7 +148,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-model", choices=sorted(SUPPORTED_MODELS), help="Modelo esperado para validacao adicional.")
     parser.add_argument("--http-timeout", type=float, default=10.0, help="Timeout da consulta HTTP direta em segundos.")
     parser.add_argument("--reboot-timeout", type=int, default=DEFAULT_REBOOT_TIMEOUT, help="Espera maxima pelo ping, em segundos.")
-    parser.add_argument("--transfer-timeout", type=int, default=15 * 60, help="Espera maxima da transferencia, em segundos.")
+    parser.add_argument("--transfer-timeout", type=int, default=DEFAULT_TRANSFER_TIMEOUT, help="Espera maxima da transferencia, em segundos.")
+    parser.add_argument(
+        "--transfer-stall-timeout",
+        type=int,
+        default=TRANSFER_STALL_TIMEOUT_SECONDS,
+        help="Tempo maximo sem progresso na transferencia, em segundos.",
+    )
     parser.add_argument("--driver-path", type=Path, help="ChromeDriver local; se omitido, usa Selenium Manager.")
     parser.add_argument(
         "--diagnostics-dir",
@@ -298,6 +310,23 @@ def version_key(value: str) -> tuple[int, int, int, int]:
     return tuple((numbers + [0] * 4)[:4])  # type: ignore[return-value]
 
 
+def final_version_matches(expected: str, observed: str | None) -> bool:
+    """Confirma a familia major.minor.patch na verificacao apos o restart."""
+    expected_version = extract_version(expected)
+    observed_version = extract_version(observed)
+    if not expected_version or not observed_version:
+        return False
+    return version_key(expected_version)[:3] == version_key(observed_version)[:3]
+
+
+def release_version(value: str) -> str:
+    """Retorna a versao operacional exibida ao usuario, como 3.4.0."""
+    extracted = extract_version(value)
+    if not extracted:
+        return normalize_version(value)
+    return ".".join(extracted.split(".")[:3])
+
+
 def resolve_firmware_metadata(
     firmware: Path,
     expected_model: str | None = None,
@@ -360,8 +389,10 @@ def assess_update(
             f"mas o firmware e para Aruba {target_model}."
         )
     decision, current_version = classify_update(target_version, identity.sys_descr)
+    final_parsed = urlparse(identity.url)
+    detected_url = f"{final_parsed.scheme}://{final_parsed.netloc}"
     return UpdateAssessment(
-        url=normalized_url,
+        url=detected_url,
         host=host,
         firmware=resolved,
         expected_model=target_model,
@@ -455,11 +486,22 @@ def ping_once(host: str, timeout_seconds: int = 2) -> bool:
     return completed.returncode == 0
 
 
-def wait_for_ping_after_restart(host: str, timeout: int, interval: int = 5) -> None:
+def wait_for_ping_after_restart(
+    host: str,
+    timeout: int,
+    interval: int = 5,
+    reporter: ProgressReporter | None = None,
+) -> None:
     LOGGER.info("Aguardando o inicio da reinicializacao por 15 segundos...")
     time.sleep(15)
     deadline = time.monotonic() + timeout
     attempt = 0
+    if reporter:
+        reporter.emit(
+            "waiting_ping",
+            70,
+            f"Aguardando resposta por ping. Restam {timeout} segundos.",
+        )
     while time.monotonic() < deadline:
         attempt += 1
         if ping_once(host):
@@ -467,6 +509,13 @@ def wait_for_ping_after_restart(host: str, timeout: int, interval: int = 5) -> N
             return
         remaining = max(0, int(deadline - time.monotonic()))
         LOGGER.info("Sem resposta ao ping; restam ate %ss.", remaining)
+        if reporter:
+            elapsed_ratio = 1 - (remaining / timeout)
+            reporter.emit(
+                "waiting_ping",
+                min(84, 70 + int(max(0, elapsed_ratio) * 14)),
+                f"Aguardando resposta por ping. Restam {remaining} segundos.",
+            )
         time.sleep(min(interval, max(0, remaining)))
     raise UpdateNeedsReview(
         "O firmware foi transferido e o restart foi enviado, mas o switch nao respondeu "
@@ -489,7 +538,7 @@ class ArubaWebUpdater:
     ) -> None:
         try:
             from selenium import webdriver
-            from selenium.webdriver.chrome.service import Service
+            from selenium.webdriver.chrome.service import Service as ChromeService
             from selenium.webdriver.common.by import By
             from selenium.common.exceptions import (
                 ElementClickInterceptedException,
@@ -515,13 +564,20 @@ class ArubaWebUpdater:
             options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-extensions")
         options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        options.add_argument("--disable-renderer-backgrounding")
         options.add_argument("--disable-sync")
         options.add_argument("--no-first-run")
         if insecure_tls:
             LOGGER.warning("Certificados HTTPS invalidos serao aceitos neste teste.")
             options.set_capability("acceptInsecureCerts", True)
             options.add_argument("--ignore-certificate-errors")
-        service = Service(executable_path=str(driver_path.resolve())) if driver_path else Service()
+        service = (
+            ChromeService(executable_path=str(driver_path.resolve()))
+            if driver_path
+            else ChromeService()
+        )
         self.driver = webdriver.Chrome(service=service, options=options)
         self.driver.set_page_load_timeout(90)
         self.wait = WebDriverWait(self.driver, 60)
@@ -533,8 +589,8 @@ class ArubaWebUpdater:
     def close(self) -> None:
         try:
             self.driver.quit()
-        except Exception:  # pragma: no cover - depende do estado externo do Chrome
-            LOGGER.warning("Nao foi possivel encerrar o Chrome de forma limpa.")
+        except Exception:  # pragma: no cover - depende do estado externo do navegador
+            LOGGER.warning("Nao foi possivel encerrar o navegador de forma limpa.")
 
     def login(self) -> None:
         LOGGER.info("Abrindo %s e autenticando...", self.url)
@@ -545,6 +601,9 @@ class ArubaWebUpdater:
             raise UpdateError(
                 "A WebUI redirecionou o navegador para outro destino; credenciais nao foram enviadas."
             )
+        current_url = urlparse(self.driver.current_url)
+        if current_url.scheme in {"http", "https"}:
+            self.url = f"{current_url.scheme}://{current_url.netloc}"
         username = self.wait.until(self.EC.presence_of_element_located((self.By.ID, "inputUsername")))
         password = self.wait.until(self.EC.presence_of_element_located((self.By.ID, "inputPassword")))
         username.clear()
@@ -603,23 +662,46 @@ class ArubaWebUpdater:
         )
         return match.group(1) if match else None
 
-    def save_configuration(self, timeout: int = 30) -> bool:
+    def save_configuration(
+        self,
+        timeout: int = 30,
+        pending_timeout: int = 0,
+    ) -> bool:
         """Persiste a configuracao corrente e confirma que o aviso de pendencia sumiu."""
         LOGGER.info("Verificando alteracoes pendentes no botao Save Configuration...")
+        pending_deadline = time.monotonic() + max(0, pending_timeout)
+        lookup_timeout = max(10, pending_timeout)
         try:
             button = self._find_element_anywhere(
                 ((self.By.ID, "btnTopSave"),),
                 "o botao Save Configuration",
-                timeout=10,
+                timeout=lookup_timeout,
                 require_visible=False,
             )
         except UpdateError:
-            LOGGER.info("O botao Save Configuration nao esta presente; nao ha pendencia indicada.")
+            LOGGER.info(
+                "O botao Save Configuration nao apareceu em ate %ss; "
+                "nao ha pendencia indicada.",
+                lookup_timeout,
+            )
             return False
-        try:
-            pending = button.is_displayed() and button.is_enabled()
-        except self.frame_errors:
-            pending = False
+        while True:
+            try:
+                pending = button.is_displayed() and button.is_enabled()
+            except self.frame_errors:
+                try:
+                    button = self._find_element_anywhere(
+                        ((self.By.ID, "btnTopSave"),),
+                        "o botao Save Configuration",
+                        timeout=1,
+                        require_visible=False,
+                    )
+                    pending = button.is_displayed() and button.is_enabled()
+                except (UpdateError, *self.frame_errors):
+                    pending = False
+            if pending or time.monotonic() >= pending_deadline:
+                break
+            time.sleep(0.25)
         if not pending:
             LOGGER.info("Nao ha configuracao pendente para salvar.")
             return False
@@ -955,14 +1037,13 @@ class ArubaWebUpdater:
         )
         self._click_id("btnNext", "o botao Next apos Backup Image")
 
-        # Nesta versao da WebUI a opcao aparece como HTTPS, embora os IDs
-        # internos do formulario e do botao ainda mantenham o sufixo HTTP.
+        # A transferencia do arquivo .swi e feita pela opcao HTTP da WebUI.
         self._ensure_radio_selected(
             "rbTransferProtocol_0",
             "lblrbTransferProtocol_0",
-            "o protocolo HTTPS",
+            "o protocolo HTTP",
         )
-        self._click_id("btnNext", "o botao Next apos HTTPS")
+        self._click_id("btnNext", "o botao Next apos HTTP")
 
     def _locate_firmware_input(self):
         frame = self._find_element_anywhere(
@@ -1003,36 +1084,139 @@ class ArubaWebUpdater:
     def _session_expired(self) -> bool:
         return bool(self.driver.find_elements(self.By.ID, "inputUsername"))
 
-    def start_transfer_and_wait(self, timeout: int, reporter: ProgressReporter) -> None:
+    def start_transfer_and_wait(
+        self,
+        timeout: int,
+        reporter: ProgressReporter,
+        stall_timeout: int = TRANSFER_STALL_TIMEOUT_SECONDS,
+    ) -> None:
         LOGGER.info("Iniciando a transferencia do firmware...")
+        transfer_started_at = time.monotonic()
+        last_progress_at = transfer_started_at
+        transferred_bytes = 0
+        total_bytes = 0
+        last_progress_number = 0
+        consecutive_ping_failures = 0
+        host = str(urlparse(self.url).hostname or "").strip()
         self._click_id("buttonTransferProtocolHTTP")
         deadline = time.monotonic() + timeout
         last_message = ""
         while time.monotonic() < deadline:
-            if self._session_expired():
+            snapshot = self.driver.execute_script(
+                """
+                const text = selector => {
+                  const element = document.querySelector(selector);
+                  return element
+                    ? String(element.innerText || element.textContent || '').trim()
+                    : '';
+                };
+                return {
+                  sessionExpired: Boolean(document.getElementById('inputUsername')),
+                  status: text('#lblStatusModal'),
+                  error: text('#lblErrorModal'),
+                  progress: text('#loadingBar .ldBar-label')
+                };
+                """
+            ) or {}
+            if snapshot.get("sessionExpired"):
                 raise UpdateError("A sessao do switch expirou durante a transferencia.")
-            status_elements = self.driver.find_elements(self.By.ID, "lblStatusModal")
-            error_elements = self.driver.find_elements(self.By.ID, "lblErrorModal")
-            progress_elements = self.driver.find_elements(self.By.CSS_SELECTOR, "#loadingBar .ldBar-label")
-            status = status_elements[0].text.strip() if status_elements else ""
-            error = error_elements[0].text.strip() if error_elements else ""
-            progress = progress_elements[0].text.strip() if progress_elements else ""
-            message = " | ".join(part for part in (status, progress and f"{progress}%", error) if part)
-            if message and message != last_message:
-                LOGGER.info("Transferencia: %s", message)
-                progress_number = 0
+            status = str(snapshot.get("status") or "").strip()
+            error = str(snapshot.get("error") or "").strip()
+            progress = str(snapshot.get("progress") or "").strip()
+            progress_number = 0
+            transfer_match = re.search(
+                r"Copying\s+(\d+)\s*/\s*(\d+)\s*Bytes",
+                status,
+                flags=re.IGNORECASE,
+            )
+            if transfer_match:
+                transferred = int(transfer_match.group(1))
+                total = int(transfer_match.group(2))
+                if transferred > transferred_bytes:
+                    last_progress_at = time.monotonic()
+                transferred_bytes = transferred
+                total_bytes = total
+                progress_number = int((transferred / total) * 100) if total else 0
+                transferred_mb = f"{transferred / 1_000_000:.2f}".replace(".", ",")
+                total_mb = f"{total / 1_000_000:.2f}".replace(".", ",")
+                status = (
+                    f"Transferindo {transferred_mb} MB de {total_mb} MB "
+                    f"({progress_number}%)"
+                )
+                # Alguns modelos mantêm o label visual da barra em 0 durante
+                # toda a cópia. Neste caso, o contador de bytes é a fonte
+                # confiável e já contém a porcentagem calculada.
+                progress_detail = ""
+            else:
                 match = re.search(r"\d+(?:[.,]\d+)?", progress)
                 if match:
                     progress_number = int(float(match.group(0).replace(",", ".")))
+                    if progress_number > last_progress_number:
+                        last_progress_at = time.monotonic()
+                progress_detail = (
+                    f"{progress.rstrip('%')}%" if progress_number > 0 else ""
+                )
+            last_progress_number = max(last_progress_number, progress_number)
+            message = " | ".join(
+                part for part in (status, progress_detail, error) if part
+            )
+            if message and message != last_message:
+                LOGGER.info("Transferencia: %s", message)
                 reporter.emit("transfer", 35 + int(progress_number * 0.25), message)
                 last_message = message
             lowered = f"{status} {error}".lower()
             if "operation succeeded" in lowered or "transfer succeeded" in lowered:
-                LOGGER.info("Transferencia concluida com sucesso.")
+                elapsed = max(0.001, time.monotonic() - transfer_started_at)
+                completed_bytes = total_bytes or transferred_bytes
+                average_kbps = (completed_bytes / 1000) / elapsed
+                elapsed_seconds = int(round(elapsed))
+                minutes, seconds = divmod(elapsed_seconds, 60)
+                LOGGER.info(
+                    "Transferencia concluida com sucesso em %02d:%02d; taxa media %.1f KB/s.",
+                    minutes,
+                    seconds,
+                    average_kbps,
+                )
                 return
             if any(word in lowered for word in ("failed", "failure", "invalid", "error")):
+                elapsed = max(0.001, time.monotonic() - transfer_started_at)
+                average_kbps = (transferred_bytes / 1000) / elapsed
+                LOGGER.warning(
+                    "Transferencia interrompida apos %.2f MB; taxa media %.1f KB/s.",
+                    transferred_bytes / 1_000_000,
+                    average_kbps,
+                )
                 raise UpdateError(f"O switch informou falha na transferencia: {message}")
-            time.sleep(2)
+            stalled_for = time.monotonic() - last_progress_at
+            if stalled_for >= stall_timeout:
+                raise UpdateError(
+                    f"A transferencia ficou sem progresso por {stall_timeout} segundos e foi "
+                    "interrompida para permitir uma nova tentativa."
+                )
+
+            next_status_poll = min(
+                deadline,
+                time.monotonic() + TRANSFER_STATUS_POLL_SECONDS,
+            )
+            while time.monotonic() < next_status_poll:
+                remaining = next_status_poll - time.monotonic()
+                time.sleep(min(TRANSFER_CONNECTIVITY_POLL_SECONDS, remaining))
+                if not host:
+                    continue
+                if ping_once(host):
+                    consecutive_ping_failures = 0
+                    continue
+                consecutive_ping_failures += 1
+                LOGGER.warning(
+                    "Switch sem resposta durante a transferencia (%s/%s).",
+                    consecutive_ping_failures,
+                    TRANSFER_CONNECTIVITY_FAILURE_LIMIT,
+                )
+                if consecutive_ping_failures >= TRANSFER_CONNECTIVITY_FAILURE_LIMIT:
+                    raise UpdateError(
+                        "A conexao com o switch foi perdida durante a transferencia do "
+                        "firmware. A tentativa foi interrompida com seguranca."
+                    )
         raise UpdateError("Timeout aguardando a transferencia atingir 100% e concluir.")
 
     def restart(self) -> None:
@@ -1089,7 +1273,12 @@ def run(
         args.expected_model,
         args.expected_version,
     )
-    if args.reboot_timeout <= 0 or args.transfer_timeout <= 0 or args.http_timeout <= 0:
+    if (
+        args.reboot_timeout <= 0
+        or args.transfer_timeout <= 0
+        or args.transfer_stall_timeout <= 0
+        or args.http_timeout <= 0
+    ):
         raise UpdateError("Os timeouts devem ser maiores que zero.")
     if args.sentinel_approved and not args.execute:
         raise UpdateError("--sentinel-approved so pode ser usado junto com --execute.")
@@ -1160,6 +1349,7 @@ def run(
         raise UpdateError("A senha da interface web nao pode ficar vazia.")
 
     updater: ArubaWebUpdater | None = None
+
     try:
         reporter.emit("authentication", 20, "Autenticando na WebUI")
         updater = ArubaWebUpdater(
@@ -1216,21 +1406,26 @@ def run(
         reporter.emit("upload_setup", 30, "Abrindo assistente e anexando firmware")
         updater.open_update_wizard()
         updater.attach_firmware(firmware)
-        updater.start_transfer_and_wait(args.transfer_timeout, reporter)
+        updater.start_transfer_and_wait(
+            args.transfer_timeout,
+            reporter,
+            stall_timeout=args.transfer_stall_timeout,
+        )
         reporter.emit("restart", 65, "Transferencia concluida; reiniciando switch")
         updater.restart()
 
-        reporter.emit("waiting_ping", 70, "Aguardando retorno por ping por ate sete minutos")
-        wait_for_ping_after_restart(host, args.reboot_timeout)
+        wait_for_ping_after_restart(host, args.reboot_timeout, reporter=reporter)
 
         reporter.emit("verifying_web", 85, "Aguardando WebUI e consultando versao final")
-        final_identity = wait_for_web_identity(
+        wait_for_web_identity(
             url,
             args.http_timeout,
             args.insecure_tls,
         )
         updater.login()
+        final_identity = fetch_web_identity(url, args.http_timeout, args.insecure_tls)
         final_web_version = updater.read_web_version()
+        confirmed_release = release_version(expected_version)
         LOGGER.info("Versao final HTTP direto: %s", final_identity.sys_descr)
         LOGGER.info("Versao final WebUI: %s", final_web_version or "nao localizada")
 
@@ -1239,22 +1434,32 @@ def run(
                 f"O switch retornou como Aruba {final_identity.model or 'desconhecido'}, "
                 f"mas era esperado Aruba {expected_model}."
             )
-        if not version_matches(expected_version, final_identity.sys_descr):
+        if not final_version_matches(expected_version, final_identity.sys_descr):
             raise UpdateError(
                 "O switch retornou, mas a versao publica da WebUI nao corresponde a esperada: "
-                f"esperada={expected_version!r}, obtida={final_identity.sys_descr!r}."
+                f"esperada={confirmed_release!r}, obtida={final_identity.sys_descr!r}."
             )
-        if final_web_version and not version_matches(expected_version, final_web_version):
+        if final_web_version and not final_version_matches(expected_version, final_web_version):
             raise UpdateError(
                 "A versao autenticada da WebUI diverge da versao esperada: "
-                f"esperada={expected_version!r}, obtida={final_web_version!r}."
+                f"esperada={confirmed_release!r}, obtida={final_web_version!r}."
             )
         reporter.emit("saving", 95, "Versao confirmada; salvando a configuracao no switch")
-        updater.save_configuration()
-        reporter.emit("complete", 100, "Versao final confirmada; processo concluido")
+        saved_configuration = updater.save_configuration(pending_timeout=90)
+        if not saved_configuration:
+            LOGGER.info(
+                "O botao Save Configuration nao apareceu em ate 90 segundos; "
+                "a versao ja foi confirmada e o processo sera concluido sem erro."
+            )
+        LOGGER.info("Versao final confirmada: %s.", confirmed_release)
+        reporter.emit(
+            "complete",
+            100,
+            f"Versao final {confirmed_release} confirmada; processo concluido",
+        )
         action = "reinstalado" if same_version else "rebaixado" if downgrade else "atualizado"
         print(
-            f"SUCESSO: Aruba {detected_model} {action} com a versao {expected_version}. "
+            f"SUCESSO: Aruba {detected_model} {action} com a versao {confirmed_release}. "
             "O resultado pode ser salvo no Sentinel."
         )
     except Exception as exc:

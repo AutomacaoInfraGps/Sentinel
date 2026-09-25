@@ -1,7 +1,7 @@
 """Agendador persistente e seguro para atualizacoes de switches.
 
 Projetado para executar no servidor Windows que hospeda o Sentinel.
-Metadados ficam em SQLite; a senha fica cifrada pelo DPAPI do Windows e e
+Metadados ficam em SQLite; a senha fica cifrada pelo DPAPI da maquina Windows e e
 apagada do banco assim que o job termina, falha ou e cancelado.
 """
 
@@ -38,9 +38,10 @@ try:  # pacote copiado para services/switch_update_v01 no Sentinel
         assess_update,
         build_parser,
         concise_exception_message,
+        final_version_matches,
         fetch_web_identity,
+        release_version,
         run,
-        version_matches,
     )
 except ImportError:  # execucao direta neste repositorio
     from main import (
@@ -52,9 +53,10 @@ except ImportError:  # execucao direta neste repositorio
         assess_update,
         build_parser,
         concise_exception_message,
+        final_version_matches,
         fetch_web_identity,
+        release_version,
         run,
-        version_matches,
     )
 
 
@@ -68,6 +70,10 @@ except ZoneInfoNotFoundError:  # Windows sem o pacote tzdata
 UTC = timezone.utc
 FINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "reviewed"})
 VALID_DECISIONS = frozenset({"update", "same_version", "downgrade"})
+MIN_UPDATE_ATTEMPTS = 1
+MAX_UPDATE_ATTEMPTS = 5
+RETRY_DELAY_SECONDS = 5 * 60
+RETRYABLE_RESULT_CODES = frozenset({"SWU200", "SWU220", "SWU300", "SWU310", "SWU320"})
 MONTH_FOLDERS = (
     "",
     "Jan",
@@ -148,10 +154,11 @@ class CredentialProtector(Protocol):
 
 
 class DpapiCredentialProtector:
-    """Protege segredos com DPAPI, vinculados a conta Windows do processo."""
+    """Protege segredos com DPAPI, vinculados ao servidor Windows."""
 
     _ENTROPY = b"ATT-Switches/scheduler/v0.1"
     _CRYPTPROTECT_UI_FORBIDDEN = 0x1
+    _CRYPTPROTECT_LOCAL_MACHINE = 0x4
 
     class _DataBlob(ctypes.Structure):
         _fields_ = [
@@ -214,7 +221,7 @@ class DpapiCredentialProtector:
             ctypes.byref(entropy),
             None,
             None,
-            self._CRYPTPROTECT_UI_FORBIDDEN,
+            self._CRYPTPROTECT_UI_FORBIDDEN | self._CRYPTPROTECT_LOCAL_MACHINE,
             ctypes.byref(output),
         ):
             self._raise_last_error("proteger")
@@ -230,6 +237,8 @@ class DpapiCredentialProtector:
         entropy, entropy_buffer = self._blob(self._ENTROPY)
         output = self._DataBlob()
         _ = (source_buffer, entropy_buffer)
+        # O escopo de protecao faz parte do blob; CryptUnprotectData nao recebe
+        # CRYPTPROTECT_LOCAL_MACHINE e tambem consegue ler blobs antigos do usuario.
         if not self._crypt32.CryptUnprotectData(
             ctypes.byref(source),
             None,
@@ -255,7 +264,8 @@ class SchedulerSettings:
     poll_interval_seconds: float = 1.0
     http_timeout: float = 10.0
     reboot_timeout: int = 7 * 60
-    transfer_timeout: int = 15 * 60
+    transfer_timeout: int = 20 * 60
+    transfer_stall_timeout: int = 5 * 60
     insecure_tls: bool = False
     driver_path: Path | None = None
     draft_ttl_seconds: int = 15 * 60
@@ -343,7 +353,9 @@ class SwitchUpdateScheduler:
                     started_at_utc TEXT,
                     finished_at_utc TEXT,
                     log_relative_path TEXT,
-                    result_code TEXT
+                    result_code TEXT,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 1
                 )
                 """
             )
@@ -358,6 +370,16 @@ class SwitchUpdateScheduler:
             if "result_code" not in columns:
                 connection.execute(
                     "ALTER TABLE scheduled_updates ADD COLUMN result_code TEXT"
+                )
+            if "attempt_count" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0"
+                )
+            if "max_attempts" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 1"
                 )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_scheduled_updates_due "
@@ -523,8 +545,7 @@ class SwitchUpdateScheduler:
         except OSError as exc:
             raise ScheduleError("Nao foi possivel atualizar o log da verificacao.") from exc
 
-    @staticmethod
-    def _write_job_log_header(job_logger: logging.Logger, row: sqlite3.Row) -> None:
+    def _write_job_log_header(self, job_logger: logging.Logger, row: sqlite3.Row) -> None:
         operation = {
             "update": "Atualização para uma versão mais recente",
             "same_version": "Reinstalação da mesma versão",
@@ -538,13 +559,20 @@ class SwitchUpdateScheduler:
         job_logger.info("Versão encontrada: %s", row["current_version_at_creation"])
         job_logger.info("Versão desejada: %s", row["expected_version"])
         job_logger.info("Operação: %s", operation)
+        job_logger.info(
+            "Início real do processo: %s (horário de Brasília)",
+            self.now().astimezone(BRASILIA_TZ).strftime("%d/%m/%Y %H:%M:%S"),
+        )
         job_logger.info("------------------------------------------------------------")
 
     @staticmethod
     def _write_job_progress(
-        job_logger: logging.Logger, stage: str, percent: int, _message: str
+        job_logger: logging.Logger, stage: str, percent: int, message: str
     ) -> None:
-        friendly = FRIENDLY_STAGE_MESSAGES.get(stage, "Processando a atualização.")
+        if stage in {"transfer", "waiting_ping"} and message:
+            friendly = message
+        else:
+            friendly = FRIENDLY_STAGE_MESSAGES.get(stage, "Processando a atualização.")
         job_logger.info("Andamento: %s%% - %s", percent, friendly)
 
     def preview(
@@ -788,6 +816,7 @@ class SwitchUpdateScheduler:
         username: str,
         password: str,
         confirmed_decision: str,
+        max_attempts: int = 1,
     ) -> dict:
         row = self._get_draft_row(draft_id, owner=owner)
         firmware = Path(row["firmware_path"])
@@ -802,6 +831,7 @@ class SwitchUpdateScheduler:
             password=password,
             firmware=firmware,
             confirmed_decision=confirmed_decision,
+            max_attempts=max_attempts,
             expected_model=row["expected_model"],
             expected_version=row["expected_version"],
         )
@@ -845,6 +875,7 @@ class SwitchUpdateScheduler:
         password: str,
         firmware: Path,
         confirmed_decision: str,
+        max_attempts: int = 1,
         expected_model: str | None = None,
         expected_version: str | None = None,
     ) -> dict:
@@ -856,6 +887,15 @@ class SwitchUpdateScheduler:
             raise ScheduleError("Usuario e senha da WebUI sao obrigatorios.")
         if confirmed_decision not in VALID_DECISIONS:
             raise ScheduleError("A decisao confirmada para o update e invalida.")
+        try:
+            normalized_max_attempts = int(max_attempts)
+        except (TypeError, ValueError) as exc:
+            raise ScheduleError("A quantidade de tentativas e invalida.") from exc
+        if not MIN_UPDATE_ATTEMPTS <= normalized_max_attempts <= MAX_UPDATE_ATTEMPTS:
+            raise ScheduleError(
+                f"A quantidade de tentativas deve ficar entre "
+                f"{MIN_UPDATE_ATTEMPTS} e {MAX_UPDATE_ATTEMPTS}."
+            )
 
         scheduled_utc = self.normalize_scheduled_at(scheduled_at)
         current_utc = self.now().astimezone(UTC)
@@ -903,9 +943,10 @@ class SwitchUpdateScheduler:
                         status, url, host, username, credential_blob, firmware_path,
                         original_name, firmware_sha256, expected_model,
                         expected_version, current_version_at_creation,
-                        confirmed_decision, stage, percent, message
+                        confirmed_decision, stage, percent, message,
+                        attempt_count, max_attempts
                     ) VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                              'scheduled', 0, ?)
+                              'scheduled', 0, ?, 0, ?)
                     """,
                     (
                         schedule_id,
@@ -925,6 +966,7 @@ class SwitchUpdateScheduler:
                         assessment.current_version,
                         assessment.decision,
                         "Atualizacao agendada no horario de Brasilia.",
+                        normalized_max_attempts,
                     ),
                 )
                 connection.commit()
@@ -946,6 +988,14 @@ class SwitchUpdateScheduler:
         data["scheduled_at_brasilia"] = scheduled.astimezone(BRASILIA_TZ).isoformat(
             timespec="seconds"
         )
+        for field in ("started_at_utc", "finished_at_utc"):
+            value = data.get(field)
+            if value:
+                timestamp = datetime.fromisoformat(str(value))
+                data[field.replace("_utc", "_brasilia")] = timestamp.astimezone(
+                    BRASILIA_TZ
+                ).isoformat(timespec="seconds")
+        data["result_description"] = RESULT_CODES.get(data.get("result_code"))
         return data
 
     def get_schedule(self, schedule_id: str, *, owner: str | None = None) -> dict:
@@ -959,6 +1009,23 @@ class SwitchUpdateScheduler:
         if not row:
             raise ScheduleError("Agendamento nao encontrado.")
         return self._public_row(row)
+
+    def get_active_schedule_for_host(self, host: str) -> dict | None:
+        """Retorna o job que mantém um switch bloqueado, independentemente do solicitante."""
+        normalized_host = str(host or "").strip()
+        if not normalized_host:
+            return None
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM scheduled_updates
+                 WHERE host = ? AND status IN ('scheduled', 'running', 'needs_review')
+                 ORDER BY scheduled_at_utc ASC, created_at_utc ASC
+                 LIMIT 1
+                """,
+                (normalized_host,),
+            ).fetchone()
+        return self._public_row(row) if row else None
 
     def list_schedules(self, *, owner: str | None = None, limit: int = 100) -> list[dict]:
         limit = max(1, min(int(limit), 500))
@@ -1103,7 +1170,7 @@ class SwitchUpdateScheduler:
             raise ScheduleConflictError(
                 "O switch retornou, mas o modelo nao corresponde ao esperado; mantenha a revisao manual."
             )
-        if not version_matches(row["expected_version"], identity.sys_descr):
+        if not final_version_matches(row["expected_version"], identity.sys_descr):
             self._append_job_log(
                 row,
                 "NOVA VERIFICAÇÃO: o switch respondeu, mas a versão desejada não foi confirmada.",
@@ -1162,7 +1229,10 @@ class SwitchUpdateScheduler:
                 """
                 UPDATE scheduled_updates
                 SET status = 'running', stage = 'starting', percent = 0,
-                    message = 'Iniciando atualizacao agendada.', started_at_utc = ?
+                    message = 'Iniciando tentativa de atualizacao.',
+                    attempt_count = attempt_count + 1,
+                    started_at_utc = ?, finished_at_utc = NULL,
+                    error = NULL, result_code = NULL
                 WHERE id = ? AND status = 'scheduled'
                 """,
                 (now_text, row["id"]),
@@ -1217,6 +1287,40 @@ class SwitchUpdateScheduler:
                 ),
             )
 
+    def _schedule_retry(
+        self,
+        schedule_id: str,
+        *,
+        attempt_count: int,
+        max_attempts: int,
+        error: str,
+        result_code: str,
+    ) -> datetime:
+        next_attempt = self.now().astimezone(UTC) + timedelta(
+            seconds=RETRY_DELAY_SECONDS
+        )
+        message = (
+            f"Tentativa {attempt_count} de {max_attempts} nao concluida "
+            f"({result_code}). Nova tentativa automatica em cinco minutos."
+        )
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                UPDATE scheduled_updates
+                SET status = 'scheduled', stage = 'retry_scheduled', percent = 0,
+                    scheduled_at_utc = ?, message = ?, error = ?,
+                    result_code = NULL, finished_at_utc = NULL
+                WHERE id = ? AND status = 'running'
+                """,
+                (
+                    self._iso(next_attempt),
+                    message,
+                    error[:500],
+                    schedule_id,
+                ),
+            )
+        return next_attempt
+
     def _execute_claimed(self, row: sqlite3.Row) -> None:
         schedule_id = row["id"]
         firmware_path = Path(row["firmware_path"])
@@ -1227,11 +1331,17 @@ class SwitchUpdateScheduler:
         final_status = "failed"
         result_code = "SWU500"
         log_path: Path | None = None
+        cleanup_artifacts = True
         try:
             job_logger, job_handler, log_path = self._create_job_logger(schedule_id)
             self._set_job_log_path(schedule_id, log_path)
             self._write_job_log_header(job_logger, row)
-            job_logger.info("Andamento: 0%% - Atualização iniciada.")
+            job_logger.info(
+                "Tentativa: %s de %s",
+                row["attempt_count"],
+                row["max_attempts"],
+            )
+            job_logger.info("Andamento: 0% - Atualização iniciada.")
             LOGGER.info(
                 "Inicio do job %s | switch=%s | modelo=%s | versao_destino=%s | log=%s",
                 schedule_id,
@@ -1254,6 +1364,7 @@ class SwitchUpdateScheduler:
                 "--http-timeout", str(self.settings.http_timeout),
                 "--reboot-timeout", str(self.settings.reboot_timeout),
                 "--transfer-timeout", str(self.settings.transfer_timeout),
+                "--transfer-stall-timeout", str(self.settings.transfer_stall_timeout),
                 "--execute",
                 "--sentinel-approved",
             ]
@@ -1274,10 +1385,11 @@ class SwitchUpdateScheduler:
 
             reporter = ProgressReporter(callback=report_progress)
             self.executor(args, switch_password=password, reporter=reporter)
+            confirmed_release = release_version(row["expected_version"])
             self._finalize(
                 schedule_id,
                 status="completed",
-                message=f"Versao {row['expected_version']} confirmada; atualizacao concluida.",
+                message=f"Versao {confirmed_release} confirmada; atualizacao concluida.",
                 result_code="SWU000",
             )
             final_status = "completed"
@@ -1287,7 +1399,7 @@ class SwitchUpdateScheduler:
             job_logger.info("RESULTADO: SUCESSO")
             job_logger.info(
                 "A versão %s foi confirmada e o processo terminou normalmente.",
-                row["expected_version"],
+                confirmed_release,
             )
             job_logger.info("Orientação: nenhuma ação adicional é necessária.")
         except UpdateNeedsReview as exc:
@@ -1316,32 +1428,70 @@ class SwitchUpdateScheduler:
             LOGGER.warning("Agendamento %s aguarda revisao: %s", schedule_id, message)
         except Exception as exc:
             message = str(exc) if isinstance(exc, ScheduleError) else concise_exception_message(exc)
-            stage = reporter.last_stage if reporter else "starting"
+            stage = (reporter.failure_stage or reporter.last_stage) if reporter else "starting"
             result_code = self._classify_result_code(stage, message, exc)
-            self._finalize(
-                schedule_id,
-                status="failed",
-                message=message,
-                result_code=result_code,
-                error=message,
+            attempt_count = int(row["attempt_count"] or 0)
+            max_attempts = int(row["max_attempts"] or 1)
+            retry_allowed = (
+                result_code in RETRYABLE_RESULT_CODES
+                and attempt_count < max_attempts
             )
-            if job_logger:
-                friendly = FRIENDLY_FAILURE_MESSAGES.get(
-                    stage, "A atualização não pôde ser concluída."
+            if retry_allowed:
+                next_attempt = self._schedule_retry(
+                    schedule_id,
+                    attempt_count=attempt_count,
+                    max_attempts=max_attempts,
+                    error=message,
+                    result_code=result_code,
                 )
-                job_logger.info("------------------------------------------------------------")
-                job_logger.error("CÓDIGO DO RESULTADO: %s", result_code)
-                job_logger.error("RESULTADO: NÃO CONCLUÍDO")
-                job_logger.error("O que aconteceu: %s", friendly)
-                job_logger.error(
-                    "Orientação: confira a conexão e o acesso ao switch. "
-                    "Se o problema continuar, encaminhe este arquivo à equipe responsável."
+                final_status = "scheduled"
+                cleanup_artifacts = False
+                if job_logger:
+                    job_logger.warning("------------------------------------------------------------")
+                    job_logger.warning("CÓDIGO DA TENTATIVA: %s", result_code)
+                    job_logger.warning(
+                        "Tentativa %s de %s não concluída; nova tentativa às %s.",
+                        attempt_count,
+                        max_attempts,
+                        next_attempt.astimezone(BRASILIA_TZ).strftime("%d/%m/%Y %H:%M:%S"),
+                    )
+                LOGGER.warning(
+                    "Agendamento %s retornou %s e será tentado novamente (%s/%s).",
+                    schedule_id,
+                    result_code,
+                    attempt_count,
+                    max_attempts,
                 )
-            LOGGER.error("Agendamento %s falhou: %s", schedule_id, message)
+            else:
+                self._finalize(
+                    schedule_id,
+                    status="failed",
+                    message=message,
+                    result_code=result_code,
+                    error=message,
+                )
+                if job_logger:
+                    friendly = FRIENDLY_FAILURE_MESSAGES.get(
+                        stage, "A atualização não pôde ser concluída."
+                    )
+                    job_logger.info("------------------------------------------------------------")
+                    job_logger.error("CÓDIGO DO RESULTADO: %s", result_code)
+                    job_logger.error("RESULTADO: NÃO CONCLUÍDO")
+                    job_logger.error("O que aconteceu: %s", friendly)
+                    job_logger.error(
+                        "Orientação: confira a conexão e o acesso ao switch. "
+                        "Se o problema continuar, encaminhe este arquivo à equipe responsável."
+                    )
+                LOGGER.error("Agendamento %s falhou: %s", schedule_id, message)
         finally:
             password = ""
-            firmware_path.unlink(missing_ok=True)
+            if cleanup_artifacts:
+                firmware_path.unlink(missing_ok=True)
             if job_handler and job_logger:
+                job_logger.info(
+                    "Fim real do processo: %s (horário de Brasília)",
+                    self.now().astimezone(BRASILIA_TZ).strftime("%d/%m/%Y %H:%M:%S"),
+                )
                 job_logger.info("Status registrado pelo sistema: %s", final_status)
                 job_logger.removeHandler(job_handler)
                 job_handler.close()

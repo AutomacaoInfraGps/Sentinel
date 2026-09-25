@@ -1083,6 +1083,16 @@ else:
 _switch_update_task_name = str(
     _switch_update_config.get('task_name') or SWITCH_UPDATE_DEFAULT_TASK_NAME
 ).strip()
+_switch_update_webui_protocol = str(
+    _switch_update_config.get('webui_protocol_fallback')
+    or _switch_update_config.get('webui_protocol')
+    or 'https'
+).strip().casefold()
+if _switch_update_webui_protocol not in {'http', 'https'}:
+    app.logger.warning(
+        'switch_update.webui_protocol_fallback invalido; usando https por seguranca.'
+    )
+    _switch_update_webui_protocol = 'https'
 
 switch_update_scheduler = SwitchUpdateScheduler(
     SchedulerSettings(
@@ -1092,7 +1102,10 @@ switch_update_scheduler = SwitchUpdateScheduler(
         poll_interval_seconds=1.0,
         http_timeout=_switch_update_number('http_timeout', 10.0, float, 0.1),
         reboot_timeout=_switch_update_number('reboot_timeout', 7 * 60, int, 1),
-        transfer_timeout=_switch_update_number('transfer_timeout', 15 * 60, int, 1),
+        transfer_timeout=_switch_update_number('transfer_timeout', 20 * 60, int, 1),
+        transfer_stall_timeout=_switch_update_number(
+            'transfer_stall_timeout', 5 * 60, int, 1
+        ),
         insecure_tls=_switch_update_bool('insecure_tls'),
         driver_path=_switch_update_driver,
         draft_ttl_seconds=_switch_update_number('draft_ttl_seconds', 15 * 60, int, 60),
@@ -1105,6 +1118,7 @@ install_switch_update_backend(
     switch_update_scheduler,
     resolve_switch=_resolver_switch_update,
     is_authorized=_usuario_pode_atualizar_switch,
+    default_protocol=_switch_update_webui_protocol,
     start_scheduler=False,
     trigger_worker=lambda: trigger_worker_task(_switch_update_task_name),
     worker_health=lambda: worker_task_health(_switch_update_task_name),
