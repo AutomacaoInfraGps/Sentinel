@@ -164,6 +164,44 @@ class LinkFortimanagerStatusTest(unittest.TestCase):
 
         self.assertEqual("REG_NOVAUNIDADE", records[0]["regional"])
 
+    @patch.object(web_config.gerenciador_fortigate, "obter_vpn_ipsec_fortimanager")
+    @patch.object(web_config.gerenciador_fortigate, "obter_vpn_ipsec")
+    def test_vpn_operational_status_prefers_fortigate_summary(
+        self, direct_status, manager_status
+    ):
+        direct_status.return_value = {
+            "success": True,
+            "vpns": [{"tunel": "T001_PR_01", "status": "down"}],
+        }
+        manager_status.return_value = {
+            "success": True,
+            "vpns": [{"tunel": "T001_PR_01", "status": "up"}],
+        }
+
+        result = web_config._obter_vpns_operacionais()
+
+        self.assertEqual("down", result["vpns"][0]["status"])
+        self.assertEqual("fortigate_ssh", result["source"])
+        manager_status.assert_not_called()
+
+    @patch.object(web_config.gerenciador_fortigate, "obter_vpn_ipsec_fortimanager")
+    @patch.object(web_config.gerenciador_fortigate, "obter_vpn_ipsec")
+    def test_vpn_operational_status_uses_manager_only_as_fallback(
+        self, direct_status, manager_status
+    ):
+        direct_status.return_value = {"success": False, "message": "SSH indisponivel"}
+        manager_status.return_value = {
+            "success": True,
+            "source": "fortimanager_proxy",
+            "vpns": [{"tunel": "T001_PR_01", "status": "down"}],
+        }
+
+        with web_config.app.app_context():
+            result = web_config._obter_vpns_operacionais()
+
+        self.assertEqual("fortimanager_proxy", result["source"])
+        self.assertEqual("SSH indisponivel", result["warning"])
+
     def test_control_regional_requires_the_specific_unit_name(self):
         devices = [
             {"name": "FGT_CTRLMACEIO", "hostname": "FGT_CTRLMACEIO", "ip": "10.0.0.1"},
