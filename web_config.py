@@ -8140,27 +8140,32 @@ def _fresh_vpn_operational_records():
 
 
 def _obter_vpns_operacionais():
-    result = gerenciador_fortigate.obter_vpn_ipsec_fortimanager()
-    if result.get("success"):
-        return result
+    # O resumo SSH informa o estado real dos seletores. O inventario do
+    # FortiManager tambem lista tuneis inativos, portanto a mera presenca de um
+    # nome nessa resposta nao comprova que a VPN esteja online.
+    direct = gerenciador_fortigate.obter_vpn_ipsec()
+    if isinstance(direct, dict) and direct.get("success"):
+        direct["source"] = "fortigate_ssh"
+        return direct
 
-    fortimanager_error = result.get("message") or "Falha desconhecida no FortiManager"
+    direct_error = (
+        direct.get("message")
+        if isinstance(direct, dict)
+        else "Resposta invalida do FortiGate"
+    ) or "Falha desconhecida no FortiGate"
     current_app.logger.warning(
-        "Consulta de VPN pelo FortiManager indisponivel; usando fallback direto temporario: %s",
-        fortimanager_error,
+        "Consulta operacional de VPN pelo FortiGate indisponivel; tentando FortiManager: %s",
+        direct_error,
     )
-    if not gerenciador_fortigate.autenticar():
-        return {
-            "success": False,
-            "message": f"{fortimanager_error}. Fallback direto sem autenticacao.",
-            "source": "unavailable",
-        }
-
-    fallback = gerenciador_fortigate.obter_vpn_ipsec()
-    if isinstance(fallback, dict) and fallback.get("success"):
-        fallback["source"] = "fortigate_direct_fallback"
-        fallback["warning"] = fortimanager_error
-    return fallback
+    manager = gerenciador_fortigate.obter_vpn_ipsec_fortimanager()
+    if isinstance(manager, dict) and manager.get("success"):
+        manager["warning"] = direct_error
+        return manager
+    return manager if isinstance(manager, dict) else {
+        "success": False,
+        "message": direct_error,
+        "source": "unavailable",
+    }
 
 
 def _collect_and_publish_vpns():
@@ -8195,7 +8200,10 @@ def _collect_and_publish_vpns():
     )
     total_linked = len(records) - total_unmapped
     source = result.get("source") or "unknown"
-    source_label = "FortiManager" if source == "fortimanager_proxy" else "fallback direto temporário"
+    source_label = {
+        "fortigate_ssh": "FortiGate (estado operacional)",
+        "fortimanager_proxy": "FortiManager (fallback)",
+    }.get(source, source)
     message = (
         f"VPNs atualizadas: {len(records)} consultadas, {total_linked} vinculadas, "
         f"{newly_linked} novo(s) vinculo(s) e {total_unmapped} sem regional. Fonte: {source_label}."
