@@ -180,6 +180,29 @@
     .stats-card-filter {
         cursor: pointer;
         position: relative;
+        min-height: 128px;
+        height: 100%;
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .switch-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .switch-stat-item { min-width: 0; }
+
+    @media (max-width: 1199.98px) {
+        .switch-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 575.98px) {
+        .switch-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     .stats-card-filter.active-filter::after {
@@ -310,8 +333,8 @@
 </div>
 
 <!-- Estatísticas -->
-<div class="row mb-4">
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+<div class="switch-stats-grid">
+    <div class="switch-stat-item">
         <div class="stats-card stats-card-filter" data-filter-status="all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroStatus('all')">
             <div class="stats-number" id="stats-total-switches">
                 {{ regionais|map(attribute='total_switches')|sum }}
@@ -323,7 +346,7 @@
         </div>
     </div>
     
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="switch-stat-item">
         <div class="stats-card stats-card-filter" data-filter-status="online" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroStatus('online')">
             <div class="stats-number" id="stats-online">
                 {{ regionais|map(attribute='online')|sum }}
@@ -335,7 +358,7 @@
         </div>
     </div>
     
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="switch-stat-item">
         <div class="stats-card stats-card-filter" data-filter-status="offline" style="background: linear-gradient(135deg, #dc3545, #fd7e14);" onclick="aplicarFiltroStatus('offline')">
             <div class="stats-number" id="stats-offline">
                 {{ regionais|map(attribute='offline')|sum }}
@@ -347,7 +370,7 @@
         </div>
     </div>
     
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="switch-stat-item">
         <div class="stats-card stats-card-filter" data-filter-status="warning" style="background: linear-gradient(135deg, #ffc107, #ffb400);" onclick="aplicarFiltroStatus('warning')">
             <div class="stats-number" id="stats-warning">
                 {{ regionais|map(attribute='warning')|sum }}
@@ -359,7 +382,7 @@
         </div>
     </div>
 
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="switch-stat-item">
         <div class="stats-card stats-card-filter" data-filter-status="inativo" style="background: linear-gradient(135deg, #6c757d, #495057);" onclick="aplicarFiltroStatus('inativo')">
             <div class="stats-number" id="stats-inativo">
                 {{ regionais|map(attribute='inativo')|sum }}
@@ -371,7 +394,7 @@
         </div>
     </div>
 
-    <div class="col-lg col-md-4 col-sm-6 mb-3">
+    <div class="switch-stat-item">
         <div class="stats-card stats-card-filter" data-filter-status="maintenance" style="background: #d97706;" onclick="aplicarFiltroStatus('maintenance')">
             <div class="stats-number" id="stats-maintenance">
                 {{ regionais|map(attribute='maintenance')|sum }}
