@@ -386,11 +386,16 @@
     document.body.appendChild(modalElement);
     const logModal = bootstrap.Modal.getOrCreateInstance(modalElement);
     const detailCache = new Map();
+    const pageParams = new URLSearchParams(window.location.search);
+    const targetJobId = pageParams.get('job') || '';
+    const initialQuery = pageParams.get('q') || '';
     let offset = 0;
     let total = 0;
-    let currentQuery = '';
+    let currentQuery = initialQuery;
+    let targetOpened = false;
     let searchTimer = null;
     let requestSequence = 0;
+    search.value = initialQuery;
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -531,6 +536,16 @@
                 : `${total} atualização${total === 1 ? '' : 'ões'} registrada${total === 1 ? '' : 's'}`;
             shown.textContent = total ? `Exibindo ${Math.min(offset, total)} de ${total}` : '';
             loadMore.classList.toggle('d-none', offset >= total);
+            if (!targetOpened && targetJobId) {
+                const targetItem = Array.from(list.querySelectorAll('[data-job-id]'))
+                    .find(item => item.dataset.jobId === targetJobId);
+                if (targetItem) {
+                    targetOpened = true;
+                    const targetButton = targetItem.querySelector('[data-history-toggle]');
+                    await toggleDetail(targetButton);
+                    targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
             if (!total) {
                 list.innerHTML = '<div class="history-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Nenhuma atualização encontrada.</div>';
             }

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from notification_center import (
     build_notifications,
+    build_switch_update_notifications,
     decorate_with_read_state,
     dismiss_notifications,
     mark_notifications_seen,
@@ -13,6 +14,42 @@ from notification_center import (
 
 
 class NotificationCenterTests(unittest.TestCase):
+    def test_switch_update_notification_only_reports_recent_completed_jobs(self):
+        now = datetime(2026, 9, 28, 15, 0, tzinfo=timezone.utc)
+        jobs = [
+            {
+                "id": "job-completed",
+                "status": "completed",
+                "switch_name": "SW-BAHIA-01",
+                "regional": "REG_BAHIA",
+                "expected_version": "3.2.1",
+                "finished_at_utc": "2026-09-28T14:00:00+00:00",
+            },
+            {
+                "id": "job-failed",
+                "status": "failed",
+                "switch_name": "SW-BAHIA-02",
+                "finished_at_utc": "2026-09-28T14:30:00+00:00",
+            },
+            {
+                "id": "job-old",
+                "status": "completed",
+                "switch_name": "SW-ANTIGO",
+                "finished_at_utc": "2026-07-01T14:00:00+00:00",
+            },
+        ]
+
+        notifications = build_switch_update_notifications(jobs, now=now)
+
+        self.assertEqual(1, len(notifications))
+        notification = notifications[0]
+        self.assertEqual("switch_update_completed", notification["type"])
+        self.assertEqual("success", notification["severity"])
+        self.assertFalse(notification["persistent"])
+        self.assertIn("SW-BAHIA-01", notification["message"])
+        self.assertIn("job=job-completed", notification["url"])
+        self.assertIn("q=SW-BAHIA-01", notification["url"])
+
     def test_stale_snapshot_is_not_accepted(self):
         now = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc)
         self.assertTrue(snapshot_is_fresh((now - timedelta(hours=2)).isoformat(), now=now))

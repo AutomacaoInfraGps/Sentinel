@@ -123,6 +123,7 @@
 }
 
 .notification-item.important .notification-item-icon { background: #e67e22; }
+.notification-item.success .notification-item-icon { background: #198754; }
 .notification-item-copy { min-width: 0; }
 .notification-item-copy strong { display: block; color: #012e40; font-size: 0.9rem; }
 .notification-item-copy p { margin: 3px 0 5px; font-size: 0.82rem; line-height: 1.35; }
