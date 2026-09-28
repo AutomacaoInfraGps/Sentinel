@@ -135,6 +135,16 @@ class SwitchUpdateFrontendTests(unittest.TestCase):
         self.assertIn('autocomplete="current-password"', template)
         self.assertIn("passwordInput.value = '';", template)
 
+    def test_history_page_opens_job_received_from_notification_link(self):
+        template = (Path(app.template_folder) / "historico_atualizacoes_switches.html").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("pageParams.get('job')", template)
+        self.assertIn("pageParams.get('q')", template)
+        self.assertIn("item.dataset.jobId === targetJobId", template)
+        self.assertIn("await toggleDetail(targetButton)", template)
+
 
 if __name__ == "__main__":
     unittest.main()

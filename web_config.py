@@ -87,10 +87,12 @@ from maintenance_status import apply_device_maintenance, apply_zabbix_maintenanc
 from operational_state import load_operational_state, publish_group_records, publish_map_snapshot
 from notification_center import (
     build_notifications,
+    build_switch_update_notifications,
     decorate_with_read_state,
     dismiss_notifications,
     mark_notifications_seen,
     snapshot_is_fresh,
+    sort_notifications,
 )
 from services.unifi_models import normalizar_modelo_ap
 from services.switch_update_v01.scheduler import SchedulerSettings, SwitchUpdateScheduler
@@ -4485,7 +4487,8 @@ def api_notifications():
     records_by_group["servidores"] = _reconcile_notification_servers(
         records_by_group.get("servidores") or []
     )
-    if can_operate_sentinel(_current_user_groups()):
+    can_operate = can_operate_sentinel(_current_user_groups())
+    if can_operate:
         central_admins = _notification_central_admin_baseline_records()
         central_names = {
             str(item.get("nome") or "").strip().lower()
@@ -4501,6 +4504,15 @@ def api_notifications():
         records_by_group,
         orphan_vpn_names=_notification_orphan_vpn_names(records_by_group.get("vpns") or []),
     )
+    if can_operate:
+        try:
+            switch_history = switch_update_scheduler.list_history(limit=100, offset=0)
+            notifications.extend(build_switch_update_notifications(switch_history.get("items") or []))
+            notifications = sort_notifications(notifications)
+        except Exception:
+            current_app.logger.exception(
+                "Falha ao carregar conclusoes de atualizacoes de switches nas notificacoes"
+            )
     if stale_groups:
         _mapa_iniciar_refresh_background()
     notifications, unread_count = decorate_with_read_state(current_user.get_id(), notifications)

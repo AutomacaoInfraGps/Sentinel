@@ -24,6 +24,7 @@ _GROUP_CONFIG = {
 }
 _ALERT_STATUSES = {"offline", "down", "warning", "alerta", "critical", "critico", "error", "erro"}
 NOTIFICATION_SNAPSHOT_MAX_AGE = timedelta(hours=6)
+SWITCH_UPDATE_NOTIFICATION_MAX_AGE = timedelta(days=30)
 
 
 def _parse_datetime(value):
@@ -68,6 +69,71 @@ def _notification_url(group, target, name, regional):
     if group == "servidores" and regional and regional != "Sem regional":
         return f"/regional/{quote(regional, safe='')}?{query}#regional-servidores-section"
     return f"{target}?{query}"
+
+
+def sort_notifications(notifications):
+    """Ordena pendências persistentes antes dos demais eventos recentes."""
+    ordered = list(notifications or [])
+    priority = {"vpn_orphan": 0, "admin_baseline": 1}
+    ordered.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
+    ordered.sort(key=lambda item: priority.get(item.get("type"), 2))
+    return ordered
+
+
+def build_switch_update_notifications(jobs, now=None, max_age=None):
+    """Converte atualizações concluídas do histórico em eventos do sino."""
+    reference = now or datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    reference = reference.astimezone(timezone.utc)
+    allowed_age = max_age or SWITCH_UPDATE_NOTIFICATION_MAX_AGE
+    notifications = []
+
+    for job in jobs or []:
+        if str(job.get("status") or "").strip().lower() != "completed":
+            continue
+
+        occurred_at = job.get("finished_at_utc") or job.get("finished_at_brasilia")
+        occurred = _parse_datetime(occurred_at)
+        if not occurred or reference - occurred > allowed_age:
+            continue
+
+        job_id = str(job.get("id") or "").strip()
+        if not job_id:
+            continue
+        name = str(
+            job.get("switch_name") or job.get("host") or job.get("ip_address") or "Switch"
+        ).strip()
+        version = str(job.get("expected_version") or "").strip()
+        reviewed = (
+            job.get("history_status") == "confirmed_after_review"
+            or job.get("result_code") == "SWU411"
+        )
+        if reviewed:
+            message = f"A atualização de {name} foi confirmada após a revisão operacional."
+        elif version:
+            message = f"{name} foi atualizado com sucesso para a versão {version}."
+        else:
+            message = f"{name} foi atualizado com sucesso."
+        query = urlencode({"q": name, "job": job_id})
+        notification_id = hashlib.sha256(
+            f"switch_update|completed|{job_id}".encode("utf-8")
+        ).hexdigest()[:24]
+        notifications.append({
+            "id": notification_id,
+            "type": "switch_update_completed",
+            "severity": "success",
+            "icon": "bi-arrow-up-circle",
+            "title": "Atualização de switch concluída",
+            "message": message,
+            "regional": str(job.get("regional") or "Sem regional").strip(),
+            "device": name,
+            "persistent": False,
+            "occurred_at": occurred_at,
+            "url": f"/switches/firmware/history?{query}",
+        })
+
+    return sort_notifications(notifications)
 
 
 def build_notifications(records_by_group, orphan_vpn_names=None):
@@ -132,12 +198,7 @@ def build_notifications(records_by_group, orphan_vpn_names=None):
                 "url": _notification_url(group, target, name, regional),
             })
 
-    # Pendencias que exigem acao ficam sempre no topo. A data continua
-    # ordenando os alertas dentro de cada nivel de prioridade.
-    priority = {"vpn_orphan": 0, "admin_baseline": 1}
-    notifications.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
-    notifications.sort(key=lambda item: priority.get(item.get("type"), 2))
-    return notifications
+    return sort_notifications(notifications)
 
 
 def _load_state(path=None):
