@@ -1,0 +1,603 @@
+{% extends "base.html" %}
+
+{% block title %}Histórico de Atualizações - Sentinel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .switch-history-shell {
+        max-width: 1120px;
+        margin: 0 auto;
+    }
+
+    .switch-history-title {
+        color: #20272d;
+        font-weight: 300;
+    }
+
+    .switch-history-title i {
+        color: #0f6c8c;
+    }
+
+    .switch-history-panel {
+        overflow: hidden;
+        border: 1px solid rgba(15, 108, 140, 0.12);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(1, 46, 64, 0.1);
+    }
+
+    .switch-history-toolbar {
+        padding: 22px;
+        color: #fff;
+        background: linear-gradient(135deg, #012e40, #0a4a63, #0f6c8c);
+    }
+
+    .switch-history-toolbar h2 {
+        margin: 0 0 6px;
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+
+    .switch-history-toolbar p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.82);
+    }
+
+    .switch-history-search {
+        position: relative;
+        margin-top: 18px;
+    }
+
+    .switch-history-search i {
+        position: absolute;
+        top: 50%;
+        left: 16px;
+        z-index: 2;
+        color: #55707f;
+        transform: translateY(-50%);
+    }
+
+    .switch-history-search input {
+        min-height: 48px;
+        padding-left: 46px;
+        border: 0;
+        border-radius: 8px;
+    }
+
+    .switch-history-content {
+        padding: 22px;
+    }
+
+    .switch-history-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+        color: #5f6e78;
+        font-size: 0.9rem;
+    }
+
+    .history-list {
+        display: grid;
+        gap: 12px;
+    }
+
+    .history-item {
+        overflow: hidden;
+        border: 1px solid #dce7ec;
+        border-radius: 10px;
+        background: #fff;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .history-item:hover,
+    .history-item.is-open {
+        border-color: rgba(15, 108, 140, 0.48);
+        box-shadow: 0 5px 16px rgba(1, 46, 64, 0.08);
+    }
+
+    .history-item-button {
+        display: grid;
+        grid-template-columns: minmax(210px, 1.4fr) minmax(180px, 1fr) minmax(130px, 0.8fr) minmax(125px, 0.65fr) 26px;
+        gap: 16px;
+        align-items: center;
+        width: 100%;
+        padding: 17px 18px;
+        border: 0;
+        background: transparent;
+        color: #27323a;
+        text-align: left;
+    }
+
+    .history-switch-name {
+        display: block;
+        color: #012e40;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .history-date,
+    .history-field-label {
+        display: block;
+        color: #71818b;
+        font-size: 0.76rem;
+    }
+
+    .history-field-value {
+        display: block;
+        margin-top: 2px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .history-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 105px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .history-status.success { color: #146c43; background: #dff4e8; }
+    .history-status.failure { color: #a61e2d; background: #fbe1e4; }
+    .history-status.running { color: #075985; background: #e0f2fe; }
+    .history-status.scheduled { color: #805b00; background: #fff3cd; }
+    .history-status.review { color: #8a4b08; background: #ffedd5; }
+    .history-status.cancelled { color: #56616a; background: #edf0f2; }
+
+    .history-chevron {
+        color: #0f6c8c;
+        transition: transform 0.2s ease;
+    }
+
+    .history-item.is-open .history-chevron {
+        transform: rotate(180deg);
+    }
+
+    .history-detail {
+        display: none;
+        padding: 0 18px 18px;
+    }
+
+    .history-item.is-open .history-detail {
+        display: block;
+    }
+
+    .history-detail-inner {
+        padding: 18px;
+        border-top: 1px solid #e5edf1;
+        border-radius: 0 0 8px 8px;
+        background: #f7fafb;
+    }
+
+    .history-detail-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .history-summary-card {
+        padding: 12px 14px;
+        border: 1px solid #dce7ec;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .history-summary-card strong {
+        display: block;
+        margin-top: 3px;
+        color: #012e40;
+        font-size: 1.05rem;
+    }
+
+    .attempt-list {
+        display: grid;
+        gap: 9px;
+        margin-bottom: 18px;
+    }
+
+    .attempt-item {
+        display: grid;
+        grid-template-columns: 115px minmax(150px, 0.8fr) minmax(220px, 1.5fr);
+        gap: 12px;
+        padding: 12px 14px;
+        border-left: 4px solid #0f6c8c;
+        border-radius: 7px;
+        background: #fff;
+    }
+
+    .attempt-item.failure { border-left-color: #dc3545; }
+    .attempt-item.success { border-left-color: #198754; }
+    .attempt-item.review { border-left-color: #d97706; }
+
+    .attempt-number {
+        color: #012e40;
+        font-weight: 700;
+    }
+
+    .attempt-message {
+        color: #596974;
+        overflow-wrap: anywhere;
+    }
+
+    .history-log-button {
+        color: #0f6c8c;
+        border-color: #0f6c8c;
+        font-weight: 600;
+    }
+
+    .history-log-button:hover {
+        color: #fff;
+        background: #0f6c8c;
+    }
+
+    .history-empty,
+    .history-loading,
+    .history-error {
+        padding: 42px 20px;
+        color: #697984;
+        text-align: center;
+    }
+
+    .history-error { color: #a61e2d; }
+
+    .history-log-modal .modal-header {
+        color: #fff;
+        background: linear-gradient(135deg, #012e40, #0f6c8c);
+    }
+
+    .history-log-modal .modal-dialog {
+        width: min(1120px, calc(100vw - 32px));
+        max-width: 1120px;
+        margin: 16px auto;
+    }
+
+    .history-log-modal .modal-content {
+        max-height: calc(100vh - 32px);
+        overflow: hidden;
+        border: 0;
+        border-radius: 12px;
+        box-shadow: 0 20px 55px rgba(1, 46, 64, 0.32);
+    }
+
+    .history-log-modal .modal-body {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .history-log-modal .btn-close { filter: invert(1); }
+
+    .history-log-content {
+        height: min(62vh, 620px);
+        margin: 0;
+        padding: 16px;
+        overflow: auto;
+        border-radius: 8px;
+        background: #071d27;
+        color: #d9edf5;
+        font: 0.82rem/1.55 Consolas, "Courier New", monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 991.98px) {
+        .history-item-button {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .history-chevron { display: none; }
+    }
+
+    @media (max-width: 575.98px) {
+        .switch-history-content,
+        .switch-history-toolbar { padding: 16px; }
+        .history-item-button { grid-template-columns: 1fr; gap: 10px; }
+        .history-detail-summary { grid-template-columns: 1fr; }
+        .attempt-item { grid-template-columns: 1fr; gap: 5px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="switch-history-shell">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="display-5 switch-history-title mb-2">
+                <i class="bi bi-clock-history me-3"></i>Histórico de Atualizações
+            </h1>
+            <p class="lead text-muted mb-0">Consulte o resultado e os registros das atualizações de firmware.</p>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-start mb-3">
+        <a href="{{ url_for('listar_switches') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Voltar
+        </a>
+    </div>
+
+    <section class="switch-history-panel" aria-labelledby="historyPanelTitle">
+        <div class="switch-history-toolbar">
+            <h2 id="historyPanelTitle"><i class="bi bi-list-check me-2"></i>Atualizações registradas</h2>
+            <p>Resultados ordenados do mais recente para o mais antigo.</p>
+            <div class="switch-history-search">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <label for="historySearch" class="visually-hidden">Buscar no histórico</label>
+                <input id="historySearch" type="search" class="form-control"
+                       placeholder="Buscar por nome do switch, regional ou IP" autocomplete="off">
+            </div>
+        </div>
+        <div class="switch-history-content">
+            <div class="switch-history-summary">
+                <span id="historySummary">Carregando histórico...</span>
+                <span id="historyShown"></span>
+            </div>
+            <div id="historyList" class="history-list" aria-live="polite">
+                <div class="history-loading">
+                    <div class="spinner-border text-info mb-3" role="status"></div>
+                    <div>Consultando atualizações...</div>
+                </div>
+            </div>
+            <div class="text-center mt-4">
+                <button id="historyLoadMore" type="button" class="btn btn-outline-primary d-none">
+                    <i class="bi bi-chevron-down me-2"></i>Carregar mais
+                </button>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="modal fade history-log-modal" id="historyLogModal" tabindex="-1" aria-labelledby="historyLogTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="historyLogTitle">
+                    <i class="bi bi-file-earmark-text me-2"></i>Registro completo
+                </h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="historyLogContent" class="history-log-content">Carregando registro...</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const pageSize = 50;
+    const list = document.getElementById('historyList');
+    const search = document.getElementById('historySearch');
+    const summary = document.getElementById('historySummary');
+    const shown = document.getElementById('historyShown');
+    const loadMore = document.getElementById('historyLoadMore');
+    const modalElement = document.getElementById('historyLogModal');
+    const logContent = document.getElementById('historyLogContent');
+    document.body.appendChild(modalElement);
+    const logModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    const detailCache = new Map();
+    let offset = 0;
+    let total = 0;
+    let currentQuery = '';
+    let searchTimer = null;
+    let requestSequence = 0;
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function formatDate(value, includeSeconds = false) {
+        if (!value) return 'Não informado';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return new Intl.DateTimeFormat('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+            second: includeSeconds ? '2-digit' : undefined,
+        }).format(date).replace(',', ' às');
+    }
+
+    function statusInfo(status) {
+        const values = {
+            completed: ['success', 'bi-check-circle', 'Sucesso'],
+            failed: ['failure', 'bi-x-circle', 'Falha'],
+            running: ['running', 'bi-arrow-repeat', 'Em andamento'],
+            scheduled: ['scheduled', 'bi-calendar-event', 'Agendado'],
+            needs_review: ['review', 'bi-exclamation-triangle', 'Verificar'],
+            reviewed: ['review', 'bi-clipboard-check', 'Revisado'],
+            cancelled: ['cancelled', 'bi-slash-circle', 'Cancelado'],
+            confirmed_after_review: ['review', 'bi-check-circle', 'Confirmado após revisão'],
+            inconsistent: ['review', 'bi-exclamation-diamond', 'Registro inconsistente'],
+        };
+        return values[status] || ['cancelled', 'bi-question-circle', 'Indefinido'];
+    }
+
+    function resultBadge(status) {
+        const [style, icon, label] = statusInfo(status);
+        return `<span class="history-status ${style}"><i class="bi ${icon}"></i>${label}</span>`;
+    }
+
+    function itemHtml(job) {
+        const jobId = escapeHtml(job.id);
+        const referenceDate = job.finished_at_brasilia || job.started_at_brasilia || job.scheduled_at_brasilia;
+        return `
+            <article class="history-item" data-job-id="${jobId}">
+                <button type="button" class="history-item-button" data-history-toggle="${jobId}" aria-expanded="false">
+                    <span>
+                        <span class="history-switch-name"><i class="bi bi-hdd-network me-2"></i>${escapeHtml(job.switch_name)}</span>
+                        <span class="history-date">${escapeHtml(formatDate(referenceDate))}</span>
+                    </span>
+                    <span><span class="history-field-label">Regional</span><span class="history-field-value">${escapeHtml(job.regional)}</span></span>
+                    <span><span class="history-field-label">IP</span><span class="history-field-value">${escapeHtml(job.ip_address)}</span></span>
+                    <span>${resultBadge(job.history_status || job.status)}</span>
+                    <i class="bi bi-chevron-down history-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="history-detail" data-history-detail="${jobId}"></div>
+            </article>`;
+    }
+
+    function attemptHtml(attempt) {
+        const displayStatus = attempt.history_status || attempt.status;
+        const [style] = statusInfo(displayStatus);
+        const description = attempt.result_description || attempt.message || 'Sem retorno registrado.';
+        return `
+            <div class="attempt-item ${style}">
+                <span class="attempt-number">Tentativa ${escapeHtml(attempt.attempt_number)}</span>
+                <span>
+                    <span class="history-field-label">Início</span>
+                    <span class="history-field-value">${escapeHtml(formatDate(attempt.started_at_brasilia, true))}</span>
+                    <span class="history-field-label mt-2">Fim</span>
+                    <span class="history-field-value">${escapeHtml(formatDate(attempt.finished_at_brasilia, true))}</span>
+                </span>
+                <span class="attempt-message">
+                    ${resultBadge(displayStatus)}
+                    <span class="d-block mt-2">${escapeHtml(description)}</span>
+                    ${attempt.result_code ? `<small class="d-block mt-1">Código: ${escapeHtml(attempt.result_code)}</small>` : ''}
+                </span>
+            </div>`;
+    }
+
+    function detailHtml(job) {
+        const attempts = Array.isArray(job.attempts) ? job.attempts : [];
+        const failureLabel = job.status === 'completed'
+            ? 'Falhas antes do sucesso'
+            : 'Tentativas com falha';
+        const attemptItems = attempts.length
+            ? attempts.map(attemptHtml).join('')
+            : '<div class="text-muted">Nenhuma tentativa foi iniciada.</div>';
+        return `
+            <div class="history-detail-inner">
+                <div class="history-detail-summary">
+                    <div class="history-summary-card"><span class="history-field-label">Tentativas selecionadas</span><strong>${escapeHtml(job.max_attempts || 1)}</strong></div>
+                    <div class="history-summary-card">
+                        <span class="history-field-label">Tentativas realizadas</span>
+                        <strong>${escapeHtml(job.attempt_count_display ?? job.attempt_count ?? 0)}</strong>
+                        ${job.attempt_data_inferred ? '<small class="text-muted">Recuperada do registro anterior</small>' : ''}
+                    </div>
+                    <div class="history-summary-card"><span class="history-field-label">${failureLabel}</span><strong>${escapeHtml(job.failed_attempts || 0)}</strong></div>
+                </div>
+                <h3 class="h6 fw-bold mb-3">Retorno de cada tentativa</h3>
+                <div class="attempt-list">${attemptItems}</div>
+                ${job.has_log ? `
+                    <button type="button" class="btn btn-outline-primary history-log-button" data-history-log="${escapeHtml(job.id)}">
+                        <i class="bi bi-file-earmark-text me-2"></i>Ler o registro completo
+                    </button>` : '<span class="text-muted small">Registro completo ainda não disponível.</span>'}
+            </div>`;
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.message || 'Não foi possível consultar o histórico.');
+        }
+        return payload;
+    }
+
+    async function loadHistory({ append = false } = {}) {
+        const sequence = ++requestSequence;
+        if (!append) {
+            offset = 0;
+            list.innerHTML = '<div class="history-loading"><div class="spinner-border text-info mb-3" role="status"></div><div>Consultando atualizações...</div></div>';
+            loadMore.classList.add('d-none');
+        }
+        try {
+            const params = new URLSearchParams({ q: currentQuery, limit: pageSize, offset });
+            const payload = await fetchJson(`/api/switches/firmware/history?${params}`);
+            if (sequence !== requestSequence) return;
+            total = payload.total || 0;
+            const items = payload.items || [];
+            if (!append) list.innerHTML = '';
+            list.insertAdjacentHTML('beforeend', items.map(itemHtml).join(''));
+            offset += items.length;
+            summary.textContent = currentQuery
+                ? `${total} resultado${total === 1 ? '' : 's'} para “${currentQuery}”`
+                : `${total} atualização${total === 1 ? '' : 'ões'} registrada${total === 1 ? '' : 's'}`;
+            shown.textContent = total ? `Exibindo ${Math.min(offset, total)} de ${total}` : '';
+            loadMore.classList.toggle('d-none', offset >= total);
+            if (!total) {
+                list.innerHTML = '<div class="history-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Nenhuma atualização encontrada.</div>';
+            }
+        } catch (error) {
+            if (sequence !== requestSequence) return;
+            list.innerHTML = `<div class="history-error"><i class="bi bi-exclamation-circle fs-2 d-block mb-2"></i>${escapeHtml(error.message)}</div>`;
+            summary.textContent = 'Falha ao carregar o histórico';
+            shown.textContent = '';
+        }
+    }
+
+    async function toggleDetail(button) {
+        const jobId = button.dataset.historyToggle;
+        const item = button.closest('.history-item');
+        const detail = item.querySelector('[data-history-detail]');
+        const opening = !item.classList.contains('is-open');
+        item.classList.toggle('is-open', opening);
+        button.setAttribute('aria-expanded', String(opening));
+        if (!opening || detail.dataset.loaded === 'true') return;
+        detail.innerHTML = '<div class="history-detail-inner text-center text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Carregando detalhes...</div>';
+        try {
+            let job = detailCache.get(jobId);
+            if (!job) {
+                const payload = await fetchJson(`/api/switches/firmware/history/${encodeURIComponent(jobId)}`);
+                job = payload.job;
+                detailCache.set(jobId, job);
+            }
+            detail.innerHTML = detailHtml(job);
+            detail.dataset.loaded = 'true';
+        } catch (error) {
+            detail.innerHTML = `<div class="history-detail-inner history-error">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    async function openLog(jobId) {
+        logContent.textContent = 'Carregando registro...';
+        logModal.show();
+        try {
+            const payload = await fetchJson(`/api/switches/firmware/history/${encodeURIComponent(jobId)}/log`);
+            logContent.textContent = payload.log || 'Registro vazio.';
+        } catch (error) {
+            logContent.textContent = `Não foi possível abrir o registro.\n\n${error.message}`;
+        }
+    }
+
+    list.addEventListener('click', (event) => {
+        const logButton = event.target.closest('[data-history-log]');
+        if (logButton) {
+            event.stopPropagation();
+            openLog(logButton.dataset.historyLog);
+            return;
+        }
+        const toggle = event.target.closest('[data-history-toggle]');
+        if (toggle) toggleDetail(toggle);
+    });
+
+    search.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            currentQuery = search.value.trim();
+            detailCache.clear();
+            loadHistory();
+        }, 350);
+    });
+
+    loadMore.addEventListener('click', () => loadHistory({ append: true }));
+    loadHistory();
+})();
+</script>
+{% endblock %}
