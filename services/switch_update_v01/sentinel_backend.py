@@ -13,7 +13,7 @@ import secrets
 from typing import Callable
 from uuid import uuid4
 
-from flask import Blueprint, Flask, abort, jsonify, request, session
+from flask import Blueprint, Flask, abort, jsonify, render_template, request, session
 from flask_login import current_user
 from werkzeug.utils import secure_filename
 
@@ -122,6 +122,13 @@ def create_switch_update_blueprint(
         )
         return payload
 
+    def history_job(job: dict, viewer: str) -> dict:
+        payload = shared_job(job, viewer)
+        payload.pop("log_relative_path", None)
+        payload.pop("url", None)
+        payload.pop("firmware_sha256", None)
+        return payload
+
     def json_error(message: str, status: int):
         return jsonify({"success": False, "message": message}), status
 
@@ -170,6 +177,11 @@ def create_switch_update_blueprint(
                 LOGGER.exception("Nao foi possivel consultar a tarefa externa do worker.")
                 payload["worker"] = {"available": False}
         return jsonify(payload)
+
+    @blueprint.get("/switches/firmware/history")
+    def firmware_history_page():
+        require_authorized_user()
+        return render_template("historico_atualizacoes_switches.html")
 
     @blueprint.post("/api/switches/<path:host>/firmware/preflight")
     def firmware_preflight(host: str):
@@ -237,7 +249,7 @@ def create_switch_update_blueprint(
     def create_firmware_job(host: str):
         owner = require_authorized_user()
         validate_csrf()
-        switch_url(host)  # confirma novamente que o host continua no inventario
+        switch, _ = switch_url(host)  # confirma novamente que o host continua no inventario
         payload = request.get_json(silent=True) or {}
         password = str(payload.get("password") or "")
         immediate = not payload.get("scheduled_at")
@@ -260,6 +272,9 @@ def create_switch_update_blueprint(
                 password=password,
                 confirmed_decision=str(payload.get("confirmed_decision") or ""),
                 max_attempts=max_attempts,
+                switch_name=str(switch.get("host") or host),
+                regional=str(switch.get("regional") or ""),
+                ip_address=str(switch.get("ip") or draft.get("host") or ""),
             )
         finally:
             password = ""
@@ -282,6 +297,45 @@ def create_switch_update_blueprint(
     def list_firmware_jobs():
         owner = require_authorized_user()
         return jsonify({"success": True, "jobs": scheduler.list_schedules(owner=owner)})
+
+    @blueprint.get("/api/switches/firmware/active-jobs")
+    def list_active_firmware_jobs():
+        viewer = require_authorized_user()
+        jobs = [history_job(job, viewer) for job in scheduler.list_active_schedules()]
+        return jsonify({"success": True, "jobs": jobs})
+
+    @blueprint.get("/api/switches/firmware/history")
+    def list_firmware_history():
+        viewer = require_authorized_user()
+        try:
+            limit = int(request.args.get("limit", 50))
+            offset = int(request.args.get("offset", 0))
+        except (TypeError, ValueError):
+            return json_error("Paginacao invalida.", 400)
+        result = scheduler.list_history(
+            search=str(request.args.get("q") or ""),
+            limit=limit,
+            offset=offset,
+        )
+        result["items"] = [history_job(job, viewer) for job in result["items"]]
+        return jsonify({"success": True, **result})
+
+    @blueprint.get("/api/switches/firmware/history/<job_id>")
+    def firmware_history_detail(job_id: str):
+        viewer = require_authorized_user()
+        job = scheduler.get_history_detail(job_id)
+        return jsonify({"success": True, "job": history_job(job, viewer)})
+
+    @blueprint.get("/api/switches/firmware/history/<job_id>/log")
+    def firmware_history_log(job_id: str):
+        require_authorized_user()
+        return jsonify(
+            {
+                "success": True,
+                "job_id": job_id,
+                "log": scheduler.read_history_log(job_id),
+            }
+        )
 
     @blueprint.get("/api/switches/firmware/jobs/<job_id>")
     def firmware_job_status(job_id: str):

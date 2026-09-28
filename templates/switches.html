@@ -104,7 +104,14 @@
     }
 
     .switch-card {
+        flex: 1 1 auto;
+        overflow: hidden;
         transition: all 0.3s ease;
+    }
+
+    .switch-card-wrapper {
+        display: flex;
+        flex-direction: column;
     }
     
     .switch-card:hover {
@@ -131,6 +138,72 @@
         justify-content: center;
         padding: 0;
         border-radius: 7px;
+    }
+
+    .switch-update-card-state {
+        padding: 12px 14px;
+        border: 0;
+        border-top: 1px solid rgba(15, 108, 140, 0.24);
+        border-radius: 0;
+        background: #f5fafc;
+    }
+
+    .switch-update-card-state.is-scheduled {
+        border-top-color: #f0cf72;
+        background: #fff9e8;
+    }
+
+    .switch-update-card-state.is-review {
+        border-top-color: #e5a04b;
+        background: #fff4e6;
+    }
+
+    .switch-update-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 7px;
+        color: #294653;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .switch-update-card-message {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .switch-update-card-track {
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #dce8ed;
+    }
+
+    .switch-update-card-state.is-scheduled .switch-update-card-meta {
+        margin-bottom: 0;
+    }
+
+    .switch-update-card-state.is-scheduled .switch-update-card-track {
+        display: none;
+    }
+
+    .switch-update-card-bar {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0f6c8c, #198754);
+        transition: width 0.4s ease;
+    }
+
+    .switch-update-card-state.is-scheduled .switch-update-card-bar {
+        background: #d99a16;
+    }
+
+    .switch-update-card-state.is-review .switch-update-card-bar {
+        background: #d97706;
     }
     
     .status-badge {
@@ -449,7 +522,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-{% if sentinel_access.operator %}4{% else %}6{% endif %} mb-3">
                         <div class="d-grid">
                             <button id="btn-verificar-todos" class="btn btn-primary btn-lg" onclick="verificarTodosSwitches(this)">
                                 <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
@@ -461,7 +534,7 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-{% if sentinel_access.operator %}4{% else %}6{% endif %} mb-3">
                         <div class="d-grid">
                             <button type="button" class="btn btn-outline-primary btn-lg" onclick="recarregarSwitchesZabbix(this)">
                                 <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
@@ -469,6 +542,17 @@
                             </button>
                         </div>
                     </div>
+
+                    {% if sentinel_access.operator %}
+                    <div class="col-md-4 mb-3">
+                        <div class="d-grid">
+                            <a class="btn btn-outline-primary btn-lg"
+                               href="{{ url_for('switch_firmware_v01.firmware_history_page') }}">
+                                <i class="bi bi-clock-history me-2"></i>Histórico de atualizações
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 <p class="text-muted small mb-0">
                     Verificar Todos consulta os estados operacionais. Recarregar inventário atualiza hosts, IPs e regionais pelos host groups do Zabbix.
@@ -549,7 +633,7 @@
         <div class="row">
             {% for switch in regional.switches %}
             <div class="col-md-4 mb-3 switch-card-wrapper" data-status="{{ switch.status or 'desconhecido' }}" data-search-text="{{ regional.nome }} {{ switch.host }} {{ switch.ip }} {{ switch.modelo }} {{ switch.local }} {{ switch.status or 'desconhecido' }}">
-                <div class="card switch-card h-100" id="switch-{{ switch.host|replace(' ', '-')|replace('.', '-') }}" data-host="{{ switch.host }}" data-regional="{{ regional.nome }}" data-status="{{ switch.status or 'desconhecido' }}">
+                <div class="card switch-card" id="switch-{{ switch.host|replace(' ', '-')|replace('.', '-') }}" data-host="{{ switch.host }}" data-ip="{{ switch.ip }}" data-regional="{{ regional.nome }}" data-status="{{ switch.status or 'desconhecido' }}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">{{ switch.host }}</h6>
                         <span>
@@ -636,6 +720,17 @@
                             </button>
                         </div>
                     </div>
+                    {% if sentinel_access.operator %}
+                    <div class="switch-update-card-state d-none" data-switch-update-state aria-live="polite">
+                        <div class="switch-update-card-meta">
+                            <span class="switch-update-card-message"></span>
+                            <span class="switch-update-card-percent"></span>
+                        </div>
+                        <div class="switch-update-card-track" aria-hidden="true">
+                            <div class="switch-update-card-bar"></div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -1476,5 +1571,85 @@ function excluirSwitch(host) {
         }
     });
 }
+
+{% if sentinel_access.operator %}
+function formatarAgendamentoSwitchUpdate(valor) {
+    if (!valor) return 'Horário não informado';
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return String(valor);
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).formatToParts(data).reduce((resultado, parte) => {
+        resultado[parte.type] = parte.value;
+        return resultado;
+    }, {});
+    return `${partes.hour}:${partes.minute} - ${partes.day}/${partes.month}/${partes.year}`;
+}
+
+function atualizarProgressoDosCards(jobs) {
+    const jobsPorIp = new Map();
+    (jobs || []).forEach((job) => {
+        const ip = String(job.ip_address || job.host || '').trim().toLowerCase();
+        if (ip) jobsPorIp.set(ip, job);
+    });
+
+    document.querySelectorAll('.switch-card-wrapper').forEach((wrapper) => {
+        const card = wrapper.querySelector('.switch-card');
+        const state = wrapper.querySelector('[data-switch-update-state]');
+        if (!card || !state) return;
+        const ip = String(card.dataset.ip || '').trim().toLowerCase();
+        const job = jobsPorIp.get(ip);
+        if (!job) {
+            state.classList.add('d-none');
+            state.classList.remove('is-scheduled', 'is-review');
+            return;
+        }
+
+        const percent = Math.max(0, Math.min(100, Number(job.percent) || 0));
+        const message = state.querySelector('.switch-update-card-message');
+        const percentLabel = state.querySelector('.switch-update-card-percent');
+        const bar = state.querySelector('.switch-update-card-bar');
+        state.classList.remove('d-none', 'is-scheduled', 'is-review');
+
+        if (job.status === 'scheduled') {
+            state.classList.add('is-scheduled');
+            message.textContent = `Agendado: ${formatarAgendamentoSwitchUpdate(job.scheduled_at_brasilia)}`;
+            percentLabel.textContent = job.stage === 'retry_scheduled' ? 'Nova tentativa' : 'Aguardando';
+            bar.style.width = '0%';
+        } else if (job.status === 'needs_review') {
+            state.classList.add('is-review');
+            message.textContent = 'Verificação necessária';
+            percentLabel.textContent = `${percent}%`;
+            bar.style.width = `${percent}%`;
+        } else {
+            message.textContent = job.message || 'Atualização em andamento';
+            message.title = job.message || 'Atualização em andamento';
+            percentLabel.textContent = `${percent}%`;
+            bar.style.width = `${percent}%`;
+        }
+    });
+}
+
+async function consultarProgressoDosSwitches() {
+    try {
+        const resposta = await fetch('/api/switches/firmware/active-jobs', {
+            headers: { Accept: 'application/json' }
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (resposta.ok && dados.success) atualizarProgressoDosCards(dados.jobs);
+    } catch (erro) {
+        console.debug('Progresso de firmware temporariamente indisponível.', erro);
+    }
+}
+
+consultarProgressoDosSwitches();
+window.setInterval(consultarProgressoDosSwitches, 5000);
+{% endif %}
 </script>
 {% endblock %}

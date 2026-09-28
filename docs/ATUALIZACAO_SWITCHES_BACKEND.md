@@ -73,12 +73,25 @@ O servidor precisa de Google Chrome e da dependência `selenium==4.49.0`.
 - `instance/`, `data/switch_updates/`, `diagnostics/` e arquivos `*.swi` são
   artefatos locais e permanecem fora do versionamento.
 
+## Histórico e acompanhamento
+
+O SQLite preserva nome, regional e IP capturados no momento do agendamento.
+Cada execução também recebe um registro estruturado de tentativa, com horário,
+resultado e caminho controlado para o respectivo log. A tela
+`/switches/firmware/history` permite busca por switch, regional ou IP e abre o
+conteúdo completo dos logs apenas para operadores autorizados.
+
+A tela principal de switches consulta todos os jobs ativos em uma única
+requisição periódica e mostra, abaixo do card correspondente, o horário de um
+agendamento ou o progresso da execução. Os arquivos continuam sujeitos à
+retenção configurada por `log_retention_months`.
+
 ## Validação segura
 
 ```powershell
-.\venv\Scripts\python.exe -c "from services.switch_update_v01.scheduler import SwitchUpdateScheduler; from services.switch_update_v01.sentinel_backend import install_switch_update_backend; print('backend OK')"
-.\venv\Scripts\python.exe -m services.switch_update_v01.worker --help
-.\venv\Scripts\python.exe -m unittest discover -s tests/unit -p "switch_update*_test.py" -v
+.\.venv\Scripts\python.exe -c "from services.switch_update_v01.scheduler import SwitchUpdateScheduler; from services.switch_update_v01.sentinel_backend import install_switch_update_backend; print('backend OK')"
+.\.venv\Scripts\python.exe -m services.switch_update_v01.worker --help
+.\.venv\Scripts\python.exe -m unittest discover -s tests/unit -p "switch_update*_test.py" -v
 ```
 
 Não execute transferência física de firmware durante a migração. A etapa de

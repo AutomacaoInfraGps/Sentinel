@@ -9,16 +9,16 @@ echo.>> "%LOG_FILE%"
 echo ==================================================>> "%LOG_FILE%"
 echo [%date% %time%] Iniciando worker de atualizacao de switches...>> "%LOG_FILE%"
 
-if exist "%~dp0venv\Scripts\python.exe" (
-    "%~dp0venv\Scripts\python.exe" -m services.switch_update_v01.worker --runtime-dir "%~dp0data\switch_updates" >> "%LOG_FILE%" 2>&1
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
+) else if exist "%~dp0venv\Scripts\python.exe" (
+    set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
 ) else (
-    where py >nul 2>&1
-    if not errorlevel 1 (
-        py -m services.switch_update_v01.worker --runtime-dir "%~dp0data\switch_updates" >> "%LOG_FILE%" 2>&1
-    ) else (
-        python -m services.switch_update_v01.worker --runtime-dir "%~dp0data\switch_updates" >> "%LOG_FILE%" 2>&1
-    )
+    echo [%date% %time%] ERRO: ambiente virtual .venv ou venv nao encontrado.>> "%LOG_FILE%"
+    endlocal & exit /b 1
 )
+
+"%PYTHON_EXE%" -m services.switch_update_v01.worker --runtime-dir "%~dp0data\switch_updates" >> "%LOG_FILE%" 2>&1
 
 set "WORKER_EXIT=%ERRORLEVEL%"
 if not "%WORKER_EXIT%"=="0" (
