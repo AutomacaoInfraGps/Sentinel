@@ -355,7 +355,10 @@ class SwitchUpdateScheduler:
                     log_relative_path TEXT,
                     result_code TEXT,
                     attempt_count INTEGER NOT NULL DEFAULT 0,
-                    max_attempts INTEGER NOT NULL DEFAULT 1
+                    max_attempts INTEGER NOT NULL DEFAULT 1,
+                    switch_name TEXT NOT NULL DEFAULT '',
+                    regional TEXT NOT NULL DEFAULT '',
+                    ip_address TEXT NOT NULL DEFAULT ''
                 )
                 """
             )
@@ -381,9 +384,45 @@ class SwitchUpdateScheduler:
                     "ALTER TABLE scheduled_updates "
                     "ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 1"
                 )
+            if "switch_name" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN switch_name TEXT NOT NULL DEFAULT ''"
+                )
+            if "regional" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN regional TEXT NOT NULL DEFAULT ''"
+                )
+            if "ip_address" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN ip_address TEXT NOT NULL DEFAULT ''"
+                )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_scheduled_updates_due "
                 "ON scheduled_updates(status, scheduled_at_utc)"
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS switch_update_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    schedule_id TEXT NOT NULL,
+                    attempt_number INTEGER NOT NULL,
+                    started_at_utc TEXT NOT NULL,
+                    finished_at_utc TEXT,
+                    status TEXT NOT NULL,
+                    result_code TEXT,
+                    message TEXT,
+                    log_relative_path TEXT,
+                    UNIQUE(schedule_id, attempt_number),
+                    FOREIGN KEY(schedule_id) REFERENCES scheduled_updates(id)
+                )
+                """
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_switch_update_attempts_job "
+                "ON switch_update_attempts(schedule_id, attempt_number)"
             )
             connection.execute(
                 """
@@ -494,6 +533,82 @@ class SwitchUpdateScheduler:
             raise ScheduleError("Nao foi possivel finalizar o nome do log da atualizacao.") from exc
         self._set_job_log_path(schedule_id, target)
         return target
+
+    def _relative_log_path(self, log_path: Path | None) -> str | None:
+        if log_path is None:
+            return None
+        try:
+            return log_path.resolve().relative_to(self.log_root.resolve()).as_posix()
+        except (OSError, ValueError):
+            return None
+
+    def _start_attempt(self, row: sqlite3.Row) -> None:
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                INSERT INTO switch_update_attempts (
+                    schedule_id, attempt_number, started_at_utc, status, message
+                ) VALUES (?, ?, ?, 'running', ?)
+                ON CONFLICT(schedule_id, attempt_number) DO UPDATE SET
+                    started_at_utc = excluded.started_at_utc,
+                    finished_at_utc = NULL,
+                    status = 'running',
+                    result_code = NULL,
+                    message = excluded.message
+                """,
+                (
+                    row["id"],
+                    int(row["attempt_count"] or 1),
+                    str(row["started_at_utc"] or self._iso(self.now())),
+                    "Tentativa iniciada.",
+                ),
+            )
+
+    def _set_attempt_log_path(
+        self, schedule_id: str, attempt_number: int, log_path: Path
+    ) -> None:
+        relative = self._relative_log_path(log_path)
+        if not relative:
+            return
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                UPDATE switch_update_attempts
+                   SET log_relative_path = ?
+                 WHERE schedule_id = ? AND attempt_number = ?
+                """,
+                (relative, schedule_id, int(attempt_number)),
+            )
+
+    def _finish_attempt(
+        self,
+        schedule_id: str,
+        attempt_number: int,
+        *,
+        status: str,
+        result_code: str,
+        message: str,
+        log_path: Path | None,
+    ) -> None:
+        relative = self._relative_log_path(log_path)
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                UPDATE switch_update_attempts
+                   SET finished_at_utc = ?, status = ?, result_code = ?,
+                       message = ?, log_relative_path = COALESCE(?, log_relative_path)
+                 WHERE schedule_id = ? AND attempt_number = ?
+                """,
+                (
+                    self._iso(self.now()),
+                    str(status),
+                    str(result_code),
+                    str(message or "")[:500],
+                    relative,
+                    schedule_id,
+                    int(attempt_number),
+                ),
+            )
 
     @staticmethod
     def _classify_result_code(
@@ -690,11 +805,39 @@ class SwitchUpdateScheduler:
         removed = 0
         empty_dir_candidates: set[Path] = set()
         for schedule_id, relative_value, path in removable:
+            deleted_attempt_paths: list[str] = []
             try:
                 path.unlink(missing_ok=True)
             except OSError as exc:
                 LOGGER.warning("Nao foi possivel excluir o log vencido %s: %s", path, exc)
                 continue
+            with closing(self._connect()) as connection:
+                attempt_paths = connection.execute(
+                    """
+                    SELECT DISTINCT log_relative_path
+                      FROM switch_update_attempts
+                     WHERE schedule_id = ?
+                       AND log_relative_path IS NOT NULL
+                       AND TRIM(log_relative_path) <> ''
+                    """,
+                    (schedule_id,),
+                ).fetchall()
+            for attempt_row in attempt_paths:
+                attempt_relative = str(attempt_row["log_relative_path"])
+                if attempt_relative == relative_value:
+                    deleted_attempt_paths.append(attempt_relative)
+                    continue
+                try:
+                    attempt_path = self._safe_registered_log_path(attempt_relative)
+                    attempt_path.unlink(missing_ok=True)
+                    empty_dir_candidates.add(attempt_path.parent)
+                    deleted_attempt_paths.append(attempt_relative)
+                except (OSError, ScheduleError) as exc:
+                    LOGGER.warning(
+                        "Nao foi possivel excluir o log vencido de uma tentativa %s: %s",
+                        attempt_relative,
+                        exc,
+                    )
             with closing(self._connect()) as connection:
                 cursor = connection.execute(
                     """
@@ -704,6 +847,17 @@ class SwitchUpdateScheduler:
                     """,
                     (schedule_id, relative_value),
                 )
+                if deleted_attempt_paths:
+                    placeholders = ",".join("?" for _ in deleted_attempt_paths)
+                    connection.execute(
+                        f"""
+                        UPDATE switch_update_attempts
+                           SET log_relative_path = NULL
+                         WHERE schedule_id = ?
+                           AND log_relative_path IN ({placeholders})
+                        """,
+                        [schedule_id, *deleted_attempt_paths],
+                    )
             if cursor.rowcount:
                 removed += 1
                 empty_dir_candidates.add(path.parent)
@@ -817,6 +971,9 @@ class SwitchUpdateScheduler:
         password: str,
         confirmed_decision: str,
         max_attempts: int = 1,
+        switch_name: str = "",
+        regional: str = "",
+        ip_address: str = "",
     ) -> dict:
         row = self._get_draft_row(draft_id, owner=owner)
         firmware = Path(row["firmware_path"])
@@ -834,6 +991,9 @@ class SwitchUpdateScheduler:
             max_attempts=max_attempts,
             expected_model=row["expected_model"],
             expected_version=row["expected_version"],
+            switch_name=switch_name,
+            regional=regional,
+            ip_address=ip_address,
         )
         self.delete_draft(draft_id, owner=owner)
         return result
@@ -878,6 +1038,9 @@ class SwitchUpdateScheduler:
         max_attempts: int = 1,
         expected_model: str | None = None,
         expected_version: str | None = None,
+        switch_name: str = "",
+        regional: str = "",
+        ip_address: str = "",
     ) -> dict:
         owner = str(owner or "").strip()
         username = str(username or "").strip()
@@ -944,9 +1107,10 @@ class SwitchUpdateScheduler:
                         original_name, firmware_sha256, expected_model,
                         expected_version, current_version_at_creation,
                         confirmed_decision, stage, percent, message,
-                        attempt_count, max_attempts
+                        attempt_count, max_attempts, switch_name, regional,
+                        ip_address
                     ) VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                              'scheduled', 0, ?, 0, ?)
+                              'scheduled', 0, ?, 0, ?, ?, ?, ?)
                     """,
                     (
                         schedule_id,
@@ -967,6 +1131,9 @@ class SwitchUpdateScheduler:
                         assessment.decision,
                         "Atualizacao agendada no horario de Brasilia.",
                         normalized_max_attempts,
+                        str(switch_name or assessment.host).strip()[:255],
+                        str(regional or "").strip()[:255],
+                        str(ip_address or assessment.host).strip()[:64],
                     ),
                 )
                 connection.commit()
@@ -996,6 +1163,43 @@ class SwitchUpdateScheduler:
                     BRASILIA_TZ
                 ).isoformat(timespec="seconds")
         data["result_description"] = RESULT_CODES.get(data.get("result_code"))
+        data["switch_name"] = str(data.get("switch_name") or data.get("host") or "").strip()
+        data["regional"] = str(data.get("regional") or "Nao informada").strip()
+        data["ip_address"] = str(data.get("ip_address") or data.get("host") or "").strip()
+        recorded_attempts = max(0, int(data.get("attempt_count") or 0))
+        has_execution_evidence = bool(
+            data.get("started_at_utc") or str(data.get("log_relative_path") or "").strip()
+        )
+        inferred_attempt = recorded_attempts == 0 and has_execution_evidence
+        data["attempt_count_display"] = 1 if inferred_attempt else recorded_attempts
+        data["attempt_data_inferred"] = inferred_attempt
+        if data.get("status") == "completed" and data.get("result_code") == "SWU411":
+            data["history_status"] = "confirmed_after_review"
+        elif data.get("status") == "completed" and not (
+            recorded_attempts or has_execution_evidence
+        ):
+            data["history_status"] = "inconsistent"
+        else:
+            data["history_status"] = data.get("status")
+        return data
+
+    @staticmethod
+    def _public_attempt(row: sqlite3.Row) -> dict:
+        data = dict(row)
+        for field in ("started_at_utc", "finished_at_utc"):
+            value = data.get(field)
+            if value:
+                timestamp = datetime.fromisoformat(str(value))
+                data[field.replace("_utc", "_brasilia")] = timestamp.astimezone(
+                    BRASILIA_TZ
+                ).isoformat(timespec="seconds")
+        data["result_description"] = RESULT_CODES.get(data.get("result_code"))
+        data["has_log"] = bool(str(data.pop("log_relative_path", "") or "").strip())
+        data["history_status"] = (
+            "confirmed_after_review"
+            if data.get("status") == "completed" and data.get("result_code") == "SWU411"
+            else data.get("status")
+        )
         return data
 
     def get_schedule(self, schedule_id: str, *, owner: str | None = None) -> dict:
@@ -1040,6 +1244,143 @@ class SwitchUpdateScheduler:
             rows = connection.execute(query, params).fetchall()
         return [self._public_row(row) for row in rows]
 
+    def list_active_schedules(self) -> list[dict]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM scheduled_updates
+                 WHERE status IN ('scheduled', 'running', 'needs_review')
+                 ORDER BY scheduled_at_utc ASC, created_at_utc ASC
+                """
+            ).fetchall()
+        return [self._public_row(row) for row in rows]
+
+    def list_history(
+        self, *, search: str = "", limit: int = 50, offset: int = 0
+    ) -> dict:
+        limit = max(1, min(int(limit), 100))
+        offset = max(0, int(offset))
+        normalized_search = str(search or "").strip()
+        where = ""
+        params: list[object] = []
+        if normalized_search:
+            where = """
+                WHERE LOWER(COALESCE(NULLIF(switch_name, ''), host)) LIKE LOWER(?)
+                   OR LOWER(COALESCE(regional, '')) LIKE LOWER(?)
+                   OR LOWER(COALESCE(NULLIF(ip_address, ''), host)) LIKE LOWER(?)
+            """
+            pattern = f"%{normalized_search}%"
+            params.extend((pattern, pattern, pattern))
+        with closing(self._connect()) as connection:
+            total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM scheduled_updates {where}", params
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                f"""
+                SELECT * FROM scheduled_updates
+                {where}
+                ORDER BY COALESCE(finished_at_utc, started_at_utc,
+                                  scheduled_at_utc, created_at_utc) DESC,
+                         created_at_utc DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            ).fetchall()
+        return {
+            "items": [self._public_row(row) for row in rows],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    def get_history_detail(self, schedule_id: str) -> dict:
+        job = self.get_schedule(schedule_id)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM switch_update_attempts
+                 WHERE schedule_id = ?
+                 ORDER BY attempt_number ASC
+                """,
+                (schedule_id,),
+            ).fetchall()
+        attempts = [self._public_attempt(row) for row in rows]
+        display_attempts = int(job.get("attempt_count_display") or 0)
+        if not attempts and display_attempts > 0:
+            attempts.append(
+                {
+                    "attempt_number": display_attempts,
+                    "started_at_brasilia": job.get("started_at_brasilia"),
+                    "finished_at_brasilia": job.get("finished_at_brasilia"),
+                    "status": job.get("history_status") or job.get("status"),
+                    "result_code": job.get("result_code"),
+                    "result_description": job.get("result_description"),
+                    "message": job.get("error") or job.get("message"),
+                    "has_log": bool(job.get("log_relative_path")),
+                    "inferred_from_legacy_log": bool(job.get("attempt_data_inferred")),
+                }
+            )
+        job["attempts"] = attempts
+        job["failed_attempts"] = sum(
+            1 for attempt in attempts if attempt.get("status") == "failed"
+        )
+        job["has_log"] = any(attempt.get("has_log") for attempt in attempts) or bool(
+            job.get("log_relative_path")
+        )
+        return job
+
+    def read_history_log(self, schedule_id: str, *, max_bytes: int = 5 * 1024 * 1024) -> str:
+        job = self.get_schedule(schedule_id)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT attempt_number, log_relative_path
+                  FROM switch_update_attempts
+                 WHERE schedule_id = ?
+                   AND log_relative_path IS NOT NULL
+                   AND TRIM(log_relative_path) <> ''
+                 ORDER BY attempt_number ASC
+                """,
+                (schedule_id,),
+            ).fetchall()
+        registered = [
+            (int(row["attempt_number"]), str(row["log_relative_path"]))
+            for row in rows
+        ]
+        if not registered and str(job.get("log_relative_path") or "").strip():
+            registered = [
+                (max(1, int(job.get("attempt_count") or 1)), str(job["log_relative_path"]))
+            ]
+        if not registered:
+            raise ScheduleError("Este processo ainda nao possui um registro completo disponivel.")
+
+        parts: list[str] = []
+        total_bytes = 0
+        seen: set[str] = set()
+        for attempt_number, relative in registered:
+            if relative in seen:
+                continue
+            seen.add(relative)
+            path = self._safe_registered_log_path(relative)
+            try:
+                size = path.stat().st_size
+            except OSError as exc:
+                raise ScheduleError("O arquivo de log deste processo nao esta disponivel.") from exc
+            total_bytes += size
+            if total_bytes > max_bytes:
+                raise ScheduleError("O registro completo excede o limite seguro de leitura.")
+            try:
+                content = path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                raise ScheduleError("Nao foi possivel ler o arquivo de log deste processo.") from exc
+            if len(registered) > 1:
+                parts.append(f"===== TENTATIVA {attempt_number} =====\n{content.rstrip()}")
+            else:
+                parts.append(content.rstrip())
+        return "\n\n".join(parts)
+
     def cancel_schedule(self, schedule_id: str, *, owner: str) -> dict:
         firmware_path: str | None = None
         with closing(self._connect()) as connection:
@@ -1079,6 +1420,7 @@ class SwitchUpdateScheduler:
                 "SELECT * FROM scheduled_updates WHERE status = 'running'"
             ).fetchall()
             if rows:
+                finished_at = self._iso(self.now())
                 connection.execute(
                     """
                     UPDATE scheduled_updates
@@ -1089,7 +1431,23 @@ class SwitchUpdateScheduler:
                         result_code = 'SWU510', finished_at_utc = ?
                     WHERE status = 'running'
                     """,
-                    (self._iso(self.now()),),
+                    (finished_at,),
+                )
+                connection.executemany(
+                    """
+                    UPDATE switch_update_attempts
+                       SET status = 'needs_review', result_code = 'SWU510',
+                           message = ?, finished_at_utc = ?
+                     WHERE schedule_id = ? AND status = 'running'
+                    """,
+                    [
+                        (
+                            "O servico foi interrompido durante a atualizacao.",
+                            finished_at,
+                            str(row["id"]),
+                        )
+                        for row in rows
+                    ],
                 )
         for row in rows:
             if row["firmware_path"]:
@@ -1105,7 +1463,12 @@ class SwitchUpdateScheduler:
                         "Orientação: verifique o switch antes de liberar uma nova atualização.",
                     )
                     current_log = self.log_root / Path(row["log_relative_path"])
-                    self._rename_job_log(row["id"], current_log, "SWU510")
+                    renamed_log = self._rename_job_log(row["id"], current_log, "SWU510")
+                    self._set_attempt_log_path(
+                        str(row["id"]),
+                        max(1, int(row["attempt_count"] or 1)),
+                        renamed_log,
+                    )
                 except ScheduleError as exc:
                     LOGGER.error("Nao foi possivel finalizar o log do job %s: %s", row["id"], exc)
         return len(rows)
@@ -1206,7 +1569,27 @@ class SwitchUpdateScheduler:
             connection.commit()
         if row["log_relative_path"]:
             current_log = self.log_root / Path(row["log_relative_path"])
-            self._rename_job_log(schedule_id, current_log, "SWU411")
+            renamed_log = self._rename_job_log(schedule_id, current_log, "SWU411")
+            self._set_attempt_log_path(
+                schedule_id,
+                max(1, int(row["attempt_count"] or 1)),
+                renamed_log,
+            )
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                UPDATE switch_update_attempts
+                   SET status = 'completed', result_code = 'SWU411',
+                       message = ?, finished_at_utc = ?
+                 WHERE schedule_id = ? AND attempt_number = ?
+                """,
+                (
+                    LATE_SUCCESS_MESSAGE,
+                    self._iso(self.now()),
+                    schedule_id,
+                    max(1, int(row["attempt_count"] or 1)),
+                ),
+            )
         return self.get_schedule(schedule_id, owner=owner)
 
     def _claim_next_due(self) -> sqlite3.Row | None:
@@ -1332,9 +1715,13 @@ class SwitchUpdateScheduler:
         result_code = "SWU500"
         log_path: Path | None = None
         cleanup_artifacts = True
+        attempt_number = max(1, int(row["attempt_count"] or 1))
+        attempt_message = "Tentativa iniciada."
         try:
+            self._start_attempt(row)
             job_logger, job_handler, log_path = self._create_job_logger(schedule_id)
             self._set_job_log_path(schedule_id, log_path)
+            self._set_attempt_log_path(schedule_id, attempt_number, log_path)
             self._write_job_log_header(job_logger, row)
             job_logger.info(
                 "Tentativa: %s de %s",
@@ -1394,6 +1781,7 @@ class SwitchUpdateScheduler:
             )
             final_status = "completed"
             result_code = "SWU000"
+            attempt_message = f"Versao {confirmed_release} confirmada; atualizacao concluida."
             job_logger.info("------------------------------------------------------------")
             job_logger.info("CÓDIGO DO RESULTADO: SWU000")
             job_logger.info("RESULTADO: SUCESSO")
@@ -1404,6 +1792,7 @@ class SwitchUpdateScheduler:
             job_logger.info("Orientação: nenhuma ação adicional é necessária.")
         except UpdateNeedsReview as exc:
             message = concise_exception_message(exc)
+            attempt_message = message
             self._finalize(
                 schedule_id,
                 status="needs_review",
@@ -1428,6 +1817,7 @@ class SwitchUpdateScheduler:
             LOGGER.warning("Agendamento %s aguarda revisao: %s", schedule_id, message)
         except Exception as exc:
             message = str(exc) if isinstance(exc, ScheduleError) else concise_exception_message(exc)
+            attempt_message = message
             stage = (reporter.failure_stage or reporter.last_stage) if reporter else "starting"
             result_code = self._classify_result_code(stage, message, exc)
             attempt_count = int(row["attempt_count"] or 0)
@@ -1497,9 +1887,25 @@ class SwitchUpdateScheduler:
                 job_handler.close()
             if log_path and log_path.exists():
                 try:
-                    self._rename_job_log(schedule_id, log_path, result_code)
+                    log_path = self._rename_job_log(schedule_id, log_path, result_code)
                 except ScheduleError as exc:
                     LOGGER.error("Nao foi possivel renomear o log do job %s: %s", schedule_id, exc)
+            attempt_status = "failed" if final_status == "scheduled" else final_status
+            try:
+                self._finish_attempt(
+                    schedule_id,
+                    attempt_number,
+                    status=attempt_status,
+                    result_code=result_code,
+                    message=attempt_message,
+                    log_path=log_path,
+                )
+            except Exception as exc:
+                LOGGER.error(
+                    "Nao foi possivel registrar o resumo da tentativa do job %s: %s",
+                    schedule_id,
+                    exc,
+                )
             LOGGER.info("Fim do job %s | status=%s", schedule_id, final_status)
 
     def run_due_once(self) -> str | None:
