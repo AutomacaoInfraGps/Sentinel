@@ -531,9 +531,14 @@
             if (!append) list.innerHTML = '';
             list.insertAdjacentHTML('beforeend', items.map(itemHtml).join(''));
             offset += items.length;
+            const historyCountLabel = total === 0
+                ? 'Nenhuma atualização encontrada'
+                : total === 1
+                    ? '1 atualização encontrada'
+                    : `${total} atualizações encontradas`;
             summary.textContent = currentQuery
-                ? `${total} resultado${total === 1 ? '' : 's'} para “${currentQuery}”`
-                : `${total} atualização${total === 1 ? '' : 'ões'} registrada${total === 1 ? '' : 's'}`;
+                ? `${historyCountLabel} para “${currentQuery}”`
+                : historyCountLabel;
             shown.textContent = total ? `Exibindo ${Math.min(offset, total)} de ${total}` : '';
             loadMore.classList.toggle('d-none', offset >= total);
             if (!targetOpened && targetJobId) {
