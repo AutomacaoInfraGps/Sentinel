@@ -50,8 +50,15 @@ instale um ChromeDriver compatível e configure `driver_path`.
 `webui_protocol_fallback` define somente o protocolo inicial quando o
 inventário não informa um. Redirecionamentos da WebUI para HTTP ou HTTPS são
 aceitos apenas no mesmo IP, e o protocolo final retornado passa a ser usado no
-job. A transferência possui limite total de 1.200 segundos e limite de 300
-segundos sem progresso, além da verificação de conectividade durante o envio.
+job. Após o retorno do ping, `webui_recovery_timeout` permite aguardar a WebUI
+separadamente; ao esgotar esse prazo, o job fica aguardando nova verificação e
+não repete o upload ou o restart. A transferência possui limite total de 1.200
+segundos e limite de 300 segundos sem progresso, além da verificação de
+conectividade durante o envio.
+
+Na conferência final, o bot confirma a versão instalada, aciona `Apply` e só
+então aguarda por até 90 segundos o botão global de `Save Configuration`. A
+ausência do `Save` continua não bloqueando uma versão já confirmada.
 
 O servidor precisa de Google Chrome e da dependência `selenium==4.49.0`.
 
