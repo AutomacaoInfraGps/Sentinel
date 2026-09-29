@@ -130,6 +130,9 @@ def build_scheduler(
             poll_interval_seconds=1.0,
             http_timeout=_config_number(config, "http_timeout", 10.0, float, 0.1),
             reboot_timeout=_config_number(config, "reboot_timeout", 7 * 60, int, 1),
+            webui_recovery_timeout=_config_number(
+                config, "webui_recovery_timeout", 5 * 60, int, 1
+            ),
             transfer_timeout=_config_number(config, "transfer_timeout", 20 * 60, int, 1),
             transfer_stall_timeout=_config_number(
                 config, "transfer_stall_timeout", 5 * 60, int, 1

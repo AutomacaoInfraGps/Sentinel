@@ -79,6 +79,7 @@
     "insecure_tls": false,
     "http_timeout": 10,
     "reboot_timeout": 420,
+    "webui_recovery_timeout": 300,
     "transfer_timeout": 1200,
     "transfer_stall_timeout": 300,
     "draft_ttl_seconds": 900,
