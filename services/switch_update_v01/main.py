@@ -29,6 +29,7 @@ from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 SUPPORTED_MODELS = frozenset({"1830", "1930"})
 DEFAULT_REBOOT_TIMEOUT = 7 * 60
+DEFAULT_WEBUI_RECOVERY_TIMEOUT = 5 * 60
 DEFAULT_TRANSFER_TIMEOUT = 20 * 60
 MAX_FIRMWARE_BYTES = 128 * 1024 * 1024
 TRANSFER_STATUS_POLL_SECONDS = 60
@@ -148,6 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-model", choices=sorted(SUPPORTED_MODELS), help="Modelo esperado para validacao adicional.")
     parser.add_argument("--http-timeout", type=float, default=10.0, help="Timeout da consulta HTTP direta em segundos.")
     parser.add_argument("--reboot-timeout", type=int, default=DEFAULT_REBOOT_TIMEOUT, help="Espera maxima pelo ping, em segundos.")
+    parser.add_argument(
+        "--webui-recovery-timeout",
+        type=int,
+        default=DEFAULT_WEBUI_RECOVERY_TIMEOUT,
+        help="Espera maxima pela WebUI depois do retorno do ping, em segundos.",
+    )
     parser.add_argument("--transfer-timeout", type=int, default=DEFAULT_TRANSFER_TIMEOUT, help="Espera maxima da transferencia, em segundos.")
     parser.add_argument(
         "--transfer-stall-timeout",
@@ -462,7 +469,7 @@ def wait_for_web_identity(
             remaining = max(0, int(deadline - time.monotonic()))
             LOGGER.info("WebUI ainda indisponivel; nova tentativa em 5s (restam %ss).", remaining)
             time.sleep(min(5, max(0, remaining)))
-    raise UpdateError(
+    raise UpdateNeedsReview(
         "O switch respondeu ao ping, mas a WebUI nao retornou em ate "
         f"{max_wait}s. Ultimo erro: {last_error}"
     )
@@ -661,6 +668,31 @@ class ArubaWebUpdater:
             re.IGNORECASE,
         )
         return match.group(1) if match else None
+
+    def apply_configuration(self, timeout: int = 60) -> None:
+        """Aciona o Apply final antes de aguardar a persistencia no Save."""
+        LOGGER.info("Acionando Apply antes de salvar a configuracao final...")
+        upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        lower = "abcdefghijklmnopqrstuvwxyz"
+        self._click_anywhere(
+            (
+                (self.By.ID, "btnApply"),
+                (self.By.ID, "buttonApply"),
+                (
+                    self.By.XPATH,
+                    f"//button[translate(normalize-space(.), '{lower}', '{upper}')='APPLY']",
+                ),
+                (
+                    self.By.XPATH,
+                    f"//input[(translate(@type, '{lower}', '{upper}')='BUTTON' or "
+                    f"translate(@type, '{lower}', '{upper}')='SUBMIT') and "
+                    f"translate(normalize-space(@value), '{lower}', '{upper}')='APPLY']",
+                ),
+            ),
+            "o botao Apply da configuracao final",
+            timeout=timeout,
+        )
+        LOGGER.info("Apply final acionado; aguardando a liberacao do Save Configuration.")
 
     def save_configuration(
         self,
@@ -1275,6 +1307,7 @@ def run(
     )
     if (
         args.reboot_timeout <= 0
+        or args.webui_recovery_timeout <= 0
         or args.transfer_timeout <= 0
         or args.transfer_stall_timeout <= 0
         or args.http_timeout <= 0
@@ -1421,6 +1454,7 @@ def run(
             url,
             args.http_timeout,
             args.insecure_tls,
+            max_wait=args.webui_recovery_timeout,
         )
         updater.login()
         final_identity = fetch_web_identity(url, args.http_timeout, args.insecure_tls)
@@ -1444,7 +1478,8 @@ def run(
                 "A versao autenticada da WebUI diverge da versao esperada: "
                 f"esperada={confirmed_release!r}, obtida={final_web_version!r}."
             )
-        reporter.emit("saving", 95, "Versao confirmada; salvando a configuracao no switch")
+        reporter.emit("saving", 95, "Versao confirmada; aplicando e salvando a configuracao")
+        updater.apply_configuration()
         saved_configuration = updater.save_configuration(pending_timeout=90)
         if not saved_configuration:
             LOGGER.info(
@@ -1465,6 +1500,7 @@ def run(
     except Exception as exc:
         failure_message = concise_exception_message(exc)
         if isinstance(exc, UpdateNeedsReview):
+            reporter.failure_stage = reporter.last_stage
             reporter.emit("needs_review", reporter.last_percent, failure_message)
         else:
             reporter.fail(failure_message)

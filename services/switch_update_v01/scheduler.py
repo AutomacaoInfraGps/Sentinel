@@ -264,6 +264,7 @@ class SchedulerSettings:
     poll_interval_seconds: float = 1.0
     http_timeout: float = 10.0
     reboot_timeout: int = 7 * 60
+    webui_recovery_timeout: int = 5 * 60
     transfer_timeout: int = 20 * 60
     transfer_stall_timeout: int = 5 * 60
     insecure_tls: bool = False
@@ -616,7 +617,7 @@ class SwitchUpdateScheduler:
     ) -> str:
         lowered = message.casefold()
         if isinstance(exc, UpdateNeedsReview):
-            return "SWU410"
+            return "SWU420" if stage == "verifying_web" else "SWU410"
         if "credencial" in lowered or "dpapi" in lowered:
             return "SWU520"
         if "firmware reservado" in lowered or "arquivo foi alterado" in lowered:
@@ -1750,6 +1751,7 @@ class SwitchUpdateScheduler:
                 "--expected-version", row["expected_version"],
                 "--http-timeout", str(self.settings.http_timeout),
                 "--reboot-timeout", str(self.settings.reboot_timeout),
+                "--webui-recovery-timeout", str(self.settings.webui_recovery_timeout),
                 "--transfer-timeout", str(self.settings.transfer_timeout),
                 "--transfer-stall-timeout", str(self.settings.transfer_stall_timeout),
                 "--execute",
@@ -1793,23 +1795,35 @@ class SwitchUpdateScheduler:
         except UpdateNeedsReview as exc:
             message = concise_exception_message(exc)
             attempt_message = message
+            review_stage = (
+                reporter.failure_stage or reporter.last_stage
+                if reporter
+                else "waiting_ping"
+            )
+            review_code = self._classify_result_code(review_stage, message, exc)
             self._finalize(
                 schedule_id,
                 status="needs_review",
                 message=message,
-                result_code="SWU410",
+                result_code=review_code,
                 error=message,
             )
             final_status = "needs_review"
-            result_code = "SWU410"
+            result_code = review_code
             if job_logger:
                 job_logger.info("------------------------------------------------------------")
-                job_logger.warning("CÓDIGO DO RESULTADO: SWU410")
+                job_logger.warning("CÓDIGO DO RESULTADO: %s", review_code)
                 job_logger.warning("RESULTADO: VERIFICAÇÃO NECESSÁRIA")
-                job_logger.warning(
-                    "O arquivo foi enviado e o switch recebeu o comando para reiniciar, "
-                    "mas não voltou a responder em até sete minutos."
-                )
+                if review_code == "SWU420":
+                    job_logger.warning(
+                        "O switch voltou a responder ao ping, mas a WebUI não ficou "
+                        "disponível dentro do tempo configurado."
+                    )
+                else:
+                    job_logger.warning(
+                        "O arquivo foi enviado e o switch recebeu o comando para reiniciar, "
+                        "mas não voltou a responder em até sete minutos."
+                    )
                 job_logger.warning(
                     "Orientação: use a opção 'Verificar novamente' no Sentinel. "
                     "Não repita a atualização nem reinicie fisicamente o equipamento antes da consulta."
