@@ -214,15 +214,15 @@ definir, para cada ação:
 
 Classificação inicial recomendada:
 
-| Ação | Risco | Regra inicial |
-| --- | --- | --- |
-| Consulta de status | Baixo | Automática após RBAC |
-| Consulta de usuário no AD | Baixo | Somente leitura e escopo por OU |
-| Desbloqueio de conta | Médio | Confirmação de uso único |
-| Reset de senha | Alto | Confirmação reforçada e piloto controlado |
-| Alteração de grupo | Alto | Segunda aprovação |
-| Exclusão de usuário ou host | Crítico | Bloqueada inicialmente |
-| Comando arbitrário | Crítico | Permanentemente proibido |
+| Ação                        | Risco    | Regra inicial                                |
+| ----------------------------- | -------- | -------------------------------------------- |
+| Consulta de status            | Baixo    | Automática após RBAC                       |
+| Consulta de usuário no AD    | Baixo    | Somente leitura e escopo por OU              |
+| Desbloqueio de conta          | Médio   | Confirmação de uso único                  |
+| Reset de senha                | Alto     | Confirmação reforçada e piloto controlado |
+| Alteração de grupo          | Alto     | Segunda aprovação                          |
+| Exclusão de usuário ou host | Crítico | Bloqueada inicialmente                       |
+| Comando arbitrário           | Crítico | Permanentemente proibido                     |
 
 ## Confirmação humana
 
@@ -547,4 +547,3 @@ Uma ação somente poderá ser habilitada quando todos os itens forem verdadeiro
   https://developers.cloudflare.com/tunnel/reference/tunnel-tokens/
 - n8n - Security audit:
   https://docs.n8n.io/hosting/securing/security-audit/
-
