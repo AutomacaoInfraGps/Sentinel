@@ -133,6 +133,12 @@ Esse documento define as fronteiras de confiança, identidade por canal,
 confirmação humana, executor isolado, conta técnica, auditoria e critérios que
 devem ser atendidos antes de qualquer ação de escrita.
 
+A autenticacao do canal tecnico entre n8n e Sentinel esta documentada em:
+
+```text
+sofia/docs/AUTENTICACAO_SERVICO_N8N.md
+```
+
 O modelo autenticado preserva a OU no `dn` e os grupos retornados pelo AD. Esses
 campos formam a identidade usada pela futura autorizacao por escopo, mas ainda
 nao concedem capacidades enquanto as regras correspondentes nao forem
