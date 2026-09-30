@@ -15,15 +15,44 @@ Exemplo de variáveis do serviço:
 ```text
 SECRET_KEY=<valor aleatório com pelo menos 64 caracteres>
 SENTINEL_HTTPS_ENABLED=true
+SENTINEL_TRUST_PROXY=true
 SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
 AUTOMACAO_WEB_HOST=127.0.0.1
 AUTOMACAO_WEB_PORT=5000
 ```
 
+`SENTINEL_TRUST_PROXY=true` aceita os cabecalhos de IP e protocolo enviados por
+um unico proxy reverso. Ative essa opcao somente quando o Waitress estiver em
+`127.0.0.1`; manter a porta 5000 acessivel pela rede permitiria forjar esses
+cabecalhos. O proxy deve substituir, e nao apenas preservar, os cabecalhos
+`X-Forwarded-For` e `X-Forwarded-Proto` recebidos do cliente.
+
 As configurações das integrações ficam exclusivamente no `environment.json`,
 que não deve ser versionado, copiado para executáveis ou incluído em imagens.
 Restrinja sua leitura à conta do serviço e mantenha o `environment.example.json`
 somente com valores fictícios.
+
+## Canal técnico n8n
+
+O segredo HMAC do canal entre n8n e Sentinel é uma credencial de serviço, não
+uma configuração de integração comum. Defina-o no ambiente protegido do processo
+do Sentinel e na credencial Crypto criptografada do n8n. Não o grave no
+`environment.json`, em workflow exportado ou em script versionado.
+
+```text
+SENTINEL_N8N_KEY_ID=n8n-celeno-v1
+SENTINEL_N8N_HMAC_SECRET=<segredo aleatório exclusivo>
+SENTINEL_N8N_ALLOWED_NETWORKS=10.254.12.66/32
+SENTINEL_N8N_MAX_CLOCK_SKEW_SECONDS=60
+```
+
+A lista de redes é obrigatória e deve usar o IP real do host n8n. Mantenha os
+relógios sincronizados para validar a janela curta das requisições. Restrinja
+também a porta no firewall do Windows ao host necessário.
+
+O endpoint inicial `/api/internal/sofia/v1/health` não retorna dados
+operacionais. Não habilite consultas internas enquanto o tráfego entre os hosts
+não estiver protegido por TLS.
 
 ## Active Directory
 

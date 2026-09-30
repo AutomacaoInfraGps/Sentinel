@@ -10,6 +10,7 @@ from urllib.parse import urljoin, urlparse
 
 from flask import flash, jsonify, redirect, request, session, url_for
 from flask_login import current_user
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -21,6 +22,10 @@ PUBLIC_ENDPOINTS = frozenset({
 })
 logger = logging.getLogger(__name__)
 SESSION_BROWSER_LIFETIME = timedelta(days=3650)
+
+
+def _environment_flag(name):
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _is_service_endpoint(endpoint):
@@ -93,9 +98,12 @@ def _csrf_is_valid():
 
 
 def configure_security(app, project_root):
-    https_enabled = os.environ.get("SENTINEL_HTTPS_ENABLED", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }
+    https_enabled = _environment_flag("SENTINEL_HTTPS_ENABLED")
+    trust_proxy = _environment_flag("SENTINEL_TRUST_PROXY")
+    if trust_proxy:
+        # Exactly one local reverse proxy (IIS) is trusted. The application server
+        # must listen on loopback so clients cannot inject these headers directly.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     session_timeout_minutes = _session_timeout_minutes()
     permanent_session = session_timeout_minutes > 0
     session_lifetime = (
@@ -198,5 +206,6 @@ def configure_security(app, project_root):
 
     return {
         "https_enabled": https_enabled,
+        "trust_proxy": trust_proxy,
         "session_timeout_minutes": session_timeout_minutes,
     }

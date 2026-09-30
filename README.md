@@ -302,6 +302,7 @@ Em producao, configure no servico:
 ```text
 SECRET_KEY=<chave aleatoria com pelo menos 64 caracteres>
 SENTINEL_HTTPS_ENABLED=true
+SENTINEL_TRUST_PROXY=true
 SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
 SENTINEL_SESSION_TIMEOUT_MINUTES=0
 AUTOMACAO_WEB_HOST=127.0.0.1
@@ -310,6 +311,40 @@ AUTOMACAO_WEB_PORT=5000
 
 O proxy reverso deve publicar o HTTPS e redirecionar HTTP para HTTPS. Consulte
 [docs/SECURITY_DEPLOYMENT.md](docs/SECURITY_DEPLOYMENT.md) antes de publicar.
+`SENTINEL_TRUST_PROXY=true` confia em exatamente um proxy para o IP de origem e
+o protocolo. Use essa opcao somente com `AUTOMACAO_WEB_HOST=127.0.0.1`, de modo
+que clientes da rede nao alcancem o Waitress diretamente.
+
+### Canal interno da SofIA com o n8n
+
+O n8n usa uma identidade tecnica exclusiva para acessar a API interna da SofIA.
+Esse canal nao reutiliza cookie do navegador, senha do Active Directory ou
+credencial pessoal. A primeira rota disponivel retorna apenas saude e versao do
+contrato, sem inventario ou dados operacionais:
+
+```text
+GET /api/internal/sofia/v1/health
+```
+
+Configure estas variaveis no processo do Sentinel, nunca no Git ou no
+`environment.json`:
+
+```text
+SENTINEL_N8N_KEY_ID=n8n-celeno-v1
+SENTINEL_N8N_HMAC_SECRET=<segredo aleatorio exclusivo com pelo menos 32 caracteres>
+SENTINEL_N8N_ALLOWED_NETWORKS=10.254.12.66/32
+SENTINEL_N8N_MAX_CLOCK_SKEW_SECONDS=60
+```
+
+O Sentinel assina e valida metodo, caminho, timestamp, nonce e hash do corpo com
+HMAC-SHA256. Nonces aceitos sao persistidos em `instance/` para bloquear replay.
+O segredo correspondente deve ficar em uma credencial Crypto criptografada no
+n8n, nunca em um campo comum do workflow.
+
+Enquanto o Sentinel estiver publicado somente por HTTP, utilize essa integracao
+apenas para o healthcheck sem dados. TLS deve ser habilitado antes de trafegar
+consultas ou qualquer informacao operacional. Consulte
+[`sofia/docs/AUTENTICACAO_SERVICO_N8N.md`](sofia/docs/AUTENTICACAO_SERVICO_N8N.md).
 
 ### Testes automatizados de seguranca
 
@@ -320,7 +355,7 @@ ou durante a homologacao.
 Para executar somente os testes de autenticacao, permissoes e HTTP:
 
 ```powershell
-python -m unittest tests.unit.auth_ad_access_test tests.unit.regional_access_test tests.unit.security_http_test
+python -m unittest tests.unit.auth_ad_access_test tests.unit.regional_access_test tests.unit.security_http_test tests.unit.sofia_service_auth_test
 ```
 
 Para executar toda a suite automatizada:
@@ -332,6 +367,8 @@ python -m unittest discover -s tests -p "*_test.py"
 Esses testes utilizam simulacoes de usuario e nao precisam da senha real do AD.
 Eles verificam, entre outros pontos, acesso anonimo, CSRF, redirecionamento,
 separacao entre visualizacao e operacao e bloqueio entre regionais.
+O teste `sofia_service_auth_test` tambem cobre assinatura invalida, expiracao,
+replay, origem de rede nao autorizada e ausencia de segredo.
 
 ### Auditoria de dependencias
 

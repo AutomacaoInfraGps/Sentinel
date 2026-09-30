@@ -1,8 +1,11 @@
 import unittest
+import tempfile
 from unittest.mock import patch
 
+from flask import Flask, jsonify, request
+
 from user_model import User, remove_user, save_user
-from security_hardening import is_safe_next_url
+from security_hardening import configure_security, is_safe_next_url
 from web_config import app
 
 
@@ -43,6 +46,68 @@ class SecurityHTTPTest(unittest.TestCase):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
+
+    def test_trusted_proxy_uses_one_forwarded_hop(self):
+        proxy_app = Flask(__name__)
+
+        @proxy_app.get("/health", endpoint="sentinel_health")
+        def proxy_health():
+            return jsonify({
+                "remote_address": request.remote_addr,
+                "is_secure": request.is_secure,
+            })
+
+        with tempfile.TemporaryDirectory() as project_root, patch.dict(
+            "os.environ",
+            {
+                "SECRET_KEY": "a" * 64,
+                "SENTINEL_TRUST_PROXY": "true",
+            },
+            clear=False,
+        ):
+            configure_security(proxy_app, project_root)
+            response = proxy_app.test_client().get(
+                "/health",
+                headers={
+                    "X-Forwarded-For": "10.254.12.66",
+                    "X-Forwarded-Proto": "https",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["remote_address"], "10.254.12.66")
+        self.assertTrue(response.get_json()["is_secure"])
+
+    def test_forwarded_headers_are_ignored_when_proxy_is_not_trusted(self):
+        direct_app = Flask(__name__)
+
+        @direct_app.get("/health", endpoint="sentinel_health")
+        def direct_health():
+            return jsonify({
+                "remote_address": request.remote_addr,
+                "is_secure": request.is_secure,
+            })
+
+        with tempfile.TemporaryDirectory() as project_root, patch.dict(
+            "os.environ",
+            {
+                "SECRET_KEY": "a" * 64,
+                "SENTINEL_TRUST_PROXY": "false",
+            },
+            clear=False,
+        ):
+            configure_security(direct_app, project_root)
+            response = direct_app.test_client().get(
+                "/health",
+                headers={
+                    "X-Forwarded-For": "10.254.12.66",
+                    "X-Forwarded-Proto": "https",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["remote_address"], "127.0.0.1")
+        self.assertFalse(response.get_json()["is_secure"])
 
     def test_legacy_api_test_remains_protected(self):
         response = self.client.get("/api/test")
