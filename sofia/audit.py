@@ -10,12 +10,20 @@ _AUDIT_LOCK = Lock()
 _AUDIT_PATH = Path(__file__).resolve().parents[1] / "logs" / "sofia_audit.jsonl"
 
 
-def registrar_evento_sofia(*, usuario, status, tamanho_mensagem, endereco_remoto=None, detalhe=None):
+def registrar_evento_sofia(
+    *,
+    usuario,
+    status,
+    tamanho_mensagem,
+    endereco_remoto=None,
+    detalhe=None,
+    acao="chat:basic",
+):
     """Append request metadata without storing conversation contents."""
     event = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "usuario": str(usuario or "desconhecido"),
-        "acao": "chat:basic",
+        "acao": str(acao or "chat:basic"),
         "status": str(status),
         "tamanho_mensagem": int(tamanho_mensagem or 0),
         "endereco_remoto": str(endereco_remoto or ""),

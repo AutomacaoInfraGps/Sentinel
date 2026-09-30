@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 SESSION_BROWSER_LIFETIME = timedelta(days=3650)
 
 
+def _is_service_endpoint(endpoint):
+    """Identify machine-to-machine routes protected by their own authentication."""
+    return bool(endpoint and endpoint.startswith("sofia_service."))
+
+
 def _session_timeout_minutes():
     raw_value = os.environ.get("SENTINEL_SESSION_TIMEOUT_MINUTES", "0").strip()
     try:
@@ -121,13 +126,23 @@ def configure_security(app, project_root):
     @app.before_request
     def require_authenticated_request():
         endpoint = request.endpoint
-        if endpoint and endpoint not in PUBLIC_ENDPOINTS and not current_user.is_authenticated:
+        service_endpoint = _is_service_endpoint(endpoint)
+        if (
+            endpoint
+            and endpoint not in PUBLIC_ENDPOINTS
+            and not service_endpoint
+            and not current_user.is_authenticated
+        ):
             if request.path.startswith("/api/"):
                 return jsonify({"success": False, "message": "Autenticação necessária."}), 401
             next_path = request.full_path.rstrip("?")
             return redirect(url_for("login", next=next_path))
 
-        if request.method not in SAFE_METHODS and not _csrf_is_valid():
+        if (
+            request.method not in SAFE_METHODS
+            and not service_endpoint
+            and not _csrf_is_valid()
+        ):
             logger.warning(
                 "CSRF rejeitado: endpoint=%s path=%s token_sessao=%s "
                 "token_enviado=%s requisicao_https=%s cookie_secure=%s",
