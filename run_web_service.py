@@ -35,6 +35,27 @@ def _resolve_web_port() -> int:
     return port if 1 <= port <= 65535 else 5000
 
 
+def _environment_flag(name: str) -> bool:
+    return str(os.environ.get(name) or "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
+def _waitress_proxy_options(host: str) -> dict:
+    if not _environment_flag("SENTINEL_TRUST_PROXY"):
+        return {}
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        raise RuntimeError(
+            "SENTINEL_TRUST_PROXY exige AUTOMACAO_WEB_HOST em loopback"
+        )
+    return {
+        "trusted_proxy": "127.0.0.1",
+        "trusted_proxy_count": 1,
+        "trusted_proxy_headers": {"x-forwarded-for", "x-forwarded-proto"},
+        "clear_untrusted_proxy_headers": True,
+    }
+
+
 def main():
     _configure_stdio()
     port = _resolve_web_port()
@@ -64,7 +85,13 @@ def main():
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"[{datetime.now().isoformat()}] Iniciando serviço web em {host}:{port}\n")
 
-        serve(app, listen=f"{host}:{port}", threads=8, channel_timeout=1200)
+        serve(
+            app,
+            listen=f"{host}:{port}",
+            threads=8,
+            channel_timeout=1200,
+            **_waitress_proxy_options(host),
+        )
     except Exception as exc:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"[{datetime.now().isoformat()}] Erro no serviço web: {exc}\n")
