@@ -350,7 +350,7 @@ o candidato preferencial para a primeira ação piloto.
 
 ## n8n em produção
 
-O n8n será instalado em Docker no Rigel ou em VM dedicada, após validação de
+O n8n será instalado em Docker em um servidor dedicado, após validação de
 capacidade e segregação.
 
 Controles mínimos:
