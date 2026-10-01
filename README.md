@@ -303,7 +303,7 @@ Em producao, configure no servico:
 SECRET_KEY=<chave aleatoria com pelo menos 64 caracteres>
 SENTINEL_HTTPS_ENABLED=true
 SENTINEL_TRUST_PROXY=true
-SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
+SENTINEL_TRUSTED_HOSTS=<fqdn-interno>,<ip-do-proxy>
 SENTINEL_SESSION_TIMEOUT_MINUTES=0
 AUTOMACAO_WEB_HOST=127.0.0.1
 AUTOMACAO_WEB_PORT=5000
@@ -333,9 +333,9 @@ Configure estas variaveis no processo do Sentinel, nunca no Git ou no
 `environment.json`:
 
 ```text
-SENTINEL_N8N_KEY_ID=n8n-celeno-v1
+SENTINEL_N8N_KEY_ID=<identificador-da-chave>
 SENTINEL_N8N_HMAC_SECRET=<segredo aleatorio exclusivo com pelo menos 32 caracteres>
-SENTINEL_N8N_ALLOWED_NETWORKS=10.254.12.66/32
+SENTINEL_N8N_ALLOWED_NETWORKS=<ip-ou-rede-do-n8n-em-CIDR>
 SENTINEL_N8N_MAX_CLOCK_SKEW_SECONDS=60
 ```
 
@@ -344,9 +344,23 @@ HMAC-SHA256. Nonces aceitos sao persistidos em `instance/` para bloquear replay.
 O segredo correspondente deve ficar em uma credencial Crypto criptografada no
 n8n, nunca em um campo comum do workflow.
 
-Enquanto o Sentinel estiver publicado somente por HTTP, utilize essa integracao
-apenas para o healthcheck sem dados. TLS deve ser habilitado antes de trafegar
-consultas ou qualquer informacao operacional. Consulte
+O canal de producao usa
+`https://<fqdn-interno>/api/internal/sofia/v1/health`, publicado pelo proxy
+reverso. A porta do Waitress permanece restrita ao loopback e nao deve ser
+exposta na rede.
+
+Quando uma CA interna for utilizada, o certificado publico em PEM deve ser
+instalado no host Linux e montado no container do n8n. O servico `n8n` do
+Compose deve manter estas configuracoes, usando o nome definido no ambiente:
+
+```yaml
+environment:
+  NODE_EXTRA_CA_CERTS: /etc/ssl/certs/empresa-ca.crt
+volumes:
+  - /usr/local/share/ca-certificates/empresa-ca.crt:/etc/ssl/certs/empresa-ca.crt:ro
+```
+
+Nao desative a verificacao TLS para contornar erros de certificado. Consulte
 [`sofia/docs/AUTENTICACAO_SERVICO_N8N.md`](sofia/docs/AUTENTICACAO_SERVICO_N8N.md).
 
 ### Testes automatizados de seguranca

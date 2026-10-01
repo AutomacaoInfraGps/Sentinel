@@ -5,7 +5,7 @@
 1. Publique o Sentinel somente por HTTPS, atrás do proxy reverso corporativo.
 2. Defina `SENTINEL_HTTPS_ENABLED=true` para ativar cookie `Secure` e HSTS.
 3. Defina uma chave aleatória e exclusiva em `SECRET_KEY`. Não compartilhe essa chave nem a inclua no Git.
-4. Defina `SENTINEL_TRUSTED_HOSTS` com os hosts permitidos, separados por vírgula. Exemplo: `sentinel.galaxia.local,10.254.12.63`.
+4. Defina `SENTINEL_TRUSTED_HOSTS` com os hosts permitidos, separados por vírgula. Exemplo: `<fqdn-interno>,<ip-do-proxy>`.
 5. Inicie pelo `run_web_service.py`, que usa Waitress. Não publique o servidor de desenvolvimento do Flask.
 6. Restrinja a porta do Waitress no firewall para aceitar somente o proxy reverso ou a rede administrativa.
 7. Mantenha `DEBUG` desativado e limite o acesso aos logs e à pasta `instance` à conta do serviço.
@@ -16,7 +16,7 @@ Exemplo de variáveis do serviço:
 SECRET_KEY=<valor aleatório com pelo menos 64 caracteres>
 SENTINEL_HTTPS_ENABLED=true
 SENTINEL_TRUST_PROXY=true
-SENTINEL_TRUSTED_HOSTS=sentinel.galaxia.local,10.254.12.63
+SENTINEL_TRUSTED_HOSTS=<fqdn-interno>,<ip-do-proxy>
 AUTOMACAO_WEB_HOST=127.0.0.1
 AUTOMACAO_WEB_PORT=5000
 ```
@@ -42,9 +42,9 @@ do Sentinel e na credencial Crypto criptografada do n8n. Não o grave no
 `environment.json`, em workflow exportado ou em script versionado.
 
 ```text
-SENTINEL_N8N_KEY_ID=n8n-celeno-v1
+SENTINEL_N8N_KEY_ID=<identificador-da-chave>
 SENTINEL_N8N_HMAC_SECRET=<segredo aleatório exclusivo>
-SENTINEL_N8N_ALLOWED_NETWORKS=10.254.12.66/32
+SENTINEL_N8N_ALLOWED_NETWORKS=<ip-ou-rede-do-n8n-em-CIDR>
 SENTINEL_N8N_MAX_CLOCK_SKEW_SECONDS=60
 ```
 
@@ -67,7 +67,7 @@ não estiver protegido por TLS.
 
 ## Validação após publicar
 
-1. Acesse `https://sentinel.galaxia.local/login` e confirme o certificado válido.
+1. Acesse `https://<fqdn-interno>/login` e confirme o certificado válido.
 2. Confirme que uma URL HTTP redireciona para HTTPS no proxy.
 3. Teste um usuário regional e confirme que outra regional retorna HTTP 403.
 4. Teste um membro de `Remote Desktop Users` e confirme que ele visualiza, mas não altera configurações.
