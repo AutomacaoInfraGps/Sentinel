@@ -322,11 +322,12 @@ combinado com um listener exposto na rede.
 
 O n8n usa uma identidade tecnica exclusiva para acessar a API interna da SofIA.
 Esse canal nao reutiliza cookie do navegador, senha do Active Directory ou
-credencial pessoal. A primeira rota disponivel retorna apenas saude e versao do
-contrato, sem inventario ou dados operacionais:
+credencial pessoal. As primeiras rotas retornam apenas saude e o contrato
+fechado de capacidades, sem inventario ou dados operacionais:
 
 ```text
 GET /api/internal/sofia/v1/health
+GET /api/internal/sofia/v1/capabilities
 ```
 
 Configure estas variaveis no processo do Sentinel, nunca no Git ou no

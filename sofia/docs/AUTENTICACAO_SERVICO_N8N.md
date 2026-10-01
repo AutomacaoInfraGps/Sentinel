@@ -3,14 +3,16 @@
 O canal interno do n8n usa uma identidade tecnica propria. Ele nao reutiliza
 cookie do navegador, senha do Active Directory ou credencial pessoal.
 
-## Primeira rota
+## Rotas iniciais
 
 ```text
 GET /api/internal/sofia/v1/health
+GET /api/internal/sofia/v1/capabilities
 ```
 
-A rota retorna apenas a disponibilidade da API, o modo somente leitura e a
-versao do contrato. Nenhum dado operacional e exposto nessa etapa.
+As rotas retornam apenas a disponibilidade da API e o contrato fechado de
+capacidades tecnicas em modo somente leitura. Nenhum dado operacional e exposto
+nessa etapa.
 
 ## Controles
 
