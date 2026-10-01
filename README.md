@@ -313,7 +313,10 @@ O proxy reverso deve publicar o HTTPS e redirecionar HTTP para HTTPS. Consulte
 [docs/SECURITY_DEPLOYMENT.md](docs/SECURITY_DEPLOYMENT.md) antes de publicar.
 `SENTINEL_TRUST_PROXY=true` confia em exatamente um proxy para o IP de origem e
 o protocolo. Use essa opcao somente com `AUTOMACAO_WEB_HOST=127.0.0.1`, de modo
-que clientes da rede nao alcancem o Waitress diretamente.
+que clientes da rede nao alcancem o Waitress diretamente. O inicializador
+configura o proprio Waitress para aceitar `X-Forwarded-For` e
+`X-Forwarded-Proto` somente do IIS local e recusa iniciar se o modo de proxy for
+combinado com um listener exposto na rede.
 
 ### Canal interno da SofIA com o n8n
 

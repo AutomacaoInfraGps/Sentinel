@@ -26,6 +26,8 @@ um unico proxy reverso. Ative essa opcao somente quando o Waitress estiver em
 `127.0.0.1`; manter a porta 5000 acessivel pela rede permitiria forjar esses
 cabecalhos. O proxy deve substituir, e nao apenas preservar, os cabecalhos
 `X-Forwarded-For` e `X-Forwarded-Proto` recebidos do cliente.
+O `run_web_service.py` configura a confianca diretamente no Waitress e falha
+fechado se esse modo for combinado com um listener fora do loopback.
 
 As configurações das integrações ficam exclusivamente no `environment.json`,
 que não deve ser versionado, copiado para executáveis ou incluído em imagens.
