@@ -10,7 +10,8 @@ from web_config import app
 
 class SofiaServiceAuthenticationTest(unittest.TestCase):
     PATH = "/api/internal/sofia/v1/health"
-    KEY_ID = "n8n-celeno-v1"
+    CAPABILITIES_PATH = "/api/internal/sofia/v1/capabilities"
+    KEY_ID = "test-service-key-v1"
     SECRET = "test-secret-with-at-least-thirty-two-bytes-123456789"
 
     def setUp(self):
@@ -40,12 +41,20 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
         self.environment.stop()
         self.temp_dir.cleanup()
 
-    def _headers(self, *, nonce="unique-service-nonce-0001", timestamp=None, secret=None):
+    def _headers(
+        self,
+        *,
+        path=None,
+        nonce="unique-service-nonce-0001",
+        timestamp=None,
+        secret=None,
+    ):
         timestamp = str(timestamp if timestamp is not None else int(time.time()))
+        path = path or self.PATH
         signature = build_signature(
             secret or self.SECRET,
             "GET",
-            self.PATH,
+            path,
             timestamp,
             nonce,
             b"",
@@ -75,6 +84,38 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
             },
         )
 
+    def test_valid_signed_capabilities_request_returns_closed_contract(self):
+        response = self.client.get(
+            self.CAPABILITIES_PATH,
+            headers=self._headers(
+                path=self.CAPABILITIES_PATH,
+                nonce="unique-capabilities-nonce-01",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertEqual(
+            response.get_json(),
+            {
+                "service": "sentinel",
+                "mode": "read-only",
+                "api_version": "v1",
+                "capabilities": [
+                    {
+                        "id": "service.health.read",
+                        "method": "GET",
+                        "path": "/api/internal/sofia/v1/health",
+                    },
+                    {
+                        "id": "service.capabilities.read",
+                        "method": "GET",
+                        "path": "/api/internal/sofia/v1/capabilities",
+                    },
+                ],
+            },
+        )
+
     def test_wrong_signature_is_rejected(self):
         response = self.client.get(
             self.PATH,
@@ -98,7 +139,7 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
         response = self.client.get(
             self.PATH,
             headers=self._headers(nonce="unique-service-nonce-other-ip"),
-            environ_base={"REMOTE_ADDR": "10.254.12.99"},
+            environ_base={"REMOTE_ADDR": "192.0.2.99"},
         )
         self.assertEqual(response.status_code, 403)
 
