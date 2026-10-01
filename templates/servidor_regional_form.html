@@ -173,11 +173,15 @@
                         </div>
                         
                         <div class="col-md-4 mb-3">
-                            <label for="porta" class="form-label">Porta</label>
-                            <input type="number" class="form-control" id="porta" 
-                                   value="{{ servidor.porta if servidor else '443' }}" 
-                                   min="1" max="65535">
-                            <div class="form-text">Porta HTTPS (padrão: 443)</div>
+                            <label for="porta" class="form-label" id="porta-label">Porta de consulta</label>
+                            <input type="number" class="form-control" id="porta"
+                                   value="{{ servidor.porta if servidor and servidor.porta else '' }}"
+                                   min="1" max="65535" placeholder="Selecione o sistema operacional">
+                            <input type="text" class="form-control d-none" id="porta-automatica"
+                                   value="WMI/RPC: TCP 135 + portas dinâmicas" disabled>
+                            <div class="form-text" id="porta-ajuda">
+                                A porta depende do método de consulta usado pelo servidor.
+                            </div>
                         </div>
                         
                         <div class="col-md-6 mb-3">
@@ -275,6 +279,8 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
+    atualizarCampoPorta(true);
+
     if ($('#servidor_id').val()) {
         $('#senha')
             .prop('required', false)
@@ -294,8 +300,43 @@ $(document).ready(function() {
         if (sistemaOperacional && !modeloField.val()) {
             modeloField.val('Servidor Virtual');
         }
+
+        atualizarCampoPorta(false);
     });
 });
+
+function atualizarCampoPorta(carregamentoInicial) {
+    const sistemaOperacional = ($('#sistema_operacional').val() || '').toLowerCase();
+    const linux = ['ubuntu', 'debian', 'centos'].includes(sistemaOperacional);
+    const windows = sistemaOperacional.startsWith('win_server_');
+    const porta = $('#porta');
+    const portaAutomatica = $('#porta-automatica');
+
+    if (windows) {
+        porta.addClass('d-none').prop('disabled', true);
+        portaAutomatica.removeClass('d-none');
+        $('#porta-label').text('Conexão da consulta');
+        $('#porta-ajuda').text('O WMI/DCOM inicia na TCP 135 e negocia uma porta RPC dinâmica; não existe uma única porta editável.');
+        return;
+    }
+
+    porta.removeClass('d-none').prop('disabled', false);
+    portaAutomatica.addClass('d-none');
+
+    if (linux) {
+        if (!carregamentoInicial && (!porta.val() || porta.val() === '443')) {
+            porta.val('22');
+        } else if (!porta.val()) {
+            porta.val('22');
+        }
+        $('#porta-label').text('Porta SSH');
+        $('#porta-ajuda').text('Porta realmente usada pela consulta SSH. O padrão é 22 e pode ser alterado.');
+        return;
+    }
+
+    $('#porta-label').text('Porta de consulta');
+    $('#porta-ajuda').text('Selecione o sistema operacional para identificar o método e a porta da consulta.');
+}
 
 function salvarServidor() {
     const btn = $('.btn-primary');
@@ -331,7 +372,7 @@ function salvarServidor() {
         ip: ip,
         usuario: $('#usuario').val().trim(),
         senha: $('#senha').val(),
-        porta: parseInt($('#porta').val()) || 443,
+        porta: $('#porta').prop('disabled') ? null : (parseInt($('#porta').val()) || null),
         timeout: parseInt($('#timeout').val()) || 10,
         ativo: $('#ativo').is(':checked'),
         modelo: $('#modelo').val().trim() || null,
@@ -371,7 +412,7 @@ function testarConexao() {
     const ip = $('#ip').val().trim();
     const usuario = $('#usuario').val().trim();
     const senha = $('#senha').val();
-    const porta = parseInt($('#porta').val()) || 443;
+    const porta = $('#porta').prop('disabled') ? null : (parseInt($('#porta').val()) || null);
     
     if (!ip || !usuario || !senha) {
         showToast('Preencha IP, usuário e senha para testar', 'warning');

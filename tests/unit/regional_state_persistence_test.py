@@ -50,6 +50,28 @@ class RegionalStatePersistenceTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(reloaded["servidores"], [])
 
+    def test_porta_padrao_linux_e_ssh(self):
+        servidor = self.manager._normalizar_servidor({
+            "sistema_operacional": "ubuntu",
+        })
+
+        self.assertEqual(servidor["porta"], 22)
+
+    def test_windows_nao_recebe_porta_https_ficticia(self):
+        servidor = self.manager._normalizar_servidor({
+            "sistema_operacional": "win_server_22",
+        })
+
+        self.assertIsNone(servidor["porta"])
+
+    def test_porta_ssh_personalizada_e_preservada(self):
+        servidor = self.manager._normalizar_servidor({
+            "sistema_operacional": "debian",
+            "porta": 2222,
+        })
+
+        self.assertEqual(servidor["porta"], 2222)
+
     def test_renomear_regional_descarta_links_auto_e_preserva_manuais(self):
         self.manager.adicionar_regional("REG_CNTRL_MACEIO", "REG_CNTRL_MACEIO")
         regional = self.manager.regionais["regionais"]["REG_CNTRL_MACEIO"]

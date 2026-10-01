@@ -10575,7 +10575,7 @@ def api_salvar_servidor_regional(codigo_regional):
             'ip': data['ip'],
             'usuario': data['usuario'],
             'senha': data.get('senha') or (servidor_existente or {}).get('senha'),
-            'porta': int(data.get('porta', 443)),
+            'porta': data.get('porta'),
             'timeout': int(data.get('timeout', 10)),
             'ativo': data.get('ativo', True),
             'modelo': (data.get('modelo') or 'Servidor Virtual').strip(),

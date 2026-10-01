@@ -84,7 +84,21 @@ class GerenciadorRegionais:
         dados["funcao"] = str(dados.get("funcao") or "Aplicação").strip()
         dados["modelo"] = str(dados.get("modelo") or "Servidor Virtual").strip()
         dados["sistema_operacional"] = str(dados.get("sistema_operacional") or "").strip()
-        dados.setdefault("porta", 443)
+        sistema_operacional = dados["sistema_operacional"].lower()
+        usa_ssh = any(
+            indicador in sistema_operacional
+            for indicador in ("ubuntu", "debian", "linux", "centos", "rocky", "alma", "redhat", "rhel")
+        )
+        porta_padrao = 22 if usa_ssh else None
+        porta = dados.get("porta")
+        if porta in (None, ""):
+            dados["porta"] = porta_padrao
+        else:
+            try:
+                porta = int(porta)
+                dados["porta"] = porta if 1 <= porta <= 65535 else porta_padrao
+            except (TypeError, ValueError):
+                dados["porta"] = porta_padrao
         dados.setdefault("timeout", 10)
         dados.setdefault("ativo", True)
         return dados
