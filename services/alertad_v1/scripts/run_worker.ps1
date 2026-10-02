@@ -6,6 +6,7 @@ param(
     [string]$Settings,
 
     [string]$EnvironmentFile,
+    [string]$SentinelEnvironmentFile,
 
     [string]$LogFile = "logs\alertad.jsonl",
     [switch]$DryRun,
@@ -32,6 +33,10 @@ $workerArguments = @(
 
 if ($EnvironmentFile) {
     $workerArguments += @("--env-file", $EnvironmentFile)
+}
+
+if ($SentinelEnvironmentFile) {
+    $workerArguments += @("--sentinel-environment", $SentinelEnvironmentFile)
 }
 
 if ($DryRun) { $workerArguments += "--dry-run" }
