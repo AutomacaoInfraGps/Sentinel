@@ -22,7 +22,7 @@ Não envie ao agente o nome real da conta nem a saída contendo ACLs internas.
 Set-Location C:\CAMINHO_DO_ALERTAD
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t . -v
 .\.venv\Scripts\python.exe -m compileall -q src tests alertad.py scripts
 ```
 
