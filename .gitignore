@@ -131,3 +131,6 @@ docs/*smartvc*.md
 .env
 instance/
 .credentials/
+
+# Amostras corporativas locais do AlertAD nunca devem ser versionadas.
+/services/alertad_v1/tests/fixtures/XMLEXAMPLE_test/

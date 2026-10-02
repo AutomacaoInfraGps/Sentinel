@@ -1,0 +1,19 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-Security-Auditing" />
+    <EventID>4729</EventID>
+    <TimeCreated SystemTime="2026-09-21T17:09:55.0388367Z" />
+    <EventRecordID>100009</EventRecordID>
+    <Channel>Security</Channel>
+    <Computer>DC02.EXAMPLE.LOCAL</Computer>
+  </System>
+  <EventData>
+    <Data Name="MemberName">-</Data>
+    <Data Name="MemberSid">S-1-5-21-1000000000-2000000000-3000000000-1102</Data>
+    <Data Name="TargetUserName">Enterprise Admins</Data>
+    <Data Name="TargetDomainName">EXAMPLE</Data>
+    <Data Name="TargetSid">S-1-5-21-1000000000-2000000000-3000000000-519</Data>
+    <Data Name="SubjectUserName">operador.teste</Data>
+    <Data Name="SubjectDomainName">EXAMPLE</Data>
+  </EventData>
+</Event>
