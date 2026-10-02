@@ -126,7 +126,12 @@
 .notification-item.success .notification-item-icon { background: #198754; }
 .notification-item-copy { min-width: 0; }
 .notification-item-copy strong { display: block; color: #012e40; font-size: 0.9rem; }
-.notification-item-copy p { margin: 3px 0 5px; font-size: 0.82rem; line-height: 1.35; }
+.notification-item-copy p {
+    margin: 3px 0 5px;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    white-space: pre-line;
+}
 .notification-item-copy small { color: #667784; font-size: 0.72rem; }
 .notification-unread-dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: #13a7df; }
 

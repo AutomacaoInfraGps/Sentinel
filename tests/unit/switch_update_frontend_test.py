@@ -73,7 +73,7 @@ class SwitchUpdateFrontendTests(unittest.TestCase):
         self.assertIn("form.reportValidity();", html)
         self.assertIn("adjustScheduleTime(-30)", html)
         self.assertIn("adjustScheduleTime(30)", html)
-        self.assertIn("será realizado imediatamente", html)
+        self.assertIn("será executada imediatamente", html)
         self.assertIn("Continuar", html)
         self.assertIn("Voltar", html)
 

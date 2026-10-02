@@ -72,6 +72,11 @@
       "profile"
     ]
   },
+  "alertad": {
+    "enabled": false,
+    "sqlite_path": "C:\\CAMINHO_LOCAL_PROTEGIDO\\alertad.db",
+    "recent_limit": 100
+  },
   "switch_update": {
     "task_name": "SentinelSwitchUpdateWorker",
     "driver_path": null,

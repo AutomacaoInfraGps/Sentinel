@@ -1,0 +1,37 @@
+{
+  "fixed_groups": [
+    "Domain Admins",
+    "Administrators",
+    "Backup Operators",
+    "Enterprise Admins",
+    "Schema Admins"
+  ],
+  "group_name_prefix": "GGS_Suporte",
+  "timezone": "America/Sao_Paulo",
+  "event_log_channel": "ForwardedEvents",
+  "event_batch_size": 500,
+  "event_overlap_size": 10,
+  "poll_interval_seconds": null,
+  "max_delivery_attempts": 6,
+  "delivery_channels": [
+    "teams",
+    "email"
+  ],
+  "directory": {
+    "enabled": false,
+    "backend": "POWERSHELL_ADWS",
+    "server": null,
+    "query_timeout_seconds": 30,
+    "cache_ttl_seconds": 300,
+    "cache_max_entries": 2048
+  },
+  "retention": {
+    "events_and_deliveries_days": null,
+    "occurrences_days": null,
+    "operational_logs_days": null,
+    "exceptional_raw_xml_days": null,
+    "deduplication_guard_days": null,
+    "purge_enabled": false
+  }
+}
+

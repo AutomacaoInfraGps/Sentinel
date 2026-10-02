@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alertad"
+version = "0.1.0"
+description = "Núcleo da automação de alertas de grupos críticos do Active Directory"
+requires-python = ">=3.11"
+dependencies = [
+    "msal==1.33.0",
+    "python-dotenv==1.1.1",
+    "requests==2.32.5",
+    "pywin32==312; sys_platform == 'win32'",
+]
+
+[project.scripts]
+alertad = "alertad.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

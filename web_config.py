@@ -95,6 +95,7 @@ from notification_center import (
     sort_notifications,
 )
 from services.unifi_models import normalizar_modelo_ap
+from services.alertad_notifications import load_alertad_notifications
 from services.switch_update_v01.scheduler import SchedulerSettings, SwitchUpdateScheduler
 from services.switch_update_v01.sentinel_backend import install_switch_update_backend
 from services.switch_update_v01.windows_task import (
@@ -4533,6 +4534,14 @@ def api_notifications():
             current_app.logger.exception(
                 "Falha ao carregar conclusoes de atualizacoes de switches nas notificacoes"
             )
+    notifications.extend(
+        load_alertad_notifications(
+            ENV_CONFIG,
+            authorized=can_operate,
+            logger=current_app.logger,
+        )
+    )
+    notifications = sort_notifications(notifications)
     cached_map, cache_age = _mapa_carregar_cache()
     refresh_started = False
     if stale_groups or not cached_map or not _mapa_cache_esta_fresco(cache_age):
