@@ -39,7 +39,8 @@ A aplicacao fica disponivel em `http://localhost:5000`.
 O checklist executa o lote completo e gera a primeira fotografia/cache do dia.
 O mapa funciona como atualizador operacional continuo:
 
-- A thread de atualizacao roda a cada **3 minutos**.
+- Com o mapa aberto, a atualizacao automatica e solicitada a cada **1 minuto**.
+  A trava do backend impede a execucao simultanea de duas coletas.
 - Links, VPNs, switches, firewalls, servidores e APs sao consultados.
 - Somente registros alterados devem ser persistidos e registrados no historico.
 - Infraestrutura, Regionais, Checklist e Mapa consomem a mesma base operacional,
