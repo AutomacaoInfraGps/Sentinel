@@ -108,6 +108,7 @@ from sofia.tools_sentinel import configurar_ferramentas_sentinel
 
 # Autenticação AD
 from auth_ad import init_auth, get_user
+from user_model import User, save_user
 
 # Configuração Flask com caminhos corretos para executável
 from utils_paths import get_base_dir
@@ -186,7 +187,18 @@ def method_not_allowed(error):
 @login_manager.user_loader
 def load_user(user_id):
     """Carrega usuário para Flask-Login"""
-    return get_user(user_id)
+    user = get_user(user_id)
+    if user is not None:
+        return user
+    identity = session.get("_sentinel_identity") or {}
+    if str(identity.get("username") or "") != str(user_id or ""):
+        return None
+    try:
+        user = User(identity)
+    except (KeyError, TypeError, ValueError):
+        return None
+    save_user(user)
+    return user
 
 
 # Instâncias globais
