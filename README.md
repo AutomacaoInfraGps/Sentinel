@@ -46,6 +46,10 @@ O mapa funciona como atualizador operacional continuo:
   evitando estados diferentes entre as telas.
 - O endpoint do mapa possui TTL configuravel por
   `MAPA_MONITORAMENTO_TTL_SECONDS`, com padrao de **300 segundos**.
+- Enquanto uma coleta estiver em andamento, o mapa consulta o cache a cada
+  **15 segundos**. Falhas transitórias preservam a ultima visualizacao valida e
+  geram nova tentativa automatica, inclusive ao retornar para a aba ou quando a
+  conexao de rede voltar.
 - Caches especificos de integracoes continuam existindo para limitar chamadas
   externas; atualizacoes manuais podem forcar uma nova consulta.
 
@@ -493,10 +497,12 @@ regional compativel seja encontrada.
 Cada item abre a tela operacional correspondente com a busca ja preenchida.
 Alertas de servidor abrem diretamente os detalhes da regional, posicionam a
 tela na secao de servidores e destacam o equipamento para teste ou edicao.
-Snapshots operacionais com mais de seis horas nao geram notificacoes, evitando
-que uma queda antiga seja apresentada como incidente atual. Nos detalhes da
-regional, o snapshot tambem so substitui o status salvo quando sua verificacao
-for igual ou mais recente.
+O sino consulta o estado operacional a cada 30 segundos. Quando o cache do mapa
+ultrapassa seu TTL, essa consulta inicia uma nova coleta e passa a acompanhar a
+atualizacao a cada 10 segundos. Durante falhas ou coletas demoradas, os ultimos
+alertas conhecidos permanecem visiveis com indicacao de atualizacao, em vez de
+o painel ficar vazio. Nos detalhes da regional, o snapshot tambem so substitui
+o status salvo quando sua verificacao for igual ou mais recente.
 Essa validacao de idade tambem protege as telas de servidores, switches, links,
 VPNs e firewalls: o parametro `q` da notificacao atua somente na busca visual e
 nunca altera ou restaura o status contido no alerta.

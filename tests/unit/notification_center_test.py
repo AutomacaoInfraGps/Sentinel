@@ -14,6 +14,23 @@ from notification_center import (
 
 
 class NotificationCenterTests(unittest.TestCase):
+    def test_map_and_bell_frontends_recover_without_discarding_last_state(self):
+        root = Path(__file__).parents[2]
+        map_source = (root / "templates" / "mapa_monitoramento.html").read_text(
+            encoding="utf-8"
+        )
+        bell_source = (root / "static" / "notifications" / "notifications.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("if (!appData)", map_source)
+        self.assertIn("scheduleRetry();", map_source)
+        self.assertIn("visibilitychange", map_source)
+        self.assertIn("if (loadInFlight) return;", map_source)
+        self.assertIn("payload.refreshing === true", bell_source)
+        self.assertIn("ACTIVE_REFRESH_MS = 10000", bell_source)
+        self.assertIn("exibindo os últimos alertas conhecidos", bell_source)
+
     def test_switch_update_notification_only_reports_recent_completed_jobs(self):
         now = datetime(2026, 9, 28, 15, 0, tzinfo=timezone.utc)
         jobs = [
