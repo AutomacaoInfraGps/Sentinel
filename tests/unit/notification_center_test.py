@@ -97,6 +97,7 @@ class NotificationCenterTests(unittest.TestCase):
                 "nome": "FW-TESTE",
                 "regional": "REG_TESTE",
                 "status": "warning",
+                "status_disponibilidade": "online",
                 "changed_at": "2026-09-16T10:02:00",
             }],
             "admins": [{
