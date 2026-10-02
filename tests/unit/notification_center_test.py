@@ -24,6 +24,8 @@ class NotificationCenterTests(unittest.TestCase):
         )
 
         self.assertIn("if (!appData)", map_source)
+        self.assertIn("response.status === 401", map_source)
+        self.assertIn("window.location.replace(`/login?next=${next}`)", map_source)
         self.assertIn("scheduleRetry();", map_source)
         self.assertIn("visibilitychange", map_source)
         self.assertIn("if (loadInFlight) return;", map_source)

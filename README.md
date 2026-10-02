@@ -290,10 +290,10 @@ acao e IP de origem, fica em `output/regional_access_audit.json`; esse arquivo
 tambem deve fazer parte do backup para preservar o historico administrativo.
 
 Alteracoes de grupos do AD passam a valer em um novo login. Por padrao, a
-sessao permanece ativa ate o logout, fechamento do navegador ou reinicio do
-servico, permitindo paineis de monitoramento continuamente abertos. Para
-reativar um prazo, defina `SENTINEL_SESSION_TIMEOUT_MINUTES` com um valor maior
-que zero.
+sessao permanece ativa ate o logout ou fechamento do navegador, inclusive
+quando o servico web e reiniciado. A identidade minima necessaria para restaurar
+a sessao fica no cookie assinado, sem senha ou credencial do AD. Para reativar
+um prazo, defina `SENTINEL_SESSION_TIMEOUT_MINUTES` com um valor maior que zero.
 
 ### HTTPS e producao
 
