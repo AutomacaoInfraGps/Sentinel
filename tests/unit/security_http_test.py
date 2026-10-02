@@ -131,6 +131,14 @@ class SecurityHTTPTest(unittest.TestCase):
         )
         self.assertNotIn("Expires=", session_cookie)
         self.assertNotIn("Max-Age=", session_cookie)
+        with self.client.session_transaction() as authenticated_session:
+            identity = authenticated_session["_sentinel_identity"]
+        self.assertEqual(identity["username"], "admin.kiosk")
+        self.assertNotIn("password", identity)
+
+        remove_user("admin.kiosk")
+        restored = self.client.get("/mapa")
+        self.assertEqual(restored.status_code, 200)
 
     def test_expired_login_csrf_returns_to_form_with_a_new_token(self):
         self.client.get("/login?next=/regionais")
