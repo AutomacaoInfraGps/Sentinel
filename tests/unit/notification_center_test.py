@@ -27,6 +27,7 @@ class NotificationCenterTests(unittest.TestCase):
         self.assertIn("scheduleRetry();", map_source)
         self.assertIn("visibilitychange", map_source)
         self.assertIn("if (loadInFlight) return;", map_source)
+        self.assertIn("const REFRESH_MS = 60 * 1000;", map_source)
         self.assertIn("payload.refreshing === true", bell_source)
         self.assertIn("ACTIVE_REFRESH_MS = 10000", bell_source)
         self.assertIn("exibindo os últimos alertas conhecidos", bell_source)
