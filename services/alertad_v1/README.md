@@ -59,7 +59,7 @@ Requer Python 3.11 ou posterior. No Windows:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t . -v
 ```
 
 Copie `config/settings.example.json` para um arquivo não versionado, defina
