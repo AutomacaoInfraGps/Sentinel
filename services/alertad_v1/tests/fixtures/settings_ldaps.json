@@ -1,0 +1,9 @@
+{
+  "poll_interval_seconds": 10,
+  "directory": {
+    "enabled": true,
+    "host": "directory.example.invalid",
+    "port": 636,
+    "base_dn": "DC=example,DC=invalid"
+  }
+}
