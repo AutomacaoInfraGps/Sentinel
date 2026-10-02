@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from alertad.graph import DelegatedTokenProvider, GraphAuthenticationError
+from alertad.sentinel_environment import load_sentinel_graph_environment
 
 
 def main() -> int:
@@ -24,6 +25,11 @@ def main() -> int:
         default=PROJECT_ROOT / ".env",
         help="Arquivo local protegido com as variáveis do Graph.",
     )
+    parser.add_argument(
+        "--sentinel-environment",
+        type=Path,
+        help="environment.json local do Sentinel; valores Graph lidos em memoria.",
+    )
     args = parser.parse_args()
     try:
         from dotenv import load_dotenv
@@ -31,6 +37,8 @@ def main() -> int:
         load_dotenv = None
     if args.env_file.exists() and load_dotenv is not None:
         load_dotenv(args.env_file, override=False)
+    if args.sentinel_environment is not None:
+        load_sentinel_graph_environment(args.sentinel_environment)
 
     client_id = (
         os.getenv("M365_DELEGATED_CLIENT_ID", "").strip()
