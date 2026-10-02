@@ -99,8 +99,13 @@ Nunca reutilize esse banco em produção; a aplicação recusa a troca entre os 
   -Database C:\CAMINHO_LOCAL_PROTEGIDO\alertad.db `
   -Settings C:\CAMINHO_LOCAL_PROTEGIDO\settings.json `
   -EnvironmentFile C:\CAMINHO_LOCAL_PROTEGIDO\alertad.env `
+  -SentinelEnvironmentFile C:\CAMINHO_DO_SENTINEL\environment.json `
   -LogFile C:\CAMINHO_LOCAL_PROTEGIDO\logs\alertad.jsonl
 ```
+
+O `environment.json` fornece tenant, cliente, segredo e remetente apenas em
+memória. O `alertad.env` complementar deve conter somente os destinos e a
+configuração delegada do Teams, sem duplicar o `client_secret` do Sentinel.
 
 O script é apropriado como ação de uma Tarefa Agendada sob a conta de serviço.
 A criação da tarefa, ACLs e identidade ficam a cargo da equipe do ambiente. Use o
@@ -138,7 +143,9 @@ delegada e `ChatMessage.Send` para um chat existente; o AlertAD não cria chats 
 altera participantes. A renovação do cache delegado é manual:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\renew_teams_cache.py
+.\.venv\Scripts\python.exe .\scripts\renew_teams_cache.py `
+  --env-file C:\CAMINHO_LOCAL_PROTEGIDO\alertad.env `
+  --sentinel-environment C:\CAMINHO_DO_SENTINEL\environment.json
 ```
 
 O diretório usa `Get-ADUser` local por PowerShell/ADWS, com timeout e cache

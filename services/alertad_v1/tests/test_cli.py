@@ -20,6 +20,7 @@ from alertad.contracts import (
 )
 from alertad.event_source import EventLogReadError
 from alertad.persistence import EventStore
+from alertad.sentinel_environment import load_sentinel_graph_environment
 
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -101,6 +102,45 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["checkpoints"][0]["logical_sequence"], 42)
         self.assertEqual(payload["checkpoints"][0]["source"], "forwardedevents")
         self.assertNotIn("SYNTHETIC-OPAQUE-BOOKMARK", result.stdout)
+
+    def test_loads_sentinel_graph_values_without_overriding_process(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            environment_file = Path(directory) / "environment.json"
+            environment_file.write_text(
+                json.dumps(
+                    {
+                        "microsoft_graph": {
+                            "tenant_id": "synthetic-tenant",
+                            "client_id": "synthetic-client",
+                            "client_secret": "synthetic-secret",
+                            "sender_upn": "sender@example.invalid",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            environment = {"M365_CLIENT_ID": "process-client"}
+            load_sentinel_graph_environment(environment_file, environ=environment)
+
+        self.assertEqual(environment["M365_TENANT_ID"], "synthetic-tenant")
+        self.assertEqual(environment["M365_CLIENT_ID"], "process-client")
+        self.assertEqual(environment["M365_CLIENT_SECRET"], "synthetic-secret")
+        self.assertEqual(environment["M365_SENDER_UPN"], "sender@example.invalid")
+
+    def test_sentinel_environment_errors_do_not_expose_file_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            environment_file = Path(directory) / "environment.json"
+            environment_file.write_text(
+                '{"client_secret":"SYNTHETIC_MUST_NOT_LEAK"',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "Arquivo de ambiente do Sentinel invalido",
+            ) as raised:
+                load_sentinel_graph_environment(environment_file, environ={})
+
+        self.assertNotIn("SYNTHETIC_MUST_NOT_LEAK", str(raised.exception))
 
     def test_cli_returns_failure_when_controlled_read_fails(self) -> None:
         output = io.StringIO()
