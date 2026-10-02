@@ -327,13 +327,19 @@ combinado com um listener exposto na rede.
 
 O n8n usa uma identidade tecnica exclusiva para acessar a API interna da SofIA.
 Esse canal nao reutiliza cookie do navegador, senha do Active Directory ou
-credencial pessoal. As primeiras rotas retornam apenas saude e o contrato
-fechado de capacidades, sem inventario ou dados operacionais:
+credencial pessoal. O contrato comeca fechado para saude, descoberta de
+capacidades e leitura minima de alertas:
 
 ```text
 GET /api/internal/sofia/v1/health
 GET /api/internal/sofia/v1/capabilities
+GET /api/internal/sofia/v1/alerts
 ```
+
+`alerts.read` fornece somente o resumo, a validade do snapshot e ate 100
+alertas ativos com identificacao operacional minima. O endpoint nao entrega
+inventario completo, credenciais, segredos ou dados de sessao e nao executa
+acoes no Sentinel.
 
 Configure estas variaveis no processo do Sentinel, nunca no Git ou no
 `environment.json`:
