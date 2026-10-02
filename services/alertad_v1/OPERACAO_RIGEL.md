@@ -39,9 +39,10 @@ Crie `settings.json` a partir do exemplo e configure:
 - canais habilitados;
 - retenção apenas como parâmetros documentais; mantenha `purge_enabled=false`.
 
-Crie um arquivo de ambiente protegido usando apenas os nomes de
-`config/graph.env.example`. Não use valores de exemplo. O worker carrega esse
-arquivo com `--env-file` sem sobrescrever variáveis já definidas no processo.
+Crie um arquivo de ambiente protegido usando apenas os nomes específicos do
+AlertAD em `config/graph.env.example`. Tenant, cliente, segredo e remetente podem
+ser lidos diretamente do `environment.json` do Sentinel em memória, sem criar
+uma segunda cópia. Variáveis já definidas no processo continuam tendo prioridade.
 
 ## 4. Diagnóstico local
 
@@ -64,6 +65,7 @@ Use outro arquivo SQLite:
   -Database C:\CAMINHO_LOCAL_PROTEGIDO\homologacao.db `
   -Settings C:\CAMINHO_LOCAL_PROTEGIDO\settings.json `
   -EnvironmentFile C:\CAMINHO_LOCAL_PROTEGIDO\alertad.env `
+  -SentinelEnvironmentFile C:\CAMINHO_DO_SENTINEL\environment.json `
   -LogFile C:\CAMINHO_LOCAL_PROTEGIDO\logs\homologacao.jsonl `
   -DryRun -InitializeAtEnd -Once
 ```
@@ -84,7 +86,8 @@ A renovação é manual e pode exigir interação:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\renew_teams_cache.py `
-  --env-file C:\CAMINHO_LOCAL_PROTEGIDO\alertad.env
+  --env-file C:\CAMINHO_LOCAL_PROTEGIDO\alertad.env `
+  --sentinel-environment C:\CAMINHO_DO_SENTINEL\environment.json
 ```
 
 Proteja o arquivo indicado por `ALERTAD_TEAMS_CACHE_FILE` como uma credencial. O

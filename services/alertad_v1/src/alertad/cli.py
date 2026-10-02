@@ -18,6 +18,7 @@ from .parsing import EventParseError, parse_windows_event
 from .persistence import EventStore
 from .reporting import export_attention_report
 from .rules import GroupMatcher
+from .sentinel_environment import load_sentinel_graph_environment
 from .service import EventProcessor, ProcessStatus
 from .worker import (
     AlertWorker,
@@ -62,6 +63,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--env-file",
         type=Path,
         help="Arquivo local protegido com variáveis do Microsoft Graph.",
+    )
+    worker_command.add_argument(
+        "--sentinel-environment",
+        type=Path,
+        help="environment.json local do Sentinel; valores Graph lidos em memoria.",
     )
 
     status_command = subcommands.add_parser("status", help="Mostra o estado local do banco.")
@@ -157,6 +163,8 @@ def _run_worker(args) -> int:
         except ImportError as exc:
             raise RuntimeError("Dependência 'python-dotenv' não instalada") from exc
         load_dotenv(args.env_file, override=False)
+    if args.sentinel_environment is not None:
+        load_sentinel_graph_environment(args.sentinel_environment)
     settings = Settings.load(args.settings)
     settings.validate_for_worker()
     configure_logging(args.log_file)
