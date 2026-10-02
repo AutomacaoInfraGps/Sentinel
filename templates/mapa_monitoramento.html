@@ -963,7 +963,7 @@
         const DATA_URL = "/api/mapa/dados";
         const STATES_URL = "/static/maps/br_states_paths.json";
         const SURROUNDING_URL = "/static/maps/south_america_paths.json";
-        const REFRESH_MS = 3 * 60 * 1000;
+        const REFRESH_MS = 60 * 1000;
         const STATIC_MAP_DATA = window.SENTINEL_MAPA_CHECKLIST_DATA || null;
         const STATIC_STATES_DATA = window.SENTINEL_MAPA_STATES || null;
         const STATIC_SURROUNDING_DATA = window.SENTINEL_MAPA_SURROUNDING || null;
@@ -1005,6 +1005,8 @@
         let rotationTimer = null;
         let rotationIndex = 0;
         let rotationShowingDetail = false;
+        let lastSuccessfulLoad = null;
+        let connectionIssue = false;
 
         const stateNames = {
             AC: 'Acre', AL: 'Alagoas', AP: 'Amapa', AM: 'Amazonas', BA: 'Bahia',
@@ -1024,7 +1026,11 @@
         }
 
         function updateLiveClock() {
-            updatedAt.textContent = formatDate(new Date());
+            if (connectionIssue && appData) {
+                updatedAt.textContent = 'Reconectando...';
+                return;
+            }
+            updatedAt.textContent = formatDate(lastSuccessfulLoad || new Date());
         }
 
         async function fetchJson(url) {
@@ -1032,7 +1038,9 @@
             const response = await fetch(`${url}${separator}t=${Date.now()}`, { cache: 'no-store', credentials: 'same-origin' });
             const contentType = response.headers.get('content-type') || '';
             if (!response.ok) {
-                throw new Error(`${url} retornou HTTP ${response.status}`);
+                const error = new Error(`${url} retornou HTTP ${response.status}`);
+                error.status = response.status;
+                throw error;
             }
             if (!contentType.includes('application/json')) {
                 const text = await response.text();
@@ -1977,14 +1985,25 @@
         }
 
         let refreshPollTimer = null;
+        let retryTimer = null;
+        let loadInFlight = false;
+
+        function scheduleRetry() {
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => loadData(false), 15 * 1000);
+        }
 
         async function loadData(forceRefresh = false) {
+            if (loadInFlight) return;
+            loadInFlight = true;
             try {
                 if (IS_STATIC_MAP) {
                     geoData = STATIC_STATES_DATA || await fetchJson(STATES_URL);
                     surroundingData = STATIC_SURROUNDING_DATA || {};
                     markRegionalChanges(STATIC_MAP_DATA.regionais || []);
                     appData = STATIC_MAP_DATA;
+                    lastSuccessfulLoad = new Date();
+                    connectionIssue = false;
                     updateLiveClock();
                     renderAlertList();
                     drawMap();
@@ -2003,6 +2022,9 @@
                 surroundingData = results[1];
                 markRegionalChanges(results[2].regionais || []);
                 appData = results[2];
+                lastSuccessfulLoad = new Date();
+                connectionIssue = false;
+                clearTimeout(retryTimer);
                 updateLiveClock();
                 renderAlertList();
                 drawMap();
@@ -2015,7 +2037,14 @@
                 }
             } catch (error) {
                 console.error(error);
-                showLoadError(error);
+                connectionIssue = true;
+                updateLiveClock();
+                if (!appData) {
+                    showLoadError(error);
+                }
+                scheduleRetry();
+            } finally {
+                loadInFlight = false;
             }
         }
 
@@ -2054,6 +2083,10 @@
         setInterval(updateLiveClock, 1000);
         if (!IS_STATIC_MAP) {
             setInterval(() => loadData(true), REFRESH_MS);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) loadData(false);
+            });
+            window.addEventListener('online', () => loadData(false));
         }
     </script>
 </body>

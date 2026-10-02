@@ -164,6 +164,22 @@ def build_notifications(records_by_group, orphan_vpn_names=None):
                 })
 
             raw_status = item.get("status_disponibilidade") or item.get("status")
+            if group == "firewalls":
+                availability = str(item.get("status_disponibilidade") or "").strip().lower()
+                if availability not in {
+                    "offline",
+                    "down",
+                    "error",
+                    "erro",
+                    "critical",
+                    "critico",
+                    "maintenance",
+                    "manutencao",
+                    "manutenção",
+                    "inactive",
+                    "inativo",
+                }:
+                    raw_status = item.get("status") or item.get("status_disponibilidade")
             status = str(raw_status or "").strip().lower()
             if status not in _ALERT_STATUSES:
                 continue

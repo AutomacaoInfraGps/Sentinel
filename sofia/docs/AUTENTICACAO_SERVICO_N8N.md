@@ -8,11 +8,13 @@ cookie do navegador, senha do Active Directory ou credencial pessoal.
 ```text
 GET /api/internal/sofia/v1/health
 GET /api/internal/sofia/v1/capabilities
+GET /api/internal/sofia/v1/alerts
 ```
 
-As rotas retornam apenas a disponibilidade da API e o contrato fechado de
-capacidades tecnicas em modo somente leitura. Nenhum dado operacional e exposto
-nessa etapa.
+As rotas retornam a disponibilidade da API, o contrato fechado de capacidades
+e uma visao minima dos alertas ativos em modo somente leitura. A resposta de
+alertas e limitada a 100 itens e nao inclui inventario completo, credenciais,
+segredos ou dados de sessao de usuarios.
 
 ## Controles
 

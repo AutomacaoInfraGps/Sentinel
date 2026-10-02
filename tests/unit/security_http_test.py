@@ -48,6 +48,44 @@ class SecurityHTTPTest(unittest.TestCase):
         response = self.client.get("/api/test")
         self.assertEqual(response.status_code, 401)
 
+    def test_notification_api_refreshes_map_cache_and_keeps_last_known_alerts(self):
+        self._login_session("admin.notifications", ["SENTINEL_ADMINISTRATIVE_OU"])
+        state = {
+            "updated_at": "2026-10-02T10:00:00+00:00",
+            "groups": {
+                "links": {
+                    "updated_at": "2020-01-01T00:00:00+00:00",
+                    "records": [{
+                        "nome": "WAN TESTE",
+                        "regional": "REG_TESTE",
+                        "status": "offline",
+                        "changed_at": "2026-10-02T10:00:00+00:00",
+                    }],
+                },
+            },
+        }
+
+        with (
+            patch("web_config.load_operational_state", return_value=state),
+            patch("web_config.filter_records", side_effect=lambda records, *_args, **_kwargs: records),
+            patch("web_config.can_operate_sentinel", return_value=False),
+            patch("web_config._mapa_carregar_cache", return_value=({}, 999)),
+            patch("web_config._mapa_iniciar_refresh_background", return_value=True) as refresh,
+            patch("web_config._mapa_refresh_esta_em_andamento", return_value=True),
+            patch(
+                "web_config.decorate_with_read_state",
+                side_effect=lambda _user, notifications: (notifications, len(notifications)),
+            ),
+        ):
+            response = self.client.get("/api/notifications")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["refreshing"])
+        self.assertFalse(payload["snapshot_fresh"])
+        self.assertTrue(any(item["device"] == "WAN TESTE" for item in payload["notifications"]))
+        refresh.assert_called_once_with()
+
     def test_login_form_and_security_headers_are_present(self):
         response = self.client.get("/login")
         self.assertEqual(response.status_code, 200)

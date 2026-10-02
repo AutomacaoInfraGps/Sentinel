@@ -3680,6 +3680,11 @@ def _mapa_marcar_refresh_finalizado():
         _mapa_cache_refresh_em_andamento = False
 
 
+def _mapa_refresh_esta_em_andamento():
+    with _mapa_cache_refresh_lock:
+        return _mapa_cache_refresh_em_andamento
+
+
 def _mapa_atualizar_fontes_operacionais():
     """Atualiza os coletores compartilhados antes de publicar o snapshot comum."""
     resultados = {}
@@ -4469,7 +4474,7 @@ def _reconcile_notification_servers(operational_servers):
 @app.route('/api/notifications')
 @login_required
 def api_notifications():
-    """Alertas do snapshot operacional, sem disparar novas coletas externas."""
+    """Alertas do snapshot operacional, mantendo a coleta do mapa atualizada."""
     state = load_operational_state()
     groups = state.get("groups") or {}
     notification_groups = {"links", "vpns", "aps", "switches", "firewalls", "servidores", "admins"}
@@ -4477,10 +4482,10 @@ def api_notifications():
     stale_groups = []
     for group in notification_groups:
         group_data = groups.get(group) or {}
+        records_by_group[group] = group_data.get("records") or []
         if snapshot_is_fresh(group_data.get("updated_at")):
-            records_by_group[group] = group_data.get("records") or []
+            continue
         else:
-            records_by_group[group] = []
             stale_groups.append(group)
     for group in notification_groups:
         records_by_group[group] = filter_records(
@@ -4512,6 +4517,7 @@ def api_notifications():
         try:
             switch_history = switch_update_scheduler.list_history(limit=100, offset=0)
             notifications.extend(build_switch_update_notifications(switch_history.get("items") or []))
+            notifications = sort_notifications(notifications)
         except Exception:
             current_app.logger.exception(
                 "Falha ao carregar conclusoes de atualizacoes de switches nas notificacoes"
@@ -4524,8 +4530,11 @@ def api_notifications():
         )
     )
     notifications = sort_notifications(notifications)
-    if stale_groups:
-        _mapa_iniciar_refresh_background()
+    cached_map, cache_age = _mapa_carregar_cache()
+    refresh_started = False
+    if stale_groups or not cached_map or not _mapa_cache_esta_fresco(cache_age):
+        refresh_started = _mapa_iniciar_refresh_background()
+    refresh_in_progress = refresh_started or _mapa_refresh_esta_em_andamento()
     notifications, unread_count = decorate_with_read_state(current_user.get_id(), notifications)
     return jsonify({
         "success": True,
@@ -4534,6 +4543,8 @@ def api_notifications():
         "updated_at": state.get("updated_at"),
         "snapshot_fresh": snapshot_fresh,
         "stale_groups": sorted(stale_groups),
+        "refreshing": refresh_in_progress,
+        "cache_age_seconds": int(cache_age) if cache_age is not None else None,
     })
 
 
