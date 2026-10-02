@@ -39,13 +39,18 @@ A aplicacao fica disponivel em `http://localhost:5000`.
 O checklist executa o lote completo e gera a primeira fotografia/cache do dia.
 O mapa funciona como atualizador operacional continuo:
 
-- A thread de atualizacao roda a cada **3 minutos**.
+- Com o mapa aberto, a atualizacao automatica e solicitada a cada **1 minuto**.
+  A trava do backend impede a execucao simultanea de duas coletas.
 - Links, VPNs, switches, firewalls, servidores e APs sao consultados.
 - Somente registros alterados devem ser persistidos e registrados no historico.
 - Infraestrutura, Regionais, Checklist e Mapa consomem a mesma base operacional,
   evitando estados diferentes entre as telas.
 - O endpoint do mapa possui TTL configuravel por
   `MAPA_MONITORAMENTO_TTL_SECONDS`, com padrao de **300 segundos**.
+- Enquanto uma coleta estiver em andamento, o mapa consulta o cache a cada
+  **15 segundos**. Falhas transitórias preservam a ultima visualizacao valida e
+  geram nova tentativa automatica, inclusive ao retornar para a aba ou quando a
+  conexao de rede voltar.
 - Caches especificos de integracoes continuam existindo para limitar chamadas
   externas; atualizacoes manuais podem forcar uma nova consulta.
 
@@ -322,13 +327,19 @@ combinado com um listener exposto na rede.
 
 O n8n usa uma identidade tecnica exclusiva para acessar a API interna da SofIA.
 Esse canal nao reutiliza cookie do navegador, senha do Active Directory ou
-credencial pessoal. As primeiras rotas retornam apenas saude e o contrato
-fechado de capacidades, sem inventario ou dados operacionais:
+credencial pessoal. O contrato comeca fechado para saude, descoberta de
+capacidades e leitura minima de alertas:
 
 ```text
 GET /api/internal/sofia/v1/health
 GET /api/internal/sofia/v1/capabilities
+GET /api/internal/sofia/v1/alerts
 ```
+
+`alerts.read` fornece somente o resumo, a validade do snapshot e ate 100
+alertas ativos com identificacao operacional minima. O endpoint nao entrega
+inventario completo, credenciais, segredos ou dados de sessao e nao executa
+acoes no Sentinel.
 
 Configure estas variaveis no processo do Sentinel, nunca no Git ou no
 `environment.json`:
@@ -493,10 +504,12 @@ regional compativel seja encontrada.
 Cada item abre a tela operacional correspondente com a busca ja preenchida.
 Alertas de servidor abrem diretamente os detalhes da regional, posicionam a
 tela na secao de servidores e destacam o equipamento para teste ou edicao.
-Snapshots operacionais com mais de seis horas nao geram notificacoes, evitando
-que uma queda antiga seja apresentada como incidente atual. Nos detalhes da
-regional, o snapshot tambem so substitui o status salvo quando sua verificacao
-for igual ou mais recente.
+O sino consulta o estado operacional a cada 30 segundos. Quando o cache do mapa
+ultrapassa seu TTL, essa consulta inicia uma nova coleta e passa a acompanhar a
+atualizacao a cada 10 segundos. Durante falhas ou coletas demoradas, os ultimos
+alertas conhecidos permanecem visiveis com indicacao de atualizacao, em vez de
+o painel ficar vazio. Nos detalhes da regional, o snapshot tambem so substitui
+o status salvo quando sua verificacao for igual ou mais recente.
 Essa validacao de idade tambem protege as telas de servidores, switches, links,
 VPNs e firewalls: o parametro `q` da notificacao atua somente na busca visual e
 nunca altera ou restaura o status contido no alerta.

@@ -14,6 +14,11 @@
     const emptyText = document.getElementById('notificationEmptyText');
     let notifications = [];
     let snapshotFresh = true;
+    let refreshInProgress = false;
+    let loadInFlight = false;
+    let loadTimer = null;
+    const NORMAL_REFRESH_MS = 30000;
+    const ACTIVE_REFRESH_MS = 10000;
     const baseDocumentTitle = document.title.replace(/^\(\d+\+?\)\s*/, '');
 
     const setDocumentTitleCount = (value) => {
@@ -41,7 +46,7 @@
         list.replaceChildren();
         empty.hidden = notifications.length > 0;
         list.hidden = notifications.length === 0;
-        if (!snapshotFresh) {
+        if (!snapshotFresh || refreshInProgress) {
             summary.textContent = 'Atualizando o estado operacional...';
             emptyTitle.textContent = 'Dados operacionais desatualizados';
             emptyText.textContent = 'Uma atualização foi iniciada. Os alertas aparecerão após a nova coleta.';
@@ -80,17 +85,35 @@
         });
     };
 
+    const scheduleLoad = (delay) => {
+        window.clearTimeout(loadTimer);
+        loadTimer = window.setTimeout(load, delay);
+    };
+
     const load = async () => {
+        if (loadInFlight) return;
+        loadInFlight = true;
         try {
-            const response = await fetch(widget.dataset.listUrl, { headers: { Accept: 'application/json' } });
+            const response = await fetch(widget.dataset.listUrl, {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const payload = await response.json();
             notifications = payload.notifications || [];
             snapshotFresh = payload.snapshot_fresh !== false;
+            refreshInProgress = payload.refreshing === true;
             setCount(payload.unread_count);
             render();
+            scheduleLoad(refreshInProgress ? ACTIVE_REFRESH_MS : NORMAL_REFRESH_MS);
         } catch (error) {
-            summary.textContent = 'Não foi possível carregar os alertas';
+            summary.textContent = notifications.length
+                ? 'Reconectando; exibindo os últimos alertas conhecidos'
+                : 'Reconectando ao monitoramento...';
+            scheduleLoad(ACTIVE_REFRESH_MS);
+        } finally {
+            loadInFlight = false;
         }
     };
 
@@ -151,7 +174,10 @@
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !panel.hidden) close();
     });
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) load();
+    });
+    window.addEventListener('online', load);
 
     load();
-    window.setInterval(load, 30000);
 })();
