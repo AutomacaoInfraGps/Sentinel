@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-ALERTAD_SOURCE = REPOSITORY_ROOT / "services" / "alertad_v1" / "src"
+ALERTAD_ROOT = Path(__file__).resolve().parents[2]
+ALERTAD_SOURCE = ALERTAD_ROOT / "src"
 sys.path.insert(0, str(ALERTAD_SOURCE))
 
 from alertad.parsing import parse_windows_event  # noqa: E402
@@ -36,7 +36,7 @@ class SampleValidationError(ValueError):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Valida amostras XML sensíveis do AlertAD sem exibir campos dos eventos."
+            "Valida amostras XML privadas do AlertAD sem exibir campos dos eventos."
         )
     )
     parser.add_argument("samples_directory", type=Path)

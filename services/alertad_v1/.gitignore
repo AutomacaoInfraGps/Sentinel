@@ -16,3 +16,5 @@ logs/
 config/settings.json
 .env
 .auth_cache/
+!tests/test_*.py
+tests/fixtures/XMLEXAMPLE_test/
