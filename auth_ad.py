@@ -286,6 +286,7 @@ def init_auth(app):
                 user = User(user_info)
                 save_user(user)
                 login_user(user)
+                session["_sentinel_identity"] = user.to_session_dict()
                 session.permanent = bool(
                     current_app.config.get("SENTINEL_SESSION_PERMANENT", False)
                 )
@@ -304,7 +305,7 @@ def init_auth(app):
     @app.route('/logout', methods=['GET', 'POST'])
     def logout():
         """Logout do usuário"""
-        from flask import redirect, render_template, request, url_for, flash
+        from flask import redirect, render_template, request, url_for, flash, session
         from flask_login import logout_user, current_user
 
         if request.method == 'GET':
@@ -314,6 +315,7 @@ def init_auth(app):
             username = current_user.id
             logout_user()
             remove_user(username)
+            session.pop("_sentinel_identity", None)
             flash('Logout realizado com sucesso', 'info')
         
         return redirect(url_for('login'))

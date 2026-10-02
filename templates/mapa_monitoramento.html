@@ -1038,6 +1038,10 @@
             const response = await fetch(`${url}${separator}t=${Date.now()}`, { cache: 'no-store', credentials: 'same-origin' });
             const contentType = response.headers.get('content-type') || '';
             if (!response.ok) {
+                if (response.status === 401) {
+                    const next = encodeURIComponent(window.location.pathname + window.location.search);
+                    window.location.replace(`/login?next=${next}`);
+                }
                 const error = new Error(`${url} retornou HTTP ${response.status}`);
                 error.status = response.status;
                 throw error;

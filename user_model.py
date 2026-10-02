@@ -7,7 +7,7 @@ from threading import RLock
 from typing import Dict, Optional
 
 from flask_login import UserMixin
-from regional_access import effective_user_groups
+from regional_access import effective_user_groups, normalize_group_name
 
 class User(UserMixin):
     """Classe de usuário para Flask-Login"""
@@ -52,6 +52,18 @@ class User(UserMixin):
             'dn': self.dn,
             'groups': list(self.groups),
             'login_time': self.login_time.isoformat()
+        }
+
+    def to_session_dict(self) -> Dict:
+        """Return compact signed-session claims without credentials."""
+        return {
+            'username': self.username,
+            'display_name': self.display_name,
+            'groups': list(dict.fromkeys(
+                normalize_group_name(group)
+                for group in self.groups
+                if normalize_group_name(group)
+            )),
         }
     
     @classmethod
