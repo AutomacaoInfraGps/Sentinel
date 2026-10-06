@@ -109,6 +109,46 @@
         transition: all 0.3s ease;
     }
 
+    .quick-action-control {
+        position: relative;
+        display: flex;
+        width: 100%;
+        height: 82px;
+        min-height: 82px;
+        padding: 10px 16px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .quick-action-control .btn-text {
+        display: grid;
+        width: 100%;
+        grid-template-columns: 24px minmax(0, 1fr) 24px;
+        align-items: center;
+        column-gap: 8px;
+    }
+
+    .quick-action-control .btn-text i {
+        grid-column: 1;
+        justify-self: start;
+        margin: 0 !important;
+        line-height: 1;
+    }
+
+    .quick-action-control .quick-action-label {
+        grid-column: 2;
+        line-height: 1.35;
+        text-align: center;
+        white-space: normal;
+    }
+
+    .quick-action-control .btn-loading-spinner {
+        position: absolute;
+        top: calc(50% - 0.5rem);
+        left: calc(50% - 0.5rem);
+        margin: 0 !important;
+    }
+
     .switch-card-wrapper {
         display: flex;
         flex-direction: column;
@@ -117,6 +157,64 @@
     .switch-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+
+    .switch-core-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.28rem;
+        padding: 0.22rem 0.48rem;
+        color: #073f52;
+        border: 1px solid rgba(92, 190, 218, 0.72);
+        border-radius: 999px;
+        background: linear-gradient(135deg, #eaf9fd, #ccecf5);
+        box-shadow: 0 2px 6px rgba(1, 46, 64, 0.16);
+        font-size: 0.67rem;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0.045em;
+        white-space: nowrap;
+    }
+
+    .switch-core-badge-symbol {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 0.9rem;
+        height: 0.9rem;
+        color: #0F6C8C;
+        font-size: 0.76rem;
+        line-height: 1;
+    }
+
+    .switch-core-badge-symbol::before {
+        margin: 0;
+        line-height: 1;
+    }
+
+    .switch-card-heading {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.32rem 0.42rem;
+    }
+
+    .switch-card-heading h6 {
+        min-width: 0;
+        margin: 0;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    .switch-card-status-group {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        min-height: 20px;
+        margin-left: 0.5rem;
     }
 
     .switch-card-actions {
@@ -293,28 +391,14 @@
     }
 
     .verification-meta {
-        display: inline-flex;
-        flex-direction: column;
-        gap: 2px;
-        padding: 10px 12px;
-        margin: 8px 0 12px;
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 10px;
-    }
-
-    .verification-label {
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
+        display: block;
+        margin-top: 1px;
+        font-size: 0.875em;
         color: #6c757d;
     }
 
     .verification-value {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: #012E40;
+        font-weight: 400;
     }
 
     .warning-cause {
@@ -522,41 +606,68 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-{% if sentinel_access.operator %}4{% else %}6{% endif %} mb-3">
+                    <div class="{% if sentinel_access.operator %}col-md-6 col-xl-3{% else %}col-md-6{% endif %} mb-3">
                         <div class="d-grid">
-                            <button id="btn-verificar-todos" class="btn btn-primary btn-lg" onclick="verificarTodosSwitches(this)">
+                            <button type="button" id="btn-verificar-todos" class="btn btn-primary btn-lg quick-action-control" onclick="verificarTodosSwitches(this)">
                                 <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
                                 <span class="btn-text">
                                     <i class="bi bi-arrow-clockwise me-2"></i>
-                                    Verificar Todos os Switches
+                                    <span class="quick-action-label">Verificar Todos os Switches</span>
                                 </span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-{% if sentinel_access.operator %}4{% else %}6{% endif %} mb-3">
-                        <div class="d-grid">
-                            <button type="button" class="btn btn-outline-primary btn-lg" onclick="recarregarSwitchesZabbix(this)">
-                                <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
-                                <span class="btn-text"><i class="bi bi-cloud-download me-2"></i>Recarregar inventário do Zabbix</span>
                             </button>
                         </div>
                     </div>
 
                     {% if sentinel_access.operator %}
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 col-xl-3 mb-3">
                         <div class="d-grid">
-                            <a class="btn btn-outline-primary btn-lg"
+                            <button type="button" id="btn-verificar-firmwares" class="btn btn-outline-success btn-lg quick-action-control" onclick="verificarFirmwaresSwitches(this)">
+                                <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
+                                <span class="btn-text">
+                                    <i class="bi bi-cpu me-2"></i>
+                                    <span class="quick-action-label">Verificar Firmwares</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="{% if sentinel_access.operator %}col-md-6 col-xl-3{% else %}col-md-6{% endif %} mb-3">
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-outline-primary btn-lg quick-action-control" onclick="recarregarSwitchesZabbix(this)">
+                                <span class="btn-loading-spinner spinner-border spinner-border-sm me-2" style="display: none;"></span>
+                                <span class="btn-text">
+                                    <i class="bi bi-cloud-download me-2"></i>
+                                    <span class="quick-action-label">Recarregar inventário do Zabbix</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {% if sentinel_access.operator %}
+                    <div class="col-md-6 col-xl-3 mb-3">
+                        <div class="d-grid">
+                            <a class="btn btn-outline-primary btn-lg quick-action-control"
                                href="{{ url_for('switch_firmware_v01.firmware_history_page') }}">
-                                <i class="bi bi-clock-history me-2"></i>Histórico de atualizações
+                                <span class="btn-text">
+                                    <i class="bi bi-clock-history me-2"></i>
+                                    <span class="quick-action-label">Histórico de atualizações</span>
+                                </span>
                             </a>
                         </div>
                     </div>
                     {% endif %}
                 </div>
-                <p class="text-muted small mb-0">
-                    Verificar Todos consulta os estados operacionais. Recarregar inventário atualiza hosts, IPs e regionais pelos host groups do Zabbix.
-                </p>
+                <ul class="text-muted small mb-0 ps-3">
+                    <li><strong>Verificar Todos os Switches:</strong> consulta no Zabbix o estado operacional e o horário da verificação.</li>
+                    {% if sentinel_access.operator %}
+                    <li><strong>Verificar Firmwares:</strong> consulta a versão na WebUI pública de cada switch, sem utilizar credenciais, e atualiza o horário da consulta.</li>
+                    {% endif %}
+                    <li><strong>Recarregar inventário do Zabbix:</strong> atualiza hosts, IPs e regionais a partir dos host groups.</li>
+                    {% if sentinel_access.operator %}
+                    <li><strong>Histórico de atualizações:</strong> mostra os agendamentos concluídos, com falha ou que precisam de revisão.</li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
     </div>
@@ -632,11 +743,19 @@
         <!-- Lista de Switches -->
         <div class="row">
             {% for switch in regional.switches %}
-            <div class="col-md-4 mb-3 switch-card-wrapper" data-status="{{ switch.status or 'desconhecido' }}" data-search-text="{{ regional.nome }} {{ switch.host }} {{ switch.ip }} {{ switch.modelo }} {{ switch.local }} {{ switch.status or 'desconhecido' }}">
+            <div class="col-md-4 mb-3 switch-card-wrapper" data-status="{{ switch.status or 'desconhecido' }}" data-search-text="{{ regional.nome }} {{ switch.host }} {{ switch.ip }} {{ switch.modelo }} {{ switch.firmware_version or '' }} {{ switch.local }} {{ switch.status or 'desconhecido' }}">
                 <div class="card switch-card" id="switch-{{ switch.host|replace(' ', '-')|replace('.', '-') }}" data-host="{{ switch.host }}" data-ip="{{ switch.ip }}" data-regional="{{ regional.nome }}" data-status="{{ switch.status or 'desconhecido' }}">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">{{ switch.host }}</h6>
-                        <span>
+                        <div class="switch-card-heading">
+                            <h6>{{ switch.host }}</h6>
+                            {% if switch.is_core %}
+                            <span class="switch-core-badge" title="Switch CORE da regional">
+                                <i class="bi bi-diagram-3-fill switch-core-badge-symbol" aria-hidden="true"></i>
+                                CORE
+                            </span>
+                            {% endif %}
+                        </div>
+                        <span class="switch-card-status-group">
                             {% if switch.status == 'online' %}
                             <span class="status-badge status-online" title="Online"></span>
                             {% elif switch.status == 'inativo' %}
@@ -654,12 +773,47 @@
                     </div>
                     <div class="card-body">
                         <p class="mb-1"><strong>IP:</strong> {{ switch.ip }}</p>
-                        <p class="mb-1"><strong>Modelo:</strong> {{ switch.modelo }}</p>
                         <p class="mb-1"><strong>Local:</strong> {{ switch.local }}</p>
-                        <div class="verification-meta{% if not switch.ultima_verificacao_formatada %} d-none{% endif %}">
-                            <span class="verification-label">Última verificação</span>
-                            <span class="verification-value">{{ switch.ultima_verificacao_formatada or 'Ainda não verificado' }}</span>
-                        </div>
+                        <p class="mb-1">
+                            <strong>Status:</strong>
+                            <span class="switch-status">
+                                {% if switch.status == 'online' %}
+                                <span class="text-success">Online</span>
+                                {% elif switch.status == 'offline' %}
+                                <span class="text-danger">Offline</span>
+                                {% elif switch.status == 'warning' %}
+                                <span class="text-warning">Atenção</span>
+                                {% elif switch.status == 'inativo' %}
+                                <span class="text-secondary">Inativo</span>
+                                {% elif switch.status == 'maintenance' %}
+                                <span class="text-warning">Em manutenção</span>
+                                {% elif switch.status == 'não encontrado' %}
+                                <span class="text-danger">Não encontrado</span>
+                                {% elif switch.status == 'erro' %}
+                                <span class="text-danger">Erro</span>
+                                {% else %}
+                                <span class="text-muted">Desconhecido</span>
+                                {% endif %}
+                            </span>
+                            <small class="verification-meta{% if not switch.ultima_verificacao_formatada %} d-none{% endif %}">
+                                Verificado em <span class="verification-value">{{ switch.ultima_verificacao_formatada or 'Ainda não verificado' }}</span>
+                            </small>
+                        </p>
+                        <p class="mb-1"><strong>Modelo:</strong> <span class="switch-model">{{ switch.modelo }}</span></p>
+                        <p class="mb-1">
+                            <strong>Firmware:</strong>
+                            {% if switch.firmware_version %}
+                                <span class="switch-firmware-version">{{ switch.firmware_version }}</span>
+                                {% if switch.firmware_checked_at_formatada %}
+                                    <small class="switch-firmware-checked text-muted d-block">Verificado em {{ switch.firmware_checked_at_formatada }}</small>
+                                {% else %}
+                                    <small class="switch-firmware-checked text-muted d-none"></small>
+                                {% endif %}
+                            {% else %}
+                                <span class="switch-firmware-version text-muted">Não consultado</span>
+                                <small class="switch-firmware-checked text-muted d-none"></small>
+                            {% endif %}
+                        </p>
                         <div class="warning-cause{% if switch.status != 'warning' or not switch.warning_problemas %} d-none{% endif %}">
                             <span class="warning-cause-label">Motivo da atenção</span>
                             <span class="warning-cause-value">{{ switch.warning_resumo or 'Alerta identificado no Zabbix' }}</span>
@@ -676,27 +830,6 @@
                                 <li class="indisponivel-cause-details">{{ switch.status_details }}</li>
                             </ul>
                         </div>
-                        <p class="mb-0"><strong>Status:</strong> 
-                            <span class="switch-status">
-                                {% if switch.status == 'online' %}
-                                <span class="text-success">Online</span>
-                                {% elif switch.status == 'offline' %}
-                                <span class="text-danger">Offline</span>
-                                {% elif switch.status == 'warning' %}
-                                <span class="text-warning">Atenção</span>
-                                {% elif switch.status == 'inativo' %}
-                                <span class="text-secondary">Inativo</span>
-                                {% elif switch.status == 'maintenance' %}
-                                <span class="text-warning">Em manutencao</span>
-                                {% elif switch.status == 'não encontrado' %}
-                                <span class="text-danger">Não encontrado</span>
-                                {% elif switch.status == 'erro' %}
-                                <span class="text-danger">Erro</span>
-                                {% else %}
-                                <span class="text-muted">Desconhecido</span>
-                                {% endif %}
-                            </span>
-                        </p>
                     </div>
                     <div class="card-footer">
                         <div class="d-flex align-items-center switch-card-actions mb-2">
@@ -886,7 +1019,11 @@ function aplicarProgressoJobSwitches(job) {
     }
 
     if (job?.partial_results) {
-        aplicarResultadosSwitches(job.partial_results);
+        if (job.kind === 'switches-firmware') {
+            aplicarResultadosFirmware(job.partial_results);
+        } else {
+            aplicarResultadosSwitches(job.partial_results);
+        }
     }
 }
 
@@ -981,7 +1118,16 @@ function formatarUltimaVerificacao(valor) {
 
     const data = new Date(valor);
     if (!Number.isNaN(data.getTime())) {
-        return data.toLocaleString('pt-BR');
+        const options = { timeZone: 'America/Sao_Paulo' };
+        const datePart = data.toLocaleDateString('pt-BR', options);
+        const timePart = data.toLocaleTimeString('pt-BR', {
+            ...options,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        return `${datePart} às ${timePart}`;
     }
 
     return valor;
@@ -1308,6 +1454,34 @@ function aplicarResultadosSwitches(resultados) {
     recalcularContadores();
 }
 
+function atualizarFirmwareSwitch(host, resultado) {
+    if (!resultado?.success || !resultado.current_version) {
+        return;
+    }
+
+    const card = obterCardSwitch(host);
+    if (!card.length) {
+        return;
+    }
+
+    const version = card.find('.switch-firmware-version');
+    const checked = card.find('.switch-firmware-checked');
+    version.text(resultado.current_version).removeClass('text-muted');
+    if (resultado.model) {
+        card.find('.switch-model').text(resultado.model);
+    }
+    checked
+        .text(`Verificado em ${formatarUltimaVerificacao(resultado.checked_at_brasilia)}`)
+        .addClass('d-block')
+        .removeClass('d-none');
+}
+
+function aplicarResultadosFirmware(resultados) {
+    for (const [host, resultado] of Object.entries(resultados || {})) {
+        atualizarFirmwareSwitch(host, resultado);
+    }
+}
+
 function verificarTodosSwitches(button, options = {}) {
     const config = Object.assign({
         automatico: false,
@@ -1374,6 +1548,63 @@ function verificarTodosSwitches(button, options = {}) {
                     hideLoadingOverlay();
                 }
             });
+        });
+}
+
+function verificarFirmwaresSwitches(button) {
+    showLoading(button);
+    switchesSyncMode = 'firmware';
+    const total = lerNumero('#stats-total-switches');
+    $('#loadingOverlayScope').text(
+        total > 0 ? `Consultando firmware de ${total} switches` : 'Consultando firmwares cadastrados'
+    );
+    showLoadingOverlay(
+        'Verificando firmwares',
+        'Consultando sequencialmente a WebUI pública dos switches, sem utilizar credenciais.'
+    );
+    showToast('Iniciando consulta das versões de firmware...', 'info');
+
+    $.ajax({
+        url: '/api/switches/firmwares/verificar',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ async: true })
+    })
+        .done(function(response) {
+            if (!response.success || !response.job_id) {
+                showToast(`Erro: ${response.message || 'Não foi possível iniciar a consulta de firmwares'}`, 'danger');
+                hideLoading(button);
+                hideLoadingOverlay();
+                return;
+            }
+
+            acompanharJobSwitches(response.job_id, {
+                onComplete: function(result) {
+                    aplicarResultadosFirmware(result.resultados || {});
+                    setSwitchesSyncProgress(100);
+                    const duration = formatSwitchesSyncElapsed((result.duration_seconds || 0) * 1000);
+                    const average = Number(result.average_seconds || 0).toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                    const message = `${result.successful || 0}/${result.total || 0} firmwares consultados em ${duration}; média de ${average}s por switch.`;
+                    showToast(message, result.failed ? 'warning' : 'success');
+                    setTimeout(() => {
+                        hideLoading(button);
+                        hideLoadingOverlay();
+                    }, 250);
+                },
+                onError: function(job) {
+                    showToast(job.error || job.message || 'Erro ao consultar firmwares.', 'danger');
+                    hideLoading(button);
+                    hideLoadingOverlay();
+                }
+            });
+        })
+        .fail(function(xhr) {
+            showToast(xhr.responseJSON?.message || 'Erro de conexão ao iniciar a consulta de firmwares.', 'danger');
+            hideLoading(button);
+            hideLoadingOverlay();
         });
 }
 

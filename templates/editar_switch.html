@@ -59,6 +59,200 @@
         content: " *";
         color: red;
     }
+
+    .core-selector {
+        position: relative;
+    }
+
+    .core-selector-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .core-selector-card {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr) 34px;
+        align-items: center;
+        gap: 16px;
+        min-height: 96px;
+        padding: 18px 20px;
+        color: #23343c;
+        border: 2px solid #b8cdd5;
+        border-radius: 12px;
+        background: linear-gradient(145deg, #fff 0%, #f2f7f9 100%);
+        box-shadow: 0 5px 14px rgba(1, 46, 64, 0.08);
+        cursor: pointer;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease,
+                    transform 0.18s ease, background 0.18s ease;
+    }
+
+    .core-selector-card:hover {
+        border-color: #0F6C8C;
+        box-shadow: 0 8px 20px rgba(1, 46, 64, 0.14);
+        transform: translateY(-1px);
+    }
+
+    .core-selector-input:focus-visible + .core-selector-card {
+        outline: 3px solid rgba(15, 108, 140, 0.24);
+        outline-offset: 3px;
+    }
+
+    .core-selector-icon {
+        position: relative;
+        display: inline-flex;
+        width: 58px;
+        height: 58px;
+        align-items: center;
+        justify-content: center;
+        color: #0F6C8C;
+        border: 1px solid #a9ccd8;
+        border-radius: 50%;
+        background: #e6f3f7;
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .core-selector-icon i {
+        display: block;
+        margin: 0;
+        line-height: 1;
+    }
+
+    .core-selector-icon::after {
+        content: "";
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 9px;
+        height: 9px;
+        border: 2px solid #e6f3f7;
+        border-radius: 50%;
+        background: #27ae60;
+        box-shadow: 0 1px 3px rgba(1, 46, 64, 0.22);
+    }
+
+    .core-selector-title {
+        display: block;
+        color: #012E40;
+        font-size: 1.08rem;
+        font-weight: 800;
+    }
+
+    .core-selector-description {
+        display: block;
+        margin-top: 3px;
+        color: #64767e;
+        font-size: 0.88rem;
+        font-weight: 400;
+    }
+
+    .core-selector-state {
+        display: inline-flex;
+        width: 30px;
+        height: 30px;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+        border: 2px solid #9fb7c0;
+        border-radius: 50%;
+        background: #fff;
+        transition: all 0.18s ease;
+    }
+
+    .core-selector-state i {
+        display: block;
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1;
+    }
+
+    .core-selector-input:checked + .core-selector-card {
+        color: #fff;
+        border-color: #0F6C8C;
+        background: linear-gradient(135deg, #012E40, #0A4A63 58%, #0F6C8C);
+        box-shadow: 0 10px 24px rgba(1, 46, 64, 0.24);
+    }
+
+    .core-selector-input:checked + .core-selector-card .core-selector-icon {
+        color: #012E40;
+        border-color: #8bd0e5;
+        background: #dff5fb;
+    }
+
+    .core-selector-input:checked + .core-selector-card .core-selector-title,
+    .core-selector-input:checked + .core-selector-card .core-selector-description {
+        color: #fff;
+    }
+
+    .core-selector-input:checked + .core-selector-card .core-selector-description {
+        color: rgba(255, 255, 255, 0.82);
+    }
+
+    .core-selector-input:checked + .core-selector-card .core-selector-state {
+        color: #fff;
+        border-color: #2dbb75;
+        background: #198754;
+    }
+
+    .core-selector.is-locked .core-selector-card {
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .core-selector.is-locked .core-selector-card:hover {
+        box-shadow: 0 5px 14px rgba(1, 46, 64, 0.08);
+    }
+
+    .core-selector.is-locked .core-selector-state {
+        color: #0F6C8C;
+        border-color: #89afbd;
+        background: #e5f2f6;
+    }
+
+    .core-selector.is-locked .core-selector-input:checked + .core-selector-card .core-selector-state {
+        color: #012E40;
+        border-color: #9bd3e4;
+        background: #dff5fb;
+    }
+
+    .core-lock-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 12px 14px;
+        color: #684c0b;
+        border: 1px solid #e6cf91;
+        border-left: 4px solid #d39b12;
+        border-radius: 8px;
+        background: #fff8e5;
+        font-size: 0.88rem;
+        line-height: 1.45;
+    }
+
+    .core-lock-alert i {
+        flex: 0 0 auto;
+        margin-top: 1px;
+        color: #a87300;
+    }
+
+    @media (max-width: 575.98px) {
+        .core-selector-card {
+            grid-template-columns: 48px minmax(0, 1fr) 30px;
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .core-selector-icon {
+            width: 48px;
+            height: 48px;
+            font-size: 1.7rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -84,6 +278,7 @@
     </div>
     
     <form method="post" action="{{ url_for('editar_switch', host=switch.host) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-6">
                 <div class="form-group">
@@ -128,11 +323,54 @@
             <input type="text" class="form-control" id="local" name="local" 
                    value="{{ switch.local }}">
         </div>
+
+        <div class="form-group core-selector{% if core_change_locked %} is-locked{% endif %}">
+            <input class="core-selector-input" type="checkbox"
+                   id="is_core" name="is_core" value="1"
+                   {% if core_change_locked %}disabled{% endif %}
+                   {% if switch.is_core %}checked{% endif %}>
+            {% if core_change_locked %}
+            <input type="hidden" name="is_core" value="{{ '1' if switch.is_core else '0' }}">
+            {% endif %}
+            <label class="core-selector-card" for="is_core">
+                <span class="core-selector-icon" aria-hidden="true">
+                    <i class="bi bi-diagram-3-fill"></i>
+                </span>
+                <span>
+                    <span class="core-selector-title">Switch CORE da regional</span>
+                    <span class="core-selector-description">
+                        {% if core_change_locked %}
+                        Identificação bloqueada enquanto houver atualizações ativas na regional.
+                        {% else %}
+                        Ative para manter este equipamento por último na fila da regional.
+                        {% endif %}
+                    </span>
+                </span>
+                <span class="core-selector-state" aria-hidden="true">
+                    <i class="bi {% if core_change_locked %}bi-lock-fill{% else %}bi-check-lg{% endif %}"></i>
+                </span>
+            </label>
+            <div class="mt-2 text-muted small">
+                Apenas um switch pode ser CORE em cada regional. Em atualizações do mesmo dia,
+                ele aguarda os demais switches e executa suas tentativas sem a pausa de cinco minutos.
+            </div>
+            {% if core_change_locked %}
+            <div class="core-lock-alert" role="alert">
+                <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+                <span>
+                    Esta regional possui <strong>{{ core_active_jobs|length }} atualização(ões) ativa(s)</strong>.
+                    Conclua ou cancele esses agendamentos antes de marcar ou desmarcar o CORE.
+                </span>
+            </div>
+            {% endif %}
+        </div>
         
         <div class="form-group mt-4">
             <div class="alert alert-info">
                 <i class="bi bi-info-circle me-2"></i>
-                Modelo e local ficam salvos no Sentinel e são preservados nas atualizações do Zabbix.
+                Modelo, local e a identificação de CORE ficam salvos no Sentinel e são preservados nas atualizações do Zabbix.
+                O modelo detectado pela verificação de firmware preenche este campo automaticamente;
+                após salvar uma edição manual, o valor informado aqui terá prioridade.
             </div>
         </div>
         

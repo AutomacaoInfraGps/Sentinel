@@ -56,6 +56,7 @@ class WebIdentity:
     sys_name: str
     sys_descr: str
     model: str | None
+    page_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,9 @@ class LoginPageParser(HTMLParser):
         super().__init__()
         self._inside_title = False
         self._title_parts: list[str] = []
+        self._visible_text_parts: list[str] = []
+        self._public_metadata_parts: list[str] = []
+        self._ignored_text_depth = 0
         self.fields: dict[str, str] = {}
         self.element_ids: set[str] = set()
 
@@ -85,25 +89,56 @@ class LoginPageParser(HTMLParser):
     def title(self) -> str:
         return "".join(self._title_parts).strip()
 
+    @property
+    def visible_text(self) -> str:
+        return " ".join(self._visible_text_parts).strip()
+
+    @property
+    def public_metadata_text(self) -> str:
+        return " ".join(self._public_metadata_parts).strip()
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_name = tag.lower()
         attributes = {name: value or "" for name, value in attrs}
-        if tag.lower() == "title":
+        if tag_name in {"script", "style", "noscript"}:
+            self._ignored_text_depth += 1
+        if tag_name == "title":
             self._inside_title = True
         element_id = attributes.get("id")
         if element_id:
             self.element_ids.add(element_id)
-        if tag.lower() == "input":
+        if tag_name == "input":
             key = element_id or attributes.get("name")
             if key:
                 self.fields[key] = attributes.get("value", "")
+                normalized_key = key.casefold()
+                value = attributes.get("value", "").strip()
+                if value and not any(
+                    sensitive in normalized_key
+                    for sensitive in ("username", "password", "credential")
+                ):
+                    self._public_metadata_parts.append(value)
+        for name, value in attributes.items():
+            normalized_name = name.casefold()
+            clean_value = str(value or "").strip()
+            if clean_value and (
+                normalized_name in {"title", "aria-label", "content"}
+                or normalized_name.startswith("data-")
+            ):
+                self._public_metadata_parts.append(clean_value)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() == "title":
+        tag_name = tag.lower()
+        if tag_name == "title":
             self._inside_title = False
+        if tag_name in {"script", "style", "noscript"} and self._ignored_text_depth:
+            self._ignored_text_depth -= 1
 
     def handle_data(self, data: str) -> None:
         if self._inside_title:
             self._title_parts.append(data)
+        if not self._ignored_text_depth and data.strip():
+            self._visible_text_parts.append(data.strip())
 
 
 @dataclass
@@ -443,6 +478,21 @@ def fetch_web_identity(url: str, timeout: float, insecure_tls: bool) -> WebIdent
 
     sys_name = clean_text(parser.fields.get("sysName", ""))
     sys_descr = clean_text(parser.fields.get("sysDescr", ""))
+    embedded_model_text = " ".join(
+        re.findall(
+            r"(?:HPE\s+Networking\s+)?Instant\s+On\s+\d{4}\s+\d{1,2}p"
+            r"(?:\s+[A-Za-z0-9+.-]+){0,12}",
+            html,
+            flags=re.IGNORECASE,
+        )
+    )
+    page_text = clean_text(
+        f"{parser.visible_text} {parser.public_metadata_text} {embedded_model_text}"
+    )
+    # A validação crítica do atualizador usa somente os campos estáveis da
+    # WebUI. O texto amplo da página é mantido à parte para enriquecer a
+    # descrição exibida (por exemplo, quantidade de portas), pois pode conter
+    # referências a mais de uma família em scripts ou textos auxiliares.
     model = detect_supported_model((parser.title, sys_descr))
     return WebIdentity(
         url=final_url,
@@ -450,6 +500,7 @@ def fetch_web_identity(url: str, timeout: float, insecure_tls: bool) -> WebIdent
         sys_name=sys_name,
         sys_descr=sys_descr,
         model=model,
+        page_text=page_text,
     )
 
 

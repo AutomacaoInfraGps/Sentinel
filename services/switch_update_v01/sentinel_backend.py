@@ -18,7 +18,13 @@ from flask_login import current_user
 from werkzeug.utils import secure_filename
 
 try:  # pacote copiado para services/switch_update_v01 no Sentinel
-    from .main import MAX_FIRMWARE_BYTES, UpdateError, __version__
+    from .main import (
+        MAX_FIRMWARE_BYTES,
+        UpdateError,
+        __version__,
+        extract_version,
+        fetch_web_identity,
+    )
     from .scheduler import (
         TZDATA_AVAILABLE,
         ScheduleConflictError,
@@ -26,7 +32,13 @@ try:  # pacote copiado para services/switch_update_v01 no Sentinel
         SwitchUpdateScheduler,
     )
 except ImportError:  # testes/execucao direta neste repositorio
-    from main import MAX_FIRMWARE_BYTES, UpdateError, __version__
+    from main import (
+        MAX_FIRMWARE_BYTES,
+        UpdateError,
+        __version__,
+        extract_version,
+        fetch_web_identity,
+    )
     from scheduler import (
         TZDATA_AVAILABLE,
         ScheduleConflictError,
@@ -116,6 +128,7 @@ def create_switch_update_blueprint(
         payload.pop("username", None)
         payload["requested_by"] = payload.get("owner")
         payload["can_cancel"] = payload.get("status") == "scheduled"
+        payload["can_reschedule"] = payload.get("status") == "failed"
         payload["can_review"] = (
             payload.get("status") == "needs_review"
             and payload.get("requested_by") == viewer
@@ -183,6 +196,29 @@ def create_switch_update_blueprint(
         require_authorized_user()
         return render_template("historico_atualizacoes_switches.html")
 
+    @blueprint.get("/api/switches/<path:host>/firmware/identity")
+    def firmware_identity(host: str):
+        require_authorized_user()
+        switch, url = switch_url(host)
+        identity = fetch_web_identity(
+            url,
+            scheduler.settings.http_timeout,
+            scheduler.settings.insecure_tls,
+        )
+        current_version = extract_version(identity.sys_descr)
+        if not current_version:
+            return json_error("Nao foi possivel identificar a versao atual do switch.", 422)
+        inventory = scheduler.record_firmware_identity(
+            host=url.split("://", 1)[1],
+            current_version=current_version,
+            model=identity.model or str(switch.get("modelo") or ""),
+            switch_name=str(switch.get("host") or host),
+            regional=str(switch.get("regional") or ""),
+            ip_address=str(switch.get("ip") or ""),
+            source="webui",
+        )
+        return jsonify({"success": True, "identity": inventory})
+
     @blueprint.post("/api/switches/<path:host>/firmware/preflight")
     def firmware_preflight(host: str):
         owner = require_authorized_user()
@@ -226,6 +262,21 @@ def create_switch_update_blueprint(
                 firmware=temporary,
                 original_name=original_name,
             )
+            try:
+                scheduler.record_firmware_identity(
+                    host=str(draft.get("host") or url.split("://", 1)[1]),
+                    current_version=str(draft.get("current_version") or ""),
+                    model=str(draft.get("current_model") or switch.get("modelo") or ""),
+                    switch_name=str(switch.get("host") or host),
+                    regional=str(switch.get("regional") or ""),
+                    ip_address=str(switch.get("ip") or draft.get("host") or ""),
+                    source="preflight",
+                )
+            except Exception:
+                LOGGER.exception(
+                    "Preflight concluido, mas nao foi possivel atualizar o inventario de %s.",
+                    draft.get("host") or host,
+                )
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -260,6 +311,34 @@ def create_switch_update_blueprint(
             scheduled_at = payload.get("scheduled_at")
             if not scheduled_at:
                 scheduled_at = scheduler.now()
+            if bool(switch.get("is_core")):
+                schedule_context = scheduler.core_schedule_context(
+                    regional=str(switch.get("regional") or ""),
+                    scheduled_at=scheduled_at,
+                    exclude_host=str(switch.get("ip") or draft.get("host") or ""),
+                )
+                conflict_code = "CORE_SCHEDULE_CONFLICT"
+                conflict_message = (
+                    "O switch CORE deve ser agendado depois dos demais "
+                    "switches da regional."
+                )
+            else:
+                schedule_context = scheduler.normal_schedule_context(
+                    regional=str(switch.get("regional") or ""),
+                    scheduled_at=scheduled_at,
+                    exclude_host=str(switch.get("ip") or draft.get("host") or ""),
+                )
+                conflict_code = "REGIONAL_CORE_ORDER_CONFLICT"
+                conflict_message = (
+                    "O switch deve ser agendado antes do CORE da regional."
+                )
+            if not schedule_context["valid"]:
+                return jsonify({
+                    "success": False,
+                    "code": conflict_code,
+                    "message": conflict_message,
+                    "core_schedule": schedule_context,
+                }), 409
             try:
                 max_attempts = int(payload.get("max_attempts", 1))
             except (TypeError, ValueError):
@@ -275,6 +354,7 @@ def create_switch_update_blueprint(
                 switch_name=str(switch.get("host") or host),
                 regional=str(switch.get("regional") or ""),
                 ip_address=str(switch.get("ip") or draft.get("host") or ""),
+                is_core=bool(switch.get("is_core")),
             )
         finally:
             password = ""
@@ -292,6 +372,39 @@ def create_switch_update_blueprint(
                 "worker_triggered": worker_triggered,
             }
         ), 202
+
+    @blueprint.post("/api/switches/<path:host>/firmware/regional-schedule-check")
+    def check_regional_schedule(host: str):
+        require_authorized_user()
+        validate_csrf()
+        switch, _ = switch_url(host)
+        payload = request.get_json(silent=True) or {}
+        scheduled_at = payload.get("scheduled_at") or scheduler.now()
+        is_core = bool(switch.get("is_core"))
+        context_builder = (
+            scheduler.core_schedule_context
+            if is_core
+            else scheduler.normal_schedule_context
+        )
+        context = context_builder(
+            regional=str(switch.get("regional") or ""),
+            scheduled_at=scheduled_at,
+            exclude_host=str(switch.get("ip") or ""),
+        )
+        if not context["valid"]:
+            code = "CORE_SCHEDULE_CONFLICT" if is_core else "REGIONAL_CORE_ORDER_CONFLICT"
+            message = (
+                "O switch CORE deve ser agendado depois dos demais switches da regional."
+                if is_core
+                else "O switch deve ser agendado antes do CORE da regional."
+            )
+            return jsonify({
+                "success": False,
+                "code": code,
+                "message": message,
+                "core_schedule": context,
+            }), 409
+        return jsonify({"success": True, "valid": True, "is_core": is_core})
 
     @blueprint.get("/api/switches/firmware/jobs")
     def list_firmware_jobs():
