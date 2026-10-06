@@ -96,6 +96,7 @@ from notification_center import (
 )
 from services.unifi_models import normalizar_modelo_ap
 from services.alertad_notifications import load_alertad_notifications
+from services.switch_update_v01.main import extract_version, fetch_web_identity
 from services.switch_update_v01.scheduler import SchedulerSettings, SwitchUpdateScheduler
 from services.switch_update_v01.sentinel_backend import install_switch_update_backend
 from services.switch_update_v01.windows_task import (
@@ -1141,6 +1142,214 @@ install_switch_update_backend(
     trigger_worker=lambda: trigger_worker_task(_switch_update_task_name),
     worker_health=lambda: worker_task_health(_switch_update_task_name),
 )
+
+
+def _switch_firmware_target(switch):
+    """Monta um alvo WebUI somente a partir do inventario controlado do Sentinel."""
+    ip_text = str(switch.get('ip') or '').strip()
+    if not ip_text:
+        raise ValueError('Switch sem IP cadastrado.')
+    ip_obj = ipaddress.ip_address(ip_text)
+    protocol = str(
+        switch.get('protocol')
+        or switch.get('protocolo')
+        or _switch_update_webui_protocol
+    ).strip().casefold()
+    if protocol not in {'http', 'https'}:
+        protocol = _switch_update_webui_protocol
+    url_host = f'[{ip_obj}]' if ip_obj.version == 6 else str(ip_obj)
+    return str(ip_obj), f'{protocol}://{url_host}'
+
+
+def _compact_switch_model(identity, current_model=''):
+    """Normaliza família e portas usando somente os metadados já consultados."""
+    identity_values = [
+        str(getattr(identity, 'title', '') or ''),
+        str(getattr(identity, 'sys_descr', '') or ''),
+        str(getattr(identity, 'page_text', '') or ''),
+        str(getattr(identity, 'model', '') or ''),
+    ]
+    identity_text = ' '.join(identity_values)
+    model_match = re.search(
+        r'(?i)(?:instant\s*on|instanton)[\s_-]*(\d{4})',
+        identity_text,
+    )
+    if not model_match:
+        raw_model = str(getattr(identity, 'model', '') or '').strip()
+        model_match = re.fullmatch(r'(\d{4})', raw_model)
+    if not model_match:
+        return None
+
+    family = model_match.group(1)
+    port_text = f'{identity_text} {current_model}'
+    port_match = re.search(
+        rf'(?i)(?<!\d){re.escape(family)}(?!\d).*?\b(8|12|16|24|26|48|52)\s*(?:p|ports?|g(?:igabit)?)\b',
+        port_text,
+    )
+    if not port_match:
+        # Alguns modelos publicam "Switch 48p ... 1830" e outros
+        # "1830 48p". As quantidades de uplinks (2p/4p) ficam fora desta
+        # lista para que o primeiro match represente as portas principais.
+        port_match = re.search(
+            r'(?i)\b(8|12|16|24|26|48|52)\s*(?:p|ports?|g(?:igabit)?)\b',
+            port_text,
+        )
+    suffix = f' {port_match.group(1)}p' if port_match else ''
+    return f'HPE Networking Instant On {family}{suffix}'
+
+
+def _preferred_switch_model(current_model, detected_model, model_source=''):
+    current = str(current_model or '').strip()
+    detected = str(detected_model or '').strip()
+    current_is_known = current.casefold() not in {
+        '', 'não informado', 'nao informado', 'modelo não informado', 'modelo nao informado'
+    }
+    if str(model_source or '').strip().casefold() == 'manual' and current_is_known:
+        return current
+    if not current_is_known:
+        return detected or current
+    if not detected:
+        return current
+
+    current_family = re.search(r'(?<!\d)(\d{4})(?!\d)', current)
+    detected_family = re.search(r'(?<!\d)(\d{4})(?!\d)', detected)
+    if (
+        current_family
+        and detected_family
+        and current_family.group(1) == detected_family.group(1)
+        and len(current) > len(detected)
+    ):
+        return current
+    return detected
+
+
+def _switches_firmware_snapshot():
+    """Usa a mesma fonte persistida exibida na tela para evitar divergências."""
+    switches_cache = _mapa_ler_json_output('switches_status_cache.json')
+    cached = [
+        {'host': host, **dict(switch)}
+        for host, switch in (switches_cache or {}).items()
+        if isinstance(switch, dict)
+    ]
+    if cached:
+        return cached
+    with gerenciador_switches._switches_load_lock:
+        return [dict(item) for item in gerenciador_switches.switches]
+
+
+def _run_switch_firmware_inventory_job(job_id, switches):
+    started_at = time.monotonic()
+    results = {}
+    successful = 0
+    failed = 0
+    total = len(switches)
+    detected_models = {}
+
+    try:
+        _update_background_job(
+            job_id,
+            total=total,
+            message='Consultando versões de firmware...',
+            detail='Acessando a WebUI pública dos switches, sem utilizar credenciais.',
+        )
+        for index, switch in enumerate(switches, start=1):
+            switch_started_at = time.monotonic()
+            switch_name = str(switch.get('host') or switch.get('nome') or '').strip()
+            result = {'success': False}
+            try:
+                ip_text, url = _switch_firmware_target(switch)
+                identity = fetch_web_identity(
+                    url,
+                    switch_update_scheduler.settings.http_timeout,
+                    switch_update_scheduler.settings.insecure_tls,
+                )
+                current_version = extract_version(identity.sys_descr)
+                if not current_version:
+                    raise ValueError('Versão não identificada na WebUI do switch.')
+                display_model = _compact_switch_model(
+                    identity,
+                    str(switch.get('modelo') or ''),
+                )
+                effective_model = _preferred_switch_model(
+                    switch.get('modelo'),
+                    display_model or identity.model,
+                    switch.get('modelo_source'),
+                )
+                inventory = switch_update_scheduler.record_firmware_identity(
+                    host=ip_text,
+                    current_version=current_version,
+                    model=(
+                        effective_model
+                        or str(identity.model or '')
+                    ),
+                    switch_name=switch_name,
+                    regional=str(switch.get('regional') or ''),
+                    ip_address=ip_text,
+                    source='bulk_webui',
+                )
+                successful += 1
+                if effective_model:
+                    detected_models[switch_name] = effective_model
+                result = {
+                    'success': True,
+                    'current_version': inventory['current_version'],
+                    'model': effective_model or inventory.get('model') or display_model,
+                    'checked_at_brasilia': inventory['checked_at_brasilia'],
+                }
+            except Exception as exc:
+                failed += 1
+                app.logger.info(
+                    'Não foi possível consultar o firmware de %s: %s',
+                    switch_name or 'switch sem nome',
+                    exc,
+                )
+                result = {'success': False, 'message': 'Não foi possível consultar a versão.'}
+
+            result['duration_seconds'] = round(time.monotonic() - switch_started_at, 3)
+            results[switch_name] = result
+            _update_background_job(
+                job_id,
+                completed=index,
+                total=total,
+                current_item=switch_name,
+                message=f'Consultando firmware {index} de {total}',
+                detail=f'Último switch processado: {switch_name}',
+                patch_results={switch_name: result},
+            )
+
+        effective_models = gerenciador_switches.atualizar_modelos_detectados(
+            detected_models
+        )
+        for host, model in effective_models.items():
+            if host in results and results[host].get('success'):
+                results[host]['model'] = model
+
+        elapsed_seconds = round(time.monotonic() - started_at, 3)
+        average_seconds = round(elapsed_seconds / total, 3) if total else 0
+        _complete_background_job(
+            job_id,
+            result={
+                'success': True,
+                'resultados': results,
+                'total': total,
+                'successful': successful,
+                'failed': failed,
+                'duration_seconds': elapsed_seconds,
+                'average_seconds': average_seconds,
+            },
+            message='Consulta de firmwares concluída.',
+            detail=(
+                f'{successful} de {total} versões consultadas em '
+                f'{elapsed_seconds:.1f}s; média de {average_seconds:.2f}s por switch.'
+            ),
+        )
+    except Exception as exc:
+        app.logger.exception('Erro no job de consulta de firmwares %s', job_id)
+        _fail_background_job(
+            job_id,
+            exc,
+            message='Erro ao consultar firmwares dos switches',
+        )
 
 
 def _obter_arquivo_switches():
@@ -6638,11 +6847,36 @@ def api_mapeamento_emails_contatos():
 @login_required
 def editar_switch(host):
     """Edita os metadados locais de um switch inventariado pelo Zabbix."""
+    switch_atual = gerenciador_switches.obter_switch(host)
+    if not switch_atual and gerenciador_switches._carregar_switches_api():
+        switch_atual = gerenciador_switches.obter_switch(host)
+
+    if not switch_atual:
+        flash(f'Switch não encontrado: {host}', 'error')
+        return redirect(url_for('listar_switches'))
+
     if request.method == 'POST':
         try:
             modelo = request.form.get('modelo', '').strip()
             local = request.form.get('local', '').strip()
-            gerenciador_switches.atualizar_metadados(host, modelo=modelo, local=local)
+            is_core = request.form.get('is_core') == '1'
+            core_changed = is_core != bool(switch_atual.get('is_core'))
+            if core_changed:
+                active_jobs = switch_update_scheduler.list_active_schedules_for_regional(
+                    str(switch_atual.get('regional') or '')
+                )
+                if active_jobs:
+                    raise ValueError(
+                        'Não é possível alterar o switch CORE enquanto a regional '
+                        f'possui {len(active_jobs)} atualização(ões) ativa(s). '
+                        'Conclua ou cancele os agendamentos antes de alterar o CORE.'
+                    )
+            gerenciador_switches.atualizar_metadados(
+                host,
+                modelo=modelo,
+                local=local,
+                is_core=is_core,
+            )
             
             flash(f'Switch {host} atualizado com sucesso!', 'success')
             return redirect(url_for('listar_switches'))
@@ -6651,16 +6885,34 @@ def editar_switch(host):
             flash(f'Erro ao atualizar switch: {str(e)}', 'error')
             return redirect(url_for('editar_switch', host=host))
     
-    switch = gerenciador_switches.obter_switch(host)
-    if not switch and gerenciador_switches._carregar_switches_api():
-        switch = gerenciador_switches.obter_switch(host)
-    
-    if not switch:
-        flash(f'Switch não encontrado: {host}', 'error')
-        return redirect(url_for('listar_switches'))
-    
+    switch = dict(switch_atual)
+    switch_ip = str(switch.get('ip') or '').strip()
+    firmware_identity = next(
+        (
+            item for item in switch_update_scheduler.list_firmware_inventory()
+            if str(item.get('host') or '').strip() == switch_ip
+            or _normalizar_host_switch(item.get('switch_name')) == _normalizar_host_switch(switch.get('host'))
+        ),
+        None,
+    )
+    if firmware_identity:
+        switch['modelo'] = _preferred_switch_model(
+            switch.get('modelo'),
+            firmware_identity.get('model'),
+            switch.get('modelo_source'),
+        )
+
+    active_regional_jobs = switch_update_scheduler.list_active_schedules_for_regional(
+        str(switch.get('regional') or '')
+    )
     regionais = gerenciador_switches.listar_regionais()
-    return render_template('editar_switch.html', switch=switch, regionais=regionais)
+    return render_template(
+        'editar_switch.html',
+        switch=switch,
+        regionais=regionais,
+        core_change_locked=bool(active_regional_jobs),
+        core_active_jobs=active_regional_jobs,
+    )
 
 
 @app.route('/switches/atualizar/<path:host>')
@@ -6684,7 +6936,30 @@ def atualizar_switch(host):
     switch.setdefault('host', host)
     switch.setdefault('regional', 'Regional não informada')
     switch.setdefault('modelo', 'Modelo não informado')
-    return render_template('atualizar_switch.html', switch=switch)
+    switch_ip = str(switch.get('ip') or '').strip()
+    firmware_identity = next(
+        (
+            item for item in switch_update_scheduler.list_firmware_inventory()
+            if str(item.get('host') or '').strip() == switch_ip
+            or _normalizar_host_switch(item.get('switch_name')) == _normalizar_host_switch(switch.get('host'))
+        ),
+        None,
+    )
+    if firmware_identity:
+        switch['firmware_version'] = firmware_identity.get('current_version')
+        switch['firmware_checked_at'] = firmware_identity.get('checked_at_brasilia')
+        if firmware_identity.get('model'):
+            switch['modelo'] = _preferred_switch_model(
+                switch.get('modelo'),
+                firmware_identity['model'],
+                switch.get('modelo_source'),
+            )
+    last_failed_job = switch_update_scheduler.get_latest_failed_schedule_for_host(switch_ip)
+    return render_template(
+        'atualizar_switch.html',
+        switch=switch,
+        last_failed_job=last_failed_job,
+    )
 
 @app.route('/api/switches/excluir/<host>', methods=['DELETE'])
 @login_required
@@ -6880,6 +7155,11 @@ def listar_switches():
                 gerenciador_switches._carregar_switches()
             switches_fonte = [dict(switch) for switch in gerenciador_switches.switches]
 
+        metadados_switches = gerenciador_switches._carregar_metadados()
+        for switch in switches_fonte:
+            gerenciador_switches._aplicar_metadados(switch, metadados_switches)
+        gerenciador_switches._resolver_cores_regionais(switches_fonte)
+
         switches_por_regional_operacional = _agrupar_switches_por_regionais_configuradas(
             switches_fonte,
             regionais_configuradas,
@@ -6892,6 +7172,17 @@ def listar_switches():
 
         # Prepara dados para a view
         regionais_dados = []
+        firmware_inventory = switch_update_scheduler.list_firmware_inventory()
+        firmware_by_ip = {
+            str(item.get('host') or item.get('ip_address') or '').strip(): item
+            for item in firmware_inventory
+            if str(item.get('host') or item.get('ip_address') or '').strip()
+        }
+        firmware_by_name = {
+            _normalizar_host_switch(item.get('switch_name')): item
+            for item in firmware_inventory
+            if _normalizar_host_switch(item.get('switch_name'))
+        }
 
         print("Carregando página de switches com lista atualizada pela API do Zabbix...")
 
@@ -6917,6 +7208,21 @@ def listar_switches():
                 switch["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
                     switch.get("ultima_verificacao")
                 )
+                firmware_identity = (
+                    firmware_by_ip.get(str(switch.get('ip') or '').strip())
+                    or firmware_by_name.get(_normalizar_host_switch(switch.get('host')))
+                )
+                if firmware_identity:
+                    switch['firmware_version'] = firmware_identity.get('current_version')
+                    switch['firmware_checked_at_formatada'] = _formatar_ultima_verificacao(
+                        firmware_identity.get('checked_at_brasilia')
+                    )
+                    if firmware_identity.get('model'):
+                        switch['modelo'] = _preferred_switch_model(
+                            switch.get('modelo'),
+                            firmware_identity['model'],
+                            switch.get('modelo_source'),
+                        )
 
             # Conta switches por status
             total_switches = len(switches)
@@ -7055,6 +7361,25 @@ def api_recarregar_switches_zabbix():
         name=f'switch-reload-job-{job_id}',
     )
     return jsonify({'success': True, 'job_id': job_id})
+
+
+@app.route('/api/switches/firmwares/verificar', methods=['POST'])
+@login_required
+def api_verificar_firmwares_switches():
+    """Consulta em segundo plano a versão de firmware de todos os switches."""
+    switches = _switches_firmware_snapshot()
+    job_id = _create_background_job(
+        'switches-firmware',
+        total=len(switches),
+        message='Preparando consulta de firmwares...',
+        detail='Criando job para consultar a WebUI pública dos switches.',
+    )
+    _start_background_job(
+        lambda: _run_switch_firmware_inventory_job(job_id, switches),
+        name=f'switch-firmware-job-{job_id}',
+    )
+    return jsonify({'success': True, 'job_id': job_id})
+
 
 @app.route('/api/switches/regional/<regional>', methods=['POST'])
 @login_required

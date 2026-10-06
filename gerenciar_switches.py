@@ -177,6 +177,9 @@ class GerenciadorSwitches:
             "ip": switch_info.get("ip"),
             "hostid": switch_info.get("hostid"),
             "modelo": switch_info.get("modelo"),
+            "modelo_source": switch_info.get("modelo_source"),
+            "is_core": bool(switch_info.get("is_core", False)),
+            "core_source": switch_info.get("core_source"),
             "local": switch_info.get("local"),
             "zabbix_host": switch_info.get("zabbix_host"),
             "zabbix_name": switch_info.get("zabbix_name"),
@@ -250,7 +253,35 @@ class GerenciadorSwitches:
             valor = str(registro.get(campo) or "").strip()
             if valor:
                 switch_info[campo] = valor
+        if str(registro.get("modelo") or "").strip():
+            switch_info["modelo_source"] = str(
+                registro.get("modelo_source") or "manual"
+            ).strip().casefold()
+        switch_info["is_core"] = bool(registro.get("is_core", False))
+        switch_info["core_source"] = "manual" if "is_core" in registro else None
         return switch_info
+
+    @staticmethod
+    def _normalizar_regional_core(valor):
+        return unicodedata.normalize("NFKD", str(valor or "").strip().casefold()).encode(
+            "ascii", "ignore"
+        ).decode("ascii")
+
+    def _resolver_cores_regionais(self, switches):
+        """Garante no inventario no maximo um CORE efetivo por regional."""
+        por_regional = {}
+        for switch in switches:
+            por_regional.setdefault(
+                self._normalizar_regional_core(switch.get("regional")), []
+            ).append(switch)
+
+        for regional, itens in por_regional.items():
+            cores = [item for item in itens if item.get("is_core")]
+            if cores:
+                for item in cores[1:]:
+                    item["is_core"] = False
+                if len(cores) > 1:
+                    print(f"[AVISO] Mais de um CORE manual encontrado na regional {regional}.")
 
     def obter_switch(self, host_name):
         alvo = str(host_name or "").strip().casefold()
@@ -260,7 +291,7 @@ class GerenciadorSwitches:
             str(switch.get("zabbix_name") or "").strip().casefold(),
         }), None)
 
-    def atualizar_metadados(self, host_name, modelo="", local=""):
+    def atualizar_metadados(self, host_name, modelo="", local="", is_core=False):
         switch_info = self.obter_switch(host_name)
         if not switch_info:
             raise ValueError(f"Switch nao encontrado: {host_name}")
@@ -268,19 +299,103 @@ class GerenciadorSwitches:
         registro = {
             "hostid": str(switch_info.get("hostid") or "").strip(),
             "host": str(switch_info.get("host") or "").strip(),
+            "regional": str(switch_info.get("regional") or "").strip(),
             "modelo": str(modelo or "").strip() or "Não informado",
+            "modelo_source": "manual",
             "local": str(local or "").strip() or "Não informado",
+            "is_core": bool(is_core),
+            "core_source": "manual",
             "atualizado_em": datetime.now().isoformat(),
         }
         with self._metadata_lock:
             metadados = self._carregar_metadados()
+            if registro["is_core"]:
+                regional = self._normalizar_regional_core(switch_info.get("regional"))
+                outro_core = next((
+                    switch for switch in self.switches
+                    if switch is not switch_info
+                    and self._normalizar_regional_core(switch.get("regional")) == regional
+                    and bool(switch.get("is_core"))
+                ), None)
+                if outro_core:
+                    raise ValueError(
+                        "A regional ja possui o switch CORE "
+                        f"{outro_core.get('host')}. Desmarque-o antes de definir outro."
+                    )
             metadados[self._metadata_key(switch_info)] = registro
             self._salvar_metadados(metadados)
-
-        switch_info["modelo"] = registro["modelo"]
-        switch_info["local"] = registro["local"]
+            # Atualiza ainda sob o mesmo lock para duas edicoes simultaneas nao
+            # conseguirem registrar dois COREs na mesma regional.
+            switch_info["modelo"] = registro["modelo"]
+            switch_info["modelo_source"] = "manual"
+            switch_info["local"] = registro["local"]
+            switch_info["is_core"] = registro["is_core"]
+            switch_info["core_source"] = "manual"
         self._persistir_status_switch(switch_info)
         return switch_info
+
+    def atualizar_modelos_detectados(self, modelos_por_host):
+        """Persiste modelos da WebUI sem substituir valores editados manualmente."""
+        modelos = {
+            str(host or "").strip(): str(modelo or "").strip()
+            for host, modelo in (modelos_por_host or {}).items()
+            if str(host or "").strip() and str(modelo or "").strip()
+        }
+        if not modelos:
+            return {}
+
+        efetivos = {}
+        alterados = []
+        with self._metadata_lock:
+            metadados = self._carregar_metadados()
+            mudou = False
+            for host, modelo_detectado in modelos.items():
+                switch_info = self.obter_switch(host) or {"host": host}
+                chave = self._metadata_key(switch_info)
+                host_key = f"host:{str(switch_info.get('host') or host).strip().casefold()}"
+                registro = dict(metadados.get(chave) or metadados.get(host_key) or {})
+                modelo_salvo = str(registro.get("modelo") or "").strip()
+                origem = str(registro.get("modelo_source") or "").strip().casefold()
+                modelo_manual = (
+                    modelo_salvo.casefold()
+                    not in {"", "não informado", "nao informado", "modelo não informado", "modelo nao informado"}
+                    and origem not in {"firmware", "webui"}
+                )
+
+                if modelo_manual:
+                    efetivos[host] = modelo_salvo
+                    if switch_info.get("host"):
+                        switch_info["modelo"] = modelo_salvo
+                        switch_info["modelo_source"] = "manual"
+                    continue
+
+                registro.update({
+                    "hostid": str(switch_info.get("hostid") or "").strip(),
+                    "host": str(switch_info.get("host") or host).strip(),
+                    "modelo": modelo_detectado,
+                    "modelo_source": "firmware",
+                    "local": str(
+                        registro.get("local") or switch_info.get("local") or "Não informado"
+                    ).strip(),
+                    "atualizado_em": datetime.now().isoformat(),
+                })
+                metadados[chave] = registro
+                mudou = True
+                efetivos[host] = modelo_detectado
+                if switch_info.get("host"):
+                    switch_info["modelo"] = modelo_detectado
+                    switch_info["modelo_source"] = "firmware"
+                    alterados.append(switch_info)
+
+            if mudou:
+                self._salvar_metadados(metadados)
+
+        if alterados:
+            cache = self._carregar_status_cache()
+            for switch_info in alterados:
+                cache[switch_info["host"]] = self._status_cache_entry(switch_info)
+            self._salvar_status_cache(cache)
+        return efetivos
         
     def _converter_ip_numerico(self, ip_numerico):
         """Converte IP numérico para formato padrão (ex: 192.168.1.1)"""
@@ -845,6 +960,7 @@ class GerenciadorSwitches:
                     self.regionais[regional] = []
                 self.regionais[regional].append(switch)
             
+            self._resolver_cores_regionais(self.switches)
             print(f"✅ Carregados {len(self.switches)} switches de {len(self.regionais)} regionais")
 
         except Exception as e:
@@ -982,6 +1098,7 @@ class GerenciadorSwitches:
 
                 switches_novos.append(switch)
                 regionais_novas.setdefault(regional_name, []).append(switch)
+            self._resolver_cores_regionais(switches_novos)
             self.switches = switches_novos
             self.regionais = regionais_novas
             self._salvar_status_cache({

@@ -25,6 +25,7 @@ import sqlite3
 from threading import Event, Lock, Thread
 import time
 from typing import Callable, Protocol
+import unicodedata
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -39,6 +40,7 @@ try:  # pacote copiado para services/switch_update_v01 no Sentinel
         build_parser,
         concise_exception_message,
         final_version_matches,
+        extract_version,
         fetch_web_identity,
         release_version,
         run,
@@ -54,6 +56,7 @@ except ImportError:  # execucao direta neste repositorio
         build_parser,
         concise_exception_message,
         final_version_matches,
+        extract_version,
         fetch_web_identity,
         release_version,
         run,
@@ -359,7 +362,9 @@ class SwitchUpdateScheduler:
                     max_attempts INTEGER NOT NULL DEFAULT 1,
                     switch_name TEXT NOT NULL DEFAULT '',
                     regional TEXT NOT NULL DEFAULT '',
-                    ip_address TEXT NOT NULL DEFAULT ''
+                    ip_address TEXT NOT NULL DEFAULT '',
+                    is_core INTEGER NOT NULL DEFAULT 0,
+                    scheduled_day_brasilia TEXT NOT NULL DEFAULT ''
                 )
                 """
             )
@@ -400,9 +405,23 @@ class SwitchUpdateScheduler:
                     "ALTER TABLE scheduled_updates "
                     "ADD COLUMN ip_address TEXT NOT NULL DEFAULT ''"
                 )
+            if "is_core" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN is_core INTEGER NOT NULL DEFAULT 0"
+                )
+            if "scheduled_day_brasilia" not in columns:
+                connection.execute(
+                    "ALTER TABLE scheduled_updates "
+                    "ADD COLUMN scheduled_day_brasilia TEXT NOT NULL DEFAULT ''"
+                )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_scheduled_updates_due "
                 "ON scheduled_updates(status, scheduled_at_utc)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_scheduled_updates_regional_day "
+                "ON scheduled_updates(regional, scheduled_day_brasilia, status, is_core)"
             )
             connection.execute(
                 """
@@ -448,6 +467,20 @@ class SwitchUpdateScheduler:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_firmware_drafts_expiry "
                 "ON firmware_drafts(expires_at_utc)"
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS switch_firmware_inventory (
+                    host TEXT PRIMARY KEY,
+                    switch_name TEXT NOT NULL DEFAULT '',
+                    regional TEXT NOT NULL DEFAULT '',
+                    ip_address TEXT NOT NULL DEFAULT '',
+                    model TEXT NOT NULL DEFAULT '',
+                    current_version TEXT NOT NULL,
+                    checked_at_utc TEXT NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'webui'
+                )
+                """
             )
 
     @staticmethod
@@ -975,6 +1008,7 @@ class SwitchUpdateScheduler:
         switch_name: str = "",
         regional: str = "",
         ip_address: str = "",
+        is_core: bool = False,
     ) -> dict:
         row = self._get_draft_row(draft_id, owner=owner)
         firmware = Path(row["firmware_path"])
@@ -995,6 +1029,7 @@ class SwitchUpdateScheduler:
             switch_name=switch_name,
             regional=regional,
             ip_address=ip_address,
+            is_core=is_core,
         )
         self.delete_draft(draft_id, owner=owner)
         return result
@@ -1042,6 +1077,7 @@ class SwitchUpdateScheduler:
         switch_name: str = "",
         regional: str = "",
         ip_address: str = "",
+        is_core: bool = False,
     ) -> dict:
         owner = str(owner or "").strip()
         username = str(username or "").strip()
@@ -1062,6 +1098,7 @@ class SwitchUpdateScheduler:
             )
 
         scheduled_utc = self.normalize_scheduled_at(scheduled_at)
+        scheduled_day_brasilia = scheduled_utc.astimezone(BRASILIA_TZ).date().isoformat()
         current_utc = self.now().astimezone(UTC)
         if scheduled_utc < current_utc - timedelta(seconds=30):
             raise ScheduleError("O horario agendado ja passou.")
@@ -1109,9 +1146,9 @@ class SwitchUpdateScheduler:
                         expected_version, current_version_at_creation,
                         confirmed_decision, stage, percent, message,
                         attempt_count, max_attempts, switch_name, regional,
-                        ip_address
+                        ip_address, is_core, scheduled_day_brasilia
                     ) VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                              'scheduled', 0, ?, 0, ?, ?, ?, ?)
+                              'scheduled', 0, ?, 0, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         schedule_id,
@@ -1135,6 +1172,8 @@ class SwitchUpdateScheduler:
                         str(switch_name or assessment.host).strip()[:255],
                         str(regional or "").strip()[:255],
                         str(ip_address or assessment.host).strip()[:64],
+                        1 if is_core else 0,
+                        scheduled_day_brasilia,
                     ),
                 )
                 connection.commit()
@@ -1167,6 +1206,7 @@ class SwitchUpdateScheduler:
         data["switch_name"] = str(data.get("switch_name") or data.get("host") or "").strip()
         data["regional"] = str(data.get("regional") or "Nao informada").strip()
         data["ip_address"] = str(data.get("ip_address") or data.get("host") or "").strip()
+        data["is_core"] = bool(data.get("is_core"))
         recorded_attempts = max(0, int(data.get("attempt_count") or 0))
         has_execution_evidence = bool(
             data.get("started_at_utc") or str(data.get("log_relative_path") or "").strip()
@@ -1232,6 +1272,98 @@ class SwitchUpdateScheduler:
             ).fetchone()
         return self._public_row(row) if row else None
 
+    def get_latest_failed_schedule_for_host(self, host: str) -> dict | None:
+        """Retorna a falha mais recente para contextualizar um novo agendamento."""
+        normalized_host = str(host or "").strip()
+        if not normalized_host:
+            return None
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM scheduled_updates
+                 WHERE host = ? AND status = 'failed'
+                 ORDER BY COALESCE(finished_at_utc, started_at_utc,
+                                   scheduled_at_utc, created_at_utc) DESC
+                 LIMIT 1
+                """,
+                (normalized_host,),
+            ).fetchone()
+        return self._public_row(row) if row else None
+
+    @staticmethod
+    def _public_firmware_inventory(row: sqlite3.Row) -> dict:
+        data = dict(row)
+        checked = datetime.fromisoformat(str(data["checked_at_utc"]))
+        data["checked_at_brasilia"] = checked.astimezone(BRASILIA_TZ).isoformat(
+            timespec="seconds"
+        )
+        return data
+
+    def record_firmware_identity(
+        self,
+        *,
+        host: str,
+        current_version: str,
+        model: str = "",
+        switch_name: str = "",
+        regional: str = "",
+        ip_address: str = "",
+        source: str = "webui",
+    ) -> dict:
+        normalized_host = str(host or ip_address or "").strip()
+        normalized_version = str(current_version or "").strip()
+        if not normalized_host or not normalized_version:
+            raise ScheduleError("Host e versao sao obrigatorios para registrar o inventario.")
+        checked_at = self._iso(self.now())
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                INSERT INTO switch_firmware_inventory (
+                    host, switch_name, regional, ip_address, model,
+                    current_version, checked_at_utc, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(host) DO UPDATE SET
+                    switch_name = excluded.switch_name,
+                    regional = excluded.regional,
+                    ip_address = excluded.ip_address,
+                    model = CASE
+                        WHEN length(excluded.model) >= length(model) THEN excluded.model
+                        ELSE model
+                    END,
+                    current_version = excluded.current_version,
+                    checked_at_utc = excluded.checked_at_utc,
+                    source = excluded.source
+                """,
+                (
+                    normalized_host[:255],
+                    str(switch_name or "").strip()[:255],
+                    str(regional or "").strip()[:255],
+                    str(ip_address or normalized_host).strip()[:64],
+                    str(model or "").strip()[:64],
+                    normalized_version[:64],
+                    checked_at,
+                    str(source or "webui").strip()[:32],
+                ),
+            )
+        return self.get_firmware_identity(normalized_host)
+
+    def get_firmware_identity(self, host: str) -> dict:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM switch_firmware_inventory WHERE host = ?",
+                (str(host or "").strip(),),
+            ).fetchone()
+        if not row:
+            raise ScheduleError("Versao do switch ainda nao consultada.")
+        return self._public_firmware_inventory(row)
+
+    def list_firmware_inventory(self) -> list[dict]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM switch_firmware_inventory ORDER BY checked_at_utc DESC"
+            ).fetchall()
+        return [self._public_firmware_inventory(row) for row in rows]
+
     def list_schedules(self, *, owner: str | None = None, limit: int = 100) -> list[dict]:
         limit = max(1, min(int(limit), 500))
         query = "SELECT * FROM scheduled_updates"
@@ -1255,6 +1387,147 @@ class SwitchUpdateScheduler:
                 """
             ).fetchall()
         return [self._public_row(row) for row in rows]
+
+    def list_active_schedules_for_regional(self, regional: str) -> list[dict]:
+        regional_key = self._regional_queue_key(regional)
+        if not regional_key:
+            return []
+        return [
+            job for job in self.list_active_schedules()
+            if self._regional_queue_key(job.get("regional")) == regional_key
+        ]
+
+    def core_schedule_context(
+        self,
+        *,
+        regional: str,
+        scheduled_at: datetime | str,
+        exclude_host: str = "",
+    ) -> dict:
+        """Valida se um CORE ficou ao menos cinco minutos depois da regional."""
+        proposed_utc = self.normalize_scheduled_at(scheduled_at)
+        proposed_day = proposed_utc.astimezone(BRASILIA_TZ).date().isoformat()
+        regional_key = self._regional_queue_key(regional)
+        excluded = str(exclude_host or "").strip().casefold()
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM scheduled_updates
+                 WHERE status IN ('scheduled', 'running', 'needs_review')
+                 ORDER BY scheduled_at_utc ASC, created_at_utc ASC
+                """
+            ).fetchall()
+
+        regional_rows = [
+            row for row in rows
+            if self._regional_queue_key(row["regional"]) == regional_key
+            and self._scheduled_day(row) == proposed_day
+            and str(row["host"] or "").strip().casefold() != excluded
+        ]
+        schedules = []
+        for row in regional_rows:
+            public = self._public_row(row)
+            schedules.append({
+                "switch_name": public["switch_name"],
+                "ip_address": public["ip_address"],
+                "current_version": str(row["current_version_at_creation"] or ""),
+                "expected_version": str(row["expected_version"] or ""),
+                "scheduled_at_brasilia": public["scheduled_at_brasilia"],
+            })
+        if not regional_rows:
+            return {
+                "valid": True,
+                "rule": "minimum",
+                "regional": str(regional or "").strip(),
+                "schedules": [],
+                "suggested_at_brasilia": None,
+            }
+
+        latest_utc = max(
+            datetime.fromisoformat(str(row["scheduled_at_utc"]).replace("Z", "+00:00"))
+            for row in regional_rows
+        )
+        suggested_utc = latest_utc + timedelta(minutes=5)
+        suggested_brasilia = suggested_utc.astimezone(BRASILIA_TZ)
+        return {
+            "valid": proposed_utc >= suggested_utc,
+            "rule": "minimum",
+            "regional": str(regional or "").strip(),
+            "schedules": schedules,
+            "suggested_at_brasilia": suggested_brasilia.isoformat(timespec="seconds"),
+        }
+
+    def normal_schedule_context(
+        self,
+        *,
+        regional: str,
+        scheduled_at: datetime | str,
+        exclude_host: str = "",
+    ) -> dict:
+        """Impede um switch normal de ser marcado depois do CORE da regional."""
+        proposed_utc = self.normalize_scheduled_at(scheduled_at)
+        proposed_day = proposed_utc.astimezone(BRASILIA_TZ).date().isoformat()
+        regional_key = self._regional_queue_key(regional)
+        excluded = str(exclude_host or "").strip().casefold()
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM scheduled_updates
+                 WHERE status IN ('scheduled', 'running', 'needs_review')
+                   AND is_core = 1
+                 ORDER BY scheduled_at_utc ASC, created_at_utc ASC
+                """
+            ).fetchall()
+
+        core_rows = [
+            row for row in rows
+            if self._regional_queue_key(row["regional"]) == regional_key
+            and self._scheduled_day(row) == proposed_day
+            and str(row["host"] or "").strip().casefold() != excluded
+        ]
+        schedules = []
+        for row in core_rows:
+            public = self._public_row(row)
+            schedules.append({
+                "switch_name": public["switch_name"],
+                "ip_address": public["ip_address"],
+                "current_version": str(row["current_version_at_creation"] or ""),
+                "expected_version": str(row["expected_version"] or ""),
+                "scheduled_at_brasilia": public["scheduled_at_brasilia"],
+            })
+        if not core_rows:
+            return {
+                "valid": True,
+                "rule": "maximum",
+                "regional": str(regional or "").strip(),
+                "schedules": [],
+                "suggested_at_brasilia": None,
+            }
+
+        earliest_core_utc = min(
+            datetime.fromisoformat(str(row["scheduled_at_utc"]).replace("Z", "+00:00"))
+            for row in core_rows
+        )
+        suggested_utc = earliest_core_utc - timedelta(minutes=5)
+        suggestion = "before_core"
+        rule = "maximum"
+        if suggested_utc <= self.now().astimezone(UTC):
+            proposed_local = proposed_utc.astimezone(BRASILIA_TZ)
+            suggested_utc = (
+                proposed_local.replace(hour=0, minute=0, second=0, microsecond=0)
+                + timedelta(days=1)
+            ).astimezone(UTC)
+            suggestion = "next_day"
+            rule = "minimum"
+        suggested_brasilia = suggested_utc.astimezone(BRASILIA_TZ)
+        return {
+            "valid": False if suggestion == "next_day" else proposed_utc <= suggested_utc,
+            "rule": rule,
+            "suggestion": suggestion,
+            "regional": str(regional or "").strip(),
+            "schedules": schedules,
+            "suggested_at_brasilia": suggested_brasilia.isoformat(timespec="seconds"),
+        }
 
     def list_history(
         self, *, search: str = "", limit: int = 50, offset: int = 0
@@ -1544,6 +1817,23 @@ class SwitchUpdateScheduler:
                 "O switch retornou, mas a versao esperada nao foi confirmada; mantenha a revisao manual."
             )
 
+        confirmed_version = extract_version(identity.sys_descr) or row["expected_version"]
+        try:
+            self.record_firmware_identity(
+                host=row["host"],
+                current_version=confirmed_version,
+                model=identity.model or row["expected_model"],
+                switch_name=row["switch_name"],
+                regional=row["regional"],
+                ip_address=row["ip_address"],
+                source="review",
+            )
+        except Exception:
+            LOGGER.exception(
+                "Versao confirmada, mas nao foi possivel atualizar o inventario de %s.",
+                row["host"],
+            )
+
         self._append_job_log(
             row,
             "------------------------------------------------------------",
@@ -1593,19 +1883,60 @@ class SwitchUpdateScheduler:
             )
         return self.get_schedule(schedule_id, owner=owner)
 
+    @staticmethod
+    def _regional_queue_key(value: str) -> str:
+        return unicodedata.normalize("NFKD", str(value or "").strip().casefold()).encode(
+            "ascii", "ignore"
+        ).decode("ascii")
+
+    @staticmethod
+    def _scheduled_day(row: sqlite3.Row) -> str:
+        stored = str(row["scheduled_day_brasilia"] or "").strip()
+        if stored:
+            return stored
+        scheduled = datetime.fromisoformat(str(row["scheduled_at_utc"]).replace("Z", "+00:00"))
+        if scheduled.tzinfo is None:
+            scheduled = scheduled.replace(tzinfo=UTC)
+        return scheduled.astimezone(BRASILIA_TZ).date().isoformat()
+
+    def _core_waits_for_regional(self, connection: sqlite3.Connection, row: sqlite3.Row) -> bool:
+        if not bool(row["is_core"]):
+            return False
+        regional = self._regional_queue_key(row["regional"])
+        if not regional:
+            return False
+        scheduled_day = self._scheduled_day(row)
+        pending = connection.execute(
+            """
+            SELECT * FROM scheduled_updates
+             WHERE id <> ?
+               AND status IN ('scheduled', 'running', 'needs_review')
+            """,
+            (row["id"],),
+        ).fetchall()
+        return any(
+            self._regional_queue_key(candidate["regional"]) == regional
+            and self._scheduled_day(candidate) == scheduled_day
+            for candidate in pending
+        )
+
     def _claim_next_due(self) -> sqlite3.Row | None:
         now_text = self._iso(self.now())
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
+            candidates = connection.execute(
                 """
                 SELECT * FROM scheduled_updates
                 WHERE status = 'scheduled' AND scheduled_at_utc <= ?
                 ORDER BY scheduled_at_utc ASC, created_at_utc ASC
-                LIMIT 1
                 """,
                 (now_text,),
-            ).fetchone()
+            ).fetchall()
+            row = next(
+                (candidate for candidate in candidates
+                 if not self._core_waits_for_regional(connection, candidate)),
+                None,
+            )
             if not row:
                 connection.commit()
                 return None
@@ -1679,13 +2010,18 @@ class SwitchUpdateScheduler:
         max_attempts: int,
         error: str,
         result_code: str,
+        is_core: bool = False,
     ) -> datetime:
-        next_attempt = self.now().astimezone(UTC) + timedelta(
-            seconds=RETRY_DELAY_SECONDS
+        delay_seconds = 0 if is_core else RETRY_DELAY_SECONDS
+        next_attempt = self.now().astimezone(UTC) + timedelta(seconds=delay_seconds)
+        retry_timing = (
+            "Nova tentativa automatica imediata."
+            if is_core
+            else "Nova tentativa automatica em cinco minutos."
         )
         message = (
             f"Tentativa {attempt_count} de {max_attempts} nao concluida "
-            f"({result_code}). Nova tentativa automatica em cinco minutos."
+            f"({result_code}). {retry_timing}"
         )
         with closing(self._connect()) as connection:
             connection.execute(
@@ -1774,6 +2110,21 @@ class SwitchUpdateScheduler:
 
             reporter = ProgressReporter(callback=report_progress)
             self.executor(args, switch_password=password, reporter=reporter)
+            try:
+                self.record_firmware_identity(
+                    host=row["host"],
+                    current_version=row["expected_version"],
+                    model=row["expected_model"],
+                    switch_name=row["switch_name"],
+                    regional=row["regional"],
+                    ip_address=row["ip_address"],
+                    source="completed_job",
+                )
+            except Exception:
+                LOGGER.exception(
+                    "Atualizacao concluida, mas nao foi possivel atualizar o inventario de %s.",
+                    row["host"],
+                )
             confirmed_release = release_version(row["expected_version"])
             self._finalize(
                 schedule_id,
@@ -1847,6 +2198,7 @@ class SwitchUpdateScheduler:
                     max_attempts=max_attempts,
                     error=message,
                     result_code=result_code,
+                    is_core=bool(row["is_core"]),
                 )
                 final_status = "scheduled"
                 cleanup_artifacts = False
