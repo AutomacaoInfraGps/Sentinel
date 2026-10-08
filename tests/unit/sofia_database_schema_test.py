@@ -11,6 +11,7 @@ MIGRATION = (
     / "migrations"
     / "001_read_only_foundation.sql"
 )
+SYNC_MIGRATION = MIGRATION.with_name("002_alert_snapshot_sync.sql")
 
 
 class SofiaDatabaseSchemaTests(unittest.TestCase):
@@ -56,6 +57,16 @@ class SofiaDatabaseSchemaTests(unittest.TestCase):
     def test_public_role_is_revoked(self) -> None:
         self.assertIn("revoke all on schema sofia from public", self.normalized)
         self.assertIn("revoke all on all tables in schema sofia from public", self.normalized)
+
+    def test_snapshot_sync_uses_closed_security_definer_function(self) -> None:
+        sql = " ".join(SYNC_MIGRATION.read_text(encoding="utf-8").lower().split())
+        self.assertIn("security definer", sql)
+        self.assertIn("set search_path = pg_catalog, sofia", sql)
+        self.assertIn("jsonb_array_length(p_alerts) > 100", sql)
+        self.assertIn("revoke all on function", sql)
+        self.assertIn("revoke insert on sofia.alert_snapshots", sql)
+        self.assertIn("revoke update on sofia.alert_snapshots", sql)
+        self.assertNotIn("raw_payload", sql)
 
 
 if __name__ == "__main__":
