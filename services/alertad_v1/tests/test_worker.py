@@ -194,10 +194,9 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(resolver.calls, [])
         self.assertEqual(store.event_count(), 1)
         self.assertEqual(len(output), 1)
-        self.assertIn(
-            "Usuário: CN=Usuario Teste,OU=Usuarios,DC=example,DC=local",
-            output[0],
-        )
+        self.assertIn("Usuário: Usuario Teste", output[0])
+        self.assertNotIn("OU=Usuarios", output[0])
+        self.assertNotIn("DC=example", output[0])
         self.assertNotIn("exibindo o SID", output[0])
 
     def test_failure_during_persistence_does_not_advance_failed_item(self) -> None:

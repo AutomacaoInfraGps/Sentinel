@@ -9,6 +9,7 @@ from typing import Protocol
 from urllib.parse import quote
 
 from .contracts import DeliveryResult
+from .formatting import format_alert_html
 from .graph import (
     ClientCredentialTokenProvider,
     DelegatedTokenProvider,
@@ -136,8 +137,8 @@ class GraphEmailNotifier:
     def send(self, event: ADGroupEvent, message: str) -> DeliveryResult:
         payload = {
             "message": {
-                "subject": f"[CRÍTICO] Alteração no grupo {event.target_user_name}",
-                "body": {"contentType": "Text", "content": message},
+                "subject": f"[Sentinel][AD] Alteração no grupo {event.target_user_name}",
+                "body": {"contentType": "HTML", "content": format_alert_html(message)},
                 "toRecipients": [
                     {"emailAddress": {"address": address}}
                     for address in self.recipients
@@ -223,7 +224,12 @@ class GraphTeamsNotifier:
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
                 },
-                json={"body": {"contentType": "text", "content": message}},
+                json={
+                    "body": {
+                        "contentType": "html",
+                        "content": format_alert_html(message),
+                    }
+                },
                 timeout=60,
             )
         except GraphAuthenticationError as exc:
@@ -339,7 +345,12 @@ class GraphTeamsRecipientNotifier:
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
                 },
-                json={"body": {"contentType": "text", "content": message}},
+                json={
+                    "body": {
+                        "contentType": "html",
+                        "content": format_alert_html(message),
+                    }
+                },
                 timeout=60,
             )
         except GraphAuthenticationError as exc:

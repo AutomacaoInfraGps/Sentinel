@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta, timezone
+from html import escape
 
 try:
     from zoneinfo import ZoneInfo
@@ -36,10 +37,33 @@ def resolved_member_label(
     # Nunca substitui um MemberName válido por SID apenas porque uma tentativa
     # de enriquecimento falhou ou foi fornecida indevidamente pelo chamador.
     if event.member_name:
-        return event.member_name
+        return _common_name(event.member_name)
     if directory_resolution is not None:
         return event.member_sid
     return event.member
+
+
+def _common_name(value: str) -> str:
+    """Reduz um DN LDAP ao CN inicial sem revelar a hierarquia interna."""
+    raw_value = value.strip()
+    if not raw_value.casefold().startswith("cn="):
+        return raw_value
+
+    common_name: list[str] = []
+    escaped = False
+    for character in raw_value[3:]:
+        if escaped:
+            common_name.append(character)
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == ",":
+            break
+        else:
+            common_name.append(character)
+    if escaped:
+        common_name.append("\\")
+    return "".join(common_name).strip() or raw_value
 
 
 def event_attentions(
@@ -66,12 +90,9 @@ def format_alert(
     action = "usuário adicionado" if event.action is Action.ADD else "usuário removido"
     timestamp = event.time_created_utc.astimezone(_brasilia_timezone())
     lines = [
-        "ALERTA DE SEGURANÇA — ACTIVE DIRECTORY",
+        "SENTINEL | ALERTA DO ACTIVE DIRECTORY",
         "",
-        "O Sentinel identificou uma movimentação em um grupo monitorado do "
-        "Active Directory.",
-        "Revise os dados abaixo e, caso a alteração não seja reconhecida, "
-        "acione a equipe responsável.",
+        "Movimentação detectada em um grupo monitorado.",
         "",
         f"Ação: {action}",
         f"Grupo: {event.target_user_name}",
@@ -79,9 +100,6 @@ def format_alert(
         f"Executor: {event.executor or 'Não informado'}",
         f"Origem: {event.source_computer}",
         f"Data/hora: {timestamp:%d/%m/%Y %H:%M:%S} (Brasília)",
-        f"Evento: {event.event_id}",
-        f"Registro: {event.event_record_id}",
-        f"Alert ID: {event.event_key[:12]}",
     ]
     attentions = event_attentions(event, directory_resolution)
     if attentions:
@@ -90,9 +108,31 @@ def format_alert(
     lines.extend(
         [
             "",
-            "Mensagem automática enviada pelo Sentinel | AlertAD.",
-            "Este canal é destinado exclusivamente a notificações de segurança.",
+            "Se a alteração não for reconhecida, acione a equipe responsável.",
+            "Mensagem automática do Sentinel | AlertAD.",
         ]
     )
     return "\n".join(lines)
+
+
+def format_alert_html(message: str) -> str:
+    """Apresenta o texto canônico em HTML simples aceito por e-mail e Teams."""
+    labels = {"Ação", "Grupo", "Usuário", "Executor", "Origem", "Data/hora"}
+    rendered: list[str] = []
+    for index, raw_line in enumerate(message.splitlines()):
+        line = raw_line.strip()
+        if not line:
+            rendered.append("")
+            continue
+        safe_line = escape(line)
+        label, separator, value = line.partition(":")
+        if separator and label in labels:
+            rendered.append(f"<strong>{escape(label)}:</strong>{escape(value)}")
+        elif index == 0:
+            rendered.append(f"<strong>{safe_line}</strong>")
+        elif line.startswith("Mensagem automática"):
+            rendered.append(f"<em>{safe_line}</em>")
+        else:
+            rendered.append(safe_line)
+    return "<div>" + "<br>".join(rendered) + "</div>"
 
