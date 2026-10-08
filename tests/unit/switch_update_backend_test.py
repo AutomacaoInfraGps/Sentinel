@@ -75,6 +75,8 @@ class SentinelBackendTests(unittest.TestCase):
         def load_user(user_id):
             return User(user_id)
 
+        self.switch_is_core = True
+
         def resolver(host):
             if host != "SW-LAB":
                 return None
@@ -83,6 +85,8 @@ class SentinelBackendTests(unittest.TestCase):
                 "ip": "192.0.2.10",
                 "modelo": "HPE Networking Instant On 1930",
                 "local": "Laboratorio",
+                "regional": "Regional Sul",
+                "is_core": self.switch_is_core,
                 "status": "online",
                 "ultima_verificacao_formatada": "18/09/2026 as 09:00:00",
             }
@@ -133,6 +137,30 @@ class SentinelBackendTests(unittest.TestCase):
         self.assertEqual(payload["execution_mode"], "windows_task")
         self.assertTrue(payload["worker"]["available"])
 
+    def test_identity_endpoint_records_current_firmware_version(self):
+        self.login()
+        identity = WebIdentity(
+            url="https://192.0.2.10/login.htm",
+            title="Instant On 1930 Switch",
+            sys_name="LAB",
+            sys_descr="InstantOn_1930_3.3.0.0 (9)",
+            model="1930",
+        )
+        with patch(
+            "services.switch_update_v01.sentinel_backend.fetch_web_identity",
+            return_value=identity,
+        ):
+            response = self.client.get("/api/switches/SW-LAB/firmware/identity")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["identity"]
+        self.assertEqual(payload["current_version"], "3.3.0.9")
+        self.assertEqual(payload["switch_name"], "SW-LAB")
+        self.assertEqual(
+            self.scheduler.get_firmware_identity("192.0.2.10")["current_version"],
+            "3.3.0.9",
+        )
+
     def test_backend_registration_is_idempotent(self):
         original = self.app.extensions["switch_update_backend_v01"]["blueprint"]
         repeated = install_switch_update_backend(
@@ -164,6 +192,10 @@ class SentinelBackendTests(unittest.TestCase):
         result = preflight.get_json()
         self.assertEqual(result["draft"]["decision"], "update")
         self.assertEqual(result["switch"]["ip"], "192.0.2.10")
+        self.assertEqual(
+            self.scheduler.get_firmware_identity("192.0.2.10")["current_version"],
+            "3.3.0.9",
+        )
 
         created_response = self.client.post(
             "/api/switches/SW-LAB/firmware/jobs",
@@ -188,6 +220,101 @@ class SentinelBackendTests(unittest.TestCase):
         status = self.client.get(f"/api/switches/firmware/jobs/{job['id']}")
         self.assertEqual(status.status_code, 200)
         self.assertEqual(status.get_json()["job"]["owner"], "allowed.user")
+
+    def test_core_schedule_conflict_returns_regional_list_and_suggestion(self):
+        firmware = Path(self.temp.name) / "normal.swi"
+        firmware.write_bytes(b"firmware-normal")
+        normal = self.scheduler.create_schedule(
+            owner="outro.operador",
+            scheduled_at="2026-09-18T22:00:00",
+            url="https://192.0.2.10",
+            username="admin",
+            password="segredo",
+            firmware=firmware,
+            confirmed_decision="update",
+            expected_model="1930",
+            expected_version="3.4.0.6",
+            switch_name="SW-02",
+            regional="Regional Sul",
+            ip_address="192.0.2.20",
+        )
+        with closing(self.scheduler._connect()) as connection:
+            connection.execute(
+                "UPDATE scheduled_updates SET host = ? WHERE id = ?",
+                ("192.0.2.20", normal["id"]),
+            )
+
+        self.login()
+        token = self.csrf()
+        check = self.client.post(
+            "/api/switches/SW-LAB/firmware/regional-schedule-check",
+            headers={"X-CSRF-Token": token},
+            json={"scheduled_at": "2026-09-18T22:00:00"},
+        )
+        self.assertEqual(check.status_code, 409)
+        self.assertEqual(check.get_json()["code"], "CORE_SCHEDULE_CONFLICT")
+        preflight = self.client.post(
+            "/api/switches/SW-LAB/firmware/preflight",
+            headers={"X-CSRF-Token": token},
+            data={"firmware": (io.BytesIO(b"firmware"), "InstantOn_1930_3.4.0.6.swi")},
+        ).get_json()
+        response = self.client.post(
+            "/api/switches/SW-LAB/firmware/jobs",
+            headers={"X-CSRF-Token": token},
+            json={
+                "draft_token": preflight["draft"]["draft_token"],
+                "username": "admin",
+                "password": "segredo",
+                "confirmed_decision": "update",
+                "scheduled_at": "2026-09-18T22:00:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["code"], "CORE_SCHEDULE_CONFLICT")
+        context = payload["core_schedule"]
+        self.assertEqual(context["suggested_at_brasilia"], "2026-09-18T22:05:00-03:00")
+        self.assertEqual(context["schedules"][0]["switch_name"], "SW-02")
+
+    def test_normal_schedule_after_core_is_rejected_by_precheck(self):
+        firmware = Path(self.temp.name) / "core.swi"
+        firmware.write_bytes(b"firmware-core")
+        core = self.scheduler.create_schedule(
+            owner="outro.operador",
+            scheduled_at="2026-09-18T22:00:00",
+            url="https://192.0.2.10",
+            username="admin",
+            password="segredo",
+            firmware=firmware,
+            confirmed_decision="update",
+            expected_model="1930",
+            expected_version="3.4.0.6",
+            switch_name="SW-CORE",
+            regional="Regional Sul",
+            ip_address="192.0.2.20",
+            is_core=True,
+        )
+        with closing(self.scheduler._connect()) as connection:
+            connection.execute(
+                "UPDATE scheduled_updates SET host = ? WHERE id = ?",
+                ("192.0.2.20", core["id"]),
+            )
+        self.switch_is_core = False
+        self.login()
+        response = self.client.post(
+            "/api/switches/SW-LAB/firmware/regional-schedule-check",
+            headers={"X-CSRF-Token": self.csrf()},
+            json={"scheduled_at": "2026-09-18T22:10:00"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["code"], "REGIONAL_CORE_ORDER_CONFLICT")
+        self.assertEqual(
+            payload["core_schedule"]["suggested_at_brasilia"],
+            "2026-09-18T21:55:00-03:00",
+        )
 
     def test_unknown_switch_is_rejected_before_network_access(self):
         self.login()

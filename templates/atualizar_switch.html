@@ -46,6 +46,14 @@
         font-size: 0.94rem;
     }
 
+    .switch-current-version.is-loading {
+        opacity: 0.78;
+    }
+
+    .switch-current-version.is-unavailable {
+        color: #ffd7d7;
+    }
+
     .switch-update-form .form-label {
         margin-bottom: 8px;
         font-weight: 600;
@@ -144,7 +152,7 @@
     }
 
     .switch-attempt-control {
-        grid-template-columns: 52px minmax(80px, 1fr) 52px;
+        grid-template-columns: 44px minmax(54px, 1fr) 44px;
     }
 
     .switch-attempt-control .form-control {
@@ -539,6 +547,148 @@
         background: #f3f8fa;
     }
 
+    .core-conflict-modal-content {
+        overflow: hidden;
+        border: 1px solid rgba(15, 108, 140, 0.35);
+        border-radius: 12px;
+        box-shadow: 0 18px 50px rgba(1, 46, 64, 0.28);
+    }
+
+    .core-conflict-header {
+        position: relative;
+        display: block;
+        padding: 17px 20px;
+        color: #fff;
+        border: 0;
+        background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
+    }
+
+    .core-conflict-header .modal-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+    }
+
+    .core-conflict-header .btn-close {
+        position: absolute;
+        top: 19px;
+        right: 20px;
+        margin: 0;
+    }
+
+    .core-conflict-columns {
+        display: grid;
+        grid-template-columns: 36% 15% 28% 21%;
+        gap: 0;
+        margin: 16px -20px -17px;
+        padding: 10px 0;
+        background: rgba(0, 0, 0, 0.13);
+    }
+
+    .core-conflict-columns span {
+        min-width: 0;
+        padding: 0 12px 0 20px;
+        color: rgba(255, 255, 255, 0.94);
+        font-size: 0.82rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .core-conflict-table-wrap {
+        margin: 0;
+        border-bottom: 1px solid #d5e2e7;
+    }
+
+    .core-conflict-table {
+        margin: 0;
+    }
+
+    .core-conflict-table tbody td {
+        padding: 12px 20px;
+        color: #33434b;
+        border: 0;
+        font-size: 0.9rem;
+        vertical-align: middle;
+    }
+
+    .core-conflict-table tbody tr:nth-child(even) td {
+        background: #f5f9fa;
+    }
+
+    .core-conflict-scheduler {
+        padding: 20px;
+        background: #f3f8fa;
+    }
+
+    .core-conflict-scheduler-title {
+        margin-bottom: 14px;
+        color: #012E40;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .core-native-date {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .core-conflict-help {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px;
+        margin-top: 12px;
+        color: #62747c;
+        font-size: 0.84rem;
+    }
+
+    .core-conflict-help i {
+        flex: 0 0 auto;
+        margin-top: 1px;
+        color: #0F6C8C;
+    }
+
+    .core-conflict-footer {
+        padding: 14px 20px;
+        border-top: 1px solid #d5e2e7;
+        background: #fff;
+    }
+
+    @media (max-width: 767.98px) {
+        .core-conflict-columns {
+            display: none;
+        }
+
+        .core-conflict-header {
+            padding-bottom: 17px;
+        }
+
+        .core-conflict-table tbody td {
+            padding: 8px 16px;
+        }
+
+        .core-conflict-table tbody td::before {
+            display: block;
+            color: #0A4A63;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .core-conflict-table tbody td:nth-child(1)::before { content: "Switch"; }
+        .core-conflict-table tbody td:nth-child(2)::before { content: "IP"; }
+        .core-conflict-table tbody td:nth-child(3)::before { content: "Versão atual/esperada"; }
+        .core-conflict-table tbody td:nth-child(4)::before { content: "Horário"; }
+    }
+
+    .core-conflict-footer .btn {
+        min-width: 126px;
+        padding: 10px 18px;
+        font-weight: 600;
+    }
+
     @media (max-width: 576px) {
         .switch-update-container {
             padding: 20px 16px;
@@ -598,8 +748,23 @@
         <div class="switch-update-meta">
             <span><strong>Regional:</strong> {{ switch.regional or 'Não informada' }}</span>
             <span><strong>Modelo:</strong> {{ switch.modelo or 'Não informado' }}</span>
+            <span id="switchCurrentVersion" class="switch-current-version is-loading">
+                <strong>Versão atual:</strong>
+                <span id="switchCurrentVersionValue">{{ switch.firmware_version or 'Consultando…' }}</span>
+            </span>
         </div>
     </div>
+
+    {% if last_failed_job %}
+    <div class="alert alert-warning" role="alert" id="lastFailedUpdateAlert">
+        <i class="bi bi-arrow-repeat me-2" aria-hidden="true"></i>
+        <strong>A última atualização não foi concluída.</strong>
+        Preencha novamente os dados abaixo para reagendar com segurança.
+        {% if last_failed_job.result_code %}
+            <small class="d-block mt-1">Código técnico: {{ last_failed_job.result_code }}</small>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <div id="workerHealthAlert" class="alert alert-danger d-none" role="alert">
         <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
@@ -628,59 +793,44 @@
             </div>
         </div>
 
-        <div class="mb-3">
-            <label for="switchFirmware" class="form-label required-field">
-                Firmware para atualização
-            </label>
-            <div class="switch-file-control">
-                <span class="switch-file-name" id="switchFirmwareName">Nenhum arquivo selecionado</span>
-                <button type="button"
-                        class="switch-file-button"
-                        id="chooseFirmwareButton"
-                        aria-label="Escolher arquivo de firmware">
-                    <i class="bi bi-folder2-open me-1" aria-hidden="true"></i>
-                    <span>Escolher arquivo</span>
-                </button>
-                <input type="file"
-                       class="switch-file-input"
-                       id="switchFirmware"
-                       accept=".swi">
+        <div class="row g-3 align-items-end mb-3 switch-update-file-row">
+            <div class="col-lg-9">
+                <label for="switchFirmware" class="form-label required-field">
+                    Firmware para atualização
+                </label>
+                <div class="switch-file-control">
+                    <span class="switch-file-name" id="switchFirmwareName">Nenhum arquivo selecionado</span>
+                    <button type="button"
+                            class="switch-file-button"
+                            id="chooseFirmwareButton"
+                            aria-label="Escolher arquivo de firmware">
+                        <i class="bi bi-folder2-open me-1" aria-hidden="true"></i>
+                        <span>Escolher arquivo</span>
+                    </button>
+                    <input type="file"
+                           class="switch-file-input"
+                           id="switchFirmware"
+                           accept=".swi">
+                </div>
             </div>
-            <div class="form-text">
-                Selecione um arquivo oficial <strong>.swi</strong> compatível com o modelo informado.
+            <div class="col-lg-3">
+                <label for="switchMaxAttempts" class="form-label required-field">Tentativas</label>
+                <div class="switch-attempt-control">
+                    <button type="button" class="switch-attempt-step" id="decreaseMaxAttempts" aria-label="Remover uma tentativa">
+                        <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                    </button>
+                    <input type="number" class="form-control" id="switchMaxAttempts"
+                           value="3" min="1" max="5" step="1" inputmode="numeric"
+                           aria-label="Quantidade de tentativas, de 1 a 5" required>
+                    <button type="button" class="switch-attempt-step" id="increaseMaxAttempts" aria-label="Adicionar uma tentativa">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
-        </div>
-
-        <div class="mb-3">
-            <label for="switchMaxAttempts" class="form-label required-field">
-                Tentativas de atualização
-            </label>
-            <div class="switch-attempt-control">
-                <button type="button"
-                        class="switch-attempt-step"
-                        id="decreaseMaxAttempts"
-                        aria-label="Remover uma tentativa">
-                    <i class="bi bi-dash-lg" aria-hidden="true"></i>
-                </button>
-                <input type="number"
-                       class="form-control"
-                       id="switchMaxAttempts"
-                       value="3"
-                       min="1"
-                       max="5"
-                       step="1"
-                       inputmode="numeric"
-                       aria-label="Quantidade de tentativas, de 1 a 5"
-                       required>
-                <button type="button"
-                        class="switch-attempt-step"
-                        id="increaseMaxAttempts"
-                        aria-label="Adicionar uma tentativa">
-                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div class="form-text">
-                Em falhas transitórias antes da reinicialização, o Sentinel tentará novamente após cinco minutos. Falhas após o restart exigem verificação manual.
+            <div class="col-12 pt-0">
+                <div class="form-text">
+                    Selecione um arquivo oficial <strong>.swi</strong>. Em falhas transitórias antes da reinicialização, o Sentinel fará até a quantidade selecionada de tentativas, com intervalo de cinco minutos.
+                </div>
             </div>
         </div>
 
@@ -829,6 +979,12 @@
                 Confirmar revisão manual
             </button>
         </div>
+        <div id="failedActions" class="d-none mt-3">
+            <a href="{{ url_for('atualizar_switch', host=switch.host) }}" class="btn btn-warning">
+                <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>
+                Reagendar
+            </a>
+        </div>
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mt-4 switch-progress-actions">
             <a href="{{ url_for('listar_switches') }}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left me-2" aria-hidden="true"></i>
@@ -871,6 +1027,94 @@
     </div>
 </div>
 
+<div class="modal fade" id="coreScheduleConflictModal" tabindex="-1" aria-labelledby="coreScheduleConflictTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content core-conflict-modal-content">
+            <div class="modal-header core-conflict-header">
+                <h2 class="modal-title fs-5" id="coreScheduleConflictTitle">
+                    <i class="bi bi-diagram-3-fill" aria-hidden="true"></i>
+                    <span id="regionalScheduleConflictTitleText">Ajustar horário do switch CORE</span>
+                </h2>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                <div class="core-conflict-columns" aria-hidden="true">
+                    <span>Switch</span>
+                    <span>IP</span>
+                    <span>Versão atual/esperada</span>
+                    <span>Horário</span>
+                </div>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive core-conflict-table-wrap">
+                    <table class="table align-middle core-conflict-table">
+                        <colgroup>
+                            <col style="width: 36%">
+                            <col style="width: 15%">
+                            <col style="width: 28%">
+                            <col style="width: 21%">
+                        </colgroup>
+                        <tbody id="coreRegionalSchedules"></tbody>
+                    </table>
+                </div>
+                <div class="core-conflict-scheduler">
+                    <div class="core-conflict-scheduler-title" id="regionalScheduleConflictSchedulerTitle">
+                        Novo agendamento para o CORE
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label for="coreScheduleDate" class="form-label switch-schedule-label">
+                                <i class="bi bi-calendar3" aria-hidden="true"></i>
+                                Data
+                            </label>
+                            <div class="switch-date-picker">
+                                <div class="switch-date-control">
+                                    <input type="text" class="form-control" id="coreScheduleDate"
+                                           inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA"
+                                           autocomplete="off" required>
+                                    <button type="button" class="switch-calendar-toggle"
+                                            id="toggleCoreScheduleCalendar" aria-label="Abrir calendário">
+                                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <input type="date" class="core-native-date" id="coreScheduleNativeDate" tabindex="-1">
+                            </div>
+                        </div>
+                        <div class="col-md-7">
+                            <label for="coreScheduleTime" class="form-label switch-schedule-label">
+                                <i class="bi bi-clock" aria-hidden="true"></i>
+                                Horário <span class="text-muted fw-normal">(Brasília)</span>
+                            </label>
+                            <div class="switch-time-control">
+                                <button type="button" class="switch-time-step" id="subtractCoreThirtyMinutes">
+                                    <i class="bi bi-dash-lg" aria-hidden="true"></i> 30 min
+                                </button>
+                                <input type="text" class="form-control" id="coreScheduleTime"
+                                       inputmode="numeric" maxlength="5" placeholder="HH:MM"
+                                       autocomplete="off" required>
+                                <button type="button" class="switch-time-step" id="addCoreThirtyMinutes">
+                                    <i class="bi bi-plus-lg" aria-hidden="true"></i> 30 min
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="core-conflict-help">
+                        <i class="bi bi-info-circle" aria-hidden="true"></i>
+                        <span id="regionalScheduleConflictHelp">
+                            O Sentinel sugere o primeiro horário válido: cinco minutos após o último switch da regional.
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between core-conflict-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="applyCoreSuggestedSchedule">
+                    <i class="bi bi-calendar-check me-1" aria-hidden="true"></i>
+                    Aplicar horário
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="cancelScheduleConfirmationModal" tabindex="-1" aria-labelledby="cancelScheduleConfirmationTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -903,9 +1147,11 @@
     const urls = {
         csrf: {{ url_for('switch_firmware_v01.csrf_token')|tojson }},
         health: {{ url_for('switch_firmware_v01.firmware_health')|tojson }},
+        identity: {{ url_for('switch_firmware_v01.firmware_identity', host=switch.host)|tojson }},
         activeJob: {{ url_for('switch_firmware_v01.active_firmware_job', host=switch.host)|tojson }},
         preflight: {{ url_for('switch_firmware_v01.firmware_preflight', host=switch.host)|tojson }},
         createJob: {{ url_for('switch_firmware_v01.create_firmware_job', host=switch.host)|tojson }},
+        regionalScheduleCheck: {{ url_for('switch_firmware_v01.check_regional_schedule', host=switch.host)|tojson }},
         job: {{ url_for('switch_firmware_v01.firmware_job_status', job_id='__JOB_ID__')|tojson }},
         cancelJob: {{ url_for('switch_firmware_v01.cancel_firmware_job', job_id='__JOB_ID__')|tojson }},
         deleteDraft: {{ url_for('switch_firmware_v01.cancel_firmware_draft', draft_id='__DRAFT_ID__')|tojson }},
@@ -914,6 +1160,8 @@
     };
 
     const form = document.getElementById('switchUpdateForm');
+    const currentVersionRoot = document.getElementById('switchCurrentVersion');
+    const currentVersionValue = document.getElementById('switchCurrentVersionValue');
     const usernameInput = document.getElementById('switchUsername');
     const passwordInput = document.getElementById('switchPassword');
     const firmwareInput = document.getElementById('switchFirmware');
@@ -942,15 +1190,29 @@
     const confirmButton = document.getElementById('confirmFirmwareButton');
     const confirmSpinner = document.getElementById('confirmSpinner');
     const confirmationModalElement = document.getElementById('firmwareConfirmationModal');
+    const coreConflictModalElement = document.getElementById('coreScheduleConflictModal');
     const cancelConfirmationModalElement = document.getElementById('cancelScheduleConfirmationModal');
     // A main-container do Sentinel usa backdrop-filter e cria um contexto de
     // empilhamento próprio. O Bootstrap anexa o backdrop diretamente ao body;
     // portanto, o modal também precisa ficar nesse nível para permanecer acima
     // da camada escura e receber os cliques.
     document.body.appendChild(confirmationModalElement);
+    document.body.appendChild(coreConflictModalElement);
     document.body.appendChild(cancelConfirmationModalElement);
     const confirmationModal = new bootstrap.Modal(confirmationModalElement);
+    const coreConflictModal = new bootstrap.Modal(coreConflictModalElement);
     const cancelConfirmationModal = new bootstrap.Modal(cancelConfirmationModalElement);
+    const coreRegionalSchedules = document.getElementById('coreRegionalSchedules');
+    const regionalScheduleConflictTitleText = document.getElementById('regionalScheduleConflictTitleText');
+    const regionalScheduleConflictSchedulerTitle = document.getElementById('regionalScheduleConflictSchedulerTitle');
+    const regionalScheduleConflictHelp = document.getElementById('regionalScheduleConflictHelp');
+    const coreScheduleDate = document.getElementById('coreScheduleDate');
+    const coreScheduleNativeDate = document.getElementById('coreScheduleNativeDate');
+    const coreScheduleTime = document.getElementById('coreScheduleTime');
+    const toggleCoreScheduleCalendar = document.getElementById('toggleCoreScheduleCalendar');
+    const subtractCoreThirtyMinutes = document.getElementById('subtractCoreThirtyMinutes');
+    const addCoreThirtyMinutes = document.getElementById('addCoreThirtyMinutes');
+    const applyCoreSuggestedSchedule = document.getElementById('applyCoreSuggestedSchedule');
     const progressSection = document.getElementById('switchUpdateProgress');
     const progressBar = document.getElementById('jobProgressBar');
     const progressRoot = progressBar.closest('.progress');
@@ -968,6 +1230,9 @@
     let pingRemainingSeconds = null;
     let lastPingServerMessage = null;
     let confirmingDraft = false;
+    let preserveDraftOnConfirmationClose = false;
+    let coreMinimumSchedule = '';
+    let regionalScheduleRule = 'minimum';
     let calendarViewDate = new Date();
     calendarViewDate.setDate(1);
 
@@ -1052,9 +1317,152 @@
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.success === false) {
-            throw new Error(payload.message || `Falha na solicitação (HTTP ${response.status}).`);
+            const error = new Error(payload.message || `Falha na solicitação (HTTP ${response.status}).`);
+            error.payload = payload;
+            error.status = response.status;
+            throw error;
         }
         return payload;
+    }
+
+    function showCoreScheduleConflict(context, fromConfirmation = false) {
+        const schedules = Array.isArray(context.schedules) ? context.schedules : [];
+        coreRegionalSchedules.replaceChildren();
+        for (const schedule of schedules) {
+            const row = document.createElement('tr');
+            const values = [
+                schedule.switch_name || 'Não informado',
+                schedule.ip_address || 'Não informado',
+                `${schedule.current_version || '—'} / ${schedule.expected_version || '—'}`,
+                schedule.scheduled_at_brasilia
+                    ? new Date(schedule.scheduled_at_brasilia).toLocaleString('pt-BR', {
+                        timeZone: 'America/Sao_Paulo',
+                        dateStyle: 'short',
+                        timeStyle: 'short'
+                    })
+                    : 'Não informado'
+            ];
+            for (const value of values) {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.appendChild(cell);
+            }
+            coreRegionalSchedules.appendChild(row);
+        }
+        const suggested = String(context.suggested_at_brasilia || '').slice(0, 16);
+        const suggestedMatch = suggested.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+        coreMinimumSchedule = suggested;
+        regionalScheduleRule = context.rule === 'maximum' ? 'maximum' : 'minimum';
+        const nextDaySuggestion = context.suggestion === 'next_day';
+        if (nextDaySuggestion) {
+            regionalScheduleConflictTitleText.textContent = 'Não há horário disponível antes do CORE';
+            regionalScheduleConflictSchedulerTitle.textContent = 'Agendar para o próximo dia';
+            regionalScheduleConflictHelp.textContent = (
+                'O CORE está próximo demais para manter o intervalo de cinco minutos. O Sentinel sugere o início do próximo dia.'
+            );
+        } else if (regionalScheduleRule === 'maximum') {
+            regionalScheduleConflictTitleText.textContent = 'Ajustar horário antes do switch CORE';
+            regionalScheduleConflictSchedulerTitle.textContent = 'Novo agendamento para o switch';
+            regionalScheduleConflictHelp.textContent = (
+                'O Sentinel sugere o último horário válido: cinco minutos antes do CORE da regional.'
+            );
+        } else {
+            regionalScheduleConflictTitleText.textContent = 'Ajustar horário do switch CORE';
+            regionalScheduleConflictSchedulerTitle.textContent = 'Novo agendamento para o CORE';
+            regionalScheduleConflictHelp.textContent = (
+                'O Sentinel sugere o primeiro horário válido: cinco minutos após o último switch da regional.'
+            );
+        }
+        if (suggestedMatch) {
+            coreScheduleDate.value = `${suggestedMatch[3]}/${suggestedMatch[2]}/${suggestedMatch[1]}`;
+            coreScheduleNativeDate.value = `${suggestedMatch[1]}-${suggestedMatch[2]}-${suggestedMatch[3]}`;
+            const today = new Date();
+            const todayIso = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0')
+            ].join('-');
+            coreScheduleNativeDate.min = regionalScheduleRule === 'maximum'
+                ? todayIso
+                : `${suggestedMatch[1]}-${suggestedMatch[2]}-${suggestedMatch[3]}`;
+            coreScheduleTime.value = `${suggestedMatch[4]}:${suggestedMatch[5]}`;
+        }
+        if (fromConfirmation) {
+            preserveDraftOnConfirmationClose = true;
+            confirmationModalElement.addEventListener('hidden.bs.modal', () => {
+                coreConflictModal.show();
+            }, { once: true });
+            confirmationModal.hide();
+        } else {
+            coreConflictModal.show();
+        }
+    }
+
+    function applySuggestedCoreSchedule() {
+        const date = scheduleDateToIso(coreScheduleDate.value);
+        const time = parseScheduleTime(coreScheduleTime.value);
+        coreScheduleDate.setCustomValidity(date ? '' : 'Informe uma data válida no formato DD/MM/AAAA.');
+        coreScheduleTime.setCustomValidity(time ? '' : 'Informe um horário válido no formato HH:MM.');
+        if (!date || !time) {
+            (date ? coreScheduleTime : coreScheduleDate).reportValidity();
+            return;
+        }
+        const selected = `${date.iso}T${formatScheduleTime(time.hours, time.minutes)}`;
+        const violatesLimit = coreMinimumSchedule && (
+            (regionalScheduleRule === 'minimum' && selected < coreMinimumSchedule)
+            || (regionalScheduleRule === 'maximum' && selected > coreMinimumSchedule)
+        );
+        if (violatesLimit) {
+            coreScheduleTime.setCustomValidity(
+                regionalScheduleRule === 'minimum'
+                    ? 'Selecione o horário sugerido ou um horário posterior.'
+                    : 'Selecione o horário sugerido ou um horário anterior.'
+            );
+            coreScheduleTime.reportValidity();
+            return;
+        }
+        coreScheduleTime.setCustomValidity('');
+        scheduleDateInput.value = coreScheduleDate.value;
+        scheduleDateIsoInput.value = date.iso;
+        scheduleTimeInput.value = formatScheduleTime(time.hours, time.minutes);
+        syncScheduledAt();
+        if (draft) {
+            document.getElementById('confirmFirmwareLabel').textContent = confirmationLabel(draft.decision);
+            coreConflictModalElement.addEventListener('hidden.bs.modal', () => {
+                confirmationModal.show();
+            }, { once: true });
+        }
+        coreConflictModal.hide();
+    }
+
+    function syncCoreNativeDate() {
+        const date = scheduleDateToIso(coreScheduleDate.value);
+        coreScheduleDate.setCustomValidity('');
+        if (date) {
+            coreScheduleDate.value = formatScheduleDate(date.date);
+            coreScheduleNativeDate.value = date.iso;
+        }
+    }
+
+    function adjustCoreScheduleTime(deltaMinutes) {
+        const date = scheduleDateToIso(coreScheduleDate.value);
+        const time = parseScheduleTime(coreScheduleTime.value);
+        if (!date || !time) return;
+        const adjusted = new Date(
+            date.date.getFullYear(),
+            date.date.getMonth(),
+            date.date.getDate(),
+            time.hours,
+            time.minutes + deltaMinutes
+        );
+        coreScheduleDate.value = formatScheduleDate(adjusted);
+        coreScheduleNativeDate.value = [
+            adjusted.getFullYear(),
+            String(adjusted.getMonth() + 1).padStart(2, '0'),
+            String(adjusted.getDate()).padStart(2, '0')
+        ].join('-');
+        coreScheduleTime.value = formatScheduleTime(adjusted.getHours(), adjusted.getMinutes());
+        coreScheduleTime.setCustomValidity('');
     }
 
     async function ensureCsrfToken() {
@@ -1063,6 +1471,25 @@
             csrfToken = response.csrf_token;
         }
         return csrfToken;
+    }
+
+    async function loadCurrentVersion() {
+        currentVersionRoot.classList.add('is-loading');
+        currentVersionRoot.classList.remove('is-unavailable');
+        try {
+            const response = await apiRequest(urls.identity);
+            const identity = response.identity || {};
+            currentVersionValue.textContent = identity.current_version || 'Não identificada';
+            if (identity.checked_at_brasilia) {
+                currentVersionRoot.title = `Consultada em ${new Date(identity.checked_at_brasilia).toLocaleString('pt-BR')}`;
+            }
+        } catch (error) {
+            currentVersionValue.textContent = 'Não foi possível consultar';
+            currentVersionRoot.title = error.message;
+            currentVersionRoot.classList.add('is-unavailable');
+        } finally {
+            currentVersionRoot.classList.remove('is-loading');
+        }
     }
 
     function setContinueLoading(loading) {
@@ -1506,6 +1933,24 @@
 
         setContinueLoading(true);
         try {
+            try {
+                await apiRequest(urls.regionalScheduleCheck, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': await ensureCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        scheduled_at: scheduledInput.value || null
+                    })
+                });
+            } catch (error) {
+                if (['CORE_SCHEDULE_CONFLICT', 'REGIONAL_CORE_ORDER_CONFLICT'].includes(error.payload?.code)) {
+                    showCoreScheduleConflict(error.payload.core_schedule || {});
+                    return;
+                }
+                throw error;
+            }
             await removeDraft();
             const body = new FormData();
             body.append('firmware', selectedFirmware, selectedFirmware.name);
@@ -1526,6 +1971,10 @@
             document.getElementById('confirmFirmwareLabel').textContent = confirmationLabel(draft.decision);
             confirmationModal.show();
         } catch (error) {
+            if (['CORE_SCHEDULE_CONFLICT', 'REGIONAL_CORE_ORDER_CONFLICT'].includes(error.payload?.code)) {
+                showCoreScheduleConflict(error.payload.core_schedule || {}, true);
+                return;
+            }
             const locked = await loadActiveJob();
             if (!locked) showPageError(error.message);
         } finally {
@@ -1631,6 +2080,10 @@
         const needsReview = job.status === 'needs_review' && job.can_review !== false;
         reviewActions.classList.toggle('d-none', !needsReview);
         reviewActions.classList.toggle('d-flex', needsReview);
+        document.getElementById('failedActions').classList.toggle(
+            'd-none',
+            job.status !== 'failed' || job.can_reschedule === false
+        );
         document.getElementById('scheduledActions').classList.toggle(
             'd-none',
             job.status !== 'scheduled' || !job.can_cancel
@@ -1776,11 +2229,33 @@
     maxAttemptsInput.addEventListener('blur', normalizeMaxAttempts);
     form.addEventListener('submit', runPreflight);
     confirmButton.addEventListener('click', createJob);
+    applyCoreSuggestedSchedule.addEventListener('click', applySuggestedCoreSchedule);
+    toggleCoreScheduleCalendar.addEventListener('click', () => {
+        if (typeof coreScheduleNativeDate.showPicker === 'function') {
+            coreScheduleNativeDate.showPicker();
+        } else {
+            coreScheduleNativeDate.focus();
+            coreScheduleNativeDate.click();
+        }
+    });
+    coreScheduleNativeDate.addEventListener('change', () => {
+        const match = coreScheduleNativeDate.value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return;
+        coreScheduleDate.value = `${match[3]}/${match[2]}/${match[1]}`;
+        coreScheduleDate.setCustomValidity('');
+    });
+    coreScheduleDate.addEventListener('blur', syncCoreNativeDate);
+    subtractCoreThirtyMinutes.addEventListener('click', () => adjustCoreScheduleTime(-30));
+    addCoreThirtyMinutes.addEventListener('click', () => adjustCoreScheduleTime(30));
     cancelScheduledJobButton.addEventListener('click', requestCancelScheduledJob);
     confirmCancelScheduledJobButton.addEventListener('click', cancelScheduledJob);
     document.getElementById('recheckJobButton').addEventListener('click', () => reviewJob(urls.recheck));
     document.getElementById('acknowledgeJobButton').addEventListener('click', () => reviewJob(urls.acknowledge));
     confirmationModalElement.addEventListener('hidden.bs.modal', () => {
+        if (preserveDraftOnConfirmationClose) {
+            preserveDraftOnConfirmationClose = false;
+            return;
+        }
         if (!confirmingDraft) removeDraft();
     });
     window.addEventListener('beforeunload', stopPolling);
@@ -1798,6 +2273,7 @@
     normalizeMaxAttempts();
     syncScheduledAt();
     renderCalendar();
+    loadCurrentVersion();
     loadActiveJob().then((hasActiveJob) => {
         if (!hasActiveJob) checkWorkerHealth();
     });
