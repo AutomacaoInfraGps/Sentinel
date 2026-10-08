@@ -116,23 +116,37 @@ def format_alert(
 
 
 def format_alert_html(message: str) -> str:
-    """Apresenta o texto canônico em HTML simples aceito por e-mail e Teams."""
-    labels = {"Ação", "Grupo", "Usuário", "Executor", "Origem", "Data/hora"}
-    rendered: list[str] = []
-    for index, raw_line in enumerate(message.splitlines()):
+    """Apresenta os campos operacionais em tabela HTML aceita pelo Teams."""
+    labels = ("Ação", "Grupo", "Usuário", "Executor", "Origem", "Data/hora")
+    details: dict[str, str] = {}
+    for raw_line in message.splitlines():
         line = raw_line.strip()
         if not line:
-            rendered.append("")
             continue
-        safe_line = escape(line)
         label, separator, value = line.partition(":")
         if separator and label in labels:
-            rendered.append(f"<strong>{escape(label)}:</strong>{escape(value)}")
-        elif index == 0:
-            rendered.append(f"<strong>{safe_line}</strong>")
-        elif line.startswith("Mensagem automática"):
-            rendered.append(f"<em>{safe_line}</em>")
-        else:
-            rendered.append(safe_line)
-    return "<div>" + "<br>".join(rendered) + "</div>"
+            normalized = value.strip()
+            details[label] = _common_name(normalized) if label == "Usuário" else normalized
+
+    if not details:
+        return f"<div><strong>{escape(message.strip())}</strong></div>"
+
+    rows = "".join(
+        "<tr>"
+        f'<td style="padding:6px 10px"><strong>{escape(label)}</strong></td>'
+        f'<td style="padding:6px 10px">{escape(details.get(label, "Não informado"))}</td>'
+        "</tr>"
+        for label in labels
+    )
+    return (
+        "<div>"
+        "<p><strong>Sentinel | Alerta do Active Directory</strong></p>"
+        "<p>Movimentação detectada em um grupo monitorado.</p>"
+        '<table border="1" cellpadding="0" cellspacing="0" '
+        'style="border-collapse:collapse">'
+        f"{rows}</table>"
+        "<p>Se a alteração não for reconhecida, acione a equipe responsável.</p>"
+        "<p><em>Mensagem automática do Sentinel | AlertAD.</em></p>"
+        "</div>"
+    )
 

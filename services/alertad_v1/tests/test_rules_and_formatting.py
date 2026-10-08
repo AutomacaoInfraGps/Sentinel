@@ -49,8 +49,27 @@ class RulesAndFormattingTests(unittest.TestCase):
         self.assertNotIn("Alert ID:", message)
 
         html = format_alert_html(message)
-        self.assertIn("<strong>Ação:</strong>", html)
-        self.assertIn("<strong>Grupo:</strong>", html)
+        self.assertIn("<table", html)
+        self.assertIn("<strong>Ação</strong>", html)
+        self.assertIn("<strong>Grupo</strong>", html)
+
+    def test_html_table_sanitizes_legacy_snapshot(self) -> None:
+        html = format_alert_html(
+            "ALERTA CRÍTICO\n"
+            "Ação: usuário adicionado\n"
+            "Grupo: GGS_Suporte_ABC\n"
+            "Usuário: CN=Usuario Teste,OU=Usuarios,DC=example,DC=local\n"
+            "Executor: EXAMPLE\\operador\n"
+            "Origem: DC01.example.local\n"
+            "Data/hora: 08/10/2026 11:00:00 (Brasília)\n"
+            "Evento: 4728\nRegistro: 123\nAlert ID: synthetic"
+        )
+
+        self.assertIn("Usuario Teste", html)
+        self.assertNotIn("OU=Usuarios", html)
+        self.assertNotIn("Evento", html)
+        self.assertNotIn("Registro", html)
+        self.assertNotIn("Alert ID", html)
 
     def test_resolved_directory_user_replaces_sid_in_snapshot(self) -> None:
         event = parse_windows_event((FIXTURES / "event_4732.xml").read_text(encoding="utf-8"))
