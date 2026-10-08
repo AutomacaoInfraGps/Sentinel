@@ -134,3 +134,6 @@ instance/
 
 # Amostras corporativas locais do AlertAD nunca devem ser versionadas.
 /services/alertad_v1/tests/fixtures/XMLEXAMPLE_test/
+# Caches locais de autenticacao Microsoft Graph/MSAL
+.auth_cache/
+**/.auth_cache/

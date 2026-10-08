@@ -137,7 +137,9 @@ class ClientCredentialTokenProvider:
 class DelegatedTokenProvider:
     """Lê e renova silenciosamente o token delegado usado pelo Teams."""
 
-    scopes = ("ChatMessage.Send",)
+    # Mantem os mesmos escopos dos demais projetos Graph que compartilham
+    # esta identidade delegada e o cache MSAL ja consentido.
+    scopes = ("User.Read", "Chat.ReadWrite", "ChatMessage.Send")
 
     def __init__(
         self,

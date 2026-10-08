@@ -58,7 +58,7 @@ fake; valide em canal/laboratório aprovado se a empresa exigir.
 ## Graph controlado
 
 - [ ] Consentimento `Mail.Send`, remetente e destinatários de homologação aprovados.
-- [ ] Consentimento delegado `ChatMessage.Send`, conta e chat existentes aprovados.
+- [ ] Consentimento delegado `User.Read`, `Chat.ReadWrite` e `ChatMessage.Send`, conta e destinatários aprovados.
 - [ ] Cache do Teams renovado e protegido.
 - [ ] E-mail e Teams recebem o snapshot esperado.
 - [ ] Falha controlada em Teams não impede e-mail, e vice-versa.

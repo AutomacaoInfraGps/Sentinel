@@ -92,6 +92,15 @@ A renovação é manual e pode exigir interação:
 
 Proteja o arquivo indicado por `ALERTAD_TEAMS_CACHE_FILE` como uma credencial. O
 worker detecta uma renovação externa pelo horário do arquivo e recarrega o cache.
+No RIGEL, configure essa variável com o caminho absoluto
+`C:\Automacao\.auth_cache\teams_token_cache.bin`; isso evita que uma Tarefa
+Agendada procure o cache em seu diretório de trabalho. A pasta `.auth_cache` é
+local, contém credenciais delegadas e nunca deve ser versionada.
+
+Configure `ALERTAD_TEAMS_RECIPIENTS` com os UPNs separados por vírgula. Cada
+destinatário recebe uma mensagem no chat 1:1 e possui entrega e retentativa
+independentes. `ALERTAD_TEAMS_CHAT_ID` permanece somente para compatibilidade
+com um chat fixo.
 
 ## 7. Inicialização automática
 

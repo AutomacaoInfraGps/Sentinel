@@ -13,7 +13,7 @@ from .directory import CachingDirectoryResolver, PowerShellADWSLookupClient
 from .event_source import EventLogReadError, WindowsEventLogSource
 from .formatting import format_alert
 from .logging_setup import configure_logging
-from .notifiers import GraphEmailNotifier, GraphTeamsNotifier
+from .notifiers import GraphEmailNotifier, graph_teams_notifiers_from_environment
 from .parsing import EventParseError, parse_windows_event
 from .persistence import EventStore
 from .reporting import export_attention_report
@@ -148,7 +148,7 @@ def _directory_resolver(
 def _notifiers(settings: Settings):
     result = {}
     if "teams" in settings.delivery_channels:
-        result["teams"] = GraphTeamsNotifier.from_environment()
+        result.update(graph_teams_notifiers_from_environment())
     if "email" in settings.delivery_channels:
         result["email"] = GraphEmailNotifier.from_environment()
     return result
@@ -180,13 +180,14 @@ def _run_worker(args) -> int:
     )
     if args.initialize_at_end:
         initialize_checkpoint_at_end(source, store)
+    notifiers = {} if args.dry_run else _notifiers(settings)
     worker = AlertWorker(
         source=source,
         store=store,
         resolver=_directory_resolver(settings),
         matcher=GroupMatcher(settings.fixed_groups, settings.group_name_prefix),
-        channels=settings.delivery_channels,
-        notifiers={} if args.dry_run else _notifiers(settings),
+        channels=(settings.delivery_channels if args.dry_run else tuple(notifiers)),
+        notifiers=notifiers,
         batch_size=settings.event_batch_size,
         poll_interval_seconds=settings.poll_interval_seconds or 30,
         dry_run=args.dry_run,

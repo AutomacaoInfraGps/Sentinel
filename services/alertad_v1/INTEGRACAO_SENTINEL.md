@@ -100,7 +100,7 @@ deve mapear os valores em memória, sem criar uma segunda cópia versionada:
 Ainda precisam ser definidos externamente:
 
 - destinatários de homologação do AlertAD;
-- aplicação/cliente delegado permitido para `ChatMessage.Send`;
+- aplicação/cliente delegado permitido para `User.Read`, `Chat.ReadWrite` e `ChatMessage.Send`;
 - conta delegada do Teams;
 - chat de homologação;
 - caminho protegido do cache delegado.

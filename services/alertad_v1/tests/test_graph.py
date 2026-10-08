@@ -46,6 +46,12 @@ class GraphCacheTests(unittest.TestCase):
         )
         self.assertEqual(list(self.cache_file.parent.glob("*.tmp")), [])
 
+    def test_delegated_scopes_allow_chat_creation_and_message_delivery(self) -> None:
+        self.assertEqual(
+            set(DelegatedTokenProvider.scopes),
+            {"User.Read", "Chat.ReadWrite", "ChatMessage.Send"},
+        )
+
     def test_failed_replace_preserves_previous_cache(self) -> None:
         self.cache_file.write_text("previous-cache", encoding="utf-8")
 
