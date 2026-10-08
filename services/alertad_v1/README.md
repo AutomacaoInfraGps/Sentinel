@@ -139,8 +139,12 @@ Acrescente `--dry-run` aos comandos de leitura quando o banco for de homologaç�
 ## Microsoft Graph e diretório
 
 E-mail usa autenticação de aplicação e `Mail.Send`. Teams usa autenticação
-delegada e `ChatMessage.Send` para um chat existente; o AlertAD não cria chats nem
-altera participantes. A renovação do cache delegado é manual:
+delegada com `User.Read`, `Chat.ReadWrite` e `ChatMessage.Send`, compatível com
+o cache MSAL já utilizado pelos demais projetos Graph. Configure
+`ALERTAD_TEAMS_RECIPIENTS` com UPNs separados por vírgula; o AlertAD obtém o
+chat 1:1 de cada destinatário e mantém entregas e retentativas independentes.
+`ALERTAD_TEAMS_CHAT_ID` permanece somente para compatibilidade com um chat fixo.
+A renovação do cache delegado é manual:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\renew_teams_cache.py `

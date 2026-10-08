@@ -3,8 +3,15 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
-from alertad.notifiers import GraphEmailNotifier, GraphTeamsNotifier, retry_after_seconds
+from alertad.notifiers import (
+    GraphEmailNotifier,
+    GraphTeamsNotifier,
+    GraphTeamsRecipientNotifier,
+    graph_teams_notifiers_from_environment,
+    retry_after_seconds,
+)
 from alertad.graph import GraphAuthenticationError
 from alertad.parsing import parse_windows_event
 
@@ -18,9 +25,20 @@ class FakeTokenProvider:
 
 
 class FakeResponse:
-    def __init__(self, status_code: int, headers: dict | None = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        headers: dict | None = None,
+        payload: object | None = None,
+    ) -> None:
         self.status_code = status_code
         self.headers = headers or {}
+        self.payload = payload
+
+    def json(self) -> object:
+        if self.payload is None:
+            raise ValueError("synthetic response without json")
+        return self.payload
 
 
 class FakeHttpClient:
@@ -31,6 +49,16 @@ class FakeHttpClient:
     def post(self, url: str, **kwargs) -> FakeResponse:
         self.calls.append((url, kwargs))
         return self.response
+
+
+class SequenceHttpClient:
+    def __init__(self, responses: list[FakeResponse]) -> None:
+        self.responses = list(responses)
+        self.calls: list[tuple[str, dict]] = []
+
+    def post(self, url: str, **kwargs) -> FakeResponse:
+        self.calls.append((url, kwargs))
+        return self.responses.pop(0)
 
 
 class NotifierTests(unittest.TestCase):
@@ -77,6 +105,77 @@ class NotifierTests(unittest.TestCase):
             request["json"],
             {"body": {"contentType": "text", "content": "mensagem"}},
         )
+
+    def test_teams_recipient_resolves_one_on_one_chat_and_reuses_it(self) -> None:
+        http = SequenceHttpClient(
+            [
+                FakeResponse(201, payload={"id": "19:direct@thread.v2"}),
+                FakeResponse(201),
+                FakeResponse(201),
+            ]
+        )
+        notifier = GraphTeamsRecipientNotifier(
+            FakeTokenProvider(),
+            "sender@example.com",
+            "target@example.com",
+            http,
+            "teams:synthetic",
+        )
+
+        first = notifier.send(self.event, "primeira")
+        second = notifier.send(self.event, "segunda")
+
+        self.assertTrue(first.success)
+        self.assertTrue(second.success)
+        self.assertEqual(len(http.calls), 3)
+        chat_url, chat_request = http.calls[0]
+        self.assertTrue(chat_url.endswith("/chats"))
+        members = chat_request["json"]["members"]
+        self.assertIn("sender@example.com", members[0]["user@odata.bind"])
+        self.assertIn("target@example.com", members[1]["user@odata.bind"])
+        self.assertIn("19%3Adirect%40thread.v2/messages", http.calls[1][0])
+        self.assertIn("19%3Adirect%40thread.v2/messages", http.calls[2][0])
+
+    def test_async_chat_creation_is_retried_without_sending_message(self) -> None:
+        http = SequenceHttpClient([FakeResponse(202)])
+        notifier = GraphTeamsRecipientNotifier(
+            FakeTokenProvider(),
+            "sender@example.com",
+            "target@example.com",
+            http,
+            "teams:synthetic",
+        )
+
+        result = notifier.send(self.event, "mensagem")
+
+        self.assertFalse(result.success)
+        self.assertTrue(result.retryable)
+        self.assertEqual(result.retry_after_seconds, 30)
+        self.assertEqual(len(http.calls), 1)
+
+    def test_teams_recipient_factory_deduplicates_and_separates_deliveries(self) -> None:
+        environment = {
+            "M365_TENANT_ID": "synthetic-tenant",
+            "M365_CLIENT_ID": "synthetic-client",
+            "M365_SENDER_UPN": "sender@example.com",
+            "ALERTAD_TEAMS_CACHE_FILE": "synthetic-cache.bin",
+            "ALERTAD_TEAMS_RECIPIENTS": (
+                "first@example.com,SECOND@example.com,first@example.com"
+            ),
+        }
+        with patch.dict("os.environ", environment, clear=True):
+            notifiers = graph_teams_notifiers_from_environment(
+                http=FakeHttpClient(FakeResponse(201))
+            )
+
+        self.assertEqual(len(notifiers), 2)
+        self.assertTrue(all(channel.startswith("teams:") for channel in notifiers))
+        self.assertEqual(
+            {notifier.recipient_upn for notifier in notifiers.values()},
+            {"first@example.com", "SECOND@example.com"},
+        )
+        providers = {id(notifier.token_provider) for notifier in notifiers.values()}
+        self.assertEqual(len(providers), 1)
 
     def test_transient_graph_failure_is_retryable_without_response_body(self) -> None:
         http = FakeHttpClient(

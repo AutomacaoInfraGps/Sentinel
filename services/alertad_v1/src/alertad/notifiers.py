@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Protocol
@@ -23,6 +24,8 @@ GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 class HttpResponse(Protocol):
     status_code: int
     headers: dict
+
+    def json(self) -> object: ...
 
 
 class HttpClient(Protocol):
@@ -89,6 +92,24 @@ def _recipients_from_env(name: str) -> tuple[str, ...]:
             values.append(value)
             seen.add(key)
     return tuple(values)
+
+
+def _teams_delivery_channel(recipient: str) -> str:
+    digest = hashlib.sha256(recipient.casefold().encode("utf-8")).hexdigest()[:24]
+    return f"teams:{digest}"
+
+
+def _response_json(response: HttpResponse) -> dict:
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _odata_user_reference(user_principal_name: str) -> str:
+    escaped = user_principal_name.replace("'", "''")
+    return f"{GRAPH_BASE}/users('{escaped}')"
 
 
 @dataclass
@@ -236,3 +257,153 @@ class GraphTeamsNotifier:
                 )
             ),
         )
+
+
+@dataclass
+class GraphTeamsRecipientNotifier:
+    """Entrega para um chat 1:1 resolvido a partir do UPN do destinatario."""
+
+    token_provider: TokenProvider
+    sender_upn: str
+    recipient_upn: str
+    http: HttpClient
+    channel: str
+    _chat_id: str | None = field(default=None, init=False, repr=False)
+
+    def _resolve_chat(self, token: str) -> tuple[str | None, DeliveryResult | None]:
+        if self._chat_id:
+            return self._chat_id, None
+        response = self.http.post(
+            f"{GRAPH_BASE}/chats",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "chatType": "oneOnOne",
+                "members": [
+                    {
+                        "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                        "roles": ["owner"],
+                        "user@odata.bind": _odata_user_reference(self.sender_upn),
+                    },
+                    {
+                        "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                        "roles": ["owner"],
+                        "user@odata.bind": _odata_user_reference(self.recipient_upn),
+                    },
+                ],
+            },
+            timeout=60,
+        )
+        if response.status_code in {200, 201}:
+            chat_id = str(_response_json(response).get("id") or "").strip()
+            if chat_id:
+                self._chat_id = chat_id
+                return chat_id, None
+            return None, DeliveryResult(
+                False,
+                False,
+                "Microsoft Graph retornou chat sem identificador",
+                failure_kind="unexpected",
+            )
+        if response.status_code == 202:
+            return None, DeliveryResult(
+                False,
+                True,
+                "Microsoft Graph iniciou a criacao assincrona do chat",
+                retry_after_seconds=30,
+                failure_kind="temporary",
+            )
+        retryable = _is_retryable(response.status_code)
+        return None, DeliveryResult(
+            False,
+            retryable,
+            _request_error(response),
+            retry_after_seconds=(
+                retry_after_seconds(response.headers) if retryable else None
+            ),
+            failure_kind=("temporary" if retryable else "permanent"),
+        )
+
+    def send(self, event: ADGroupEvent, message: str) -> DeliveryResult:
+        del event
+        try:
+            token = self.token_provider.get_token()
+            chat_id, failure = self._resolve_chat(token)
+            if failure is not None:
+                return failure
+            response = self.http.post(
+                f"{GRAPH_BASE}/chats/{quote(chat_id or '', safe='')}/messages",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={"body": {"contentType": "text", "content": message}},
+                timeout=60,
+            )
+        except GraphAuthenticationError as exc:
+            return DeliveryResult(
+                False,
+                exc.retryable,
+                str(exc),
+                failure_kind=exc.failure_kind,
+            )
+        except Exception as exc:
+            return DeliveryResult(
+                False,
+                True,
+                f"Falha de comunicacao com o Graph: {type(exc).__name__}",
+                failure_kind="uncertain",
+            )
+
+        if response.status_code in {200, 201, 202}:
+            return DeliveryResult(True)
+        if response.status_code == 404:
+            self._chat_id = None
+        retryable = _is_retryable(response.status_code) or response.status_code == 404
+        return DeliveryResult(
+            False,
+            retryable,
+            _request_error(response),
+            retry_after_seconds=(
+                retry_after_seconds(response.headers) if retryable else None
+            ),
+            failure_kind=(
+                "uncertain" if response.status_code == 408 else (
+                    "temporary" if retryable else "permanent"
+                )
+            ),
+        )
+
+
+def graph_teams_notifiers_from_environment(
+    http: HttpClient | None = None,
+) -> dict[str, GraphTeamsNotifier | GraphTeamsRecipientNotifier]:
+    recipients = _recipients_from_env("ALERTAD_TEAMS_RECIPIENTS")
+    if not recipients:
+        notifier = GraphTeamsNotifier.from_environment(http=http)
+        return {notifier.channel: notifier}
+
+    tenant = os.getenv("M365_TENANT_ID", "").strip()
+    client = (
+        os.getenv("M365_DELEGATED_CLIENT_ID", "").strip()
+        or os.getenv("M365_CLIENT_ID", "").strip()
+    )
+    sender = os.getenv("M365_SENDER_UPN", "").strip()
+    cache_file = os.getenv(
+        "ALERTAD_TEAMS_CACHE_FILE", ".auth_cache/teams_token_cache.bin"
+    ).strip()
+    provider = DelegatedTokenProvider(tenant, client, sender, cache_file)
+    session = http or _default_http_client()
+    result = {}
+    for recipient in recipients:
+        channel = _teams_delivery_channel(recipient)
+        result[channel] = GraphTeamsRecipientNotifier(
+            provider,
+            sender,
+            recipient,
+            session,
+            channel,
+        )
+    return result
