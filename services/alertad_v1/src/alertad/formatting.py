@@ -66,7 +66,12 @@ def format_alert(
     action = "usuário adicionado" if event.action is Action.ADD else "usuário removido"
     timestamp = event.time_created_utc.astimezone(_brasilia_timezone())
     lines = [
-        "ALERTA CRÍTICO — GRUPO DO ACTIVE DIRECTORY",
+        "ALERTA DE SEGURANÇA — ACTIVE DIRECTORY",
+        "",
+        "O Sentinel identificou uma movimentação em um grupo monitorado do "
+        "Active Directory.",
+        "Revise os dados abaixo e, caso a alteração não seja reconhecida, "
+        "acione a equipe responsável.",
         "",
         f"Ação: {action}",
         f"Grupo: {event.target_user_name}",
@@ -82,5 +87,12 @@ def format_alert(
     if attentions:
         lines.extend(["", "Pontos de atenção:"])
         lines.extend(f"- {attention}" for attention in attentions)
+    lines.extend(
+        [
+            "",
+            "Mensagem automática enviada pelo Sentinel | AlertAD.",
+            "Este canal é destinado exclusivamente a notificações de segurança.",
+        ]
+    )
     return "\n".join(lines)
 

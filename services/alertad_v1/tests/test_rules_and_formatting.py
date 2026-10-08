@@ -35,12 +35,15 @@ class RulesAndFormattingTests(unittest.TestCase):
         event = parse_windows_event((FIXTURES / "event_4732.xml").read_text(encoding="utf-8"))
         message = format_alert(event)
 
-        self.assertIn("ALERTA CRÍTICO", message)
+        self.assertIn("ALERTA DE SEGURANÇA", message)
+        self.assertIn("O Sentinel identificou uma movimentação", message)
+        self.assertIn("caso a alteração não seja reconhecida", message)
         self.assertIn("Ação: usuário adicionado", message)
         self.assertIn("Grupo: Administrators", message)
         self.assertIn("Executor: EXAMPLE\\operador.teste", message)
         self.assertIn("Data/hora: 21/09/2026 14:11:55", message)
         self.assertIn("Pontos de atenção", message)
+        self.assertIn("Mensagem automática enviada pelo Sentinel | AlertAD", message)
 
     def test_resolved_directory_user_replaces_sid_in_snapshot(self) -> None:
         event = parse_windows_event((FIXTURES / "event_4732.xml").read_text(encoding="utf-8"))
