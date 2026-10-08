@@ -386,6 +386,7 @@
     document.body.appendChild(modalElement);
     const logModal = bootstrap.Modal.getOrCreateInstance(modalElement);
     const detailCache = new Map();
+    const updateSwitchUrl = {{ url_for('atualizar_switch', host='__HOST__')|tojson }};
     const pageParams = new URLSearchParams(window.location.search);
     const targetJobId = pageParams.get('job') || '';
     const initialQuery = pageParams.get('q') || '';
@@ -486,6 +487,13 @@
         const attemptItems = attempts.length
             ? attempts.map(attemptHtml).join('')
             : '<div class="text-muted">Nenhuma tentativa foi iniciada.</div>';
+        const switchReference = job.switch_name || job.host || '';
+        const rescheduleUrl = updateSwitchUrl.replace('__HOST__', encodeURIComponent(switchReference));
+        const rescheduleButton = job.status === 'failed' && job.can_reschedule !== false
+            ? `<a class="btn btn-success ms-auto" href="${escapeHtml(rescheduleUrl)}">
+                    <i class="bi bi-arrow-repeat me-2"></i>Reagendar
+               </a>`
+            : '';
         return `
             <div class="history-detail-inner">
                 <div class="history-detail-summary">
@@ -499,10 +507,13 @@
                 </div>
                 <h3 class="h6 fw-bold mb-3">Retorno de cada tentativa</h3>
                 <div class="attempt-list">${attemptItems}</div>
-                ${job.has_log ? `
-                    <button type="button" class="btn btn-outline-primary history-log-button" data-history-log="${escapeHtml(job.id)}">
-                        <i class="bi bi-file-earmark-text me-2"></i>Ler o registro completo
-                    </button>` : '<span class="text-muted small">Registro completo ainda não disponível.</span>'}
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                    ${job.has_log ? `
+                        <button type="button" class="btn btn-outline-primary history-log-button" data-history-log="${escapeHtml(job.id)}">
+                            <i class="bi bi-file-earmark-text me-2"></i>Ler o registro completo
+                        </button>` : '<span class="text-muted small">Registro completo ainda não disponível.</span>'}
+                    ${rescheduleButton}
+                </div>
             </div>`;
     }
 

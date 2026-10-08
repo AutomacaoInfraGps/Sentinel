@@ -157,11 +157,16 @@ class IdentificationTests(unittest.TestCase):
             <input id="inputPassword" name="inputPassword" type="password">
             <input name="sysName" value="LAB-SW">
             <input name="sysDescr" value="InstantOn_1930_3.4.0.0 (6)">
+            <input type="hidden" name="productName"
+                   value="HPE Networking Instant On 1930 48p Gigabit 4p SFP Switch JL686A">
+            <div>HPE Networking Instant On 1930 48p Gigabit 4p SFP Switch JL686A</div>
             <button id="submitButton">LOGIN</button>
             </body></html>
         """)
         self.assertEqual(parser.title, "Instant On 1930 Switch")
         self.assertEqual(parser.fields["sysName"], "LAB-SW")
+        self.assertIn("Instant On 1930 48p", parser.visible_text)
+        self.assertIn("Instant On 1930 48p", parser.public_metadata_text)
         self.assertIn("submitButton", parser.element_ids)
 
 

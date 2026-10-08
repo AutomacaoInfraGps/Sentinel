@@ -108,6 +108,24 @@ class SchedulerTests(unittest.TestCase):
         value = self.scheduler.normalize_scheduled_at("2026-09-18T09:30:00")
         self.assertEqual(value.isoformat(), "2026-09-18T12:30:00+00:00")
 
+    def test_inventory_does_not_replace_detailed_model_with_family_only(self):
+        self.scheduler.record_firmware_identity(
+            host="192.0.2.10",
+            current_version="3.3.0.9",
+            model="HPE Networking Instant On 1930 48p",
+        )
+        inventory = self.scheduler.record_firmware_identity(
+            host="192.0.2.10",
+            current_version="3.4.0.6",
+            model="1930",
+        )
+
+        self.assertEqual(inventory["current_version"], "3.4.0.6")
+        self.assertEqual(
+            inventory["model"],
+            "HPE Networking Instant On 1930 48p",
+        )
+
     def test_schedule_encrypts_password_and_hides_internal_paths(self):
         created = self.create()
         self.assertEqual(created["status"], "scheduled")
@@ -163,6 +181,204 @@ class SchedulerTests(unittest.TestCase):
             f"Set-26/Logs/{logs[0].name}",
         )
         self.assertEqual(result["result_code"], "SWU000")
+
+    def test_core_waits_for_all_normal_switches_of_same_regional_and_day(self):
+        core = self.create(
+            regional="Regional Sul",
+            is_core=True,
+            switch_name="SW-CORE",
+        )
+        with closing(self.scheduler._connect()) as connection:
+            connection.execute(
+                "UPDATE scheduled_updates SET host = ? WHERE id = ?",
+                ("192.0.2.20", core["id"]),
+            )
+        normal = self.create(
+            scheduled_at="2026-09-18T16:00:00",
+            regional="Regional Sul",
+            switch_name="SW-02",
+        )
+
+        self.clock.value = datetime(2026, 9, 18, 12, 2, tzinfo=timezone.utc)
+        self.assertIsNone(self.scheduler.run_due_once())
+        self.clock.value = datetime(2026, 9, 18, 19, 1, tzinfo=timezone.utc)
+        self.assertEqual(self.scheduler.run_due_once(), normal["id"])
+        self.assertEqual(self.scheduler.run_due_once(), core["id"])
+
+    def test_core_schedule_context_suggests_five_minutes_after_regional(self):
+        self.create(
+            scheduled_at="2026-09-18T22:00:00",
+            regional="Regional Sul",
+            switch_name="SW-02",
+        )
+
+        conflict = self.scheduler.core_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T22:00:00",
+        )
+        self.assertFalse(conflict["valid"])
+        self.assertEqual(
+            conflict["suggested_at_brasilia"],
+            "2026-09-18T22:05:00-03:00",
+        )
+        self.assertEqual(conflict["schedules"][0]["switch_name"], "SW-02")
+        self.assertEqual(conflict["schedules"][0]["ip_address"], "192.0.2.10")
+        self.assertEqual(conflict["schedules"][0]["current_version"], "3.3.0.9")
+        self.assertEqual(conflict["schedules"][0]["expected_version"], "3.4.0.6")
+
+        valid = self.scheduler.core_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T22:05:00",
+        )
+        self.assertTrue(valid["valid"])
+
+    def test_active_schedules_can_be_filtered_by_regional(self):
+        created = self.create(regional="Regional São Paulo")
+
+        matches = self.scheduler.list_active_schedules_for_regional(
+            "regional sao paulo"
+        )
+        self.assertEqual([job["id"] for job in matches], [created["id"]])
+        self.assertEqual(
+            self.scheduler.list_active_schedules_for_regional("Regional Sul"),
+            [],
+        )
+
+    def test_normal_switch_must_be_five_minutes_before_scheduled_core(self):
+        self.create(
+            scheduled_at="2026-09-18T22:00:00",
+            regional="Regional Sul",
+            switch_name="SW-CORE",
+            is_core=True,
+        )
+
+        conflict = self.scheduler.normal_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T22:10:00",
+        )
+        self.assertFalse(conflict["valid"])
+        self.assertEqual(conflict["rule"], "maximum")
+        self.assertEqual(
+            conflict["suggested_at_brasilia"],
+            "2026-09-18T21:55:00-03:00",
+        )
+        self.assertEqual(conflict["schedules"][0]["switch_name"], "SW-CORE")
+
+        valid = self.scheduler.normal_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T21:55:00",
+        )
+        self.assertTrue(valid["valid"])
+
+    def test_normal_switch_uses_next_day_when_core_has_no_future_slot_before_it(self):
+        self.create(
+            scheduled_at="2026-09-18T09:03:00",
+            regional="Regional Sul",
+            switch_name="SW-CORE",
+            is_core=True,
+        )
+
+        conflict = self.scheduler.normal_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T09:04:00",
+        )
+
+        self.assertFalse(conflict["valid"])
+        self.assertEqual(conflict["rule"], "minimum")
+        self.assertEqual(conflict["suggestion"], "next_day")
+        self.assertEqual(
+            conflict["suggested_at_brasilia"],
+            "2026-09-19T00:00:00-03:00",
+        )
+
+    def test_regional_order_rules_ignore_other_region_day_and_terminal_job(self):
+        core = self.create(
+            scheduled_at="2026-09-18T22:00:00",
+            regional="Regional Sul",
+            switch_name="SW-CORE",
+            is_core=True,
+        )
+        self.assertTrue(self.scheduler.normal_schedule_context(
+            regional="Regional Norte",
+            scheduled_at="2026-09-18T22:10:00",
+        )["valid"])
+        self.assertTrue(self.scheduler.normal_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-19T22:10:00",
+        )["valid"])
+
+        with closing(self.scheduler._connect()) as connection:
+            connection.execute(
+                "UPDATE scheduled_updates SET status = 'completed' WHERE id = ?",
+                (core["id"],),
+            )
+        self.assertTrue(self.scheduler.normal_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T22:10:00",
+        )["valid"])
+
+    def test_normal_schedule_still_sees_core_that_started_during_confirmation(self):
+        core = self.create(
+            scheduled_at="2026-09-18T22:00:00",
+            regional="Regional Sul",
+            switch_name="SW-CORE",
+            is_core=True,
+        )
+        with closing(self.scheduler._connect()) as connection:
+            connection.execute(
+                "UPDATE scheduled_updates SET status = 'running' WHERE id = ?",
+                (core["id"],),
+            )
+
+        conflict = self.scheduler.normal_schedule_context(
+            regional="Regional Sul",
+            scheduled_at="2026-09-18T22:10:00",
+        )
+
+        self.assertFalse(conflict["valid"])
+        self.assertEqual(conflict["schedules"][0]["switch_name"], "SW-CORE")
+
+    def test_same_scheduled_time_uses_creation_time_as_tiebreaker(self):
+        first = self.create(scheduled_at="2026-09-18T10:00:00")
+        with closing(self.scheduler._connect()) as connection:
+            connection.execute(
+                "UPDATE scheduled_updates SET host = ? WHERE id = ?",
+                ("192.0.2.20", first["id"]),
+            )
+        self.clock.value = datetime(2026, 9, 18, 12, 0, 1, tzinfo=timezone.utc)
+        second = self.create(scheduled_at="2026-09-18T10:00:00")
+        self.clock.value = datetime(2026, 9, 18, 13, 1, tzinfo=timezone.utc)
+
+        self.assertEqual(self.scheduler.run_due_once(), first["id"])
+        self.assertEqual(self.scheduler.run_due_once(), second["id"])
+
+    def test_core_retries_immediately_until_reaching_max_attempts(self):
+        calls = []
+
+        def unstable_executor(args, *, switch_password, reporter):
+            calls.append(args)
+            reporter.emit("transfer", 50, "Falha de transferencia")
+            if len(calls) < 3:
+                raise RuntimeError("falha temporaria")
+            reporter.emit("complete", 100, "Concluido")
+
+        self.scheduler.executor = unstable_executor
+        core = self.create(
+            regional="Regional Sul",
+            is_core=True,
+            max_attempts=3,
+        )
+        self.clock.value = datetime(2026, 9, 18, 12, 2, tzinfo=timezone.utc)
+
+        self.assertEqual(self.scheduler.run_due_once(), core["id"])
+        after_first = self.scheduler.get_schedule(core["id"])
+        self.assertEqual(after_first["status"], "scheduled")
+        self.assertIn("imediata", after_first["message"])
+        self.assertEqual(self.scheduler.run_due_once(), core["id"])
+        self.assertEqual(self.scheduler.run_due_once(), core["id"])
+        completed = self.scheduler.get_schedule(core["id"])
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["attempt_count"], 3)
 
     def test_log_creation_failure_blocks_execution_before_upload(self):
         created = self.create()
