@@ -107,6 +107,7 @@ tmp_*.py
 debug_*.py
 MIGRATION_PLAN.md
 !tests/
+!/tests/unit/test_sofia_engine.py
 !tests/manual/
 !tests/manual/*.py
 
