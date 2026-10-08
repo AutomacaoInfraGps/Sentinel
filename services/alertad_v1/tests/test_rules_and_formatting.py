@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from alertad.contracts import DirectoryObject, DirectoryResolution, DirectoryResolutionStatus
-from alertad.formatting import event_attentions, format_alert
+from alertad.formatting import event_attentions, format_alert, format_alert_html
 from alertad.parsing import parse_windows_event
 from alertad.rules import GroupMatcher
 
@@ -35,15 +35,22 @@ class RulesAndFormattingTests(unittest.TestCase):
         event = parse_windows_event((FIXTURES / "event_4732.xml").read_text(encoding="utf-8"))
         message = format_alert(event)
 
-        self.assertIn("ALERTA DE SEGURANÇA", message)
-        self.assertIn("O Sentinel identificou uma movimentação", message)
-        self.assertIn("caso a alteração não seja reconhecida", message)
+        self.assertIn("SENTINEL | ALERTA DO ACTIVE DIRECTORY", message)
+        self.assertIn("Movimentação detectada", message)
+        self.assertIn("Se a alteração não for reconhecida", message)
         self.assertIn("Ação: usuário adicionado", message)
         self.assertIn("Grupo: Administrators", message)
         self.assertIn("Executor: EXAMPLE\\operador.teste", message)
         self.assertIn("Data/hora: 21/09/2026 14:11:55", message)
         self.assertIn("Pontos de atenção", message)
-        self.assertIn("Mensagem automática enviada pelo Sentinel | AlertAD", message)
+        self.assertIn("Mensagem automática do Sentinel | AlertAD", message)
+        self.assertNotIn("Evento:", message)
+        self.assertNotIn("Registro:", message)
+        self.assertNotIn("Alert ID:", message)
+
+        html = format_alert_html(message)
+        self.assertIn("<strong>Ação:</strong>", html)
+        self.assertIn("<strong>Grupo:</strong>", html)
 
     def test_resolved_directory_user_replaces_sid_in_snapshot(self) -> None:
         event = parse_windows_event((FIXTURES / "event_4732.xml").read_text(encoding="utf-8"))
@@ -68,7 +75,8 @@ class RulesAndFormattingTests(unittest.TestCase):
 
         message = format_alert(with_name, resolution)
 
-        self.assertIn(f"Usuário: {with_name.member_name}", message)
+        self.assertIn("Usuário: Usuario Teste", message)
+        self.assertNotIn("OU=Usuarios", message)
         self.assertNotIn("exibindo o SID", message)
 
     def test_unsuccessful_directory_states_fall_back_to_member_sid(self) -> None:

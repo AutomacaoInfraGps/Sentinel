@@ -86,7 +86,11 @@ class NotifierTests(unittest.TestCase):
             request["json"]["message"]["toRecipients"][0]["emailAddress"]["address"],
             "time@example.com",
         )
-        self.assertEqual(request["json"]["message"]["body"]["content"], "mensagem")
+        self.assertEqual(request["json"]["message"]["body"]["contentType"], "HTML")
+        self.assertEqual(
+            request["json"]["message"]["body"]["content"],
+            "<div><strong>mensagem</strong></div>",
+        )
 
     def test_teams_posts_directly_to_configured_group_chat(self) -> None:
         http = FakeHttpClient(FakeResponse(201))
@@ -103,7 +107,12 @@ class NotifierTests(unittest.TestCase):
         self.assertIn("/chats/19%3Achat%40thread.v2/messages", url)
         self.assertEqual(
             request["json"],
-            {"body": {"contentType": "text", "content": "mensagem"}},
+            {
+                "body": {
+                    "contentType": "html",
+                    "content": "<div><strong>mensagem</strong></div>",
+                }
+            },
         )
 
     def test_teams_recipient_resolves_one_on_one_chat_and_reuses_it(self) -> None:
@@ -135,6 +144,13 @@ class NotifierTests(unittest.TestCase):
         self.assertIn("target@example.com", members[1]["user@odata.bind"])
         self.assertIn("19%3Adirect%40thread.v2/messages", http.calls[1][0])
         self.assertIn("19%3Adirect%40thread.v2/messages", http.calls[2][0])
+        self.assertEqual(
+            http.calls[1][1]["json"]["body"],
+            {
+                "contentType": "html",
+                "content": "<div><strong>primeira</strong></div>",
+            },
+        )
 
     def test_async_chat_creation_is_retried_without_sending_message(self) -> None:
         http = SequenceHttpClient([FakeResponse(202)])
