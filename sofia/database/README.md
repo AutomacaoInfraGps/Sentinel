@@ -23,7 +23,12 @@ rede Docker privada.
 - `schema_migrations`: versao aplicada.
 
 O usuario `sofia_runtime` nao possui `DELETE`. Ele pode atualizar somente os
-campos aprovados de `alert_snapshots` e nao pode alterar a auditoria.
+snapshots por meio da funcao `sync_alert_snapshots`; ele nao pode alterar a
+auditoria nem escrever diretamente na tabela de snapshots.
+
+A funcao aceita no maximo 100 alertas, valida os campos, calcula SHA-256 dentro
+do PostgreSQL e desativa snapshots ausentes na leitura atual. O JSON recebido
+nao e persistido.
 
 ## Criacao segura
 
