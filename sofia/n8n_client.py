@@ -10,10 +10,18 @@ WEBHOOK_URL_ENV = "SENTINEL_SOFIA_N8N_WEBHOOK_URL"
 WEBHOOK_TOKEN_ENV = "SENTINEL_SOFIA_N8N_WEBHOOK_TOKEN"
 TOKEN_HEADER = "X-Sentinel-Sofia-Token"
 MAX_REPLY_LENGTH = 8000
+_SPACE_ENTITIES = ("&#x20;", "&#X20;", "&#32;", "&nbsp;")
 
 
 class SofiaN8nError(RuntimeError):
     """Raised when the private orchestrator cannot return a valid response."""
+
+
+def _clean_reply(reply):
+    cleaned = reply
+    for entity in _SPACE_ENTITIES:
+        cleaned = cleaned.replace(entity, " ")
+    return "\n".join(line.rstrip() for line in cleaned.splitlines()).strip()
 
 
 def _configured_url():
@@ -67,4 +75,4 @@ def consultar_sofia(*, mensagem, allowed_regionals):
     reply = payload.get("reply") if isinstance(payload, dict) else None
     if not isinstance(reply, str) or not reply.strip() or len(reply) > MAX_REPLY_LENGTH:
         raise SofiaN8nError("Resposta invalida do orquestrador")
-    return reply.strip()
+    return _clean_reply(reply)

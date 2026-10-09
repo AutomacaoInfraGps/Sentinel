@@ -11,7 +11,7 @@ from .audit import registrar_evento_sofia
 from .n8n_client import SofiaN8nError, consultar_sofia
 from .permissions import usuario_pode_executar
 from .tools_sentinel import codigos_regionais
-from regional_access import access_scope
+from regional_access import access_scope, effective_user_groups
 
 
 sofia_bp = Blueprint("sofia", __name__)
@@ -109,7 +109,11 @@ def chat():
         return _json_response({"error": "Você não possui permissão para consultar dados do Sentinel."}, 403)
 
     try:
-        scope = access_scope(getattr(current_user, "groups", ()), codigos_regionais())
+        groups = effective_user_groups(
+            getattr(current_user, "groups", ()) or (),
+            getattr(current_user, "dn", ""),
+        )
+        scope = access_scope(groups, codigos_regionais())
         reply = consultar_sofia(
             mensagem=message,
             allowed_regionals=scope["allowed"],
