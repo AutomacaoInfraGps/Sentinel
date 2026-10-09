@@ -97,6 +97,18 @@ A SofIA e ativada por configuracao local:
 
 O arquivo `environment.json` deve permanecer local e ignorado pelo Git.
 
+O resumo de alertas usa um webhook privado do n8n por um tunel SSH local. As
+credenciais ficam em variaveis de ambiente da maquina, nunca no repositorio:
+
+```text
+SENTINEL_SOFIA_N8N_WEBHOOK_URL=http://127.0.0.1:15678/webhook/sofia-alertas-v1
+SENTINEL_SOFIA_N8N_WEBHOOK_TOKEN=<token exclusivo do webhook>
+```
+
+No Rigel, `scripts/run_sofia_n8n_tunnel.ps1` mantem o encaminhamento local
+`127.0.0.1:15678` para o n8n no Celeno. O script deve ser executado por uma
+tarefa agendada com a mesma conta proprietaria da chave SSH.
+
 ## Seguranca
 
 Antes de qualquer acao futura, a SofIA deve validar:

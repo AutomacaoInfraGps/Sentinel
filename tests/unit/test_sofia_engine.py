@@ -81,6 +81,12 @@ class SofiaEngineTests(unittest.TestCase):
         self.assertIn("SWT-ABC-01", resposta)
         self.assertIn("CPU alta", resposta)
 
+    def test_identifica_apenas_resumo_geral_para_o_n8n(self):
+        self.assertTrue(engine.solicita_resumo_geral_alertas("Resumo dos alertas atuais"))
+        self.assertTrue(engine.solicita_resumo_geral_alertas("Quantos alertas ativos temos agora?"))
+        self.assertFalse(engine.solicita_resumo_geral_alertas("Tem alerta de switch?"))
+        self.assertFalse(engine.solicita_resumo_geral_alertas("Como estao os links?"))
+
     def test_resposta_explicativa_dashboard_usa_knowledge(self):
         resposta = self.perguntar("me explica o dashboard")
         self.assertIn("Dashboard do Sentinel", resposta)

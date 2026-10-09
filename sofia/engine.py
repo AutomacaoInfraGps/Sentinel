@@ -72,6 +72,27 @@ def _contem_termo(texto, *termos):
     return any(termo in tokens for termo in termos)
 
 
+def solicita_resumo_geral_alertas(mensagem):
+    """Identify the narrow read-only intent currently delegated to n8n."""
+    texto = _normalizar_mensagem(mensagem)
+    if not _contem_termo(texto, "alerta", "alertas", "ocorrencia", "ocorrencias"):
+        return False
+    if _contem_termo(texto, "switch", "switches", "zabbix"):
+        return False
+    return _contem_termo(
+        texto,
+        "resumo",
+        "geral",
+        "atuais",
+        "ativos",
+        "agora",
+        "hoje",
+        "status",
+        "quantos",
+        "quantas",
+    )
+
+
 def _quer_explicacao(texto):
     if _contem_termo(texto, "esta", "estao", "status", "offline", "online", "quantos", "quantas", "tem"):
         return False

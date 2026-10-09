@@ -8,7 +8,8 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user, login_required
 
 from .audit import registrar_evento_sofia
-from .engine import processar_mensagem_sofia
+from .engine import processar_mensagem_sofia, solicita_resumo_geral_alertas
+from .n8n_client import SofiaN8nError, consultar_resumo_alertas
 from .permissions import usuario_pode_executar
 from .tools_sentinel import codigos_regionais
 from regional_access import access_scope
@@ -110,18 +111,40 @@ def chat():
 
     try:
         scope = access_scope(getattr(current_user, "groups", ()), codigos_regionais())
-        reply = processar_mensagem_sofia(
-            usuario=username,
-            mensagem=message,
-            allowed_regionals=scope["allowed"],
-        )
+        if solicita_resumo_geral_alertas(message):
+            reply = consultar_resumo_alertas(
+                mensagem=message,
+                allowed_regionals=scope["allowed"],
+            )
+            audit_detail = "Resumo de alertas via n8n"
+        else:
+            reply = processar_mensagem_sofia(
+                usuario=username,
+                mensagem=message,
+                allowed_regionals=scope["allowed"],
+            )
+            audit_detail = "Resposta local somente leitura"
         registrar_evento_sofia(
             usuario=username,
             status="sucesso",
             tamanho_mensagem=len(message),
             endereco_remoto=remote_address,
+            detalhe=audit_detail,
         )
         return _json_response({"reply": reply})
+    except SofiaN8nError:
+        current_app.logger.exception("Falha no webhook privado da SofIA")
+        registrar_evento_sofia(
+            usuario=username,
+            status="erro",
+            tamanho_mensagem=len(message),
+            endereco_remoto=remote_address,
+            detalhe="Orquestrador de alertas indisponivel",
+        )
+        return _json_response(
+            {"error": "A consulta de alertas da SofIA esta indisponivel no momento."},
+            502,
+        )
     except Exception:
         registrar_evento_sofia(
             usuario=username,
