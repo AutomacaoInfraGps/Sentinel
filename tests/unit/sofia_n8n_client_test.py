@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
-from sofia.n8n_client import SofiaN8nError, consultar_resumo_alertas
+from sofia.n8n_client import SofiaN8nError, consultar_sofia
 
 
 class SofiaN8nClientTest(unittest.TestCase):
@@ -27,7 +27,7 @@ class SofiaN8nClientTest(unittest.TestCase):
             json=lambda: {"reply": "RESUMO OPERACIONAL\nTotal: 2"},
         )
 
-        reply = consultar_resumo_alertas(
+        reply = consultar_sofia(
             mensagem="Resumo dos alertas atuais",
             allowed_regionals={"REG_UBERLANDIA", "REG_ABC"},
         )
@@ -47,14 +47,14 @@ class SofiaN8nClientTest(unittest.TestCase):
             {"SENTINEL_SOFIA_N8N_WEBHOOK_URL": "http://10.254.12.66:5678/webhook/test"},
         ):
             with self.assertRaises(SofiaN8nError):
-                consultar_resumo_alertas(
+                consultar_sofia(
                     mensagem="Resumo dos alertas atuais",
                     allowed_regionals={"REG_ABC"},
                 )
 
     def test_empty_scope_does_not_call_the_orchestrator(self):
         with patch("sofia.n8n_client.requests.post") as post:
-            reply = consultar_resumo_alertas(
+            reply = consultar_sofia(
                 mensagem="Resumo dos alertas atuais",
                 allowed_regionals=set(),
             )

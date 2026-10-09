@@ -188,9 +188,9 @@ Graph.
 
 ### SofIA
 
-Assistente deterministica em `sofia/`, protegida por Flask-Login, limite de
-requisicoes e auditoria. Responde com os dados ja carregados pelo Sentinel, sem
-LLM externo.
+Assistente orquestrada pelo n8n em `sofia/`, protegida por Flask-Login, limite de
+requisicoes e auditoria. As perguntas seguem para o Ollama local com dados e
+escopo de acesso controlados pelo Sentinel.
 
 ## Integracoes
 
