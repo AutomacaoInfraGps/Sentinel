@@ -35,7 +35,7 @@ def _configured_token():
     return token
 
 
-def consultar_resumo_alertas(*, mensagem, allowed_regionals):
+def consultar_sofia(*, mensagem, allowed_regionals):
     regionals = sorted({
         str(regional).strip()
         for regional in (allowed_regionals or [])
