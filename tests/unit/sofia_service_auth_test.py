@@ -124,37 +124,34 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
         )
 
     def test_valid_signed_alert_request_returns_minimal_read_only_snapshot(self):
-        now = datetime.now(timezone.utc).isoformat()
-        state = {
-            "updated_at": now,
-            "groups": {
-                group: {"updated_at": now, "records": []}
-                for group in (
-                    "servidores",
-                    "switches",
-                    "links",
-                    "aps",
-                    "vpns",
-                    "firewalls",
-                    "admins",
-                )
+        snapshot = {
+            "updated_at": "2026-10-09T07:40:32-03:00",
+            "updated_at_brasilia": "2026-10-09T07:40:32-03:00",
+            "fresh": True,
+            "age_seconds": 8,
+            "ttl_seconds": 300,
+            "summary": {
+                "critical": 0,
+                "high": 2,
+                "medium": 10,
+                "attention": 5,
+                "total": 17,
             },
+            "alerts": [{
+                "id": "map-alert-id",
+                "type": "vpns",
+                "severity": "high",
+                "title": "Vpns offline",
+                "message": "2 ocorrencia(s) no mapa: vpns offline.",
+                "regional": "REG_TESTE",
+                "device": None,
+                "quantity": 2,
+                "persistent": False,
+                "occurred_at": "2026-10-09T07:40:32-03:00",
+            }],
         }
-        state["groups"]["links"]["records"] = [{
-            "nome": "WAN TESTE",
-            "regional": "REG_TESTE",
-            "status": "offline",
-            "changed_at": now,
-            "ip": "192.0.2.10",
-            "credencial": "nao-deve-sair",
-        }]
-        state["groups"]["servidores"]["records"] = [{
-            "nome": "SERVIDOR OK",
-            "regional": "REG_TESTE",
-            "status": "online",
-        }]
 
-        with patch("sofia.service_routes.load_operational_state", return_value=state):
+        with patch("sofia.service_routes.load_map_alert_snapshot", return_value=snapshot):
             response = self.client.get(
                 self.ALERTS_PATH,
                 headers=self._headers(
@@ -168,11 +165,10 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["mode"], "read-only")
         self.assertTrue(payload["snapshot"]["fresh"])
-        self.assertEqual(payload["summary"]["total"], 1)
-        self.assertEqual(payload["summary"]["critical"], 1)
-        self.assertEqual(payload["alerts"][0]["device"], "WAN TESTE")
-        self.assertNotIn("ip", payload["alerts"][0])
-        self.assertNotIn("credencial", payload["alerts"][0])
+        self.assertEqual(payload["snapshot"]["updated_at_brasilia"], "2026-10-09T07:40:32-03:00")
+        self.assertEqual(payload["summary"]["total"], 17)
+        self.assertEqual(payload["summary"]["high"], 2)
+        self.assertEqual(payload["alerts"][0]["quantity"], 2)
         self.assertFalse(payload["truncated"])
 
     def test_wrong_signature_is_rejected(self):

@@ -4,10 +4,8 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 
-from notification_center import build_notifications, snapshot_is_fresh
-from operational_state import DEVICE_GROUPS, load_operational_state
-
 from .service_auth import authenticate_service_request
+from .map_alerts import load_map_alert_snapshot
 
 
 sofia_service_bp = Blueprint("sofia_service", __name__)
@@ -76,6 +74,7 @@ def _service_alert_payload(notification):
             "message",
             "regional",
             "device",
+            "quantity",
             "persistent",
             "occurred_at",
         )
@@ -84,23 +83,9 @@ def _service_alert_payload(notification):
 
 @sofia_service_bp.get("/api/internal/sofia/v1/alerts")
 def service_alerts():
-    state = load_operational_state()
-    groups = state.get("groups") or {}
-    records_by_group = {
-        group: (groups.get(group) or {}).get("records") or []
-        for group in DEVICE_GROUPS
-    }
-    stale_groups = sorted(
-        group
-        for group in DEVICE_GROUPS
-        if not snapshot_is_fresh((groups.get(group) or {}).get("updated_at"))
-    )
-    notifications = build_notifications(records_by_group)
-    visible = notifications[:MAX_SERVICE_ALERTS]
-    severity_counts = {
-        severity: sum(1 for item in notifications if item.get("severity") == severity)
-        for severity in ("critical", "important", "success")
-    }
+    snapshot = load_map_alert_snapshot()
+    alerts = snapshot["alerts"]
+    visible = alerts[:MAX_SERVICE_ALERTS]
     response = jsonify(
         {
             "success": True,
@@ -109,16 +94,15 @@ def service_alerts():
             "api_version": "v1",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "snapshot": {
-                "updated_at": state.get("updated_at"),
-                "fresh": not stale_groups,
-                "stale_groups": stale_groups,
+                "updated_at": snapshot["updated_at"],
+                "updated_at_brasilia": snapshot["updated_at_brasilia"],
+                "fresh": snapshot["fresh"],
+                "age_seconds": snapshot["age_seconds"],
+                "ttl_seconds": snapshot["ttl_seconds"],
             },
-            "summary": {
-                "total": len(notifications),
-                **severity_counts,
-            },
+            "summary": snapshot["summary"],
             "alerts": [_service_alert_payload(item) for item in visible],
-            "truncated": len(notifications) > len(visible),
+            "truncated": len(alerts) > len(visible),
         }
     )
     response.headers["Cache-Control"] = "no-store"

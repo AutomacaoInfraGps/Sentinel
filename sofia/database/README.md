@@ -30,6 +30,16 @@ A funcao aceita no maximo 100 alertas, valida os campos, calcula SHA-256 dentro
 do PostgreSQL e desativa snapshots ausentes na leitura atual. O JSON recebido
 nao e persistido.
 
+A leitura tambem ocorre por uma API SQL fechada. `get_alert_summary` devolve
+somente contagens e a data da ultima observacao. `list_active_alerts` devolve no
+maximo 50 alertas com os campos operacionais minimos e pode limitar o resultado
+por regional. O usuario de runtime nao possui `SELECT` direto em
+`alert_snapshots`.
+
+A migracao `004_map_alert_alignment.sql` alinha o snapshot com o agregado exibido
+no mapa. Cada alerta inclui `quantity`, e o resumo soma as ocorrencias nas faixas
+`critical`, `high`, `medium` e `attention` em vez de contar dispositivos.
+
 ## Criacao segura
 
 Execute a preparacao com o administrador PostgreSQL do container. Nao coloque a
