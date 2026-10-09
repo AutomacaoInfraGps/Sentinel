@@ -127,14 +127,14 @@ def chat():
             detalhe=audit_detail,
         )
         return _json_response({"reply": reply})
-    except SofiaN8nError:
+    except SofiaN8nError as exc:
         current_app.logger.exception("Falha no webhook privado da SofIA")
         registrar_evento_sofia(
             usuario=username,
             status="erro",
             tamanho_mensagem=len(message),
             endereco_remoto=remote_address,
-            detalhe="Orquestrador de alertas indisponivel",
+            detalhe=f"Orquestrador indisponivel: {exc}",
         )
         return _json_response(
             {"error": "A consulta de alertas da SofIA esta indisponivel no momento."},
