@@ -65,7 +65,7 @@ def load_map_alert_snapshot(path=None, now=None):
     for regional in payload.get("regionais") or []:
         regional_code = str(regional.get("codigo") or regional.get("nome") or "Sem regional").strip()
         # This is the map snapshot time, not the time when a device last changed.
-        occurred_at = updated_at
+        occurred_at = _brasilia_iso(updated_at)
         for alert in regional.get("alertas") or []:
             severity = SEVERITY_MAP.get(str(alert.get("severidade") or "").strip().lower())
             try:
