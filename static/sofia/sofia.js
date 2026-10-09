@@ -20,6 +20,7 @@
     const messages = document.getElementById("sofiaMessages");
     const status = document.getElementById("sofiaStatus");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let waitingMessage = null;
 
     function typeAssistantMessage(item) {
         if (!item || item.dataset.typed === "true" || item.dataset.typing === "true") return;
@@ -188,11 +189,47 @@
         }
     }
 
+    function showWaitingMessage() {
+        if (waitingMessage) return;
+
+        const item = document.createElement("div");
+        item.className = "sofia-message sofia-message-assistant sofia-message-waiting";
+        item.setAttribute("role", "status");
+        item.setAttribute("aria-label", "SofIA está respondendo");
+
+        const authorNode = document.createElement("span");
+        authorNode.className = "sofia-message-author";
+        authorNode.textContent = "SofIA";
+
+        const dots = document.createElement("p");
+        dots.className = "sofia-waiting-dots";
+        dots.setAttribute("aria-hidden", "true");
+        for (let index = 0; index < 3; index += 1) {
+            dots.appendChild(document.createElement("span"));
+        }
+
+        item.append(authorNode, dots);
+        messages.appendChild(item);
+        waitingMessage = item;
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function removeWaitingMessage() {
+        if (!waitingMessage) return;
+        waitingMessage.remove();
+        waitingMessage = null;
+    }
+
     function setBusy(busy) {
         input.disabled = busy;
         sendButton.disabled = busy;
         status.classList.remove("is-error");
-        status.textContent = busy ? "SofIA está respondendo..." : "";
+        status.textContent = "";
+        if (busy) {
+            showWaitingMessage();
+        } else {
+            removeWaitingMessage();
+        }
     }
 
     function showError(message) {
@@ -261,8 +298,8 @@
             const data = contentType.includes("application/json") ? await response.json() : {};
             if (!response.ok) throw new Error(data.error || "Não foi possível falar com a SofIA.");
 
-            appendMessage("SofIA", data.reply, "assistant");
             setBusy(false);
+            appendMessage("SofIA", data.reply, "assistant");
             input.focus();
         } catch (error) {
             setBusy(false);
