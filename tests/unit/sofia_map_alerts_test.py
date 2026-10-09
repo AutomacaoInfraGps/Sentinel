@@ -44,6 +44,10 @@ class SofiaMapAlertsTest(unittest.TestCase):
         self.assertEqual(snapshot["updated_at_brasilia"], "2026-10-09T07:40:32-03:00")
         self.assertTrue(snapshot["fresh"])
         self.assertEqual([item["quantity"] for item in snapshot["alerts"]], [2, 10, 5])
+        self.assertTrue(all(
+            item["occurred_at"] == "2026-10-09T07:40:32-03:00"
+            for item in snapshot["alerts"]
+        ))
 
 
 if __name__ == "__main__":
