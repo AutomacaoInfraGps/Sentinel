@@ -61,6 +61,20 @@ class SofiaN8nClientTest(unittest.TestCase):
         self.assertIn("Nao ha regionais", reply)
         post.assert_not_called()
 
+    @patch("sofia.n8n_client.requests.post")
+    def test_removes_space_entities_from_reply(self, post):
+        post.return_value = Mock(
+            status_code=200,
+            json=lambda: {"reply": "Linha 1.&#x20;  \nLinha 2.&nbsp;"},
+        )
+
+        reply = consultar_sofia(
+            mensagem="Resumo",
+            allowed_regionals={"REG_ABC"},
+        )
+
+        self.assertEqual(reply, "Linha 1.\nLinha 2.")
+
 
 if __name__ == "__main__":
     unittest.main()
