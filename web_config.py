@@ -213,8 +213,8 @@ def load_user(user_id):
 
 # Instâncias globais
 gerenciador_regionais = GerenciadorRegionais()
-verificador_v2 = VerificadorServidoresV2()
-dashboard_hierarquico = DashboardHierarquico()
+verificador_v2 = VerificadorServidoresV2(gerenciador_regionais)
+dashboard_hierarquico = DashboardHierarquico(gerenciador_regionais, verificador_v2)
 gerenciador_switches = GerenciadorSwitches()
 gerenciador_fortigate = GerenciadorFortigate()
 gerenciador_contatos_email = GerenciadorContatosEmail()

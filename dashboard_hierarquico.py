@@ -14,9 +14,9 @@ from verificar_servidores_v2 import VerificadorServidoresV2
 class DashboardHierarquico:
     """Dashboard com estrutura hierárquica Regional → Servidores"""
     
-    def __init__(self):
-        self.gerenciador = GerenciadorRegionais()
-        self.verificador = VerificadorServidoresV2()
+    def __init__(self, gerenciador=None, verificador=None):
+        self.gerenciador = gerenciador or GerenciadorRegionais()
+        self.verificador = verificador or VerificadorServidoresV2(self.gerenciador)
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
         

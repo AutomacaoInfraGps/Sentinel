@@ -294,16 +294,30 @@ class JsonSecretStore:
             self._save_unlocked(payload)
 
     def get(self, reference: str) -> str:
-        reference = self._validate_reference(reference)
+        return self.get_many([reference])[self._validate_reference(reference)]
+
+    def get_many(self, references) -> dict[str, str]:
+        """Read the vault once and decrypt the requested credentials in memory."""
+        normalized_references = [
+            self._validate_reference(reference) for reference in references
+        ]
+        if not normalized_references:
+            return {}
+
         with _InterprocessFileLock(self.lock_path):
-            entry = self._load_unlocked()["entries"].get(reference)
-        if not isinstance(entry, dict) or not isinstance(entry.get("ciphertext"), str):
-            raise SecretNotFoundError("Credencial nao encontrada no cofre.")
-        try:
-            protected = base64.b64decode(entry["ciphertext"], validate=True)
-        except (ValueError, TypeError) as exc:
-            raise SecretStoreError("A credencial protegida esta corrompida.") from exc
-        return self.protector.unprotect(protected)
+            entries = self._load_unlocked()["entries"]
+
+        resolved = {}
+        for reference in dict.fromkeys(normalized_references):
+            entry = entries.get(reference)
+            if not isinstance(entry, dict) or not isinstance(entry.get("ciphertext"), str):
+                raise SecretNotFoundError("Credencial nao encontrada no cofre.")
+            try:
+                protected = base64.b64decode(entry["ciphertext"], validate=True)
+            except (ValueError, TypeError) as exc:
+                raise SecretStoreError("A credencial protegida esta corrompida.") from exc
+            resolved[reference] = self.protector.unprotect(protected)
+        return resolved
 
     def contains(self, reference: str) -> bool:
         reference = self._validate_reference(reference)

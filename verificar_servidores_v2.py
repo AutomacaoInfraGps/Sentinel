@@ -62,8 +62,8 @@ def print(*args, **kwargs):
 class VerificadorServidoresV2:
     """Verificador de servidores com estrutura hierárquica"""
     
-    def __init__(self):
-        self.gerenciador = GerenciadorRegionais()
+    def __init__(self, gerenciador=None):
+        self.gerenciador = gerenciador or GerenciadorRegionais()
         self.resultados = {}
         
     def verificar_servidor(self, servidor: Dict, codigo_regional: str) -> Dict:

@@ -71,6 +71,23 @@ class JsonSecretStoreTests(unittest.TestCase):
         self.assertNotIn("secret-one", persisted)
         self.assertNotIn("secret-two", persisted)
 
+    def test_get_many_returns_all_requested_values(self):
+        self.store.put_many({
+            "regional/test/server/1/password": "secret-one",
+            "regional/test/server/2/password": "secret-two",
+        })
+
+        self.assertEqual(
+            self.store.get_many([
+                "regional/test/server/1/password",
+                "regional/test/server/2/password",
+            ]),
+            {
+                "regional/test/server/1/password": "secret-one",
+                "regional/test/server/2/password": "secret-two",
+            },
+        )
+
     def test_rejects_unsafe_reference(self):
         with self.assertRaises(SecretStoreError):
             self.store.put("../outside", "segredo")

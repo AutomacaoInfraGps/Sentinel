@@ -123,11 +123,26 @@ class GerenciadorRegionais:
                 self._capture_credential_references(dados)
                 if contains_credential_reference(dados):
                     store = self._get_secret_store()
-                    resolvidos = resolve_credential_references(dados, secret_store=store)
-                    self._persisted_secrets = {
-                        reference: store.get(reference)
-                        for reference in self._credential_refs.values()
-                    }
+                    references = tuple(dict.fromkeys(self._credential_refs.values()))
+                    try:
+                        get_many = getattr(store, "get_many", None)
+                        if callable(get_many):
+                            resolved_secrets = get_many(references)
+                        else:
+                            resolved_secrets = {
+                                reference: store.get(reference)
+                                for reference in references
+                            }
+                    except SecretStoreError as exc:
+                        raise EnvironmentConfigError(
+                            "Uma credencial referenciada pelo ambiente nao esta disponivel."
+                        ) from exc
+                    resolvidos = resolve_credential_references(
+                        dados,
+                        secret_store=store,
+                        resolved_secrets=resolved_secrets,
+                    )
+                    self._persisted_secrets = resolved_secrets
                     return self._normalizar_estrutura(resolvidos)
                 self._persisted_secrets = {}
                 return dados

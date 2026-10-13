@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from typing import Protocol
+from typing import Mapping, Protocol
 
 from core.secret_store import JsonSecretStore, SecretStoreError
 
@@ -72,11 +72,14 @@ def resolve_credential_references(
     payload: object,
     *,
     secret_store: SecretReader,
+    resolved_secrets: Mapping[str, str] | None = None,
 ) -> object:
     """Return a copy of a JSON value with credential references resolved in memory."""
     if is_credential_reference(payload):
         reference = payload[CREDENTIAL_REFERENCE_KEY].strip()
         try:
+            if resolved_secrets is not None and reference in resolved_secrets:
+                return resolved_secrets[reference]
             return secret_store.get(reference)
         except SecretStoreError as exc:
             raise EnvironmentConfigError(
@@ -84,12 +87,20 @@ def resolve_credential_references(
             ) from exc
     if isinstance(payload, dict):
         return {
-            key: resolve_credential_references(value, secret_store=secret_store)
+            key: resolve_credential_references(
+                value,
+                secret_store=secret_store,
+                resolved_secrets=resolved_secrets,
+            )
             for key, value in payload.items()
         }
     if isinstance(payload, list):
         return [
-            resolve_credential_references(value, secret_store=secret_store)
+            resolve_credential_references(
+                value,
+                secret_store=secret_store,
+                resolved_secrets=resolved_secrets,
+            )
             for value in payload
         ]
     return deepcopy(payload)
