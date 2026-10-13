@@ -4,7 +4,7 @@
 Coleta certificados do servidor Acrab e salva em JSON.
 
 Regras:
-- Lê credenciais do arquivo de backup `estrutura_regionais.backup_20260522_102235.json`.
+- Lê credenciais do cadastro atual usando o cofre do Sentinel.
 - Usa WinRM (Invoke-Command) via PowerShell local para executar comando remoto.
 - Salva resultado tratado em `certificate_disk_report_acrab.json`.
 """
@@ -19,7 +19,6 @@ from datetime import datetime
 
 
 WORKDIR = Path(__file__).resolve().parents[0]
-BACKUP_FILE = WORKDIR / "estrutura_regionais.backup_20260522_102235.json"
 SECONDARY_FILE = WORKDIR / "estrutura_regionais.json"
 OUTPUT_FILE = WORKDIR / "certificate_disk_report_acrab.json"
 LOG_DIR = WORKDIR / "logs"
@@ -37,63 +36,57 @@ def log_error(msg: str):
         pass
 
 
-def load_credentials_from_backup(ip: str):
-    # Try primary backup first, then secondary full file
-    candidates = [BACKUP_FILE, SECONDARY_FILE]
-    last_exc = None
-    for f in candidates:
-        if not f.exists():
-            continue
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except Exception as exc:
-            last_exc = exc
-            continue
+def load_credentials(ip: str):
+    from gerenciar_regionais import GerenciadorRegionais
 
-        regionais = data.get("regionais") if isinstance(data, dict) else None
-        if not isinstance(regionais, dict):
-            continue
-
-        for chave, reg in regionais.items():
-            servidores = (reg or {}).get("servidores") or []
-            if not isinstance(servidores, list):
+    if not SECONDARY_FILE.exists():
+        raise RuntimeError("Cadastro regional atual nao encontrado")
+    data = GerenciadorRegionais(str(SECONDARY_FILE)).regionais
+    for reg in data.get("regionais", {}).values():
+        for srv in (reg or {}).get("servidores", []):
+            srv_ip = str(srv.get("ip") or srv.get("address") or "").strip()
+            if srv_ip != str(ip):
                 continue
-            for srv in servidores:
-                srv_ip = str(srv.get("ip") or srv.get("address") or "").strip()
-                if not srv_ip:
-                    continue
-                if srv_ip == str(ip):
-                    usuario = srv.get("usuario") or srv.get("login") or srv.get("user")
-                    senha = srv.get("senha") or srv.get("password") or srv.get("pass")
-                    if not usuario or not senha:
-                        raise RuntimeError("Credenciais encontradas, mas incompletas no backup")
-                    nome = srv.get("nome") or srv.get("host") or None
-                    return {
-                        "username": usuario,
-                        "password": senha,
-                        "host": nome or ip,
-                        "source_file": str(f),
-                    }
-
-    if last_exc:
-        raise RuntimeError(f"Falha ao ler arquivos de credenciais: {last_exc}")
-    raise RuntimeError(f"Nenhum servidor com IP {ip} encontrado nos arquivos {candidates}")
-
-
-def escape_ps(value: str) -> str:
-    return str(value).replace("'", "''")
+            usuario = srv.get("usuario") or srv.get("login") or srv.get("user")
+            senha = srv.get("senha") or srv.get("password") or srv.get("pass")
+            if not usuario or not senha:
+                raise RuntimeError("Credenciais encontradas, mas incompletas")
+            return {
+                "username": usuario,
+                "password": senha,
+                "host": srv.get("nome") or srv.get("host") or ip,
+            }
+    raise RuntimeError("Servidor alvo nao encontrado no cadastro regional atual")
 
 
 def run_remote_powershell(host: str, username: str, password: str, script_block: str):
-    # Build a PowerShell command that creates PSCredential and runs Invoke-Command
+    # A credencial segue pela entrada padrao e nao aparece na linha de comando.
     ps = textwrap.dedent(f"""
-        $pw = ConvertTo-SecureString '{escape_ps(password)}' -AsPlainText -Force
-        $cred = New-Object System.Management.Automation.PSCredential('{escape_ps(username)}', $pw)
-        Invoke-Command -ComputerName {host} -Credential $cred -Authentication Negotiate -ScriptBlock {{ {script_block} }} -ErrorAction Stop | ConvertTo-Json -Depth 4
+        $payload = [Console]::In.ReadToEnd() | ConvertFrom-Json
+        $pw = ConvertTo-SecureString $payload.password -AsPlainText -Force
+        $cred = New-Object System.Management.Automation.PSCredential($payload.username, $pw)
+        try {{
+            Invoke-Command -ComputerName $payload.host -Credential $cred -Authentication Negotiate -ScriptBlock {{ {script_block} }} -ErrorAction Stop | ConvertTo-Json -Depth 4
+        }} finally {{
+            $payload = $null
+            $pw = $null
+            $cred = $null
+        }}
     """)
+    credential_input = json.dumps({
+        "host": str(host),
+        "username": str(username),
+        "password": str(password),
+    })
 
     try:
-        proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+            input=credential_input,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
     except Exception as exc:
         raise RuntimeError(f"Falha ao executar PowerShell local: {exc}")
 
@@ -151,7 +144,7 @@ def normalize_cert_entry(entry: dict) -> dict:
 
 def main():
     try:
-        creds = load_credentials_from_backup(TARGET_IP)
+        creds = load_credentials(TARGET_IP)
     except Exception as exc:
         log_error(f"Erro ao carregar credenciais: {exc}")
         print(f"Erro ao carregar credenciais: {exc}")

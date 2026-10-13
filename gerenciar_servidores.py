@@ -4,9 +4,12 @@ Interface amigável para adicionar, remover e configurar servidores iDRAC/iLO
 """
 
 import json
+import os
 import socket
+import tempfile
 import requests
 import urllib3
+from copy import deepcopy
 from datetime import datetime
 from pysnmp.hlapi import (
     SnmpEngine,
@@ -23,6 +26,17 @@ import re
 
 # Importa configurações
 from config import PROJECT_ROOT, CONEXOES_FILE
+from core.environment_loader import (
+    CREDENTIAL_REFERENCE_KEY,
+    EnvironmentConfigError,
+    contains_credential_reference,
+    is_credential_reference,
+    resolve_credential_references,
+)
+from core.secret_store import JsonSecretStore, SecretStoreError
+
+
+LEGACY_CREDENTIAL_STORAGE = "vault-v1"
 
 # Desabilita warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -30,17 +44,93 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class GerenciadorServidores:
     """Classe para gerenciar servidores iDRAC/iLO"""
     
-    def __init__(self):
-        self.arquivo_servidores = PROJECT_ROOT / "servidores.json"
+    def __init__(self, arquivo_servidores=None, secret_store=None):
+        self.arquivo_servidores = Path(arquivo_servidores or PROJECT_ROOT / "servidores.json")
         self.arquivo_conexoes_legado = CONEXOES_FILE
+        self._secret_store = secret_store
+        self._credential_refs = {}
+        self._persisted_secrets = {}
         self.servidores = self._carregar_servidores()
+
+    def _get_secret_store(self):
+        if self._secret_store is None:
+            self._secret_store = JsonSecretStore()
+        return self._secret_store
+
+    @staticmethod
+    def _reference_segment(value: object) -> str:
+        import unicodedata
+
+        normalized = unicodedata.normalize("NFKD", str(value or ""))
+        ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+        return re.sub(r"[^a-z0-9._-]+", "-", ascii_value).strip("-._") or "item"
+
+    def _server_reference(self, servidor: Dict, index: int) -> str:
+        server_id = servidor.get("id") or f"index-{index}"
+        return f"legacy-servers/{self._reference_segment(server_id)}/senha"
+
+    def _capture_credential_references(self, payload: Dict) -> None:
+        self._credential_refs = {}
+        for index, servidor in enumerate(payload.get("servidores", [])):
+            value = servidor.get("senha")
+            if is_credential_reference(value):
+                key = str(servidor.get("id") or f"index-{index}")
+                self._credential_refs[key] = value[CREDENTIAL_REFERENCE_KEY]
+
+    def _payload_para_persistencia(self, dados: Dict) -> Dict:
+        payload = deepcopy(dados)
+        config = payload.setdefault("configuracao", {})
+        if config.get("credential_storage") != LEGACY_CREDENTIAL_STORAGE:
+            return payload
+
+        store = self._get_secret_store()
+        refs_atualizadas = {}
+        segredos_atualizados = {}
+        alterados = {}
+        for index, servidor in enumerate(payload.get("servidores", [])):
+            key = str(servidor.get("id") or f"index-{index}")
+            secret = servidor.get("senha")
+            reference = self._credential_refs.get(key) or self._server_reference(
+                servidor, index
+            )
+            if is_credential_reference(secret):
+                reference = secret[CREDENTIAL_REFERENCE_KEY]
+                secret = store.get(reference)
+            if not isinstance(secret, str) or not secret:
+                continue
+            if self._persisted_secrets.get(reference) != secret:
+                alterados[reference] = secret
+            servidor["senha"] = {CREDENTIAL_REFERENCE_KEY: reference}
+            refs_atualizadas[key] = reference
+            segredos_atualizados[reference] = secret
+
+        if alterados:
+            store.put_many(alterados)
+            for reference, secret in alterados.items():
+                if store.get(reference) != secret:
+                    raise SecretStoreError("Uma credencial legada nao passou na verificacao.")
+        self._credential_refs = refs_atualizadas
+        self._persisted_secrets = segredos_atualizados
+        return payload
     
     def _carregar_servidores(self) -> Dict:
         """Carrega a lista de servidores do arquivo JSON"""
         if self.arquivo_servidores.exists():
             try:
                 with open(self.arquivo_servidores, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    dados = json.load(f)
+                self._capture_credential_references(dados)
+                if contains_credential_reference(dados):
+                    store = self._get_secret_store()
+                    resolvidos = resolve_credential_references(dados, secret_store=store)
+                    self._persisted_secrets = {
+                        reference: store.get(reference)
+                        for reference in self._credential_refs.values()
+                    }
+                    return resolvidos
+                return dados
+            except (EnvironmentConfigError, SecretStoreError):
+                raise
             except (json.JSONDecodeError, FileNotFoundError) as e:
                 print(f"⚠️ Erro ao carregar servidores.json: {e}")
                 return self._criar_estrutura_inicial()
@@ -54,6 +144,7 @@ class GerenciadorServidores:
             "servidores": [],
             "configuracao": {
                 "versao": "1.0",
+                "credential_storage": LEGACY_CREDENTIAL_STORAGE,
                 "ultima_atualizacao": datetime.now().isoformat(),
                 "backup_automatico": True,
                 "validacao_automatica": True
@@ -143,11 +234,24 @@ class GerenciadorServidores:
         if dados is None:
             dados = self.servidores
         
-        dados["configuracao"]["ultima_atualizacao"] = datetime.now().isoformat()
+        dados.setdefault("configuracao", {})["ultima_atualizacao"] = datetime.now().isoformat()
         
         try:
-            with open(self.arquivo_servidores, 'w', encoding='utf-8') as f:
-                json.dump(dados, f, indent=2, ensure_ascii=False)
+            payload = self._payload_para_persistencia(dados)
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=".servidores-",
+                suffix=".tmp",
+                dir=str(self.arquivo_servidores.parent),
+            )
+            try:
+                with os.fdopen(descriptor, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary_name, self.arquivo_servidores)
+            finally:
+                if os.path.exists(temporary_name):
+                    os.unlink(temporary_name)
             print(f"💾 Configurações salvas em: {self.arquivo_servidores.name}")
         except Exception as e:
             print(f"❌ Erro ao salvar: {e}")
@@ -511,6 +615,9 @@ class GerenciadorServidores:
     
     def gerar_arquivo_conexoes_legado(self):
         """Gera o arquivo Conexoes.txt no formato antigo para compatibilidade"""
+        if self.servidores.get("configuracao", {}).get("credential_storage") == LEGACY_CREDENTIAL_STORAGE:
+            print("Conexoes.txt nao foi gerado: credenciais protegidas pelo cofre.")
+            return False
         servidores_ativos = [s for s in self.servidores.get("servidores", []) if s.get("ativo", True)]
         
         conteudo = []
@@ -525,13 +632,19 @@ Senha: {servidor['senha']}"""
         # Salva o arquivo
         self.arquivo_conexoes_legado.write_text("\n\n".join(conteudo), encoding="utf-8")
         print(f"📄 Arquivo {self.arquivo_conexoes_legado.name} atualizado para compatibilidade")
+        return True
     
     def exportar_configuracao(self, arquivo: str):
         """Exporta configuração para backup"""
         try:
             caminho = Path(arquivo)
             with open(caminho, 'w', encoding='utf-8') as f:
-                json.dump(self.servidores, f, indent=2, ensure_ascii=False)
+                json.dump(
+                    self._payload_para_persistencia(self.servidores),
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                )
             print(f"📤 Configuração exportada para: {caminho}")
         except Exception as e:
             print(f"❌ Erro ao exportar: {e}")
@@ -549,6 +662,9 @@ Senha: {servidor['senha']}"""
                 return False
             
             self.servidores = dados
+            self.servidores.setdefault("configuracao", {})["credential_storage"] = (
+                LEGACY_CREDENTIAL_STORAGE
+            )
             self._salvar_servidores()
             print(f"📥 Configuração importada de: {caminho}")
             return True

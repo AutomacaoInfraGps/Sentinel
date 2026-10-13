@@ -9,6 +9,13 @@ param(
     [string]$TaskName = "AutomacaoWebStartup",
     [string]$DisplayName = "Automacao Web",
     [string]$Description = "Sistema de Automacao Web (Flask + Waitress)",
+    [string]$TaskUser = $(
+        if ($env:USERDOMAIN -and $env:USERNAME) {
+            "$($env:USERDOMAIN)\$($env:USERNAME)"
+        } else {
+            $env:USERNAME
+        }
+    ),
     [string]$PythonPath = (Join-Path $PSScriptRoot ".venv\Scripts\python.exe"),
     [string]$RunnerPath = (Join-Path $PSScriptRoot "run_web_service.py"),
     [string]$StarterPath = (Join-Path $PSScriptRoot "start_web_background.ps1"),
@@ -73,7 +80,8 @@ function Install-Service {
     if ($PublicBase) {
         $taskCommand += " -PublicBase `"$PublicBase`""
     }
-    schtasks /create /tn $TaskName /sc onstart /ru SYSTEM /rl HIGHEST /tr $taskCommand /f | Out-Null
+    Write-Host "A tarefa sera vinculada a '$TaskUser' para acessar o cofre DPAPI."
+    schtasks /create /tn $TaskName /sc onstart /ru $TaskUser /rp * /rl HIGHEST /tr $taskCommand /f | Out-Null
 
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
         sc.exe config $ServiceName start= demand | Out-Null

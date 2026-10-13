@@ -379,7 +379,14 @@ class TemplatesConfiguracao:
             # Carrega servidores atuais
             from gerenciar_servidores import GerenciadorServidores
             gerenciador = GerenciadorServidores()
-            servidores_atuais = gerenciador.listar_servidores()
+            servidores_atuais = [
+                {
+                    chave: valor
+                    for chave, valor in servidor.items()
+                    if chave not in {"senha", "password"}
+                }
+                for servidor in gerenciador.listar_servidores()
+            ]
             
             # Cria template
             template = {

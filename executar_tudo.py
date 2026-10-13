@@ -1152,7 +1152,9 @@ def _carregar_servidores_da_estrutura():
     if not estrutura_path.exists():
         return []
 
-    data = json.loads(estrutura_path.read_text(encoding="utf-8"))
+    from gerenciar_regionais import GerenciadorRegionais
+
+    data = GerenciadorRegionais(str(estrutura_path)).regionais
     servidores = []
 
     for regional in (data.get("regionais") or {}).values():
