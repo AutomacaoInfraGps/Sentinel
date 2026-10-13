@@ -296,13 +296,24 @@
 
             const contentType = response.headers.get("content-type") || "";
             const data = contentType.includes("application/json") ? await response.json() : {};
-            if (!response.ok) throw new Error(data.error || "Não foi possível falar com a SofIA.");
+            if (!response.ok) {
+                const requestError = new Error(data.error || "Não foi possível falar com a SofIA.");
+                requestError.assistantReply = data.reply ||
+                    "Não consegui falar com o Sentinel neste momento. Tente novamente em instantes.";
+                throw requestError;
+            }
 
             setBusy(false);
             appendMessage("SofIA", data.reply, "assistant");
             input.focus();
         } catch (error) {
             setBusy(false);
+            appendMessage(
+                "SofIA",
+                error.assistantReply ||
+                    "Não consegui concluir sua solicitação neste momento. Tente novamente em instantes.",
+                "assistant"
+            );
             showError(error.message || "Erro de comunicação com a SofIA.");
             input.focus();
         }

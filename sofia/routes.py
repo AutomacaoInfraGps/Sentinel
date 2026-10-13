@@ -137,7 +137,13 @@ def chat():
             detalhe=f"Orquestrador indisponivel: {exc}",
         )
         return _json_response(
-            {"error": "A consulta de alertas da SofIA esta indisponivel no momento."},
+            {
+                "error": "A consulta de alertas da SofIA esta indisponivel no momento.",
+                "reply": (
+                    "Não consegui consultar os dados do Sentinel neste momento. "
+                    "Tente novamente em instantes."
+                ),
+            },
             502,
         )
     except Exception:
@@ -148,4 +154,13 @@ def chat():
             endereco_remoto=remote_address,
             detalhe="Falha interna no processamento",
         )
-        return _json_response({"error": "Não foi possível processar sua mensagem agora."}, 500)
+        return _json_response(
+            {
+                "error": "Não foi possível processar sua mensagem agora.",
+                "reply": (
+                    "Não consegui processar sua mensagem neste momento. "
+                    "Tente novamente em instantes."
+                ),
+            },
+            500,
+        )
