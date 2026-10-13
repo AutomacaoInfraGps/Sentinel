@@ -21,11 +21,11 @@ from core.environment_loader import (  # noqa: E402
     is_credential_reference,
     resolve_credential_references,
 )
-from core.secret_store import JsonSecretStore, SecretStoreError  # noqa: E402
-from gerenciar_servidores import (  # noqa: E402
-    GerenciadorServidores,
+from core.legacy_server_credentials import (  # noqa: E402
     LEGACY_CREDENTIAL_STORAGE,
+    server_reference,
 )
+from core.secret_store import JsonSecretStore, SecretStoreError  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -67,7 +67,6 @@ def save_raw(path: Path, payload: dict) -> None:
 
 
 def build_plan(payload: dict) -> list[MigrationItem]:
-    helper = GerenciadorServidores.__new__(GerenciadorServidores)
     items = []
     references = set()
     for index, servidor in enumerate(payload.get("servidores", [])):
@@ -78,7 +77,7 @@ def build_plan(payload: dict) -> list[MigrationItem]:
             continue
         if not isinstance(secret, str):
             raise MigrationError("Uma senha legada possui formato nao suportado.")
-        reference = GerenciadorServidores._server_reference(helper, servidor, index)
+        reference = server_reference(servidor, index)
         if reference in references:
             raise MigrationError("Dois servidores geraram a mesma referencia de credencial.")
         references.add(reference)

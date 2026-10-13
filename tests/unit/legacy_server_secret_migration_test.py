@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -46,6 +48,23 @@ def sample_payload():
 
 
 class LegacyServerSecretMigrationTests(unittest.TestCase):
+    def test_migration_cli_help_does_not_import_snmp(self):
+        script = (
+            Path(__file__).resolve().parents[2]
+            / "scripts"
+            / "security"
+            / "migrate_legacy_server_secrets.py"
+        )
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("servidores.json", result.stdout)
+
     def test_migration_manager_and_rollback(self):
         payload = sample_payload()
         store = FakeSecretStore()

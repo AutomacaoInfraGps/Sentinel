@@ -33,10 +33,12 @@ from core.environment_loader import (
     is_credential_reference,
     resolve_credential_references,
 )
+from core.legacy_server_credentials import (
+    LEGACY_CREDENTIAL_STORAGE,
+    reference_segment,
+    server_reference,
+)
 from core.secret_store import JsonSecretStore, SecretStoreError
-
-
-LEGACY_CREDENTIAL_STORAGE = "vault-v1"
 
 # Desabilita warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -59,15 +61,10 @@ class GerenciadorServidores:
 
     @staticmethod
     def _reference_segment(value: object) -> str:
-        import unicodedata
-
-        normalized = unicodedata.normalize("NFKD", str(value or ""))
-        ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
-        return re.sub(r"[^a-z0-9._-]+", "-", ascii_value).strip("-._") or "item"
+        return reference_segment(value)
 
     def _server_reference(self, servidor: Dict, index: int) -> str:
-        server_id = servidor.get("id") or f"index-{index}"
-        return f"legacy-servers/{self._reference_segment(server_id)}/senha"
+        return server_reference(servidor, index)
 
     def _capture_credential_references(self, payload: Dict) -> None:
         self._credential_refs = {}
