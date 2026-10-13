@@ -19,4 +19,14 @@ if (-not (Test-Path $runner)) {
     throw "Runner não encontrado em $runner"
 }
 
-Start-Process -FilePath $pythonExe -ArgumentList $runner -WorkingDirectory $projectDir -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+$process = Start-Process `
+    -FilePath $pythonExe `
+    -ArgumentList $runner `
+    -WorkingDirectory $projectDir `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $stdoutLog `
+    -RedirectStandardError $stderrLog `
+    -PassThru `
+    -Wait
+
+exit $process.ExitCode
