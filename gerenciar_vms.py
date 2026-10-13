@@ -30,6 +30,7 @@ except ImportError:
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+from core.environment_loader import EnvironmentConfigError, load_environment_file
 try:
     from urllib3.exceptions import InsecureRequestWarning
 except ImportError:
@@ -45,17 +46,10 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # Tenta importar configurações do environment.json
 try:
-    from pathlib import Path
-    
-    # Carrega configurações do environment.json
     from utils_paths import get_environment_file
     env_file = get_environment_file()
-    if env_file.exists():
-        with open(env_file, 'r', encoding='utf-8') as f:
-            ENV_CONFIG = json.load(f)
-    else:
-        ENV_CONFIG = {}
-except Exception as e:
+    ENV_CONFIG = load_environment_file(env_file)
+except (EnvironmentConfigError, OSError) as e:
     print(f"⚠️ Erro ao carregar environment.json: {e}")
     ENV_CONFIG = {}
 

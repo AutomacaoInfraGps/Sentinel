@@ -51,8 +51,7 @@
                         <label for="naos_senha" class="form-label">Senha *</label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="naos_senha" name="naos_senha" 
-                                   value="{{ config.get('naos_server', {}).get('senha', '') }}" 
-                                   placeholder="Digite a senha" required>
+                                   placeholder="Deixe vazio para manter a senha atual">
                             <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('naos_senha')">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -101,8 +100,7 @@
                         <label for="unifi_senha" class="form-label">Senha *</label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="unifi_senha" name="unifi_senha" 
-                                   value="{{ config.get('unifi_controller', {}).get('password', '') }}" 
-                                   placeholder="Digite a senha" required>
+                                   placeholder="Deixe vazio para manter a senha atual">
                             <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('unifi_senha')">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -151,8 +149,7 @@
                         <label for="fortigate_senha" class="form-label">Senha *</label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="fortigate_senha" name="fortigate_senha" 
-                                   value="{{ config.get('fortigate', {}).get('password', '') }}" 
-                                   placeholder="Digite a senha" required>
+                                   placeholder="Deixe vazio para manter a senha atual">
                             <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('fortigate_senha')">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -193,8 +190,7 @@
                         <label for="zabbix_senha" class="form-label">Senha *</label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="zabbix_senha" name="zabbix_senha" 
-                                   value="{{ config.get('zabbix', {}).get('password', '') }}" 
-                                   placeholder="Digite a senha" required>
+                                   placeholder="Deixe vazio para manter a senha atual">
                             <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('zabbix_senha')">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -243,8 +239,7 @@
                         <label for="server_manager_senha" class="form-label">Senha *</label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="server_manager_senha" name="server_manager_senha" 
-                                   value="{{ config.get('server_manager', {}).get('password', '') }}" 
-                                   placeholder="Digite a senha" required>
+                                   placeholder="Deixe vazio para manter a senha atual">
                             <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('server_manager_senha')">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -560,11 +555,11 @@ $('#formConfiguracoes').on('submit', function(e) {
     
     // Validação básica
     const camposObrigatorios = [
-        'naos_ip', 'naos_usuario', 'naos_senha', 
-        'unifi_host', 'unifi_usuario', 'unifi_senha',
-        'fortigate_host', 'fortigate_usuario', 'fortigate_senha',
-        'zabbix_url', 'zabbix_usuario', 'zabbix_senha',
-        'server_manager_host', 'server_manager_usuario', 'server_manager_senha'
+        'naos_ip', 'naos_usuario',
+        'unifi_host', 'unifi_usuario',
+        'fortigate_host', 'fortigate_usuario',
+        'zabbix_url', 'zabbix_usuario',
+        'server_manager_host', 'server_manager_usuario'
     ];
     let camposFaltando = [];
     

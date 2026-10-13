@@ -27,6 +27,14 @@ from gerenciar_fortigate import GerenciadorFortigate
 from fortimanager_client import FortiManagerClient, FortiManagerClientError
 from fortianalyzer_client import FortiAnalyzerClient
 from config import ENV_CONFIG
+from core.environment_loader import (
+    EnvironmentConfigError,
+    is_credential_reference,
+    load_environment_file,
+    redact_environment_secrets,
+    save_environment_file,
+)
+from core.secret_store import JsonSecretStore, SecretStoreError
 from flask import Flask, render_template, jsonify, request, redirect, url_for, current_app, make_response, send_file, send_from_directory, session, flash, has_app_context, has_request_context, Response
 from flask_login import LoginManager, login_required, current_user
 from regional_access import (
@@ -10802,11 +10810,9 @@ def configuracoes():
     try:
         # Carrega configurações existentes
         env_file = PROJECT_ROOT / "environment.json"
-        config = {}
-        
-        if env_file.exists():
-            with open(env_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+        config = redact_environment_secrets(
+            load_environment_file(env_file, resolve_secrets=False)
+        )
         
         return render_template('configuracoes.html', config=config)
         
@@ -12408,22 +12414,18 @@ def api_salvar_configuracoes():
     try:
         data = request.get_json()
         env_file = PROJECT_ROOT / "environment.json"
-        config_atual = {}
-        if env_file.exists():
-            try:
-                with open(env_file, 'r', encoding='utf-8') as f:
-                    config_atual = json.load(f)
-            except Exception:
-                config_atual = {}
+        config_atual = load_environment_file(env_file, resolve_secrets=False)
 
         def senha_ou_atual(campo, secao, chave="password"):
             nova_senha = data.get(campo)
-            if nova_senha:
-                return nova_senha
             secao_atual = config_atual.get(secao, {})
-            if isinstance(secao_atual, dict):
-                return secao_atual.get(chave, "")
-            return ""
+            valor_atual = secao_atual.get(chave, "") if isinstance(secao_atual, dict) else ""
+            if not nova_senha:
+                return valor_atual
+            if is_credential_reference(valor_atual):
+                JsonSecretStore().put(valor_atual["credential_ref"], str(nova_senha))
+                return valor_atual
+            return nova_senha
         
         # Estrutura da configuração
         config = {
@@ -12472,13 +12474,15 @@ def api_salvar_configuracoes():
         # Salva configuração
         config = {**config_atual, **config}
         env_file = PROJECT_ROOT / "environment.json"
-        with open(env_file, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+        save_environment_file(env_file, config)
         
         return jsonify({'success': True, 'message': 'Configurações salvas com sucesso!'})
         
-    except Exception as e:
+    except (EnvironmentConfigError, SecretStoreError, TypeError, ValueError) as e:
         return jsonify({'success': False, 'message': f'Erro ao salvar: {str(e)}'})
+    except Exception:
+        current_app.logger.exception("Falha inesperada ao salvar configuracoes")
+        return jsonify({'success': False, 'message': 'Erro interno ao salvar configuracoes'}), 500
 
 
 @app.route('/api/backup/exportar')

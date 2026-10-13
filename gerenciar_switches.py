@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 from utils_paths import get_file_path
+from core.environment_loader import EnvironmentConfigError, load_environment_file
 
 
 _ORIGINAL_PRINT = builtins.print
@@ -61,30 +62,16 @@ class GerenciadorSwitches:
     def __init__(self, arquivo_excel=None, config_file="zabbix_config.json"):
         # Tenta obter configurações do environment.json
         try:
-            import json
-            from pathlib import Path
             from utils_paths import get_environment_file
-            
-            # Carrega configurações do environment.json
             env_file = get_environment_file()
-            if env_file.exists():
-                with open(env_file, 'r', encoding='utf-8') as f:
-                    ENV_CONFIG = json.load(f)
-                    zabbix_config = ENV_CONFIG.get('zabbix', {})
-                    arquivo_excel_env = zabbix_config.get('excel_file')
-                    zabbix_url_env = zabbix_config.get('url')
-                    zabbix_username_env = zabbix_config.get('username')
-                    zabbix_password_env = zabbix_config.get('password')
-            else:
-                ENV_CONFIG = {}
-                zabbix_config = {}
-                arquivo_excel_env = None
-                zabbix_url_env = None
-                zabbix_username_env = None
-                zabbix_password_env = None
-        except Exception as e:
+            environment_config = load_environment_file(env_file)
+            zabbix_config = environment_config.get('zabbix', {})
+            arquivo_excel_env = zabbix_config.get('excel_file')
+            zabbix_url_env = zabbix_config.get('url')
+            zabbix_username_env = zabbix_config.get('username')
+            zabbix_password_env = zabbix_config.get('password')
+        except (EnvironmentConfigError, OSError) as e:
             print(f"⚠️ Erro ao carregar environment.json: {e}")
-            ENV_CONFIG = {}
             zabbix_config = {}
             arquivo_excel_env = None
             zabbix_url_env = None

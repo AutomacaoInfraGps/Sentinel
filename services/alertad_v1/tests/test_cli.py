@@ -142,6 +142,41 @@ class CliTests(unittest.TestCase):
 
         self.assertNotIn("SYNTHETIC_MUST_NOT_LEAK", str(raised.exception))
 
+    def test_loads_sentinel_graph_secret_reference(self) -> None:
+        class SecretStore:
+            def get(self, reference: str) -> str:
+                self.reference = reference
+                return "synthetic-resolved-secret"
+
+        with tempfile.TemporaryDirectory() as directory:
+            environment_file = Path(directory) / "environment.json"
+            environment_file.write_text(
+                json.dumps(
+                    {
+                        "microsoft_graph": {
+                            "tenant_id": "synthetic-tenant",
+                            "client_id": "synthetic-client",
+                            "client_secret": {
+                                "credential_ref": "environment/microsoft_graph/client_secret"
+                            },
+                            "sender_upn": "sender@example.invalid",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            environment = {}
+            store = SecretStore()
+
+            load_sentinel_graph_environment(
+                environment_file,
+                environ=environment,
+                secret_store=store,
+            )
+
+        self.assertEqual(environment["M365_CLIENT_SECRET"], "synthetic-resolved-secret")
+        self.assertEqual(store.reference, "environment/microsoft_graph/client_secret")
+
     def test_cli_returns_failure_when_controlled_read_fails(self) -> None:
         output = io.StringIO()
         arguments = [

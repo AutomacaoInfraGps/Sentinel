@@ -6,7 +6,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SOURCE_ROOT = PROJECT_ROOT / "src"
+SENTINEL_ROOT = PROJECT_ROOT.parents[1]
 sys.path.insert(0, str(SOURCE_ROOT))
+sys.path.insert(1, str(SENTINEL_ROOT))
 
 # `python -m unittest discover -s tests` importa módulos de teste como módulos de
 # topo. Nesse modo, este lançador pode ser encontrado antes do pacote `src/alertad`.

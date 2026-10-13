@@ -8,8 +8,11 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC = PROJECT_ROOT / "src"
+SENTINEL_ROOT = PROJECT_ROOT.parents[1]
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+if str(SENTINEL_ROOT) not in sys.path:
+    sys.path.insert(1, str(SENTINEL_ROOT))
 
 from alertad.graph import DelegatedTokenProvider, GraphAuthenticationError
 from alertad.sentinel_environment import load_sentinel_graph_environment

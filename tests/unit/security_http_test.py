@@ -44,6 +44,30 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
 
+    def test_configuration_page_never_renders_stored_passwords(self):
+        self._login_session("admin.config", ["SENTINEL_ADMINISTRATIVE_OU"])
+        configuration = {
+            "naos_server": {
+                "ip": "192.0.2.10",
+                "usuario": "operator",
+                "senha": "SYNTHETIC_PASSWORD_MUST_NOT_REACH_BROWSER",
+            },
+            "fortigate": {
+                "RJ": {
+                    "host": "192.0.2.20",
+                    "password": {"credential_ref": "environment/fortigate/RJ/password"},
+                }
+            },
+        }
+
+        with patch("web_config.load_environment_file", return_value=configuration):
+            response = self.client.get("/configuracoes")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"SYNTHETIC_PASSWORD_MUST_NOT_REACH_BROWSER", response.data)
+        self.assertNotIn(b"environment/fortigate/RJ/password", response.data)
+        self.assertIn(b"Deixe vazio para manter a senha atual", response.data)
+
     def test_legacy_api_test_remains_protected(self):
         response = self.client.get("/api/test")
         self.assertEqual(response.status_code, 401)

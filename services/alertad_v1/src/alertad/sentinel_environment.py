@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import MutableMapping
+
+from core.environment_loader import EnvironmentConfigError, load_environment_file
 
 
 _GRAPH_ENVIRONMENT_FIELDS = {
@@ -18,17 +19,16 @@ def load_sentinel_graph_environment(
     path: str | Path,
     *,
     environ: MutableMapping[str, str] | None = None,
+    secret_store=None,
 ) -> None:
     """Load Graph values in memory without logging or duplicating secrets."""
     source = Path(path)
     if not source.is_file():
         raise ValueError("Arquivo de ambiente do Sentinel nao encontrado")
     try:
-        payload = json.loads(source.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = load_environment_file(source, secret_store=secret_store)
+    except EnvironmentConfigError as exc:
         raise ValueError("Arquivo de ambiente do Sentinel invalido") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("Arquivo de ambiente do Sentinel invalido")
     graph = payload.get("microsoft_graph")
     if not isinstance(graph, dict):
         raise ValueError("Configuracao Microsoft Graph do Sentinel ausente")

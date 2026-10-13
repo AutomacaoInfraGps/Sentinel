@@ -12,6 +12,7 @@ import paramiko
 import re
 from datetime import datetime
 from fortimanager_client import FortiManagerClient
+from core.environment_loader import EnvironmentConfigError, load_environment_file
 
 
 def _parse_vpn_phase1_comments(output):
@@ -39,18 +40,10 @@ def _parse_vpn_phase1_comments(output):
 
 # Tenta importar configurações do environment.json
 try:
-    import json
-    from pathlib import Path
-    
-    # Carrega configurações do environment.json
     from utils_paths import get_environment_file
     env_file = get_environment_file()
-    if env_file.exists():
-        with open(env_file, 'r', encoding='utf-8') as f:
-            ENV_CONFIG = json.load(f)
-    else:
-        ENV_CONFIG = {}
-except Exception as e:
+    ENV_CONFIG = load_environment_file(env_file)
+except (EnvironmentConfigError, OSError) as e:
     print(f"⚠️ Erro ao carregar environment.json: {e}")
     ENV_CONFIG = {}
 

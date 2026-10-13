@@ -133,6 +133,9 @@ docs/*smartvc*.md
 instance/
 .credentials/
 
+# Frontends recuperados podem conter inventario operacional sensivel.
+/recovered/aster_frontend/
+
 # Amostras corporativas locais do AlertAD nunca devem ser versionadas.
 /services/alertad_v1/tests/fixtures/XMLEXAMPLE_test/
 # Caches locais de autenticacao Microsoft Graph/MSAL

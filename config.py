@@ -4,9 +4,10 @@ Este arquivo define todos os caminhos e configurações de forma dinâmica.
 """
 
 import os
-import json
 from pathlib import Path
 from datetime import datetime
+
+from core.environment_loader import EnvironmentConfigError, load_environment_file
 
 # === CONFIGURACOES DE RUNTIME ===
 def _resolve_public_base() -> Path:
@@ -128,15 +129,13 @@ REPLICACAO_JSON = DATA_DIR_PUBLIC / "replicacao.json"
 def load_environment_config():
     """Carrega as configurações do arquivo environment.json"""
     env_file = PROJECT_ROOT / "environment.json"
-    if env_file.exists():
-        try:
-            with open(env_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            print(f"[WARN] Erro ao carregar environment.json: {e}")
-            return {}
-    else:
+    if not env_file.exists():
         print(f"[WARN] Arquivo environment.json não encontrado em: {env_file}")
+        return {}
+    try:
+        return load_environment_file(env_file)
+    except EnvironmentConfigError as exc:
+        print(f"[WARN] Erro ao carregar environment.json: {exc}")
         return {}
 
 # Carrega as configurações do ambiente
