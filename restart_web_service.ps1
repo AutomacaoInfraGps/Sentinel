@@ -6,6 +6,23 @@ param(
 $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$serviceScript = Join-Path $projectDir "servico_web.ps1"
+
+if (-not (Test-Path $serviceScript)) {
+    throw "Gerenciador do servico web nao encontrado: $serviceScript"
+}
+
+$serviceArguments = @{
+    Action = "restart"
+    Port = $Port
+}
+if ($PublicBase) {
+    $serviceArguments["PublicBase"] = $PublicBase
+}
+
+& $serviceScript @serviceArguments
+exit $LASTEXITCODE
+
 $pythonExe = @(
     (Join-Path $projectDir ".venv\Scripts\python.exe"),
     (Join-Path $projectDir "venv\Scripts\python.exe")

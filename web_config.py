@@ -4654,8 +4654,8 @@ def _operational_record_is_newer(canonical, operational):
     return bool(operational_time) or not canonical_time
 
 
-def _fresh_operational_records(group, regional=None):
-    state = load_operational_state()
+def _fresh_operational_records(group, regional=None, state=None):
+    state = state if state is not None else load_operational_state()
     group_data = (state.get("groups") or {}).get(group) or {}
     if not snapshot_is_fresh(group_data.get("updated_at")):
         return []
@@ -4990,24 +4990,63 @@ def _obter_regionais_com_firewall_a_vencer():
 @login_required
 def listar_regionais():
     """Página de listagem de regionais"""
-    try:
-        regionais = [
-            codigo for codigo in gerenciador_regionais.listar_regionais()
-            if can_access_regional(_current_user_groups(), codigo, gerenciador_regionais.listar_regionais())
-        ]
-        regionais_map = dict((gerenciador_regionais.regionais.get("regionais") or {}))
-        firewalls_agrupados = _agrupar_firewalls_regionais_cache(regionais_map)
-        vpns_agrupadas = (
-            _agrupar_vpns_por_regional(_fresh_operational_records("vpns")).get("vpns_por_regional") or {}
+    started_at = time.monotonic()
+    previous_stage_at = started_at
+
+    def log_stage(stage):
+        nonlocal previous_stage_at
+        now = time.monotonic()
+        current_app.logger.info(
+            "[regionais] etapa=%s delta=%.3fs total=%.3fs",
+            stage,
+            now - previous_stage_at,
+            now - started_at,
         )
-        switches_operacionais_agrupados = _agrupar_switches_operacionais_atuais()
+        previous_stage_at = now
+
+    try:
+        available_regionals = gerenciador_regionais.listar_regionais()
+        scope = access_scope(_current_user_groups(), available_regionals)
+        allowed_regionals = scope.get("allowed") or set()
+        regionais = [
+            codigo for codigo in available_regionals
+            if normalize_regional_code(codigo) in allowed_regionals
+        ]
+        log_stage("escopo")
+
+        operational_state = load_operational_state()
+        log_stage("snapshot")
+
+        regionais_map = dict((gerenciador_regionais.regionais.get("regionais") or {}))
+        firewalls_agrupados = _agrupar_firewalls_regionais_cache(
+            regionais_map,
+            operational_state=operational_state,
+        )
+        log_stage("firewalls")
+
+        vpns_agrupadas = (
+            _agrupar_vpns_por_regional(
+                _fresh_operational_records("vpns", state=operational_state)
+            ).get("vpns_por_regional") or {}
+        )
+        log_stage("vpns")
+
+        switches_operacionais_agrupados = _agrupar_switches_operacionais_atuais(
+            operational_state=operational_state
+        )
+        log_stage("switches")
+
         firewalls_a_vencer = _obter_regionais_com_firewall_a_vencer()
+        log_stage("alertas_firewall")
         regionais_dados = []
         
         for codigo_regional in regionais:
             regional_info = regionais_map.get(codigo_regional)
             if regional_info:
-                servidores = regional_info.get('servidores', [])
+                servidores = [
+                    _servidor_para_exibicao(servidor)
+                    for servidor in regional_info.get('servidores', [])
+                ]
                 links = [
                     _preparar_link_para_template(link)
                     for link in _obter_links_internet_exibicao(regional_info)
@@ -5082,7 +5121,10 @@ def listar_regionais():
                     'firewalls': firewalls_resumo,
                 })
         
-        return render_template('regionais.html', regionais=regionais_dados)
+        log_stage("montagem")
+        response = render_template('regionais.html', regionais=regionais_dados)
+        log_stage("template")
+        return response
         
     except Exception as e:
         flash(f'Erro ao carregar regionais: {str(e)}', 'error')
@@ -5188,8 +5230,10 @@ def _formatar_ultima_verificacao_switch(valor):
         return str(valor)
 
 
-def _agrupar_switches_operacionais_atuais():
-    switches_operacionais = _fresh_operational_records("switches")
+def _agrupar_switches_operacionais_atuais(operational_state=None):
+    switches_operacionais = _fresh_operational_records(
+        "switches", state=operational_state
+    )
     if not switches_operacionais:
         return None
     regionais_configuradas = {
@@ -5584,8 +5628,10 @@ def _obter_firewalls_regionais_cache(codigo_regional):
     return _agrupar_firewalls_regionais_cache(regionais_map).get(codigo_norm, [])
 
 
-def _agrupar_firewalls_regionais_cache(regionais_map):
-    firewalls = _fresh_operational_records("firewalls")
+def _agrupar_firewalls_regionais_cache(regionais_map, operational_state=None):
+    firewalls = _fresh_operational_records(
+        "firewalls", state=operational_state
+    )
     if not firewalls:
         cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}
         firewalls = [
