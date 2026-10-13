@@ -11,14 +11,69 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
 from typing import Protocol
-
-from filelock import FileLock
 
 
 STORE_VERSION = 1
 DEFAULT_STORE_PATH = Path(__file__).resolve().parents[1] / ".credentials" / "sentinel-secrets.json"
 _REFERENCE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,239}$")
+
+
+class _InterprocessFileLock:
+    """Small OS-native lock used to serialize updates to the secret store."""
+
+    def __init__(self, path: Path, timeout: float = 10.0) -> None:
+        self.path = path
+        self.timeout = timeout
+        self._stream = None
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._stream = self.path.open("a+b")
+        self._stream.seek(0, os.SEEK_END)
+        if self._stream.tell() == 0:
+            self._stream.write(b"\0")
+            self._stream.flush()
+        self._stream.seek(0)
+
+        deadline = time.monotonic() + self.timeout
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(self._stream.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(self._stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except OSError as exc:
+                if time.monotonic() >= deadline:
+                    self._stream.close()
+                    self._stream = None
+                    raise SecretStoreError(
+                        "O cofre de credenciais esta ocupado; tente novamente."
+                    ) from exc
+                time.sleep(0.05)
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if self._stream is None:
+            return
+        try:
+            self._stream.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(self._stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(self._stream.fileno(), fcntl.LOCK_UN)
+        finally:
+            self._stream.close()
+            self._stream = None
 
 
 class SecretStoreError(RuntimeError):
@@ -207,7 +262,7 @@ class JsonSecretStore:
         protected = self.protector.protect(secret)
         encoded = base64.b64encode(protected).decode("ascii")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with FileLock(str(self.lock_path)):
+        with _InterprocessFileLock(self.lock_path):
             payload = self._load_unlocked()
             payload["entries"][reference] = {
                 "ciphertext": encoded,
@@ -217,7 +272,7 @@ class JsonSecretStore:
 
     def get(self, reference: str) -> str:
         reference = self._validate_reference(reference)
-        with FileLock(str(self.lock_path)):
+        with _InterprocessFileLock(self.lock_path):
             entry = self._load_unlocked()["entries"].get(reference)
         if not isinstance(entry, dict) or not isinstance(entry.get("ciphertext"), str):
             raise SecretNotFoundError("Credencial nao encontrada no cofre.")
@@ -229,12 +284,12 @@ class JsonSecretStore:
 
     def contains(self, reference: str) -> bool:
         reference = self._validate_reference(reference)
-        with FileLock(str(self.lock_path)):
+        with _InterprocessFileLock(self.lock_path):
             return reference in self._load_unlocked()["entries"]
 
     def delete(self, reference: str) -> bool:
         reference = self._validate_reference(reference)
-        with FileLock(str(self.lock_path)):
+        with _InterprocessFileLock(self.lock_path):
             payload = self._load_unlocked()
             removed = payload["entries"].pop(reference, None) is not None
             if removed:
