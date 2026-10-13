@@ -92,10 +92,15 @@ function Install-Service {
 
     & $PythonPath -m pip install --disable-pip-version-check waitress | Out-Null
 
-    schtasks /end /tn $TaskName 2>$null | Out-Null
+    $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($existingTask) {
+        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    }
     Stop-WebMonitorProcesses
     Stop-WebProcesses
-    schtasks /delete /tn $TaskName /f 2>$null | Out-Null
+    if ($existingTask) {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    }
     $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$MonitorPath`" -Port $Port"
     if ($PublicBase) {
         $taskCommand += " -PublicBase `"$PublicBase`""
@@ -119,7 +124,10 @@ function Start-WebService {
         return
     }
 
-    schtasks /run /tn $TaskName | Out-Null
+    if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
+        throw "Tarefa '$TaskName' nao encontrada. Execute a acao 'install'."
+    }
+    Start-ScheduledTask -TaskName $TaskName
     Write-Host "Tarefa '$TaskName' acionada."
 }
 
@@ -128,7 +136,9 @@ function Stop-WebService {
         return
     }
 
-    schtasks /end /tn $TaskName 2>$null | Out-Null
+    if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    }
     Stop-WebMonitorProcesses
     Stop-WebProcesses
     Write-Host "Automação web parada."
@@ -176,7 +186,9 @@ function Uninstall-Service {
 
     Stop-WebMonitorProcesses
     Stop-WebProcesses
-    schtasks /delete /tn $TaskName /f 2>$null | Out-Null
+    if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    }
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
         sc.exe config $ServiceName start= demand | Out-Null
     }
