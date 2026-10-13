@@ -5252,6 +5252,14 @@ def _obter_vpns_detalhe_regional(codigo_regional):
     return [dict(vpn) for vpn in (agrupadas.get(codigo_regional, {}).get("tunels") or [])]
 
 
+def _servidor_para_exibicao(servidor):
+    seguro = dict(servidor or {})
+    seguro.pop("senha", None)
+    seguro.pop("password", None)
+    seguro.pop("credential_ref", None)
+    return seguro
+
+
 @app.route('/regional/<codigo_regional>')
 @login_required
 def detalhar_regional(codigo_regional):
@@ -5304,7 +5312,7 @@ def detalhar_regional(codigo_regional):
         # O JSON define quais servidores existem. O cache apenas atualiza o
         # estado dos servidores cadastrados, sem recriar itens ja excluidos.
         for servidor in regional_info.get('servidores', []):
-            servidor_completo = servidor.copy()
+            servidor_completo = _servidor_para_exibicao(servidor)
             operacional = (
                 operacionais_por_id.get(str(servidor.get("id")))
                 or operacionais_por_ip.get(str(servidor.get("ip") or "").strip())
@@ -11010,11 +11018,13 @@ def editar_servidor_regional(codigo_regional, id_servidor):
             flash('Servidor não encontrado', 'error')
             return redirect(url_for('detalhar_regional', codigo_regional=codigo_regional))
 
+        servidor_exibicao = _servidor_para_exibicao(servidor)
+
         return render_template(
             'servidor_regional_form.html',
             regional_codigo=codigo_regional,
             regional_nome=regional_info.get('nome', codigo_regional),
-            servidor=servidor,
+            servidor=servidor_exibicao,
             acao='Editar'
         )
 

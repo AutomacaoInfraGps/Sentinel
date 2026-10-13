@@ -6,15 +6,99 @@ Estrutura hierárquica: Regional → Servidores Virtuais
 import json
 import os
 import tempfile
+from copy import deepcopy
 from typing import Dict, List, Optional
 from datetime import datetime
+
+from core.environment_loader import (
+    CREDENTIAL_REFERENCE_KEY,
+    EnvironmentConfigError,
+    contains_credential_reference,
+    is_credential_reference,
+    resolve_credential_references,
+)
+from core.secret_store import JsonSecretStore, SecretStoreError
+
+
+REGIONAL_CREDENTIAL_STORAGE = "vault-v1"
 
 class GerenciadorRegionais:
     """Gerencia a estrutura hierárquica de regionais e servidores"""
     
-    def __init__(self, arquivo_regionais="estrutura_regionais.json"):
+    def __init__(self, arquivo_regionais="estrutura_regionais.json", secret_store=None):
         self.arquivo_regionais = arquivo_regionais
+        self._secret_store = secret_store
+        self._credential_refs = {}
+        self._persisted_secrets = {}
         self.regionais = self._carregar_regionais()
+
+    def _get_secret_store(self):
+        if self._secret_store is None:
+            self._secret_store = JsonSecretStore()
+        return self._secret_store
+
+    @staticmethod
+    def _reference_segment(value: object) -> str:
+        import re
+        import unicodedata
+
+        normalized = unicodedata.normalize("NFKD", str(value or ""))
+        ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+        return re.sub(r"[^a-z0-9._-]+", "-", ascii_value).strip("-._") or "item"
+
+    def _server_key(self, regional: str, servidor: Dict, index: int) -> tuple[str, str]:
+        return str(regional), str(servidor.get("id") or f"index-{index}")
+
+    def _server_reference(self, regional: str, servidor: Dict, index: int) -> str:
+        return "/".join((
+            "regionals",
+            self._reference_segment(regional),
+            "servers",
+            self._reference_segment(servidor.get("id") or f"index-{index}"),
+            "senha",
+        ))
+
+    def _capture_credential_references(self, payload: Dict) -> None:
+        self._credential_refs = {}
+        for regional, info in payload.get("regionais", {}).items():
+            for index, servidor in enumerate(info.get("servidores", [])):
+                value = servidor.get("senha")
+                if is_credential_reference(value):
+                    key = self._server_key(regional, servidor, index)
+                    self._credential_refs[key] = value[CREDENTIAL_REFERENCE_KEY]
+
+    def _payload_para_persistencia(self) -> Dict:
+        payload = deepcopy(self.regionais)
+        config = payload.setdefault("configuracao", {"versao": "2.0"})
+        if config.get("credential_storage") != REGIONAL_CREDENTIAL_STORAGE:
+            return payload
+
+        store = self._get_secret_store()
+        refs_atualizadas = {}
+        segredos_atualizados = {}
+        for regional, info in payload.get("regionais", {}).items():
+            for index, servidor in enumerate(info.get("servidores", [])):
+                secret = servidor.get("senha")
+                key = self._server_key(regional, servidor, index)
+                reference = self._credential_refs.get(key) or self._server_reference(
+                    regional, servidor, index
+                )
+                if is_credential_reference(secret):
+                    reference = secret[CREDENTIAL_REFERENCE_KEY]
+                    secret = store.get(reference)
+                if not isinstance(secret, str) or not secret:
+                    continue
+                if self._persisted_secrets.get(reference) != secret:
+                    store.put(reference, secret)
+                    if store.get(reference) != secret:
+                        raise SecretStoreError("Uma credencial regional nao passou na verificacao.")
+                servidor["senha"] = {CREDENTIAL_REFERENCE_KEY: reference}
+                refs_atualizadas[key] = reference
+                segredos_atualizados[reference] = secret
+
+        self._credential_refs = refs_atualizadas
+        self._persisted_secrets = segredos_atualizados
+        return payload
 
     def _estrutura_padrao(self) -> Dict:
         return {"regionais": {}, "configuracao": {"versao": "2.0"}}
@@ -35,8 +119,22 @@ class GerenciadorRegionais:
                 if not conteudo:
                     raise ValueError('arquivo vazio')
 
-                dados = json.loads(conteudo)
-                return self._normalizar_estrutura(dados)
+                dados = self._normalizar_estrutura(json.loads(conteudo))
+                self._capture_credential_references(dados)
+                if contains_credential_reference(dados):
+                    store = self._get_secret_store()
+                    resolvidos = resolve_credential_references(dados, secret_store=store)
+                    self._persisted_secrets = {
+                        reference: store.get(reference)
+                        for reference in self._credential_refs.values()
+                    }
+                    return self._normalizar_estrutura(resolvidos)
+                self._persisted_secrets = {}
+                return dados
+            except (EnvironmentConfigError, SecretStoreError):
+                # A estrutura nao pode operar sem resolver as credenciais do cofre.
+                # Falhar aqui evita que um processo grave uma estrutura vazia por engano.
+                raise
             except (json.JSONDecodeError, OSError, ValueError) as e:
                 if isinstance(fallback, dict) and fallback.get('regionais'):
                     print(f"⚠️ Erro ao carregar regionais do arquivo; usando dados em memória: {e}")
@@ -57,12 +155,13 @@ class GerenciadorRegionais:
         self.regionais.setdefault("regionais", {})
         self.regionais.setdefault("configuracao", {"versao": "2.0"})
         self.regionais["configuracao"]["ultima_atualizacao"] = datetime.now().isoformat()
-        print("SALVANDO EM:", os.path.abspath(self.arquivo_regionais))  # << ADICIONA ISSO  
+        payload = self._payload_para_persistencia()
+        print("SALVANDO EM:", os.path.abspath(self.arquivo_regionais))
         diretorio = os.path.dirname(os.path.abspath(self.arquivo_regionais)) or '.'
         fd_temp, caminho_temp = tempfile.mkstemp(prefix='regionais_', suffix='.tmp', dir=diretorio, text=True)
         try:
             with os.fdopen(fd_temp, 'w', encoding='utf-8') as f:
-                json.dump(self.regionais, f, indent=2, ensure_ascii=False)
+                json.dump(payload, f, indent=2, ensure_ascii=False)
             os.replace(caminho_temp, self.arquivo_regionais)
         finally:
             if os.path.exists(caminho_temp):
