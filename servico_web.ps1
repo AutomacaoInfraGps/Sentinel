@@ -101,7 +101,7 @@ function Install-Service {
         $taskCommand += " -PublicBase `"$PublicBase`""
     }
     Write-Host "A tarefa sera vinculada a '$TaskUser' para acessar o cofre DPAPI."
-    schtasks /create /tn $TaskName /sc onstart /ru $TaskUser /rp * /rl HIGHEST /tr $taskCommand /f | Out-Null
+    schtasks /create /tn $TaskName /sc onstart /ru $TaskUser /rp * /rl HIGHEST /tr $taskCommand /f
     if ($LASTEXITCODE -ne 0) {
         throw "Nao foi possivel criar a tarefa '$TaskName'."
     }
