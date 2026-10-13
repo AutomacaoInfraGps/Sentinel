@@ -100,8 +100,13 @@ def build_plan(payload: dict) -> list[MigrationItem]:
 def migrate_payload(payload: dict, *, secret_store) -> tuple[dict, list[MigrationItem]]:
     migrated = deepcopy(payload)
     items = build_plan(payload)
+    secrets = {item.reference: item.secret for item in items}
+    if items and hasattr(secret_store, "put_many"):
+        secret_store.put_many(secrets)
+    else:
+        for reference, secret in secrets.items():
+            secret_store.put(reference, secret)
     for item in items:
-        secret_store.put(item.reference, item.secret)
         if secret_store.get(item.reference) != item.secret:
             raise MigrationError("Uma credencial nao passou na verificacao do cofre.")
         migrated["regionais"][item.regional]["servidores"][item.index]["senha"] = {

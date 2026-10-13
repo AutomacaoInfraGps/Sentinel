@@ -23,6 +23,10 @@ class FakeSecretStore:
         self.values[reference] = secret
         self.put_calls.append(reference)
 
+    def put_many(self, secrets):
+        self.values.update(secrets)
+        self.put_calls.extend(secrets)
+
     def get(self, reference):
         try:
             return self.values[reference]

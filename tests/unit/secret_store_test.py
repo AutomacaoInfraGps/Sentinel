@@ -55,6 +55,22 @@ class JsonSecretStoreTests(unittest.TestCase):
         with self.assertRaises(SecretNotFoundError):
             self.store.get(reference)
 
+    def test_put_many_persists_all_values_without_plaintext(self):
+        self.store.put_many({
+            "regional/test/server/1/password": "secret-one",
+            "regional/test/server/2/password": "secret-two",
+        })
+
+        self.assertEqual(
+            self.store.get("regional/test/server/1/password"), "secret-one"
+        )
+        self.assertEqual(
+            self.store.get("regional/test/server/2/password"), "secret-two"
+        )
+        persisted = self.path.read_text(encoding="utf-8")
+        self.assertNotIn("secret-one", persisted)
+        self.assertNotIn("secret-two", persisted)
+
     def test_rejects_unsafe_reference(self):
         with self.assertRaises(SecretStoreError):
             self.store.put("../outside", "segredo")

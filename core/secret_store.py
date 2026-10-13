@@ -252,22 +252,45 @@ class JsonSecretStore:
                 json.dump(payload, stream, indent=2, ensure_ascii=True)
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.replace(temporary_name, self.path)
+            last_error = None
+            for attempt in range(20):
+                try:
+                    os.replace(temporary_name, self.path)
+                    last_error = None
+                    break
+                except PermissionError as exc:
+                    last_error = exc
+                    if os.name != "nt" or attempt == 19:
+                        raise
+                    time.sleep(0.1)
+            if last_error is not None:
+                raise last_error
         finally:
             if os.path.exists(temporary_name):
                 os.unlink(temporary_name)
 
     def put(self, reference: str, secret: str) -> None:
-        reference = self._validate_reference(reference)
-        protected = self.protector.protect(secret)
-        encoded = base64.b64encode(protected).decode("ascii")
+        self.put_many({reference: secret})
+
+    def put_many(self, secrets: dict[str, str]) -> None:
+        """Protect and persist multiple credentials with one atomic store update."""
+        if not isinstance(secrets, dict) or not secrets:
+            return
+        prepared = {}
+        for reference, secret in secrets.items():
+            normalized = self._validate_reference(reference)
+            protected = self.protector.protect(secret)
+            prepared[normalized] = base64.b64encode(protected).decode("ascii")
+
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with _InterprocessFileLock(self.lock_path):
             payload = self._load_unlocked()
-            payload["entries"][reference] = {
-                "ciphertext": encoded,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
+            updated_at = datetime.now(timezone.utc).isoformat()
+            for reference, encoded in prepared.items():
+                payload["entries"][reference] = {
+                    "ciphertext": encoded,
+                    "updated_at": updated_at,
+                }
             self._save_unlocked(payload)
 
     def get(self, reference: str) -> str:
