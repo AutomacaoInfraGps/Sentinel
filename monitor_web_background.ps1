@@ -1,6 +1,7 @@
 param(
     [int]$Port = $(if ($env:AUTOMACAO_WEB_PORT) { [int]$env:AUTOMACAO_WEB_PORT } else { 5000 }),
-    [string]$PublicBase = $env:AUTOMACAO_PUBLIC_BASE
+    [string]$PublicBase = $env:AUTOMACAO_PUBLIC_BASE,
+    [int]$HealthFailureThreshold = 20
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +18,7 @@ $stdoutLog = Join-Path $logDir "web_task_stdout.log"
 $stderrLog = Join-Path $logDir "web_task_stderr.log"
 $port = $Port
 $startupGraceSeconds = 45
+$script:consecutiveHealthFailures = 0
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $env:AUTOMACAO_WEB_PORT = [string]$port
@@ -80,8 +82,14 @@ function Ensure-WebRunning {
     $serviceHealthy = Test-WebHealth
 
     if ($serviceHealthy) {
+        if ($script:consecutiveHealthFailures -gt 0) {
+            Write-MonitorLog "Healthcheck recuperado apos $script:consecutiveHealthFailures falha(s) consecutiva(s)"
+        }
+        $script:consecutiveHealthFailures = 0
         return
     }
+
+    $script:consecutiveHealthFailures++
 
     if ($processes.Count -gt 0) {
         $newestProcess = $processes | Sort-Object CreationDate -Descending | Select-Object -First 1
@@ -93,7 +101,27 @@ function Ensure-WebRunning {
         }
     }
 
+    if ($listeners.Count -gt 0 -and $processes.Count -gt 0) {
+        if ($script:consecutiveHealthFailures -lt $HealthFailureThreshold) {
+            if ($script:consecutiveHealthFailures -eq 1 -or
+                $script:consecutiveHealthFailures % 5 -eq 0) {
+                Write-MonitorLog (
+                    "Healthcheck temporariamente indisponivel ({0}/{1}); processo e porta continuam ativos" -f
+                    $script:consecutiveHealthFailures, $HealthFailureThreshold
+                )
+            }
+            return
+        }
+
+        Write-MonitorLog (
+            "Healthcheck falhou {0} vezes consecutivas; reiniciando servico" -f
+            $script:consecutiveHealthFailures
+        )
+    }
+
     Stop-WebProcesses
+
+    $script:consecutiveHealthFailures = 0
 
     Write-MonitorLog "Iniciando run_web_service.py"
     Start-Process -FilePath $pythonExe -ArgumentList $runner -WorkingDirectory $projectDir -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog | Out-Null

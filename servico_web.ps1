@@ -63,6 +63,23 @@ function Stop-WebProcesses {
     }
 }
 
+function Stop-WebMonitorProcesses {
+    $monitors = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq 'powershell.exe' -and
+        $_.CommandLine -like "*$MonitorPath*" -and
+        $_.ProcessId -ne $PID
+    }
+
+    foreach ($monitor in $monitors) {
+        try {
+            Stop-Process -Id $monitor.ProcessId -Force -ErrorAction Stop
+            Write-Host "Monitor web encerrado: $($monitor.ProcessId)"
+        } catch {
+            Write-Host "Falha ao encerrar monitor $($monitor.ProcessId): $($_.Exception.Message)"
+        }
+    }
+}
+
 function Install-Service {
     if (Invoke-RequiringAdmin 'install') {
         return
@@ -75,6 +92,9 @@ function Install-Service {
 
     & $PythonPath -m pip install --disable-pip-version-check waitress | Out-Null
 
+    schtasks /end /tn $TaskName 2>$null | Out-Null
+    Stop-WebMonitorProcesses
+    Stop-WebProcesses
     schtasks /delete /tn $TaskName /f 2>$null | Out-Null
     $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$MonitorPath`" -Port $Port"
     if ($PublicBase) {
@@ -82,6 +102,9 @@ function Install-Service {
     }
     Write-Host "A tarefa sera vinculada a '$TaskUser' para acessar o cofre DPAPI."
     schtasks /create /tn $TaskName /sc onstart /ru $TaskUser /rp * /rl HIGHEST /tr $taskCommand /f | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Nao foi possivel criar a tarefa '$TaskName'."
+    }
 
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
         sc.exe config $ServiceName start= demand | Out-Null
@@ -106,6 +129,7 @@ function Stop-WebService {
     }
 
     schtasks /end /tn $TaskName 2>$null | Out-Null
+    Stop-WebMonitorProcesses
     Stop-WebProcesses
     Write-Host "Automação web parada."
 }
@@ -150,6 +174,7 @@ function Uninstall-Service {
         return
     }
 
+    Stop-WebMonitorProcesses
     Stop-WebProcesses
     schtasks /delete /tn $TaskName /f 2>$null | Out-Null
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
