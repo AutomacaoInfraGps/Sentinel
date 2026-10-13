@@ -1,9 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot "..\.."))
+    [string]$ProjectDir
 )
 
 $ErrorActionPreference = "Stop"
+
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ([string]::IsNullOrWhiteSpace($ProjectDir)) {
+    $ProjectDir = (Resolve-Path (Join-Path $scriptRoot "..\..")).Path
+}
 
 $projectPath = [IO.Path]::GetFullPath($ProjectDir)
 $vaultPath = [IO.Path]::GetFullPath((Join-Path $projectPath ".credentials"))
