@@ -111,7 +111,6 @@ def obter_redes_wifi_site(site_id, aps=None):
         configured = sanitize_site_wifi_networks(
             wlans,
             _obter_dados_unifi_site(site_id, "networkconf"),
-            _obter_dados_unifi_site(site_id, "apgroup"),
         )
         observed = sanitize_ap_wifi_networks(aps)
         networks = merge_wifi_networks(configured, observed)
