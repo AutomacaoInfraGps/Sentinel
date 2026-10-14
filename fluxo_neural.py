@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from hashlib import sha256
 
 
-DEVICE_GROUPS = ("servidores", "switches", "links", "firewalls", "vpns", "aps")
+DEVICE_GROUPS = (
+    "servidores", "switches", "links", "firewalls", "vpns", "aps", "redes_wifi",
+)
 DEVICE_LABELS = {
     "servidores": "Servidor",
     "switches": "Switch",
@@ -14,13 +16,39 @@ DEVICE_LABELS = {
     "firewalls": "Firewall",
     "vpns": "VPN",
     "aps": "Antena UniFi",
+    "redes_wifi": "Rede Wi-Fi",
 }
 
 
 def _device_name(record, group, index):
     if not isinstance(record, dict):
         return f"{DEVICE_LABELS[group]} {index + 1}"
-    for key in ("nome", "host", "hostname", "tunel", "name"):
+    if group == "links":
+        interface = str(
+            record.get("interface_monitorada")
+            or record.get("nome")
+            or record.get("interface")
+            or ""
+        ).strip()
+        provider = str(
+            record.get("provedor")
+            or record.get("alias")
+            or record.get("descricao")
+            or ""
+        ).strip()
+        if interface and provider and provider.casefold() not in interface.casefold():
+            return f"{interface} - {provider}"[:120]
+        if interface or provider:
+            return (interface or provider)[:120]
+
+    keys_by_group = {
+        "firewalls": ("hostname", "nome", "host", "name"),
+        "vpns": ("tunel", "nome", "name"),
+        "switches": ("host", "nome", "hostname", "name"),
+        "aps": ("nome", "name", "host", "hostname"),
+        "redes_wifi": ("nome", "name", "ssid"),
+    }
+    for key in keys_by_group.get(group, ("nome", "host", "hostname", "name")):
         value = str(record.get(key) or "").strip()
         if value:
             return value[:120]
@@ -55,12 +83,15 @@ def build_neural_flow_payload(map_payload):
             for index, record in enumerate(records):
                 name = _device_name(record, group, index)
                 device_id = _device_id(code, group, name, index)
-                devices.append({
+                device = {
                     "id": device_id,
                     "nome": name,
                     "tipo": group,
                     "regional_id": code,
-                })
+                }
+                if group == "redes_wifi":
+                    device["detalhe"] = str(record.get("rede") or "")[:120]
+                devices.append(device)
                 regional_device_ids.append(device_id)
                 connections.append({
                     "id": f"edge-{device_id}",

@@ -23,22 +23,39 @@ class NeuralFlowPayloadTests(unittest.TestCase):
                 "firewalls": [{"hostname": "FW-BA"}],
                 "vpns": [{"tunel": "VPN_BAHIA"}],
                 "aps": [{"name": "AP-RECEPCAO"}],
+                "redes_wifi": [{
+                    "nome": "SATURNO",
+                    "rede": "VISITANTE (10)",
+                    "ativo": True,
+                    "x_passphrase": "tambem-nao-pode-sair",
+                }],
             }],
         })
 
         self.assertEqual(payload["resumo"]["regionais"], 1)
-        self.assertEqual(payload["resumo"]["dispositivos"], 5)
-        self.assertEqual(payload["resumo"]["conexoes"], 5)
+        self.assertEqual(payload["resumo"]["dispositivos"], 6)
+        self.assertEqual(payload["resumo"]["conexoes"], 6)
         self.assertEqual(payload["regionais"][0]["totais"]["servidores"], 1)
         self.assertEqual(
             {device["nome"] for device in payload["dispositivos"]},
-            {"SRV-BA-01", "Link principal", "FW-BA", "VPN_BAHIA", "AP-RECEPCAO"},
+            {"SRV-BA-01", "Link principal", "FW-BA", "VPN_BAHIA", "AP-RECEPCAO", "SATURNO"},
         )
         serialized = repr(payload)
         self.assertNotIn("nao-pode-sair", serialized)
         self.assertNotIn("10.0.0.1", serialized)
         self.assertNotIn("segredo", serialized)
         self.assertNotIn("password", serialized)
+        self.assertNotIn("passphrase", serialized)
+
+    def test_combines_link_interface_and_provider(self):
+        payload = build_neural_flow_payload({
+            "regionais": [{
+                "codigo": "REG_BAHIA",
+                "links": [{"nome": "WAN1", "provedor": "VIVO"}],
+            }],
+        })
+
+        self.assertEqual(payload["dispositivos"][0]["nome"], "WAN1 - VIVO")
 
 
 if __name__ == "__main__":

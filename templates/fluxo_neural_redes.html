@@ -9,7 +9,7 @@
 </head>
 <body class="intro-active">
   <canvas id="network" aria-label="Fluxo neural das regionais do Sentinel"></canvas>
-  <div class="ambient" aria-hidden="true"></div>
+  <img id="galaxyBackground" src="{{ url_for('static', filename='fluxo_neural_de_redes/sentinel-galaxy-bg.png') }}" alt="" hidden>
   <img id="introLogo" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="" hidden>
 
   <header class="topbar surface interface">
@@ -71,7 +71,7 @@
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Regional</th><th>UF</th><th>Conexões</th><th>Links</th><th>Firewalls</th><th>Switches</th><th>Servidores</th><th>VPNs</th><th>Antenas</th></tr></thead>
+        <thead><tr><th>Regional</th><th>UF</th><th>Conexões</th><th>Links</th><th>Firewalls</th><th>Switches</th><th>Servidores</th><th>VPNs</th><th>Antenas</th><th>Redes Wi-Fi</th></tr></thead>
         <tbody id="tableBody"></tbody>
       </table>
     </div>

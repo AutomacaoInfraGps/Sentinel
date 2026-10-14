@@ -3777,7 +3777,9 @@ def _mapa_ler_json_output(nome_arquivo):
     return {}
 
 
-_MAPA_DEVICE_GROUPS = ("servidores", "switches", "links", "aps", "vpns", "firewalls", "admins")
+_MAPA_DEVICE_GROUPS = (
+    "servidores", "switches", "links", "aps", "vpns", "firewalls", "admins", "redes_wifi",
+)
 _MAPA_TEMPORAL_FIELDS = {
     "ultima_atualizacao_mapa",
     "cache_atualizado_em",
@@ -4052,6 +4054,7 @@ def _mapa_criar_regional(codigo, info=None):
         "vpns": [],
         "firewalls": [],
         "admins": [],
+        "redes_wifi": [],
         "totais": {},
         "alertas": [],
         "status": "ok",
@@ -4301,7 +4304,11 @@ def _mapa_recalcular_regionais(regionais):
         if regional["status"] != "ok":
             resumo["regionais_com_alerta"] += 1
 
-        regional["totais"]["total"] = sum(len(regional[grupo]) for grupo in ("servidores", "switches", "links", "aps", "vpns", "firewalls", "admins"))
+        regional["totais"]["redes_wifi"] = len(regional["redes_wifi"])
+        regional["totais"]["total"] = sum(
+            len(regional[grupo])
+            for grupo in ("servidores", "switches", "links", "aps", "vpns", "firewalls", "admins", "redes_wifi")
+        )
     return resumo
 
 
@@ -4381,6 +4388,26 @@ def _montar_dados_mapa_monitoramento():
         regionais[codigo]["switches"].append(switch_mapa)
 
     unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
+    for site in (unifi_data.get("sites") or []):
+        site_name = site.get("nome") or site.get("name") or site.get("id")
+        codigo = _mapa_encontrar_regional_unifi(regionais, site_name)
+        if not codigo or codigo not in regionais:
+            for network in site.get("redes_wifi") or []:
+                network_unmapped = dict(network)
+                network_unmapped.setdefault("regional", site_name or "SEM_REGIONAL")
+                unmapped["redes_wifi"].append(network_unmapped)
+            continue
+        for network in site.get("redes_wifi") or []:
+            if not network.get("ativo", True):
+                continue
+            bands = ", ".join(str(band) for band in (network.get("bandas") or []))
+            regionais[codigo]["redes_wifi"].append({
+                "nome": network.get("nome") or "Rede Wi-Fi",
+                "rede": network.get("rede") or "",
+                "descricao": bands,
+                "status": "online",
+            })
+
     for ap in (unifi_data.get("aps") or []):
         codigo = _mapa_encontrar_regional_unifi(regionais, ap.get("site") or ap.get("regional") or ap.get("nome"))
         # Se a função retornar um código que não está presente em `regionais`,

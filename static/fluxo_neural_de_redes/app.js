@@ -4,6 +4,7 @@
   const canvas = document.getElementById("network");
   const ctx = canvas.getContext("2d");
   const introLogo = document.getElementById("introLogo");
+  const galaxyBackground = document.getElementById("galaxyBackground");
   const ui = {
     toast: document.getElementById("toast"),
     metrics: document.getElementById("metrics"),
@@ -26,12 +27,14 @@
     servidores: { label: "Servidores", singular: "Servidor", color: "#35d09f", mono: "SV" },
     vpns: { label: "VPNs", singular: "VPN", color: "#f4bd4e", mono: "VP" },
     aps: { label: "Antenas UniFi", singular: "Antena", color: "#e6edf2", mono: "AP" },
+    redes_wifi: { label: "Redes Wi-Fi", singular: "Rede Wi-Fi", color: "#5bd6ff", mono: "WF" },
   };
+  const planetTextures = new Map();
   const state = {
     data: null, nodes: [], edges: [], byId: new Map(), neighbors: new Map(),
     visibleNodes: [], visibleEdges: [], hover: null, selected: null,
     camera: { x: 0, y: 0, scale: 1 }, pointer: null, dragNode: null, dragging: false,
-    time: 0, intro: null,
+    time: 0, intro: null, stars: [],
   };
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
@@ -43,6 +46,78 @@
     return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
   };
 
+  function seededFraction(seed) {
+    const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
+  function buildStarfield() {
+    const count = clamp(Math.round(innerWidth * innerHeight / 9000), 90, 220);
+    state.stars = Array.from({ length: count }, (_, index) => ({
+      u: seededFraction(index * 5 + 1),
+      v: seededFraction(index * 5 + 2),
+      size: .45 + seededFraction(index * 5 + 3) * 1.65,
+      alpha: .22 + seededFraction(index * 5 + 4) * .58,
+      depth: .18 + seededFraction(index * 5 + 5) * .82,
+      phase: seededFraction(index * 7 + 6) * Math.PI * 2,
+    }));
+  }
+
+  function planetTexture(name) {
+    const key = String(name || "REDE").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    if (planetTextures.has(key)) return planetTextures.get(key);
+    const image = document.createElement("canvas");
+    image.width = image.height = 112;
+    const painter = image.getContext("2d");
+    const palettes = {
+      MARTE: ["#ffb078", "#d64b32", "#6e1d22"],
+      SATURNO: ["#fff0b4", "#d9aa55", "#755233"],
+      JUPITER: ["#f7d6ad", "#b86f4a", "#6e3a36"],
+      NETUNO: ["#66c8ff", "#1769cc", "#132b7c"],
+      ANDROMEDA: ["#eef6ff", "#8bb9ff", "#6247b6"],
+    };
+    const colors = palettes[key] || ["#a8ecff", "#258fbd", "#123c69"];
+
+    painter.translate(56, 56);
+    if (key === "ANDROMEDA") {
+      painter.rotate(-.28);
+      const glow = painter.createRadialGradient(0, 0, 2, 0, 0, 48);
+      glow.addColorStop(0, "rgba(255,255,255,1)");
+      glow.addColorStop(.18, "rgba(139,185,255,.9)");
+      glow.addColorStop(1, "rgba(98,71,182,0)");
+      painter.fillStyle = glow; painter.beginPath(); painter.arc(0, 0, 48, 0, Math.PI * 2); painter.fill();
+      painter.strokeStyle = "rgba(221,235,255,.84)"; painter.lineWidth = 5;
+      [-1, 1].forEach(direction => {
+        painter.beginPath();
+        for (let step = 0; step < 52; step += 1) {
+          const angle = direction * step * .19;
+          const radius = 3 + step * .74;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius * .42;
+          step ? painter.lineTo(x, y) : painter.moveTo(x, y);
+        }
+        painter.stroke();
+      });
+    } else {
+      if (key === "SATURNO") {
+        painter.save(); painter.rotate(-.28); painter.scale(1, .34);
+        painter.strokeStyle = "rgba(244,220,155,.9)"; painter.lineWidth = 9;
+        painter.beginPath(); painter.ellipse(0, 0, 48, 34, 0, 0, Math.PI * 2); painter.stroke(); painter.restore();
+      }
+      const sphere = painter.createRadialGradient(-13, -15, 4, 0, 0, 38);
+      sphere.addColorStop(0, colors[0]); sphere.addColorStop(.52, colors[1]); sphere.addColorStop(1, colors[2]);
+      painter.fillStyle = sphere; painter.beginPath(); painter.arc(0, 0, 34, 0, Math.PI * 2); painter.fill();
+      painter.save(); painter.beginPath(); painter.arc(0, 0, 34, 0, Math.PI * 2); painter.clip();
+      painter.globalAlpha = .34; painter.strokeStyle = colors[0]; painter.lineWidth = key === "JUPITER" ? 7 : 3;
+      for (let y = -23; y <= 24; y += key === "JUPITER" ? 11 : 15) {
+        painter.beginPath(); painter.moveTo(-38, y); painter.bezierCurveTo(-12, y - 5, 12, y + 5, 38, y); painter.stroke();
+      }
+      painter.restore();
+    }
+    planetTextures.set(key, image);
+    return image;
+  }
+
   function resize() {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(innerWidth * ratio);
@@ -50,6 +125,7 @@
     canvas.style.width = `${innerWidth}px`;
     canvas.style.height = `${innerHeight}px`;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    buildStarfield();
   }
 
   function buildGraph() {
@@ -85,7 +161,8 @@
         const x = parent.x + Math.cos(angle) * ring;
         const y = parent.y + Math.sin(angle) * ring;
         nodes.push({
-          ...device, kind: "device", radius: 13, x, y, tx: x, ty: y,
+          ...device, kind: "device", radius: device.tipo === "redes_wifi" ? 20 : 13, parentId: regionalId,
+          offsetX: x - parent.x, offsetY: y - parent.y, x, y, tx: x, ty: y,
           vx: 0, vy: 0, opacity: 0, delay: .1 + Math.random() * .45,
         });
         edges.push({
@@ -183,7 +260,7 @@
       <tr data-id="${escapeHtml(item.id)}">
         <td><strong>${escapeHtml(item.nome)}</strong><br><small>${escapeHtml(item.codigo)}</small></td>
         <td>${escapeHtml(item.uf || "-")}</td><td>${item.dispositivos.length}</td>
-        ${["links", "firewalls", "switches", "servidores", "vpns", "aps"].map(type => `<td>${item.totais[type] || 0}</td>`).join("")}
+        ${["links", "firewalls", "switches", "servidores", "vpns", "aps", "redes_wifi"].map(type => `<td>${item.totais[type] || 0}</td>`).join("")}
       </tr>`).join("");
   }
 
@@ -201,7 +278,7 @@
       ${Object.entries(categories).map(([key, item]) => {
         const entries = devices.filter(device => device.tipo === key);
         if (!entries.length) return "";
-        return `<section class="device-section" style="--category:${item.color}"><h3>${item.label}</h3><div class="device-list">${entries.map(device => `<span class="device-chip">${escapeHtml(device.nome)}</span>`).join("")}</div></section>`;
+        return `<section class="device-section" style="--category:${item.color}"><h3>${item.label}</h3><div class="device-list">${entries.map(device => `<span class="device-chip">${escapeHtml(device.nome)}${device.detalhe ? `<small>${escapeHtml(device.detalhe)}</small>` : ""}</span>`).join("")}</div></section>`;
       }).join("")}`;
     ui.panel.classList.add("open");
   }
@@ -218,10 +295,21 @@
     return new Set([base.id, ...(state.neighbors.get(base.id) || [])]);
   }
 
+  function targetPoint(node, followCurrentParent = false) {
+    if (node.kind !== "device") return { x: node.tx, y: node.ty };
+    const parent = state.byId.get(node.parentId);
+    if (!parent) return { x: node.tx, y: node.ty };
+    return {
+      x: (followCurrentParent ? parent.x : parent.tx) + node.offsetX,
+      y: (followCurrentParent ? parent.y : parent.ty) + node.offsetY,
+    };
+  }
+
   function fitGraph() {
     const nodes = state.visibleNodes.length ? state.visibleNodes : state.nodes;
     if (!nodes.length) return;
-    const xs = nodes.map(node => node.tx), ys = nodes.map(node => node.ty);
+    const targets = nodes.map(node => targetPoint(node));
+    const xs = targets.map(point => point.x), ys = targets.map(point => point.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
     const centerX = (minX + maxX) / 2;
@@ -236,8 +324,9 @@
 
   function reorganize() {
     state.nodes.forEach(node => {
-      node.x = node.tx + (Math.random() - .5) * (node.kind === "regional" ? 160 : 45);
-      node.y = node.ty + (Math.random() - .5) * (node.kind === "regional" ? 130 : 45);
+      const target = targetPoint(node);
+      node.x = target.x + (Math.random() - .5) * (node.kind === "regional" ? 160 : 45);
+      node.y = target.y + (Math.random() - .5) * (node.kind === "regional" ? 130 : 45);
       node.vx = node.vy = 0;
     });
   }
@@ -258,27 +347,53 @@
     if (!state.data || (state.intro && !state.intro.done)) return;
     state.nodes.forEach((node, index) => {
       if (node === state.dragNode) return;
-      const driftX = Math.sin(state.time * .00022 + index * 1.7) * (node.kind === "regional" ? 8 : 3);
-      const driftY = Math.cos(state.time * .00018 + index * 1.3) * (node.kind === "regional" ? 7 : 3);
-      node.vx += (node.tx + driftX - node.x) * (node.kind === "regional" ? .00045 : .0012);
-      node.vy += (node.ty + driftY - node.y) * (node.kind === "regional" ? .00045 : .0012);
-      node.vx *= .94; node.vy *= .94; node.x += node.vx; node.y += node.vy;
+      const target = targetPoint(node, node.kind === "device");
+      const driftX = Math.sin(state.time * .00022 + index * 1.7) * (node.kind === "regional" ? 8 : 5);
+      const driftY = Math.cos(state.time * .00018 + index * 1.3) * (node.kind === "regional" ? 7 : 5);
+      const spring = node.kind === "regional" ? .00045 : .0032;
+      const damping = node.kind === "regional" ? .94 : .9;
+      node.vx += (target.x + driftX - node.x) * spring;
+      node.vy += (target.y + driftY - node.y) * spring;
+      node.vx *= damping; node.vy *= damping; node.x += node.vx; node.y += node.vy;
     });
   }
 
   function drawBackground() {
-    const gradient = ctx.createRadialGradient(innerWidth * .58, innerHeight * .47, 0, innerWidth * .58, innerHeight * .47, Math.max(innerWidth, innerHeight) * .8);
-    gradient.addColorStop(0, "rgba(7,24,39,.16)"); gradient.addColorStop(.52, "rgba(4,15,25,.34)"); gradient.addColorStop(1, "rgba(2,7,13,.72)");
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, innerWidth, innerHeight);
-    const grid = 72 * state.camera.scale;
-    if (grid > 18) {
-      const offsetX = (innerWidth / 2 + state.camera.x) % grid;
-      const offsetY = (innerHeight / 2 + state.camera.y) % grid;
-      ctx.strokeStyle = "rgba(71,166,215,.045)"; ctx.lineWidth = 1; ctx.beginPath();
-      for (let x = offsetX; x < innerWidth; x += grid) { ctx.moveTo(x, 0); ctx.lineTo(x, innerHeight); }
-      for (let y = offsetY; y < innerHeight; y += grid) { ctx.moveTo(0, y); ctx.lineTo(innerWidth, y); }
-      ctx.stroke();
+    if (galaxyBackground.complete && galaxyBackground.naturalWidth) {
+      const cover = Math.max(innerWidth / galaxyBackground.naturalWidth, innerHeight / galaxyBackground.naturalHeight);
+      const galaxyZoom = 1.22 + clamp((state.camera.scale - 1) * .055, -.04, .08);
+      const width = galaxyBackground.naturalWidth * cover * galaxyZoom;
+      const height = galaxyBackground.naturalHeight * cover * galaxyZoom;
+      const travelX = clamp(state.camera.x * .075, -Math.max((width - innerWidth) / 2, 0), Math.max((width - innerWidth) / 2, 0));
+      const travelY = clamp(state.camera.y * .075, -Math.max((height - innerHeight) / 2, 0), Math.max((height - innerHeight) / 2, 0));
+      ctx.save();
+      ctx.globalAlpha = .92;
+      ctx.filter = "brightness(1.22) saturate(1.08)";
+      ctx.drawImage(galaxyBackground, (innerWidth - width) / 2 + travelX, (innerHeight - height) / 2 + travelY, width, height);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#020810"; ctx.fillRect(0, 0, innerWidth, innerHeight);
     }
+    const gradient = ctx.createRadialGradient(innerWidth * .58, innerHeight * .47, 0, innerWidth * .58, innerHeight * .47, Math.max(innerWidth, innerHeight) * .8);
+    gradient.addColorStop(0, "rgba(4,16,27,.03)"); gradient.addColorStop(.55, "rgba(3,12,21,.12)"); gradient.addColorStop(1, "rgba(1,5,10,.38)");
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+    const fieldWidth = innerWidth + 160;
+    const fieldHeight = innerHeight + 160;
+    state.stars.forEach((star, index) => {
+      const rawX = star.u * fieldWidth + state.camera.x * star.depth * .16;
+      const rawY = star.v * fieldHeight + state.camera.y * star.depth * .16;
+      const x = ((rawX % fieldWidth) + fieldWidth) % fieldWidth - 80;
+      const y = ((rawY % fieldHeight) + fieldHeight) % fieldHeight - 80;
+      const twinkle = .72 + Math.sin(state.time * (.00065 + star.depth * .00035) + star.phase) * .28;
+      const radius = star.size * (.72 + star.depth * .42);
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.globalAlpha = star.alpha * twinkle;
+      ctx.fillStyle = index % 11 === 0 ? "#79d9ff" : "#e8f7ff";
+      if (radius > 1.4) { ctx.shadowColor = "#54cfff"; ctx.shadowBlur = 7; }
+      ctx.fill(); ctx.shadowBlur = 0;
+    });
+    ctx.globalAlpha = 1;
   }
 
   function roundedRect(x, y, width, height, radius) {
@@ -298,10 +413,13 @@
       const opacity = (focus ? (focused ? .95 : .025) : .2) * Math.min(edge.source.opacity, edge.target.opacity);
       if (opacity < .01) return;
       const dx = edge.target.x - edge.source.x, dy = edge.target.y - edge.source.y;
-      const qx = (edge.source.x + edge.target.x) / 2 - dy * .08;
-      const qy = (edge.source.y + edge.target.y) / 2 + dx * .08;
+      const length = Math.max(Math.hypot(dx, dy), 1);
+      const sway = Math.sin(state.time * .00115 + edge.phase * Math.PI * 2 + index * .31) * 10;
+      const bend = Math.sin(edge.phase * Math.PI * 2) * 7;
+      const qx = (edge.source.x + edge.target.x) / 2 - dy / length * (sway + bend);
+      const qy = (edge.source.y + edge.target.y) / 2 + dx / length * (sway + bend);
       ctx.beginPath(); ctx.moveTo(edge.source.x, edge.source.y); ctx.quadraticCurveTo(qx, qy, edge.target.x, edge.target.y);
-      ctx.strokeStyle = color; ctx.globalAlpha = opacity; ctx.lineWidth = focused && focus ? 2.2 / state.camera.scale : 1.05 / state.camera.scale; ctx.stroke();
+      ctx.strokeStyle = color; ctx.globalAlpha = opacity; ctx.lineWidth = focused && focus ? 1.8 / state.camera.scale : .8 / state.camera.scale; ctx.stroke();
       if (focused && focus) {
         for (let particle = 0; particle < 2; particle += 1) {
           const t = (state.time * .00028 + edge.phase + particle * .5 + index * .013) % 1;
@@ -330,16 +448,25 @@
       ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
       ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
-      ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
-      ctx.fillText(node.kind === "regional" ? (node.uf || node.codigo.replace("REG_", "").slice(0, 3)) : categories[node.tipo].mono, node.x, node.y + .5);
+      if (node.tipo === "redes_wifi") {
+        const texture = planetTexture(node.nome);
+        const size = radius * 2.35;
+        ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
+        ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = color; ctx.lineWidth = (active ? 3 : 1.5) / state.camera.scale; ctx.stroke();
+      } else {
+        ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
+        ctx.fillText(node.kind === "regional" ? (node.uf || node.codigo.replace("REG_", "").slice(0, 3)) : categories[node.tipo].mono, node.x, node.y + .5);
+      }
 
       const showLabel = node.kind === "regional" || inFocus && focus || state.camera.scale > .58;
       if (showLabel) {
-        const label = node.nome.length > 25 ? `${node.nome.slice(0, 24)}…` : node.nome;
+        const limit = node.kind === "regional" ? 32 : 40;
+        const label = node.nome.length > limit ? `${node.nome.slice(0, limit - 1)}…` : node.nome;
         ctx.font = `${node.kind === "regional" ? 650 : 600} ${node.kind === "regional" ? 10 : 8}px Segoe UI, sans-serif`;
-        const width = clamp(ctx.measureText(label).width + 10, 35, 155);
+        const width = clamp(ctx.measureText(label).width + 10, 35, 220);
         roundedRect(node.x - width / 2, node.y + radius + 6, width, node.kind === "regional" ? 19 : 16, 4);
         ctx.fillStyle = "rgba(3,12,21,.88)"; ctx.fill();
         ctx.fillStyle = inFocus ? "#e5f1f7" : "#7690a1";
@@ -569,10 +696,10 @@
       const point = worldPoint(event.clientX, event.clientY);
       const dx = point.x - state.dragNode.x, dy = point.y - state.dragNode.y;
       state.dragNode.x = point.x; state.dragNode.y = point.y;
-      state.dragNode.tx += dx; state.dragNode.ty += dy;
       if (state.dragNode.kind === "regional") {
-        const linked = state.neighbors.get(state.dragNode.id) || [];
-        linked.forEach(id => { const device = state.byId.get(id); device.x += dx; device.y += dy; device.tx += dx; device.ty += dy; });
+        state.dragNode.tx += dx; state.dragNode.ty += dy;
+      } else {
+        state.dragNode.offsetX += dx; state.dragNode.offsetY += dy;
       }
     } else {
       state.camera.x = state.pointer.cameraX + event.clientX - state.pointer.x;

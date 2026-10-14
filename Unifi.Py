@@ -8,6 +8,7 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 from services.unifi_models import nome_modelo_unifi
+from services.unifi_networks import sanitize_site_wifi_networks
 
 def texto_limpo(valor):
     return str(valor or "").strip()
@@ -59,6 +60,28 @@ def deve_ocultar_ap_teste(ap, site_desc):
     site = str(site_desc or "").strip().upper()
     return site == "API_TESTE" or (nome == "nano hd" and ip == "10.134.0.104")
 
+
+def obter_redes_wifi_site(site_id):
+    """Coleta somente metadados seguros das WLANs configuradas no site."""
+    try:
+        wlans_resp = session.get(
+            f"{base_url}/api/s/{site_id}/rest/wlanconf",
+            timeout=20,
+        )
+        networks_resp = session.get(
+            f"{base_url}/api/s/{site_id}/rest/networkconf",
+            timeout=20,
+        )
+        wlans_resp.raise_for_status()
+        networks_resp.raise_for_status()
+        return sanitize_site_wifi_networks(
+            wlans_resp.json().get("data", []),
+            networks_resp.json().get("data", []),
+        )
+    except Exception as exc:
+        print(f"Nao foi possivel coletar as redes Wi-Fi do site {site_id}: {exc}")
+        return []
+
 # === CONSTRUÇÃO DO HTML ===
 html = """
 <!DOCTYPE html>
@@ -103,16 +126,22 @@ for site in sites:
             d for d in devices
             if d.get("type") == "uap" and not deve_ocultar_ap_teste(d, site_desc)
         ]
-        if not aps:
+        redes_wifi = obter_redes_wifi_site(site_id)
+        if not aps and not redes_wifi:
             continue
 
         # Dados do site para JSON
         site_data = {
             "id": site_id,
             "nome": site_desc,
-            "total_aps": len(aps)
+            "total_aps": len(aps),
+            "redes_wifi": redes_wifi,
         }
         sites_data.append(site_data)
+
+        if not aps:
+            print(f"Site {site_desc} processado com {len(redes_wifi)} rede(s) Wi-Fi e sem APs.")
+            continue
 
         # Atualiza contadores
         total_aps += len(aps)
