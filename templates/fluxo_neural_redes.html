@@ -10,6 +10,7 @@
 <body class="intro-active">
   <canvas id="network" aria-label="Fluxo neural das regionais do Sentinel"></canvas>
   <img id="galaxyBackground" src="{{ url_for('static', filename='fluxo_neural_de_redes/sentinel-galaxy-bg.png') }}" alt="" hidden>
+  <img id="galaxyNodeTexture" src="{{ url_for('static', filename='fluxo_neural_de_redes/sentinel-galaxy-node.png', v='20261014-1') }}" alt="" hidden>
   <img id="introLogo" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="" hidden>
 
   <header class="topbar surface interface">
@@ -78,6 +79,6 @@
   </section>
 
   <div id="toast" class="toast" role="status"></div>
-  <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js', v='20261014-2') }}"></script>
+  <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js', v='20261014-3') }}"></script>
 </body>
 </html>

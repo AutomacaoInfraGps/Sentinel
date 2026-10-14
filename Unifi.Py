@@ -8,7 +8,12 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 from services.unifi_models import nome_modelo_unifi
-from services.unifi_networks import sanitize_site_wifi_networks
+from services.unifi_networks import (
+    extract_unifi_items,
+    merge_wifi_networks,
+    sanitize_ap_wifi_networks,
+    sanitize_site_wifi_networks,
+)
 
 def texto_limpo(valor):
     return str(valor or "").strip()
@@ -61,39 +66,61 @@ def deve_ocultar_ap_teste(ap, site_desc):
     return site == "API_TESTE" or (nome == "nano hd" and ip == "10.134.0.104")
 
 
-def _obter_dados_unifi_site(site_id, recurso):
-    caminhos = (
-        f"/api/s/{site_id}/rest/{recurso}",
-        f"/proxy/network/api/s/{site_id}/rest/{recurso}",
-    )
+def _obter_dados_unifi_caminhos(caminhos):
+    diagnostico = []
     ultimo_erro = None
     for caminho in caminhos:
         try:
             response = session.get(f"{base_url}{caminho}", timeout=12)
             if response.status_code == 404:
+                diagnostico.append(f"{caminho}=404")
                 continue
             response.raise_for_status()
-            data = response.json().get("data", [])
+            data = extract_unifi_items(response.json())
+            diagnostico.append(f"{caminho}={response.status_code}/{len(data)}")
             if data:
-                return data
+                return data, diagnostico
         except Exception as exc:
             ultimo_erro = exc
-    if ultimo_erro:
+            status = getattr(getattr(exc, "response", None), "status_code", "erro")
+            diagnostico.append(f"{caminho}={status}")
+    if ultimo_erro and not diagnostico:
         raise ultimo_erro
-    return []
+    return [], diagnostico
 
 
-def obter_redes_wifi_site(site_id):
+def _obter_dados_unifi_site(site_id, recurso):
+    data, _ = _obter_dados_unifi_caminhos((
+        f"/api/s/{site_id}/rest/{recurso}",
+        f"/proxy/network/api/s/{site_id}/rest/{recurso}",
+    ))
+    return data
+
+
+def obter_redes_wifi_site(site_id, aps=None):
     """Coleta somente metadados seguros das WLANs configuradas no site."""
     try:
-        return sanitize_site_wifi_networks(
-            _obter_dados_unifi_site(site_id, "wlanconf"),
+        wlans, diagnostico = _obter_dados_unifi_caminhos((
+            f"/api/s/{site_id}/rest/wlanconf",
+            f"/proxy/network/api/s/{site_id}/rest/wlanconf",
+            f"/v2/api/site/{site_id}/wlan",
+            f"/proxy/network/v2/api/site/{site_id}/wlan",
+            f"/v2/api/site/{site_id}/wlan/enriched-configuration",
+            f"/proxy/network/v2/api/site/{site_id}/wlan/enriched-configuration",
+        ))
+        configured = sanitize_site_wifi_networks(
+            wlans,
             _obter_dados_unifi_site(site_id, "networkconf"),
             _obter_dados_unifi_site(site_id, "apgroup"),
         )
+        observed = sanitize_ap_wifi_networks(aps)
+        networks = merge_wifi_networks(configured, observed)
+        if not networks:
+            print(f"Diagnostico WLAN {site_id}: {'; '.join(diagnostico)}")
+        return networks
     except Exception as exc:
         print(f"Nao foi possivel coletar as redes Wi-Fi do site {site_id}: {exc}")
-        return []
+        return sanitize_ap_wifi_networks(aps)
 
 # === CONSTRUÇÃO DO HTML ===
 html = """
@@ -139,7 +166,7 @@ for site in sites:
             d for d in devices
             if d.get("type") == "uap" and not deve_ocultar_ap_teste(d, site_desc)
         ]
-        redes_wifi = obter_redes_wifi_site(site_id)
+        redes_wifi = obter_redes_wifi_site(site_id, aps)
         if not aps and not redes_wifi:
             continue
 

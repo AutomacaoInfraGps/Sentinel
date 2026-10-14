@@ -5,6 +5,7 @@
   const ctx = canvas.getContext("2d");
   const introLogo = document.getElementById("introLogo");
   const galaxyBackground = document.getElementById("galaxyBackground");
+  const galaxyNodeTexture = document.getElementById("galaxyNodeTexture");
   const ui = {
     toast: document.getElementById("toast"),
     metrics: document.getElementById("metrics"),
@@ -491,22 +492,31 @@
       const halo = ctx.createRadialGradient(node.x, node.y, radius * .4, node.x, node.y, haloRadius);
       halo.addColorStop(0, `${color}${active ? "70" : "30"}`); halo.addColorStop(1, `${color}00`);
       ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
-      ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
       if (node.isHub) {
-        const texture = planetTexture("ANDROMEDA");
-        const size = radius * 2.28;
-        ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
+        const width = radius * 3.45;
+        const height = radius * 2.05;
+        ctx.save();
+        ctx.shadowColor = "#55ccff";
+        ctx.shadowBlur = (active ? 28 : 18) / state.camera.scale;
+        if (galaxyNodeTexture.complete && galaxyNodeTexture.naturalWidth) {
+          ctx.drawImage(galaxyNodeTexture, node.x - width / 2, node.y - height / 2, width, height);
+        } else {
+          const texture = planetTexture("ANDROMEDA");
+          ctx.drawImage(texture, node.x - radius, node.y - radius, radius * 2, radius * 2);
+        }
+        ctx.restore();
+      } else {
         ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = "#8ce8ff"; ctx.lineWidth = (active ? 3.2 : 2) / state.camera.scale; ctx.stroke();
-      } else if (node.tipo === "redes_wifi") {
+        ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
+        ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
+      }
+      if (!node.isHub && node.tipo === "redes_wifi") {
         const texture = planetTexture(node.nome);
         const size = radius * 2.35;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
         ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.strokeStyle = color; ctx.lineWidth = (active ? 3 : 1.5) / state.camera.scale; ctx.stroke();
-      } else {
+      } else if (!node.isHub) {
         ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
