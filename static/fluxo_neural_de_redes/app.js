@@ -70,8 +70,8 @@
     const variants = [
       "ASTEROIDE_ROCHOSO",
       "ASTEROIDE_METALICO",
-      "METEORO_INCANDESCENTE",
-      "COMETA_GELADO",
+      "ASTEROIDE_BASALTICO",
+      "ASTEROIDE_SILICATADO",
     ];
     const normalized = normalizeCelestialName(name);
     let hash = 2166136261;
@@ -619,9 +619,11 @@
       ctx.globalAlpha = opacity;
       const radius = node.radius * (active ? 1.14 : 1);
       let labelRadius = radius;
-      const haloRadius = radius * (active ? 3 : 2.1);
+      const haloRadius = radius * (active ? 3.35 : 2.65);
       const halo = ctx.createRadialGradient(node.x, node.y, radius * .4, node.x, node.y, haloRadius);
-      halo.addColorStop(0, `${color}${active ? "70" : "30"}`); halo.addColorStop(1, `${color}00`);
+      halo.addColorStop(0, `${color}${active ? "a0" : "68"}`);
+      halo.addColorStop(.48, `${color}${active ? "48" : "2e"}`);
+      halo.addColorStop(1, `${color}00`);
       ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2); ctx.fill();
       if (node.isHub) {
         const width = radius * 3.45;
@@ -649,9 +651,8 @@
         const isStar = node.tipo === "servidores";
         const isSwitch = node.tipo === "switches";
         const switchKey = isSwitch ? switchCelestialKey(node.nome) : "";
-        const isTrail = ["METEORO_INCANDESCENTE", "COMETA_GELADO"].includes(switchKey);
-        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isStar ? 3.35 : isTrail ? 3.7 : isSwitch ? 2.9 : 2.7);
-        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isStar ? 3.35 : isTrail ? 3.7 : isSwitch ? 2.9 : 2.7);
+        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isStar ? 3.35 : isSwitch ? 2.9 : 2.7);
+        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isStar ? 3.35 : isSwitch ? 2.9 : 2.7);
         labelRadius = Math.max(labelRadius, height / 2);
         const detailThreshold = isStar ? .52 : isSwitch ? .34 : 0;
         const detailedCelestial = state.camera.scale >= detailThreshold || active || (focus && inFocus);
