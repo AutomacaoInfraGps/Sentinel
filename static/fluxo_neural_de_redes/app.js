@@ -131,25 +131,70 @@
     buildStarfield();
   }
 
+  function relaxInitialRegionalLayout(regionals) {
+    for (let pass = 0; pass < 70; pass += 1) {
+      for (let leftIndex = 0; leftIndex < regionals.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < regionals.length; rightIndex += 1) {
+          const left = regionals[leftIndex];
+          const right = regionals[rightIndex];
+          let dx = right.x - left.x;
+          let dy = right.y - left.y;
+          let distance = Math.hypot(dx, dy);
+          if (distance < .01) {
+            const angle = (leftIndex + rightIndex + 1) * 1.73;
+            dx = Math.cos(angle); dy = Math.sin(angle); distance = 1;
+          }
+          const minimum = (left.layoutRadius + right.layoutRadius) * .96 + 38;
+          if (distance >= minimum) continue;
+          const correction = (minimum - distance) * .24;
+          const unitX = dx / distance;
+          const unitY = dy / distance;
+          if (left.isHub) {
+            right.x += unitX * correction * 2;
+            right.y += unitY * correction * 2;
+          } else if (right.isHub) {
+            left.x -= unitX * correction * 2;
+            left.y -= unitY * correction * 2;
+          } else {
+            left.x -= unitX * correction;
+            left.y -= unitY * correction;
+            right.x += unitX * correction;
+            right.y += unitY * correction;
+          }
+        }
+      }
+    }
+    regionals.forEach(node => { node.tx = node.x; node.ty = node.y; });
+  }
+
   function buildGraph() {
     const nodes = [];
     const edges = [];
     const regionals = state.data.regionais;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const devicesByRegional = new Map();
+    state.data.dispositivos.forEach(device => {
+      if (!devicesByRegional.has(device.regional_id)) devicesByRegional.set(device.regional_id, []);
+      devicesByRegional.get(device.regional_id).push(device);
+    });
 
     let orbitIndex = 0;
     regionals.forEach(regional => {
       const isHub = isGalaxyRegional(regional);
+      const deviceCount = (devicesByRegional.get(regional.id) || []).length;
+      const layoutRadius = deviceCount ? 108 + Math.floor((deviceCount - 1) / 10) * 58 : 44;
       const angle = orbitIndex * goldenAngle + .35;
-      const distance = 235 * Math.sqrt(orbitIndex + .85);
+      const distance = 255 * Math.sqrt(orbitIndex + .9);
       const x = isHub ? 0 : Math.cos(angle) * distance * 1.12 + (Math.random() - .5) * 75;
       const y = isHub ? 0 : Math.sin(angle) * distance * .74 + (Math.random() - .5) * 65;
       if (!isHub) orbitIndex += 1;
       nodes.push({
-        ...regional, kind: "regional", isHub, radius: isHub ? 50 : 30, x, y, tx: x, ty: y,
+        ...regional, kind: "regional", isHub, layoutRadius,
+        radius: isHub ? 50 : 30, x, y, tx: x, ty: y,
         vx: 0, vy: 0, opacity: 0, delay: Math.random() * .35,
       });
     });
+    relaxInitialRegionalLayout(nodes);
 
     const regionalMap = new Map(nodes.map(node => [node.id, node]));
     const galaxyNode = nodes.find(node => node.isHub);
@@ -161,18 +206,14 @@
         });
       });
     }
-    const devicesByRegional = new Map();
-    state.data.dispositivos.forEach(device => {
-      if (!devicesByRegional.has(device.regional_id)) devicesByRegional.set(device.regional_id, []);
-      devicesByRegional.get(device.regional_id).push(device);
-    });
     devicesByRegional.forEach((devices, regionalId) => {
       const parent = regionalMap.get(regionalId);
       if (!parent) return;
       devices.forEach((device, index) => {
-        const ring = 92 + Math.floor(index / 12) * 50;
-        const itemsInRing = Math.min(12, devices.length - Math.floor(index / 12) * 12);
-        const angle = (index % 12) / Math.max(itemsInRing, 1) * Math.PI * 2 + (regionalId.length % 7) * .19;
+        const ringIndex = Math.floor(index / 10);
+        const ring = 108 + ringIndex * 58;
+        const itemsInRing = Math.min(10, devices.length - ringIndex * 10);
+        const angle = (index % 10) / Math.max(itemsInRing, 1) * Math.PI * 2 + (regionalId.length % 7) * .19;
         const x = parent.x + Math.cos(angle) * ring;
         const y = parent.y + Math.sin(angle) * ring;
         nodes.push({
