@@ -222,12 +222,16 @@
     const nodes = state.visibleNodes.length ? state.visibleNodes : state.nodes;
     if (!nodes.length) return;
     const xs = nodes.map(node => node.tx), ys = nodes.map(node => node.ty);
-    const width = Math.max(...xs) - Math.min(...xs) + 360;
-    const height = Math.max(...ys) - Math.min(...ys) + 320;
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const width = maxX - minX + 360;
+    const height = maxY - minY + 320;
     const reservedLeft = innerWidth > 760 ? 320 : 16;
     state.camera.scale = clamp(Math.min((innerWidth - reservedLeft - 30) / width, (innerHeight - 110) / height), .12, 1.25);
-    state.camera.x = reservedLeft / 2;
-    state.camera.y = 38;
+    state.camera.x = reservedLeft / 2 - centerX * state.camera.scale;
+    state.camera.y = 42 - centerY * state.camera.scale;
   }
 
   function reorganize() {
@@ -264,7 +268,7 @@
 
   function drawBackground() {
     const gradient = ctx.createRadialGradient(innerWidth * .58, innerHeight * .47, 0, innerWidth * .58, innerHeight * .47, Math.max(innerWidth, innerHeight) * .8);
-    gradient.addColorStop(0, "#0a1c2d"); gradient.addColorStop(.52, "#06131f"); gradient.addColorStop(1, "#030911");
+    gradient.addColorStop(0, "rgba(7,24,39,.16)"); gradient.addColorStop(.52, "rgba(4,15,25,.34)"); gradient.addColorStop(1, "rgba(2,7,13,.72)");
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, innerWidth, innerHeight);
     const grid = 72 * state.camera.scale;
     if (grid > 18) {

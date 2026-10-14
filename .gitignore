@@ -13,6 +13,7 @@ output/*
 !static/branding/sofia_chat_avatar.png
 !static/branding/sofia_chat_header.png
 !static/branding/sentinel_regionais_logo.png
+!static/fluxo_neural_de_redes/sentinel-galaxy-bg.png
 *.jpg
 *.jpeg
 

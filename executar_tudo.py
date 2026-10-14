@@ -1052,7 +1052,7 @@ ensure_directories()
 
 safe_print(f"[INFO] Usando diretório do projeto: {PROJECT_ROOT}")
 safe_print(f"[INFO] Arquivos serão salvos em: {DASHBOARD_FINAL.parent}")
-safe_print(f"[INFO] Arquivo de conexões: {CONEXOES_FILE}")
+safe_print("[INFO] Fontes de servidores: estrutura_regionais.json / servidores.json")
 print()
 
 # === DATA E HORA DA EXECUÇÃO ===
@@ -1123,6 +1123,10 @@ def sincronizar_links_regionais_checklist():
 
 # === 1. EXECUTA CHEKLISTS DAS REGIONAIS ===
 def _carregar_servidores_do_txt_legado():
+    if not CONEXOES_FILE.is_file():
+        print("[INFO] Conexoes.txt ausente; fallback legado ignorado com seguranca.")
+        return []
+
     conteudo = CONEXOES_FILE.read_text(encoding="utf-8")
     blocos = re.split(r"\n\s*\n", conteudo.strip())
     servidores = []

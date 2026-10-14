@@ -123,11 +123,8 @@ def get_relative_path(file_path):
 def validate_config():
     """Valida se as configurações estão corretas."""
     errors = []
-    
-    # Verifica se o arquivo de conexões existe
-    if not CONEXOES_FILE.exists():
-        errors.append(f"Arquivo de conexões não encontrado: {CONEXOES_FILE}")
-    
+
+    # Conexoes.txt e opcional e existe somente para compatibilidade legada.
     # Verifica se o diretório do projeto é válido
     if not PROJECT_ROOT.exists():
         errors.append(f"Diretório do projeto não encontrado: {PROJECT_ROOT}")
