@@ -104,6 +104,7 @@ from notification_center import (
     sort_notifications,
 )
 from services.unifi_models import normalizar_modelo_ap
+from services.map_wifi_overlay import overlay_wifi_networks
 from services.alertad_notifications import load_alertad_notifications
 from services.switch_update_v01.main import extract_version, fetch_web_identity
 from services.switch_update_v01.scheduler import SchedulerSettings, SwitchUpdateScheduler
@@ -4628,6 +4629,11 @@ def api_fluxo_neural_dados():
         )
         if cached and (not _mapa_cache_esta_fresco(idade) or unifi_mais_novo):
             _mapa_iniciar_refresh_background()
+        wifi_overlay = overlay_wifi_networks(
+            cached,
+            _filtrar_antenas_unifi_ocultas(load_data("unifi") or {}),
+            _mapa_encontrar_regional_unifi,
+        )
         filtered = filter_map_payload(
             cached,
             _current_user_groups(),
@@ -4635,6 +4641,7 @@ def api_fluxo_neural_dados():
         )
         payload = build_neural_flow_payload(filtered)
         payload["cache_idade_segundos"] = int(idade or 0)
+        payload["inventario_wifi"] = wifi_overlay
         response = jsonify(payload)
         response.headers["Cache-Control"] = "no-store, max-age=0"
         return response
