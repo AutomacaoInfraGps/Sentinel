@@ -4635,7 +4635,9 @@ def api_fluxo_neural_dados():
         )
         payload = build_neural_flow_payload(filtered)
         payload["cache_idade_segundos"] = int(idade or 0)
-        return jsonify(payload)
+        response = jsonify(payload)
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
     except Exception:
         current_app.logger.exception("Falha ao montar o fluxo neural de redes")
         return jsonify({
