@@ -59,10 +59,27 @@
 
   function celestialTexture(node) {
     if (node.tipo === "servidores") return celestialTextures.get("ESTRELA");
+    if (node.tipo === "switches") return celestialTextures.get(switchCelestialKey(node.nome));
     if (node.tipo !== "redes_wifi") return null;
     const name = normalizeCelestialName(node.nome);
     if (["NEPTUNO", "NEPTUNE"].includes(name)) return celestialTextures.get("NETUNO");
     return celestialTextures.get(name) || null;
+  }
+
+  function switchCelestialKey(name) {
+    const variants = [
+      "ASTEROIDE_ROCHOSO",
+      "ASTEROIDE_METALICO",
+      "METEORO_INCANDESCENTE",
+      "COMETA_GELADO",
+    ];
+    const normalized = normalizeCelestialName(name);
+    let hash = 2166136261;
+    for (let index = 0; index < normalized.length; index += 1) {
+      hash ^= normalized.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return variants[(hash >>> 0) % variants.length];
   }
 
   function stellarFilter(name) {
@@ -490,7 +507,9 @@
   function nodeAt(clientX, clientY) {
     const point = worldPoint(clientX, clientY);
     return [...state.visibleNodes].reverse().find(node => {
-      const celestialRadius = node.tipo === "redes_wifi" ? 30 : node.tipo === "servidores" ? 21 : node.radius;
+      const celestialRadius = node.tipo === "redes_wifi"
+        ? 30
+        : ["servidores", "switches"].includes(node.tipo) ? 22 : node.radius;
       return Math.hypot(node.x - point.x, node.y - point.y) <= celestialRadius + 10 / state.camera.scale;
     });
   }
@@ -617,7 +636,7 @@
           ctx.drawImage(texture, node.x - radius, node.y - radius, radius * 2, radius * 2);
         }
         ctx.restore();
-      } else if (node.tipo !== "redes_wifi" && node.tipo !== "servidores") {
+      } else if (!["redes_wifi", "servidores", "switches"].includes(node.tipo)) {
         ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
         ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
@@ -628,16 +647,20 @@
         const isAndromeda = key === "ANDROMEDA";
         const isSaturn = key === "SATURNO";
         const isStar = node.tipo === "servidores";
-        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isStar ? 3.35 : 2.7);
-        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isStar ? 3.35 : 2.7);
+        const isSwitch = node.tipo === "switches";
+        const switchKey = isSwitch ? switchCelestialKey(node.nome) : "";
+        const isTrail = ["METEORO_INCANDESCENTE", "COMETA_GELADO"].includes(switchKey);
+        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isStar ? 3.35 : isTrail ? 3.7 : isSwitch ? 2.9 : 2.7);
+        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isStar ? 3.35 : isTrail ? 3.7 : isSwitch ? 2.9 : 2.7);
         labelRadius = Math.max(labelRadius, height / 2);
-        const detailedStar = !isStar || state.camera.scale >= .52 || active || (focus && inFocus);
+        const detailThreshold = isStar ? .52 : isSwitch ? .34 : 0;
+        const detailedCelestial = state.camera.scale >= detailThreshold || active || (focus && inFocus);
 
-        if (detailedStar) {
-          const cacheWidth = isAndromeda ? 256 : isSaturn ? 256 : isStar ? 128 : 192;
-          const cacheHeight = isAndromeda ? 128 : isSaturn ? 172 : isStar ? 128 : 192;
+        if (detailedCelestial) {
+          const cacheWidth = isAndromeda ? 256 : isSaturn ? 256 : isStar ? 128 : isSwitch ? 144 : 192;
+          const cacheHeight = isAndromeda ? 128 : isSaturn ? 172 : isStar ? 128 : isSwitch ? 144 : 192;
           const filter = isStar ? stellarFilter(node.nome) : "none";
-          const textureKey = isStar ? `star:${filter}` : key;
+          const textureKey = isStar ? `star:${filter}` : isSwitch ? switchKey : key;
           const renderedTexture = cachedCelestialTexture(
             celestial, textureKey, cacheWidth, cacheHeight, filter,
           );
@@ -654,7 +677,7 @@
         } else {
           ctx.save();
           ctx.globalAlpha = opacity * .78;
-          ctx.fillStyle = "#eaf8ff";
+          ctx.fillStyle = isSwitch ? color : "#eaf8ff";
           ctx.beginPath();
           ctx.arc(node.x, node.y, Math.max(3.2, radius * .28), 0, Math.PI * 2);
           ctx.fill();
@@ -665,7 +688,7 @@
         const size = radius * 2.7;
         labelRadius = size / 2;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
-      } else if (!node.isHub && node.tipo !== "servidores") {
+      } else if (!node.isHub && !["servidores", "switches"].includes(node.tipo)) {
         ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
