@@ -61,22 +61,35 @@ def deve_ocultar_ap_teste(ap, site_desc):
     return site == "API_TESTE" or (nome == "nano hd" and ip == "10.134.0.104")
 
 
+def _obter_dados_unifi_site(site_id, recurso):
+    caminhos = (
+        f"/api/s/{site_id}/rest/{recurso}",
+        f"/proxy/network/api/s/{site_id}/rest/{recurso}",
+    )
+    ultimo_erro = None
+    for caminho in caminhos:
+        try:
+            response = session.get(f"{base_url}{caminho}", timeout=12)
+            if response.status_code == 404:
+                continue
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            if data:
+                return data
+        except Exception as exc:
+            ultimo_erro = exc
+    if ultimo_erro:
+        raise ultimo_erro
+    return []
+
+
 def obter_redes_wifi_site(site_id):
     """Coleta somente metadados seguros das WLANs configuradas no site."""
     try:
-        wlans_resp = session.get(
-            f"{base_url}/api/s/{site_id}/rest/wlanconf",
-            timeout=20,
-        )
-        networks_resp = session.get(
-            f"{base_url}/api/s/{site_id}/rest/networkconf",
-            timeout=20,
-        )
-        wlans_resp.raise_for_status()
-        networks_resp.raise_for_status()
         return sanitize_site_wifi_networks(
-            wlans_resp.json().get("data", []),
-            networks_resp.json().get("data", []),
+            _obter_dados_unifi_site(site_id, "wlanconf"),
+            _obter_dados_unifi_site(site_id, "networkconf"),
+            _obter_dados_unifi_site(site_id, "apgroup"),
         )
     except Exception as exc:
         print(f"Nao foi possivel coletar as redes Wi-Fi do site {site_id}: {exc}")
@@ -228,7 +241,10 @@ for site in sites:
             canal_5ghz_por_site[site_desc][canal]["retry_vals"].append(tx_retry)
 
         html += "</table></div>"
-        print(f"Site {site_desc} processado com {len(aps)} APs.")
+        print(
+            f"Site {site_desc} processado com {len(aps)} APs "
+            f"e {len(redes_wifi)} rede(s) Wi-Fi."
+        )
 
     except Exception as e:
         print(f"Erro ao processar site {site_desc}: {e}")
