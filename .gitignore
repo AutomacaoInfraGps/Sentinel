@@ -15,6 +15,7 @@ output/*
 !static/branding/sentinel_regionais_logo.png
 !static/fluxo_neural_de_redes/sentinel-galaxy-bg.png
 !static/fluxo_neural_de_redes/sentinel-galaxy-node.png
+!static/fluxo_neural_de_redes/celestial-*.png
 *.jpg
 *.jpeg
 

@@ -6,6 +6,12 @@
   const introLogo = document.getElementById("introLogo");
   const galaxyBackground = document.getElementById("galaxyBackground");
   const galaxyNodeTexture = document.getElementById("galaxyNodeTexture");
+  const normalizeCelestialName = value => String(value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+  const celestialTextures = new Map(
+    [...document.querySelectorAll("[data-celestial]")]
+      .map(image => [normalizeCelestialName(image.dataset.celestial), image]),
+  );
   const ui = {
     toast: document.getElementById("toast"),
     metrics: document.getElementById("metrics"),
@@ -48,6 +54,28 @@
   };
   const isGalaxyRegional = regional => String(regional?.codigo || regional?.id || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() === "REG_GALAXIA";
+
+  function celestialTexture(node) {
+    if (node.tipo === "servidores") return celestialTextures.get("ESTRELA");
+    if (node.tipo !== "redes_wifi") return null;
+    const name = normalizeCelestialName(node.nome);
+    if (["NEPTUNO", "NEPTUNE"].includes(name)) return celestialTextures.get("NETUNO");
+    return celestialTextures.get(name) || null;
+  }
+
+  function stellarFilter(name) {
+    const key = normalizeCelestialName(name);
+    if (["BETELGEUSE", "MIRA", "SARGAS", "DIPHDA", "HAMAL"].includes(key)) {
+      return "sepia(.65) saturate(2.2) hue-rotate(325deg)";
+    }
+    if (["ARCTURO", "CAPELLA", "POLLUX", "ALDEBARAN", "GOMEISA"].includes(key)) {
+      return "sepia(.55) saturate(1.8) hue-rotate(350deg)";
+    }
+    if (["RIGEL", "SIRIUS", "BELLATRIX", "ALNITAK", "ALNILAN", "MINTAKA", "SAIPH", "VEGA"].includes(key)) {
+      return "saturate(1.35) hue-rotate(4deg) brightness(1.12)";
+    }
+    return "saturate(.8) brightness(1.04)";
+  }
 
   function seededFraction(seed) {
     const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
@@ -424,7 +452,10 @@
 
   function nodeAt(clientX, clientY) {
     const point = worldPoint(clientX, clientY);
-    return [...state.visibleNodes].reverse().find(node => Math.hypot(node.x - point.x, node.y - point.y) <= node.radius + 10 / state.camera.scale);
+    return [...state.visibleNodes].reverse().find(node => {
+      const celestialRadius = node.tipo === "redes_wifi" ? 30 : node.tipo === "servidores" ? 21 : node.radius;
+      return Math.hypot(node.x - point.x, node.y - point.y) <= celestialRadius + 10 / state.camera.scale;
+    });
   }
 
   function updatePhysics() {
@@ -529,6 +560,7 @@
       if (opacity < .01) return;
       ctx.globalAlpha = opacity;
       const radius = node.radius * (active ? 1.14 : 1);
+      let labelRadius = radius;
       const haloRadius = radius * (active ? 3 : 2.1);
       const halo = ctx.createRadialGradient(node.x, node.y, radius * .4, node.x, node.y, haloRadius);
       halo.addColorStop(0, `${color}${active ? "70" : "30"}`); halo.addColorStop(1, `${color}00`);
@@ -546,18 +578,32 @@
           ctx.drawImage(texture, node.x - radius, node.y - radius, radius * 2, radius * 2);
         }
         ctx.restore();
-      } else {
+      } else if (node.tipo !== "redes_wifi" && node.tipo !== "servidores") {
         ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
         ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
       }
-      if (!node.isHub && node.tipo === "redes_wifi") {
+      const celestial = celestialTexture(node);
+      if (!node.isHub && celestial) {
+        const key = normalizeCelestialName(node.nome);
+        const isAndromeda = key === "ANDROMEDA";
+        const isSaturn = key === "SATURNO";
+        const isStar = node.tipo === "servidores";
+        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isStar ? 3.35 : 2.7);
+        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isStar ? 3.35 : 2.7);
+        labelRadius = Math.max(labelRadius, height / 2);
+        ctx.save();
+        ctx.shadowColor = isStar ? color : "#69d9ff";
+        ctx.shadowBlur = (active ? 18 : 10) / state.camera.scale;
+        if (isStar) ctx.filter = stellarFilter(node.nome);
+        ctx.drawImage(celestial, node.x - width / 2, node.y - height / 2, width, height);
+        ctx.restore();
+      } else if (!node.isHub && node.tipo === "redes_wifi") {
         const texture = planetTexture(node.nome);
-        const size = radius * 2.35;
+        const size = radius * 2.7;
+        labelRadius = size / 2;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
-        ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = color; ctx.lineWidth = (active ? 3 : 1.5) / state.camera.scale; ctx.stroke();
-      } else if (!node.isHub) {
+      } else if (!node.isHub && node.tipo !== "servidores") {
         ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
@@ -570,10 +616,10 @@
         const label = node.nome.length > limit ? `${node.nome.slice(0, limit - 1)}…` : node.nome;
         ctx.font = `${node.kind === "regional" ? 650 : 600} ${node.kind === "regional" ? 10 : 8}px Segoe UI, sans-serif`;
         const width = clamp(ctx.measureText(label).width + 10, 35, 220);
-        roundedRect(node.x - width / 2, node.y + radius + 6, width, node.kind === "regional" ? 19 : 16, 4);
+        roundedRect(node.x - width / 2, node.y + labelRadius + 6, width, node.kind === "regional" ? 19 : 16, 4);
         ctx.fillStyle = "rgba(3,12,21,.88)"; ctx.fill();
         ctx.fillStyle = inFocus ? "#e5f1f7" : "#7690a1";
-        ctx.fillText(label, node.x, node.y + radius + (node.kind === "regional" ? 15.5 : 14));
+        ctx.fillText(label, node.x, node.y + labelRadius + (node.kind === "regional" ? 15.5 : 14));
       }
     });
     ctx.globalAlpha = 1; ctx.restore();
