@@ -45,6 +45,8 @@
     const p = clamp(value, 0, 1), c1 = 1.35, c3 = c1 + 1;
     return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
   };
+  const isGalaxyRegional = regional => String(regional?.codigo || regional?.id || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() === "REG_GALAXIA";
 
   function seededFraction(seed) {
     const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
@@ -134,18 +136,30 @@
     const regionals = state.data.regionais;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
-    regionals.forEach((regional, index) => {
-      const angle = index * goldenAngle + .35;
-      const distance = 210 * Math.sqrt(index + .65);
-      const x = Math.cos(angle) * distance * 1.1 + (Math.random() - .5) * 75;
-      const y = Math.sin(angle) * distance * .72 + (Math.random() - .5) * 65;
+    let orbitIndex = 0;
+    regionals.forEach(regional => {
+      const isHub = isGalaxyRegional(regional);
+      const angle = orbitIndex * goldenAngle + .35;
+      const distance = 235 * Math.sqrt(orbitIndex + .85);
+      const x = isHub ? 0 : Math.cos(angle) * distance * 1.12 + (Math.random() - .5) * 75;
+      const y = isHub ? 0 : Math.sin(angle) * distance * .74 + (Math.random() - .5) * 65;
+      if (!isHub) orbitIndex += 1;
       nodes.push({
-        ...regional, kind: "regional", radius: 30, x, y, tx: x, ty: y,
+        ...regional, kind: "regional", isHub, radius: isHub ? 50 : 30, x, y, tx: x, ty: y,
         vx: 0, vy: 0, opacity: 0, delay: Math.random() * .35,
       });
     });
 
     const regionalMap = new Map(nodes.map(node => [node.id, node]));
+    const galaxyNode = nodes.find(node => node.isHub);
+    if (galaxyNode) {
+      nodes.filter(node => node.kind === "regional" && !node.isHub).forEach(node => {
+        edges.push({
+          id: `backbone-${node.id}`, sourceId: galaxyNode.id, targetId: node.id,
+          kind: "backbone", phase: Math.random(),
+        });
+      });
+    }
     const devicesByRegional = new Map();
     state.data.dispositivos.forEach(device => {
       if (!devicesByRegional.has(device.regional_id)) devicesByRegional.set(device.regional_id, []);
@@ -211,7 +225,7 @@
         allowed.add(node.regional_id);
       }
     });
-    matchingParents.forEach(id => allowed.add(id));
+    if (!typeFilter) matchingParents.forEach(id => allowed.add(id));
     if (!query && !regionalFilter && !typeFilter) state.nodes.forEach(node => allowed.add(node.id));
 
     state.visibleNodes = state.nodes.filter(node => allowed.has(node.id));
@@ -272,27 +286,53 @@
     ui.detail.innerHTML = `
       <div class="detail-kicker">${escapeHtml(regional.uf || "Regional Sentinel")}</div>
       <h2>${escapeHtml(regional.nome)}</h2><div class="detail-code">${escapeHtml(regional.codigo)}</div>
+      ${regional.descricao ? `<p class="detail-description">${escapeHtml(regional.descricao)}</p>` : ""}
+      ${(regional.status || regional.ultima_atualizacao) ? `<div class="detail-summary">
+        ${regional.status ? `<span><small>Status</small><strong>${escapeHtml(regional.status)}</strong></span>` : ""}
+        ${regional.ultima_atualizacao ? `<span><small>Atualizacao</small><strong>${escapeHtml(regional.ultima_atualizacao)}</strong></span>` : ""}
+      </div>` : ""}
       <div class="detail-grid">
         ${Object.entries(categories).map(([key, item]) => `<div class="detail-item"><strong>${regional.totais[key] || 0}</strong><small>${item.label}</small></div>`).join("")}
       </div>
       ${Object.entries(categories).map(([key, item]) => {
         const entries = devices.filter(device => device.tipo === key);
         if (!entries.length) return "";
-        return `<section class="device-section" style="--category:${item.color}"><h3>${item.label}</h3><div class="device-list">${entries.map(device => `<span class="device-chip">${escapeHtml(device.nome)}${device.detalhe ? `<small>${escapeHtml(device.detalhe)}</small>` : ""}</span>`).join("")}</div></section>`;
+        return `<section class="device-section" style="--category:${item.color}"><h3>${item.label}</h3><div class="device-list">${entries.map(device => `<button type="button" class="device-chip" data-device-id="${escapeHtml(device.id)}">${escapeHtml(device.nome)}${device.detalhe ? `<small>${escapeHtml(device.detalhe)}</small>` : ""}</button>`).join("")}</div></section>`;
       }).join("")}`;
     ui.panel.classList.add("open");
   }
 
+  function selectDevice(id) {
+    const device = state.byId.get(id);
+    if (!device || device.kind !== "device") return;
+    const regional = state.data.regionais.find(item => item.id === device.regional_id);
+    const category = categories[device.tipo];
+    state.selected = device;
+    const details = Array.isArray(device.detalhes) ? device.detalhes : [];
+    ui.detail.innerHTML = `
+      <div class="detail-kicker" style="color:${category.color}">${escapeHtml(category.singular)}</div>
+      <h2>${escapeHtml(device.nome)}</h2>
+      <button type="button" class="regional-context" data-regional-id="${escapeHtml(device.regional_id)}">
+        <span>Regional</span><strong>${escapeHtml(regional?.nome || device.regional_id)}</strong>
+      </button>
+      ${device.detalhe ? `<p class="detail-description">${escapeHtml(device.detalhe)}</p>` : ""}
+      <dl class="device-details">
+        ${details.length ? details.map(item => `<div><dt>${escapeHtml(item.rotulo)}</dt><dd>${escapeHtml(item.valor)}</dd></div>`).join("") : `<div><dt>Informacao</dt><dd>Sem outros dados operacionais registrados.</dd></div>`}
+      </dl>`;
+    ui.panel.classList.add("open");
+  }
+
   function focusBase() {
-    const candidate = state.hover || state.selected;
-    if (!candidate || candidate.kind === "regional") return candidate;
-    return state.byId.get(candidate.regional_id) || candidate;
+    return state.hover || state.selected;
   }
 
   function focusSet() {
-    const base = focusBase();
-    if (!base) return null;
-    return new Set([base.id, ...(state.neighbors.get(base.id) || [])]);
+    const candidate = focusBase();
+    if (!candidate) return null;
+    if (candidate.kind === "device") {
+      return new Set([candidate.id, candidate.regional_id]);
+    }
+    return new Set([candidate.id, ...(state.neighbors.get(candidate.id) || [])]);
   }
 
   function targetPoint(node, followCurrentParent = false) {
@@ -318,15 +358,17 @@
     const height = maxY - minY + 320;
     const reservedLeft = innerWidth > 760 ? 320 : 16;
     state.camera.scale = clamp(Math.min((innerWidth - reservedLeft - 30) / width, (innerHeight - 110) / height), .12, 1.25);
-    state.camera.x = reservedLeft / 2 - centerX * state.camera.scale;
-    state.camera.y = 42 - centerY * state.camera.scale;
+    const hub = nodes.find(node => node.isHub);
+    const overview = !ui.search.value.trim() && !ui.regional.value && !ui.type.value;
+    state.camera.x = reservedLeft / 2 - (hub && overview ? hub.tx : centerX) * state.camera.scale;
+    state.camera.y = 42 - (hub && overview ? hub.ty : centerY) * state.camera.scale;
   }
 
   function reorganize() {
     state.nodes.forEach(node => {
       const target = targetPoint(node);
-      node.x = target.x + (Math.random() - .5) * (node.kind === "regional" ? 160 : 45);
-      node.y = target.y + (Math.random() - .5) * (node.kind === "regional" ? 130 : 45);
+      node.x = node.isHub ? target.x : target.x + (Math.random() - .5) * (node.kind === "regional" ? 160 : 45);
+      node.y = node.isHub ? target.y : target.y + (Math.random() - .5) * (node.kind === "regional" ? 130 : 45);
       node.vx = node.vy = 0;
     });
   }
@@ -348,10 +390,10 @@
     state.nodes.forEach((node, index) => {
       if (node === state.dragNode) return;
       const target = targetPoint(node, node.kind === "device");
-      const driftX = Math.sin(state.time * .00022 + index * 1.7) * (node.kind === "regional" ? 8 : 5);
-      const driftY = Math.cos(state.time * .00018 + index * 1.3) * (node.kind === "regional" ? 7 : 5);
-      const spring = node.kind === "regional" ? .00045 : .0032;
-      const damping = node.kind === "regional" ? .94 : .9;
+      const driftX = node.isHub ? 0 : Math.sin(state.time * .00022 + index * 1.7) * (node.kind === "regional" ? 8 : 5);
+      const driftY = node.isHub ? 0 : Math.cos(state.time * .00018 + index * 1.3) * (node.kind === "regional" ? 7 : 5);
+      const spring = node.isHub ? .004 : node.kind === "regional" ? .00045 : .0032;
+      const damping = node.isHub ? .9 : node.kind === "regional" ? .94 : .9;
       node.vx += (target.x + driftX - node.x) * spring;
       node.vy += (target.y + driftY - node.y) * spring;
       node.vx *= damping; node.vy *= damping; node.x += node.vx; node.y += node.vy;
@@ -409,8 +451,11 @@
 
     state.visibleEdges.forEach((edge, index) => {
       const focused = !focus || edge.source === base || edge.target === base;
-      const color = categories[edge.type].color;
-      const opacity = (focus ? (focused ? .95 : .025) : .2) * Math.min(edge.source.opacity, edge.target.opacity);
+      const backbone = edge.kind === "backbone";
+      const color = backbone ? "#4bbde8" : categories[edge.type].color;
+      const opacity = (
+        focus ? (focused ? (backbone ? .62 : .95) : .025) : (backbone ? .16 : .2)
+      ) * Math.min(edge.source.opacity, edge.target.opacity);
       if (opacity < .01) return;
       const dx = edge.target.x - edge.source.x, dy = edge.target.y - edge.source.y;
       const length = Math.max(Math.hypot(dx, dy), 1);
@@ -419,8 +464,9 @@
       const qx = (edge.source.x + edge.target.x) / 2 - dy / length * (sway + bend);
       const qy = (edge.source.y + edge.target.y) / 2 + dx / length * (sway + bend);
       ctx.beginPath(); ctx.moveTo(edge.source.x, edge.source.y); ctx.quadraticCurveTo(qx, qy, edge.target.x, edge.target.y);
-      ctx.strokeStyle = color; ctx.globalAlpha = opacity; ctx.lineWidth = focused && focus ? 1.8 / state.camera.scale : .8 / state.camera.scale; ctx.stroke();
-      if (focused && focus) {
+      ctx.strokeStyle = color; ctx.globalAlpha = opacity;
+      ctx.lineWidth = (backbone ? .65 : focused && focus ? 1.8 : .8) / state.camera.scale; ctx.stroke();
+      if (focused && focus && !backbone) {
         for (let particle = 0; particle < 2; particle += 1) {
           const t = (state.time * .00028 + edge.phase + particle * .5 + index * .013) % 1;
           const one = 1 - t;
@@ -448,7 +494,13 @@
       ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
       ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
-      if (node.tipo === "redes_wifi") {
+      if (node.isHub) {
+        const texture = planetTexture("ANDROMEDA");
+        const size = radius * 2.28;
+        ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
+        ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = "#8ce8ff"; ctx.lineWidth = (active ? 3.2 : 2) / state.camera.scale; ctx.stroke();
+      } else if (node.tipo === "redes_wifi") {
         const texture = planetTexture(node.nome);
         const size = radius * 2.35;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
@@ -657,6 +709,12 @@
     applyFilters(); fitGraph();
   }));
   document.getElementById("closePanel").addEventListener("click", () => { ui.panel.classList.remove("open"); state.selected = null; });
+  ui.detail.addEventListener("click", event => {
+    const deviceButton = event.target.closest("[data-device-id]");
+    if (deviceButton) { selectDevice(deviceButton.dataset.deviceId); return; }
+    const regionalButton = event.target.closest("[data-regional-id]");
+    if (regionalButton) selectRegional(regionalButton.dataset.regionalId);
+  });
   document.getElementById("tableButton").addEventListener("click", () => ui.table.classList.toggle("open"));
   document.getElementById("closeTable").addEventListener("click", () => ui.table.classList.remove("open"));
   document.getElementById("reorganizeButton").addEventListener("click", reorganize);
@@ -696,9 +754,9 @@
       const point = worldPoint(event.clientX, event.clientY);
       const dx = point.x - state.dragNode.x, dy = point.y - state.dragNode.y;
       state.dragNode.x = point.x; state.dragNode.y = point.y;
-      if (state.dragNode.kind === "regional") {
+      if (state.dragNode.kind === "regional" && !state.dragNode.isHub) {
         state.dragNode.tx += dx; state.dragNode.ty += dy;
-      } else {
+      } else if (state.dragNode.kind !== "regional") {
         state.dragNode.offsetX += dx; state.dragNode.offsetY += dy;
       }
     } else {
@@ -710,7 +768,10 @@
     if (!state.pointer) return;
     const moved = Math.hypot(event.clientX - state.pointer.x, event.clientY - state.pointer.y) > 5;
     const node = nodeAt(event.clientX, event.clientY);
-    if (!moved && node) selectRegional(node.kind === "regional" ? node.id : node.regional_id);
+    if (!moved && node) {
+      if (node.kind === "regional") selectRegional(node.id);
+      else selectDevice(node.id);
+    }
     state.dragging = false; state.dragNode = null; state.pointer = null; canvas.classList.remove("dragging");
   });
   canvas.addEventListener("pointerleave", () => { if (!state.dragging) { state.hover = null; canvas.classList.remove("pointer"); } });

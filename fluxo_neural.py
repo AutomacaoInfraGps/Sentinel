@@ -18,6 +18,80 @@ DEVICE_LABELS = {
     "aps": "Antena UniFi",
     "redes_wifi": "Rede Wi-Fi",
 }
+DEVICE_DETAIL_FIELDS = {
+    "servidores": (
+        ("IP", ("ip",)), ("Funcao", ("funcao", "descricao")),
+        ("Tipo", ("tipo",)), ("Status", ("status",)),
+        ("Tempo de resposta", ("tempo_resposta",)),
+        ("Ultima verificacao", ("ultima_verificacao", "ultima_atualizacao_mapa")),
+        ("Erro", ("erro",)),
+    ),
+    "switches": (
+        ("Hostname", ("host", "hostname")), ("IP", ("ip",)),
+        ("Modelo", ("modelo", "model")), ("Firmware", ("firmware", "version")),
+        ("Serial", ("serial", "serial_number")), ("Status", ("status",)),
+        ("Diagnostico", ("warning_resumo", "status_reason", "descricao")),
+        ("Ultima verificacao", ("ultima_verificacao", "ultima_atualizacao_mapa")),
+    ),
+    "links": (
+        ("Interface", ("interface_monitorada", "interface", "nome")),
+        ("Provedor", ("provedor", "alias", "descricao")),
+        ("IP / Rede", ("ip_exibicao", "ip", "url")), ("Status", ("status",)),
+        ("Latencia", ("latencia", "latency", "tempo_resposta")),
+        ("Ultima verificacao", ("ultima_verificacao", "ultima_atualizacao_mapa")),
+    ),
+    "firewalls": (
+        ("Modelo", ("modelo", "model", "descricao")),
+        ("Hostname", ("hostname", "host", "nome")), ("IP", ("ip",)),
+        ("Firmware", ("firmware", "version")), ("Serial", ("serial", "serial_number")),
+        ("Status", ("status",)), ("Disponibilidade", ("status_disponibilidade",)),
+        ("Vencimento", ("vencimento", "expiration_date")),
+        ("Ultima verificacao", ("ultima_verificacao", "atualizado_em", "ultima_atualizacao_mapa")),
+    ),
+    "vpns": (
+        ("Tunel", ("tunel", "nome")), ("IP remoto", ("remote_ip",)),
+        ("Gateway", ("gateway",)), ("Interface", ("interface",)),
+        ("Status", ("status",)),
+        ("Ultima verificacao", ("ultima_verificacao", "updated_at", "ultima_atualizacao_mapa")),
+    ),
+    "aps": (
+        ("IP", ("ip",)), ("Site", ("site", "regional")),
+        ("Modelo", ("modelo", "model", "modelo_codigo")),
+        ("Firmware", ("firmware", "version")), ("Status", ("status",)),
+        ("Clientes", ("clientes", "num_sta")), ("Uptime", ("uptime",)),
+        ("Ultima verificacao", ("ultima_verificacao", "ultima_atualizacao_mapa")),
+    ),
+    "redes_wifi": (
+        ("Rede", ("rede",)), ("Bandas", ("bandas",)),
+        ("Transmitida por", ("transmissao",)), ("Status", ("status",)),
+    ),
+}
+
+
+def _detail_value(record, keys):
+    for key in keys:
+        value = record.get(key)
+        if value is None or value == "":
+            continue
+        if isinstance(value, (list, tuple, set)):
+            value = ", ".join(str(item).strip() for item in value if str(item).strip())
+        if isinstance(value, dict):
+            continue
+        text = str(value).strip()
+        if text:
+            return text[:240]
+    return ""
+
+
+def _device_details(record, group):
+    if not isinstance(record, dict):
+        return []
+    details = []
+    for label, keys in DEVICE_DETAIL_FIELDS.get(group, ()):
+        value = _detail_value(record, keys)
+        if value:
+            details.append({"rotulo": label, "valor": value})
+    return details
 
 
 def _device_name(record, group, index):
@@ -42,7 +116,7 @@ def _device_name(record, group, index):
             return (interface or provider)[:120]
 
     keys_by_group = {
-        "firewalls": ("hostname", "nome", "host", "name"),
+        "firewalls": ("modelo", "model", "descricao", "nome", "hostname", "host", "name"),
         "vpns": ("tunel", "nome", "name"),
         "switches": ("host", "nome", "hostname", "name"),
         "aps": ("nome", "name", "host", "hostname"),
@@ -88,9 +162,17 @@ def build_neural_flow_payload(map_payload):
                     "nome": name,
                     "tipo": group,
                     "regional_id": code,
+                    "detalhes": _device_details(record, group),
                 }
                 if group == "redes_wifi":
-                    device["detalhe"] = str(record.get("rede") or "")[:120]
+                    detail_parts = [str(record.get("rede") or "").strip()]
+                    broadcasting = record.get("transmissao") or []
+                    if isinstance(broadcasting, str):
+                        broadcasting = [broadcasting]
+                    detail_parts.extend(str(item).strip() for item in broadcasting)
+                    device["detalhe"] = " · ".join(
+                        part for part in detail_parts if part
+                    )[:160]
                 devices.append(device)
                 regional_device_ids.append(device_id)
                 connections.append({
@@ -105,6 +187,11 @@ def build_neural_flow_payload(map_payload):
             "codigo": code,
             "nome": str(source.get("nome") or code)[:120],
             "uf": str(source.get("uf") or "").upper()[:2],
+            "descricao": str(source.get("descricao") or "")[:240],
+            "status": str(source.get("status") or "")[:40],
+            "ultima_atualizacao": str(
+                source.get("ultima_atualizacao_mapa") or ""
+            )[:80],
             "dispositivos": regional_device_ids,
             "totais": regional_counts,
         })

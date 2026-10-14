@@ -15,11 +15,16 @@ def _as_bool(value, default=True):
     return bool(value)
 
 
-def sanitize_site_wifi_networks(wlans, networks):
+def sanitize_site_wifi_networks(wlans, networks, ap_groups=None):
     """Return WLAN metadata without credentials, keys, MACs or internal payloads."""
     network_by_id = {
         str(item.get("_id") or ""): item
         for item in (networks or [])
+        if isinstance(item, dict) and item.get("_id")
+    }
+    ap_group_by_id = {
+        str(item.get("_id") or ""): _clean(item.get("name"))
+        for item in (ap_groups or [])
         if isinstance(item, dict) and item.get("_id")
     }
     result = []
@@ -43,11 +48,20 @@ def sanitize_site_wifi_networks(wlans, networks):
         if isinstance(bands, str):
             bands = [bands]
         clean_bands = [_clean(band, 20) for band in bands if _clean(band, 20)]
+        group_ids = wlan.get("ap_group_ids") or []
+        if isinstance(group_ids, str):
+            group_ids = [group_ids]
+        broadcasting = [
+            ap_group_by_id[str(group_id)]
+            for group_id in group_ids
+            if ap_group_by_id.get(str(group_id))
+        ]
 
         result.append({
             "nome": name,
             "rede": network_name,
             "bandas": clean_bands,
+            "transmissao": broadcasting,
             "ativo": _as_bool(wlan.get("enabled")),
         })
 

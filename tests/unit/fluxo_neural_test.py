@@ -20,7 +20,7 @@ class NeuralFlowPayloadTests(unittest.TestCase):
                 }],
                 "links": [{"nome": "Link principal", "api_key": "segredo-2"}],
                 "switches": [],
-                "firewalls": [{"hostname": "FW-BA"}],
+                "firewalls": [{"hostname": "FW-BA", "modelo": "FortiGate-100F"}],
                 "vpns": [{"tunel": "VPN_BAHIA"}],
                 "aps": [{"name": "AP-RECEPCAO"}],
                 "redes_wifi": [{
@@ -38,14 +38,21 @@ class NeuralFlowPayloadTests(unittest.TestCase):
         self.assertEqual(payload["regionais"][0]["totais"]["servidores"], 1)
         self.assertEqual(
             {device["nome"] for device in payload["dispositivos"]},
-            {"SRV-BA-01", "Link principal", "FW-BA", "VPN_BAHIA", "AP-RECEPCAO", "SATURNO"},
+            {"SRV-BA-01", "Link principal", "FortiGate-100F", "VPN_BAHIA", "AP-RECEPCAO", "SATURNO"},
         )
         serialized = repr(payload)
         self.assertNotIn("nao-pode-sair", serialized)
-        self.assertNotIn("10.0.0.1", serialized)
         self.assertNotIn("segredo", serialized)
         self.assertNotIn("password", serialized)
         self.assertNotIn("passphrase", serialized)
+        server = next(
+            device for device in payload["dispositivos"]
+            if device["tipo"] == "servidores"
+        )
+        self.assertIn(
+            {"rotulo": "IP", "valor": "10.0.0.1"},
+            server["detalhes"],
+        )
 
     def test_combines_link_interface_and_provider(self):
         payload = build_neural_flow_payload({
@@ -56,6 +63,19 @@ class NeuralFlowPayloadTests(unittest.TestCase):
         })
 
         self.assertEqual(payload["dispositivos"][0]["nome"], "WAN1 - VIVO")
+
+    def test_prefers_firewall_commercial_model(self):
+        payload = build_neural_flow_payload({
+            "regionais": [{
+                "codigo": "REG_BAHIA",
+                "firewalls": [{
+                    "hostname": "FGT_REGBAHIA",
+                    "descricao": "FortiGate-100F",
+                }],
+            }],
+        })
+
+        self.assertEqual(payload["dispositivos"][0]["nome"], "FortiGate-100F")
 
 
 if __name__ == "__main__":

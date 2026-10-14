@@ -4398,14 +4398,13 @@ def _montar_dados_mapa_monitoramento():
                 unmapped["redes_wifi"].append(network_unmapped)
             continue
         for network in site.get("redes_wifi") or []:
-            if not network.get("ativo", True):
-                continue
             bands = ", ".join(str(band) for band in (network.get("bandas") or []))
             regionais[codigo]["redes_wifi"].append({
                 "nome": network.get("nome") or "Rede Wi-Fi",
                 "rede": network.get("rede") or "",
+                "transmissao": network.get("transmissao") or [],
                 "descricao": bands,
-                "status": "online",
+                "status": "online" if network.get("ativo", True) else "inativo",
             })
 
     for ap in (unifi_data.get("aps") or []):
@@ -4621,6 +4620,14 @@ def api_fluxo_neural_dados():
         if not cached:
             cached = _mapa_salvar_cache(_montar_dados_mapa_monitoramento())
             idade = 0
+        unifi_snapshot = PROJECT_ROOT / "data" / "unifi.json"
+        unifi_mais_novo = (
+            unifi_snapshot.exists()
+            and _MAPA_CACHE_FILE.exists()
+            and unifi_snapshot.stat().st_mtime > _MAPA_CACHE_FILE.stat().st_mtime
+        )
+        if cached and (not _mapa_cache_esta_fresco(idade) or unifi_mais_novo):
+            _mapa_iniciar_refresh_background()
         filtered = filter_map_payload(
             cached,
             _current_user_groups(),
