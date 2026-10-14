@@ -12,6 +12,8 @@
     [...document.querySelectorAll("[data-celestial]")]
       .map(image => [normalizeCelestialName(image.dataset.celestial), image]),
   );
+  const celestialRenderCache = new Map();
+  let galaxyBackgroundRender = null;
   const ui = {
     toast: document.getElementById("toast"),
     metrics: document.getElementById("metrics"),
@@ -75,6 +77,41 @@
       return "saturate(1.35) hue-rotate(4deg) brightness(1.12)";
     }
     return "saturate(.8) brightness(1.04)";
+  }
+
+  function cachedCelestialTexture(image, key, width, height, filter = "none") {
+    if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return null;
+    const cacheKey = `${key}:${width}x${height}:${filter}`;
+    if (celestialRenderCache.has(cacheKey)) return celestialRenderCache.get(cacheKey);
+
+    const surface = document.createElement("canvas");
+    surface.width = width;
+    surface.height = height;
+    const painter = surface.getContext("2d");
+    painter.imageSmoothingEnabled = true;
+    painter.imageSmoothingQuality = "high";
+    painter.filter = filter;
+    painter.drawImage(image, 0, 0, width, height);
+    painter.filter = "none";
+    celestialRenderCache.set(cacheKey, surface);
+    return surface;
+  }
+
+  function cachedGalaxyBackground() {
+    if (!galaxyBackground.complete || !galaxyBackground.naturalWidth) return null;
+    if (galaxyBackgroundRender) return galaxyBackgroundRender;
+
+    const surface = document.createElement("canvas");
+    surface.width = galaxyBackground.naturalWidth;
+    surface.height = galaxyBackground.naturalHeight;
+    const painter = surface.getContext("2d");
+    painter.imageSmoothingEnabled = true;
+    painter.imageSmoothingQuality = "high";
+    painter.filter = "brightness(1.22) saturate(1.08)";
+    painter.drawImage(galaxyBackground, 0, 0);
+    painter.filter = "none";
+    galaxyBackgroundRender = surface;
+    return surface;
   }
 
   function seededFraction(seed) {
@@ -481,11 +518,13 @@
       const height = galaxyBackground.naturalHeight * cover * galaxyZoom;
       const travelX = clamp(state.camera.x * .075, -Math.max((width - innerWidth) / 2, 0), Math.max((width - innerWidth) / 2, 0));
       const travelY = clamp(state.camera.y * .075, -Math.max((height - innerHeight) / 2, 0), Math.max((height - innerHeight) / 2, 0));
-      ctx.save();
-      ctx.globalAlpha = .92;
-      ctx.filter = "brightness(1.22) saturate(1.08)";
-      ctx.drawImage(galaxyBackground, (innerWidth - width) / 2 + travelX, (innerHeight - height) / 2 + travelY, width, height);
-      ctx.restore();
+      const renderedBackground = cachedGalaxyBackground();
+      if (renderedBackground) {
+        ctx.save();
+        ctx.globalAlpha = .92;
+        ctx.drawImage(renderedBackground, (innerWidth - width) / 2 + travelX, (innerHeight - height) / 2 + travelY, width, height);
+        ctx.restore();
+      }
     } else {
       ctx.fillStyle = "#020810"; ctx.fillRect(0, 0, innerWidth, innerHeight);
     }
@@ -592,12 +631,35 @@
         const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isStar ? 3.35 : 2.7);
         const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isStar ? 3.35 : 2.7);
         labelRadius = Math.max(labelRadius, height / 2);
-        ctx.save();
-        ctx.shadowColor = isStar ? color : "#69d9ff";
-        ctx.shadowBlur = (active ? 18 : 10) / state.camera.scale;
-        if (isStar) ctx.filter = stellarFilter(node.nome);
-        ctx.drawImage(celestial, node.x - width / 2, node.y - height / 2, width, height);
-        ctx.restore();
+        const detailedStar = !isStar || state.camera.scale >= .52 || active || (focus && inFocus);
+
+        if (detailedStar) {
+          const cacheWidth = isAndromeda ? 256 : isSaturn ? 256 : isStar ? 128 : 192;
+          const cacheHeight = isAndromeda ? 128 : isSaturn ? 172 : isStar ? 128 : 192;
+          const filter = isStar ? stellarFilter(node.nome) : "none";
+          const textureKey = isStar ? `star:${filter}` : key;
+          const renderedTexture = cachedCelestialTexture(
+            celestial, textureKey, cacheWidth, cacheHeight, filter,
+          );
+
+          if (renderedTexture) {
+            ctx.save();
+            if (active) {
+              ctx.shadowColor = isStar ? color : "#69d9ff";
+              ctx.shadowBlur = 18 / state.camera.scale;
+            }
+            ctx.drawImage(renderedTexture, node.x - width / 2, node.y - height / 2, width, height);
+            ctx.restore();
+          }
+        } else {
+          ctx.save();
+          ctx.globalAlpha = opacity * .78;
+          ctx.fillStyle = "#eaf8ff";
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, Math.max(3.2, radius * .28), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       } else if (!node.isHub && node.tipo === "redes_wifi") {
         const texture = planetTexture(node.nome);
         const size = radius * 2.7;
