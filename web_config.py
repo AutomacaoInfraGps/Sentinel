@@ -4588,7 +4588,7 @@ def api_mapa_dados():
 @app.route('/api/fluxo-neural/dados')
 @login_required
 def api_fluxo_neural_dados():
-    """Aggregated and sanitized topology consumed by the neural flow canvas."""
+    """Sanitized per-device topology consumed by the neural flow canvas."""
     try:
         cached, idade = _mapa_carregar_cache()
         if not cached:

@@ -3,45 +3,44 @@
 
   const canvas = document.getElementById("network");
   const ctx = canvas.getContext("2d");
+  const introLogo = document.getElementById("introLogo");
   const ui = {
-    loading: document.getElementById("loading"),
     toast: document.getElementById("toast"),
     metrics: document.getElementById("metrics"),
     sync: document.getElementById("syncLabel"),
     search: document.getElementById("searchInput"),
-    uf: document.getElementById("ufFilter"),
-    status: document.getElementById("statusFilter"),
+    regional: document.getElementById("regionalFilter"),
+    type: document.getElementById("typeFilter"),
     connectionRank: document.getElementById("connectionRank"),
-    alertRank: document.getElementById("alertRank"),
+    categoryRank: document.getElementById("categoryRank"),
+    legend: document.getElementById("typeLegend"),
     panel: document.getElementById("detailPanel"),
     detail: document.getElementById("detailContent"),
     table: document.getElementById("tableView"),
     tableBody: document.getElementById("tableBody"),
-    failureButton: document.getElementById("failureButton"),
-    failureBanner: document.getElementById("failureBanner"),
   };
-  const palette = {
-    online: "#35d09f", warning: "#f4b942", offline: "#ee5261",
-    alert: "#ee5261", unknown: "#7892a4", cyan: "#20bdf2", blue: "#1479d2",
-  };
-  const groupLabels = {
-    servidores: "Servidores", switches: "Switches", links: "Links",
-    aps: "Access points", vpns: "VPNs", firewalls: "Firewalls",
+  const categories = {
+    links: { label: "Links", singular: "Link", color: "#22c3f6", mono: "LK" },
+    firewalls: { label: "Firewalls", singular: "Firewall", color: "#ef5968", mono: "FW" },
+    switches: { label: "Switches", singular: "Switch", color: "#9b7cf4", mono: "SW" },
+    servidores: { label: "Servidores", singular: "Servidor", color: "#35d09f", mono: "SV" },
+    vpns: { label: "VPNs", singular: "VPN", color: "#f4bd4e", mono: "VP" },
+    aps: { label: "Antenas UniFi", singular: "Antena", color: "#e6edf2", mono: "AP" },
   };
   const state = {
-    data: null, nodes: [], edges: [], visibleNodes: [], visibleEdges: [],
-    view: "regionals", selected: null, simulated: new Set(), failureMode: false,
-    camera: { x: 0, y: 0, scale: 1 }, pointer: null, dragNode: null,
-    dragging: false, last: performance.now(), time: 0,
+    data: null, nodes: [], edges: [], byId: new Map(), neighbors: new Map(),
+    visibleNodes: [], visibleEdges: [], hover: null, selected: null,
+    camera: { x: 0, y: 0, scale: 1 }, pointer: null, dragNode: null, dragging: false,
+    time: 0, intro: null,
   };
-
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
   }[char]));
-  const totalOf = (regional, group) => regional.totais[group]?.total || 0;
-  const problemsOf = (regional, group) => {
-    const values = regional.totais[group] || {};
-    return values.alerta || (values.offline || 0) + (values.warning || 0);
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const easeOutCubic = value => 1 - Math.pow(1 - clamp(value, 0, 1), 3);
+  const easeOutBack = value => {
+    const p = clamp(value, 0, 1), c1 = 1.35, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
   };
 
   function resize() {
@@ -54,88 +53,122 @@
   }
 
   function buildGraph() {
+    const nodes = [];
+    const edges = [];
     const regionals = state.data.regionais;
-    const radius = Math.max(330, regionals.length * 13);
-    const core = { ...state.data.hub, kind: "core", x: 0, y: 0, vx: 0, vy: 0, radius: 48 };
-    const nodes = [core];
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
     regionals.forEach((regional, index) => {
-      const angle = (index / Math.max(regionals.length, 1)) * Math.PI * 2 - Math.PI / 2;
-      const ring = index % 2 ? radius : radius * .68;
+      const angle = index * goldenAngle + .35;
+      const distance = 210 * Math.sqrt(index + .65);
+      const x = Math.cos(angle) * distance * 1.1 + (Math.random() - .5) * 75;
+      const y = Math.sin(angle) * distance * .72 + (Math.random() - .5) * 65;
       nodes.push({
-        ...regional, kind: "regional", radius: 24,
-        x: Math.cos(angle) * ring + (Math.random() - .5) * 35,
-        y: Math.sin(angle) * ring + (Math.random() - .5) * 35,
-        vx: 0, vy: 0,
+        ...regional, kind: "regional", radius: 30, x, y, tx: x, ty: y,
+        vx: 0, vy: 0, opacity: 0, delay: Math.random() * .35,
       });
-      nodes[nodes.length - 1].homeX = nodes[nodes.length - 1].x;
-      nodes[nodes.length - 1].homeY = nodes[nodes.length - 1].y;
-      Object.entries(regional.totais).forEach(([group, totals], groupIndex) => {
-        if (!totals.total) return;
-        const theta = angle + (groupIndex - 2.5) * .15;
+    });
+
+    const regionalMap = new Map(nodes.map(node => [node.id, node]));
+    const devicesByRegional = new Map();
+    state.data.dispositivos.forEach(device => {
+      if (!devicesByRegional.has(device.regional_id)) devicesByRegional.set(device.regional_id, []);
+      devicesByRegional.get(device.regional_id).push(device);
+    });
+    devicesByRegional.forEach((devices, regionalId) => {
+      const parent = regionalMap.get(regionalId);
+      if (!parent) return;
+      devices.forEach((device, index) => {
+        const ring = 92 + Math.floor(index / 12) * 50;
+        const itemsInRing = Math.min(12, devices.length - Math.floor(index / 12) * 12);
+        const angle = (index % 12) / Math.max(itemsInRing, 1) * Math.PI * 2 + (regionalId.length % 7) * .19;
+        const x = parent.x + Math.cos(angle) * ring;
+        const y = parent.y + Math.sin(angle) * ring;
         nodes.push({
-          id: `${regional.id}:${group}`, parentId: regional.id, kind: "infra", group,
-          nome: groupLabels[group], quantidade: totals.total,
-          status: problemsOf(regional, group) ? "alert" : "online",
-          x: Math.cos(theta) * (ring + 105), y: Math.sin(theta) * (ring + 105),
-          vx: 0, vy: 0, radius: 10,
+          ...device, kind: "device", radius: 13, x, y, tx: x, ty: y,
+          vx: 0, vy: 0, opacity: 0, delay: .1 + Math.random() * .45,
+        });
+        edges.push({
+          id: `edge-${device.id}`, sourceId: regionalId, targetId: device.id,
+          type: device.tipo, phase: Math.random(),
         });
       });
     });
-    const nodeMap = new Map(nodes.map(node => [node.id, node]));
-    const edges = state.data.conexoes.map(edge => ({
-      ...edge, source: nodeMap.get(edge.origem), target: nodeMap.get(edge.destino), kind: "connection",
-    })).filter(edge => edge.source && edge.target);
-    nodes.filter(node => node.kind === "infra").forEach(node => edges.push({
-      id: `infra:${node.id}`, source: nodeMap.get(node.parentId), target: node,
-      kind: "infra", tipo: node.group, status: node.status, quantidade: node.quantidade,
-    }));
+
     state.nodes = nodes;
-    state.edges = edges;
+    state.byId = new Map(nodes.map(node => [node.id, node]));
+    state.edges = edges.map(edge => ({
+      ...edge, source: state.byId.get(edge.sourceId), target: state.byId.get(edge.targetId),
+    })).filter(edge => edge.source && edge.target);
+    state.neighbors = new Map(nodes.map(node => [node.id, new Set()]));
+    state.edges.forEach(edge => {
+      state.neighbors.get(edge.sourceId).add(edge.targetId);
+      state.neighbors.get(edge.targetId).add(edge.sourceId);
+    });
     applyFilters();
     fitGraph();
+    startIntro();
   }
 
   function applyFilters() {
+    if (!state.data) return;
     const query = ui.search.value.trim().toLocaleLowerCase("pt-BR");
-    const uf = ui.uf.value;
-    const status = ui.status.value;
-    const allowed = new Set(["sentinel-core"]);
+    const regionalFilter = ui.regional.value;
+    const typeFilter = ui.type.value;
+    const allowed = new Set();
+    const matchingParents = new Set();
+
     state.nodes.forEach(node => {
       if (node.kind !== "regional") return;
-      const matches = (!query || `${node.nome} ${node.codigo}`.toLocaleLowerCase("pt-BR").includes(query))
-        && (!uf || node.uf === uf) && (!status || node.status === status);
-      if (matches) allowed.add(node.id);
+      const matchesRegional = !regionalFilter || node.id === regionalFilter;
+      const matchesText = !query || `${node.nome} ${node.codigo}`.toLocaleLowerCase("pt-BR").includes(query);
+      if (matchesRegional && matchesText) matchingParents.add(node.id);
     });
-    if (state.view === "infra") {
-      state.nodes.filter(node => node.kind === "infra" && allowed.has(node.parentId)).forEach(node => allowed.add(node.id));
-    }
+    state.nodes.forEach(node => {
+      if (node.kind !== "device") return;
+      const matchesRegional = !regionalFilter || node.regional_id === regionalFilter;
+      const matchesType = !typeFilter || node.tipo === typeFilter;
+      const matchesText = !query || node.nome.toLocaleLowerCase("pt-BR").includes(query);
+      if (matchesRegional && matchesType && matchesText) {
+        allowed.add(node.id);
+        allowed.add(node.regional_id);
+      }
+    });
+    matchingParents.forEach(id => allowed.add(id));
+    if (!query && !regionalFilter && !typeFilter) state.nodes.forEach(node => allowed.add(node.id));
+
     state.visibleNodes = state.nodes.filter(node => allowed.has(node.id));
-    state.visibleEdges = state.edges.filter(edge => allowed.has(edge.source.id) && allowed.has(edge.target.id));
+    state.visibleEdges = state.edges.filter(edge => allowed.has(edge.sourceId) && allowed.has(edge.targetId));
+    if (state.hover && !allowed.has(state.hover.id)) state.hover = null;
     renderTable();
   }
 
   function populateUi() {
     const summary = state.data.resumo;
     ui.metrics.innerHTML = [
-      [summary.regionais, "Regionais", ""], [summary.conexoes, "Conexões", ""],
-      [summary.ativos, "Ativos", ""], [summary.com_alerta, "Em atenção", "alert"],
-    ].map(([value, label, css]) => `<div class="metric ${css}"><strong>${value}</strong><small>${label}</small></div>`).join("");
+      [summary.regionais, "Regionais"], [summary.dispositivos, "Dispositivos"],
+      [summary.conexoes, "Conexões"], [summary.categorias, "Tipos"],
+    ].map(([value, label]) => `<div class="metric"><strong>${value}</strong><small>${label}</small></div>`).join("");
 
-    [...new Set(state.data.regionais.map(item => item.uf).filter(Boolean))].sort().forEach(uf => {
-      ui.uf.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(uf)}">${escapeHtml(uf)}</option>`);
+    state.data.regionais.forEach(regional => {
+      ui.regional.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(regional.id)}">${escapeHtml(regional.nome)}</option>`);
     });
-    renderRanking(ui.connectionRank, [...state.data.regionais]
-      .sort((a, b) => (totalOf(b, "vpns") + totalOf(b, "links")) - (totalOf(a, "vpns") + totalOf(a, "links")))
-      .slice(0, 6), item => totalOf(item, "vpns") + totalOf(item, "links"));
-    ui.alertRank.classList.add("alerts");
-    renderRanking(ui.alertRank, [...state.data.regionais].filter(item => item.alertas)
-      .sort((a, b) => b.alertas - a.alertas).slice(0, 6), item => item.alertas);
+    Object.entries(categories).forEach(([key, item]) => {
+      ui.type.insertAdjacentHTML("beforeend", `<option value="${key}">${item.label}</option>`);
+    });
+
+    const connected = [...state.data.regionais].sort((a, b) => b.dispositivos.length - a.dispositivos.length).slice(0, 7);
+    renderRanking(ui.connectionRank, connected, item => item.dispositivos.length);
+    ui.categoryRank.innerHTML = Object.entries(categories).map(([key, item]) => `
+      <div class="category-row" data-type="${key}" style="--category:${item.color}">
+        <i></i><span>${item.label}</span><b>${state.data.categorias[key] || 0}</b>
+      </div>`).join("");
+    ui.legend.innerHTML = Object.values(categories).map(item => `<span style="--category:${item.color}"><i></i>${item.singular}</span>`).join("");
     const stamp = state.data.source_updated_at ? new Date(state.data.source_updated_at) : new Date(state.data.generated_at);
     ui.sync.textContent = `TOPOLOGIA ATUALIZADA ${stamp.toLocaleString("pt-BR")}`;
   }
 
   function renderRanking(container, rows, valueFn) {
-    if (!rows.length) { container.innerHTML = '<div class="empty">Nenhuma ocorrência</div>'; return; }
     const max = Math.max(...rows.map(valueFn), 1);
     container.innerHTML = rows.map(item => {
       const value = valueFn(item);
@@ -145,42 +178,64 @@
 
   function renderTable() {
     if (!state.data) return;
-    const visible = new Set(state.visibleNodes.filter(node => node.kind === "regional").map(node => node.id));
-    ui.tableBody.innerHTML = state.data.regionais.filter(item => visible.has(item.id)).map(item => `
+    const visibleRegionalIds = new Set(state.visibleNodes.filter(node => node.kind === "regional").map(node => node.id));
+    ui.tableBody.innerHTML = state.data.regionais.filter(item => visibleRegionalIds.has(item.id)).map(item => `
       <tr data-id="${escapeHtml(item.id)}">
         <td><strong>${escapeHtml(item.nome)}</strong><br><small>${escapeHtml(item.codigo)}</small></td>
-        <td>${escapeHtml(item.uf || "-")}</td>
-        <td><span class="table-status ${item.status}">${item.status === "alert" ? `${item.alertas} alerta(s)` : "Normal"}</span></td>
-        ${["vpns", "links", "servidores", "switches", "aps", "firewalls"].map(group => `<td>${totalOf(item, group)}</td>`).join("")}
+        <td>${escapeHtml(item.uf || "-")}</td><td>${item.dispositivos.length}</td>
+        ${["links", "firewalls", "switches", "servidores", "vpns", "aps"].map(type => `<td>${item.totais[type] || 0}</td>`).join("")}
       </tr>`).join("");
   }
 
-  function showDetails(id) {
+  function selectRegional(id) {
     const regional = state.data.regionais.find(item => item.id === id);
     if (!regional) return;
-    state.selected = regional.id;
+    state.selected = state.byId.get(id);
+    const devices = state.data.dispositivos.filter(device => device.regional_id === id);
     ui.detail.innerHTML = `
       <div class="detail-kicker">${escapeHtml(regional.uf || "Regional Sentinel")}</div>
-      <h2>${escapeHtml(regional.nome)}</h2>
-      <div class="detail-code">${escapeHtml(regional.codigo)}</div>
-      <div class="status-pill ${regional.status}">${regional.status === "alert" ? `${regional.alertas} alerta(s) operacional(is)` : "Operação normal"}</div>
+      <h2>${escapeHtml(regional.nome)}</h2><div class="detail-code">${escapeHtml(regional.codigo)}</div>
       <div class="detail-grid">
-        ${Object.keys(groupLabels).map(group => `<div class="detail-item"><strong>${totalOf(regional, group)}</strong><small>${groupLabels[group]}</small>${problemsOf(regional, group) ? `<span>${problemsOf(regional, group)} em atenção</span>` : ""}</div>`).join("")}
-      </div>`;
+        ${Object.entries(categories).map(([key, item]) => `<div class="detail-item"><strong>${regional.totais[key] || 0}</strong><small>${item.label}</small></div>`).join("")}
+      </div>
+      ${Object.entries(categories).map(([key, item]) => {
+        const entries = devices.filter(device => device.tipo === key);
+        if (!entries.length) return "";
+        return `<section class="device-section" style="--category:${item.color}"><h3>${item.label}</h3><div class="device-list">${entries.map(device => `<span class="device-chip">${escapeHtml(device.nome)}</span>`).join("")}</div></section>`;
+      }).join("")}`;
     ui.panel.classList.add("open");
   }
 
+  function focusBase() {
+    const candidate = state.hover || state.selected;
+    if (!candidate || candidate.kind === "regional") return candidate;
+    return state.byId.get(candidate.regional_id) || candidate;
+  }
+
+  function focusSet() {
+    const base = focusBase();
+    if (!base) return null;
+    return new Set([base.id, ...(state.neighbors.get(base.id) || [])]);
+  }
+
   function fitGraph() {
-    const nodes = state.visibleNodes.filter(node => node.kind !== "infra" || state.view === "infra");
+    const nodes = state.visibleNodes.length ? state.visibleNodes : state.nodes;
     if (!nodes.length) return;
-    const xs = nodes.map(node => node.x), ys = nodes.map(node => node.y);
-    const width = Math.max(...xs) - Math.min(...xs) + 220;
-    const height = Math.max(...ys) - Math.min(...ys) + 220;
-    const availableWidth = innerWidth - (innerWidth > 760 ? 330 : 30);
-    const availableHeight = innerHeight - 120;
-    state.camera.scale = Math.max(.28, Math.min(1, availableWidth / width, availableHeight / height));
-    state.camera.x = (innerWidth > 760 ? 150 : 0);
-    state.camera.y = 35;
+    const xs = nodes.map(node => node.tx), ys = nodes.map(node => node.ty);
+    const width = Math.max(...xs) - Math.min(...xs) + 360;
+    const height = Math.max(...ys) - Math.min(...ys) + 320;
+    const reservedLeft = innerWidth > 760 ? 320 : 16;
+    state.camera.scale = clamp(Math.min((innerWidth - reservedLeft - 30) / width, (innerHeight - 110) / height), .12, 1.25);
+    state.camera.x = reservedLeft / 2;
+    state.camera.y = 38;
+  }
+
+  function reorganize() {
+    state.nodes.forEach(node => {
+      node.x = node.tx + (Math.random() - .5) * (node.kind === "regional" ? 160 : 45);
+      node.y = node.ty + (Math.random() - .5) * (node.kind === "regional" ? 130 : 45);
+      node.vx = node.vy = 0;
+    });
   }
 
   function worldPoint(clientX, clientY) {
@@ -190,38 +245,35 @@
     };
   }
 
-  function nodeAt(x, y) {
-    const point = worldPoint(x, y);
-    return [...state.visibleNodes].reverse().find(node => Math.hypot(node.x - point.x, node.y - point.y) <= node.radius + 8);
+  function nodeAt(clientX, clientY) {
+    const point = worldPoint(clientX, clientY);
+    return [...state.visibleNodes].reverse().find(node => Math.hypot(node.x - point.x, node.y - point.y) <= node.radius + 10 / state.camera.scale);
   }
 
-  function simulate() {
-    if (!state.data) return;
-    const active = state.visibleNodes;
-    for (let i = 0; i < active.length; i += 1) {
-      const a = active[i];
-      if (a.kind === "core") continue;
-      const parent = a.kind === "infra" ? state.nodes.find(node => node.id === a.parentId) : null;
-      if (parent) {
-        const dx = parent.x - a.x, dy = parent.y - a.y;
-        const distance = Math.max(Math.hypot(dx, dy), 1);
-        const force = (distance - 82) * .00045;
-        a.vx += dx / distance * force; a.vy += dy / distance * force;
-      } else {
-        a.vx += (a.homeX - a.x) * .0015;
-        a.vy += (a.homeY - a.y) * .0015;
-      }
-      for (let j = i + 1; j < active.length; j += 1) {
-        const b = active[j];
-        const dx = a.x - b.x, dy = a.y - b.y;
-        const distance2 = Math.max(dx * dx + dy * dy, 120);
-        const force = (a.kind === "infra" || b.kind === "infra" ? 2 : 7) / distance2;
-        a.vx += dx * force; a.vy += dy * force;
-        b.vx -= dx * force; b.vy -= dy * force;
-      }
-      if (a !== state.dragNode) {
-        a.vx *= .93; a.vy *= .93; a.x += a.vx; a.y += a.vy;
-      }
+  function updatePhysics() {
+    if (!state.data || (state.intro && !state.intro.done)) return;
+    state.nodes.forEach((node, index) => {
+      if (node === state.dragNode) return;
+      const driftX = Math.sin(state.time * .00022 + index * 1.7) * (node.kind === "regional" ? 8 : 3);
+      const driftY = Math.cos(state.time * .00018 + index * 1.3) * (node.kind === "regional" ? 7 : 3);
+      node.vx += (node.tx + driftX - node.x) * (node.kind === "regional" ? .00045 : .0012);
+      node.vy += (node.ty + driftY - node.y) * (node.kind === "regional" ? .00045 : .0012);
+      node.vx *= .94; node.vy *= .94; node.x += node.vx; node.y += node.vy;
+    });
+  }
+
+  function drawBackground() {
+    const gradient = ctx.createRadialGradient(innerWidth * .58, innerHeight * .47, 0, innerWidth * .58, innerHeight * .47, Math.max(innerWidth, innerHeight) * .8);
+    gradient.addColorStop(0, "#0a1c2d"); gradient.addColorStop(.52, "#06131f"); gradient.addColorStop(1, "#030911");
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, innerWidth, innerHeight);
+    const grid = 72 * state.camera.scale;
+    if (grid > 18) {
+      const offsetX = (innerWidth / 2 + state.camera.x) % grid;
+      const offsetY = (innerHeight / 2 + state.camera.y) % grid;
+      ctx.strokeStyle = "rgba(71,166,215,.045)"; ctx.lineWidth = 1; ctx.beginPath();
+      for (let x = offsetX; x < innerWidth; x += grid) { ctx.moveTo(x, 0); ctx.lineTo(x, innerHeight); }
+      for (let y = offsetY; y < innerHeight; y += grid) { ctx.moveTo(0, y); ctx.lineTo(innerWidth, y); }
+      ctx.stroke();
     }
   }
 
@@ -229,58 +281,226 @@
     ctx.beginPath(); ctx.roundRect(x, y, width, height, radius);
   }
 
-  function draw() {
-    ctx.clearRect(0, 0, innerWidth, innerHeight);
-    if (!state.data) return;
+  function drawGraph() {
+    const focus = focusSet();
+    const base = focusBase();
     ctx.save();
     ctx.translate(innerWidth / 2 + state.camera.x, innerHeight / 2 + state.camera.y);
     ctx.scale(state.camera.scale, state.camera.scale);
 
     state.visibleEdges.forEach((edge, index) => {
-      const isFailed = state.simulated.has(edge.target.id);
-      const color = isFailed ? palette.offline : palette[edge.status] || palette.blue;
-      ctx.beginPath(); ctx.moveTo(edge.source.x, edge.source.y); ctx.lineTo(edge.target.x, edge.target.y);
-      ctx.strokeStyle = color; ctx.globalAlpha = edge.kind === "infra" ? .24 : .52;
-      ctx.lineWidth = edge.kind === "infra" ? 1 : Math.min(3, 1 + edge.quantidade * .12); ctx.stroke();
-      if (edge.kind === "connection") {
-        const phase = (state.time * .00012 * (edge.tipo === "vpns" ? 1.15 : .8) + index * .17) % 1;
-        const x = edge.source.x + (edge.target.x - edge.source.x) * phase;
-        const y = edge.source.y + (edge.target.y - edge.source.y) * phase;
-        ctx.beginPath(); ctx.arc(x, y, 2.8 / state.camera.scale, 0, Math.PI * 2);
-        ctx.globalAlpha = .95; ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 12; ctx.fill(); ctx.shadowBlur = 0;
+      const focused = !focus || edge.source === base || edge.target === base;
+      const color = categories[edge.type].color;
+      const opacity = (focus ? (focused ? .95 : .025) : .2) * Math.min(edge.source.opacity, edge.target.opacity);
+      if (opacity < .01) return;
+      const dx = edge.target.x - edge.source.x, dy = edge.target.y - edge.source.y;
+      const qx = (edge.source.x + edge.target.x) / 2 - dy * .08;
+      const qy = (edge.source.y + edge.target.y) / 2 + dx * .08;
+      ctx.beginPath(); ctx.moveTo(edge.source.x, edge.source.y); ctx.quadraticCurveTo(qx, qy, edge.target.x, edge.target.y);
+      ctx.strokeStyle = color; ctx.globalAlpha = opacity; ctx.lineWidth = focused && focus ? 2.2 / state.camera.scale : 1.05 / state.camera.scale; ctx.stroke();
+      if (focused && focus) {
+        for (let particle = 0; particle < 2; particle += 1) {
+          const t = (state.time * .00028 + edge.phase + particle * .5 + index * .013) % 1;
+          const one = 1 - t;
+          const x = one * one * edge.source.x + 2 * one * t * qx + t * t * edge.target.x;
+          const y = one * one * edge.source.y + 2 * one * t * qy + t * t * edge.target.y;
+          ctx.beginPath(); ctx.arc(x, y, 2.4 / state.camera.scale, 0, Math.PI * 2);
+          ctx.globalAlpha = .95; ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 12 / state.camera.scale; ctx.fill(); ctx.shadowBlur = 0;
+        }
       }
     });
     ctx.globalAlpha = 1;
 
     state.visibleNodes.forEach(node => {
-      const failed = state.simulated.has(node.id);
-      const color = failed ? palette.offline : (node.kind === "core" ? palette.cyan : palette[node.status] || palette.cyan);
-      if (node.kind === "core") {
-        const pulse = 5 + Math.sin(state.time * .003) * 3;
-        ctx.beginPath(); ctx.arc(node.x, node.y, node.radius + pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(32,189,242,.22)"; ctx.lineWidth = 2; ctx.stroke();
-      }
-      ctx.beginPath(); ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-      ctx.fillStyle = node.kind === "core" ? "#d9f5ff" : "#0b2030";
-      ctx.strokeStyle = color; ctx.lineWidth = node.id === state.selected ? 4 : 2;
-      ctx.shadowColor = color; ctx.shadowBlur = node.kind === "infra" ? 8 : 18; ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
-      ctx.fillStyle = node.kind === "core" ? "#083354" : color;
+      const inFocus = !focus || focus.has(node.id);
+      const active = node === state.hover || node === state.selected;
+      const color = node.kind === "regional" ? "#22c3f6" : categories[node.tipo].color;
+      const opacity = node.opacity * (inFocus ? 1 : .09);
+      if (opacity < .01) return;
+      ctx.globalAlpha = opacity;
+      const radius = node.radius * (active ? 1.14 : 1);
+      const haloRadius = radius * (active ? 3 : 2.1);
+      const halo = ctx.createRadialGradient(node.x, node.y, radius * .4, node.x, node.y, haloRadius);
+      halo.addColorStop(0, `${color}${active ? "70" : "30"}`); halo.addColorStop(1, `${color}00`);
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
+      ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
+      ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = node.kind === "core" ? "800 15px Segoe UI" : node.kind === "infra" ? "700 8px Consolas" : "700 10px Consolas";
-      ctx.fillText(node.kind === "core" ? "S" : node.kind === "infra" ? String(node.quantidade) : (node.uf || node.codigo.replace("REG_", "").slice(0, 3)), node.x, node.y);
-      if (node.kind !== "infra") {
-        const label = node.kind === "core" ? "SENTINEL" : node.nome;
-        ctx.font = "650 11px Segoe UI"; const width = Math.min(170, ctx.measureText(label).width + 14);
-        roundedRect(node.x - width / 2, node.y + node.radius + 7, width, 22, 5);
-        ctx.fillStyle = "rgba(4,14,24,.88)"; ctx.fill();
-        ctx.fillStyle = "#dcecf5"; ctx.fillText(label.length > 23 ? `${label.slice(0, 22)}…` : label, node.x, node.y + node.radius + 18);
+      ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
+      ctx.fillText(node.kind === "regional" ? (node.uf || node.codigo.replace("REG_", "").slice(0, 3)) : categories[node.tipo].mono, node.x, node.y + .5);
+
+      const showLabel = node.kind === "regional" || inFocus && focus || state.camera.scale > .58;
+      if (showLabel) {
+        const label = node.nome.length > 25 ? `${node.nome.slice(0, 24)}…` : node.nome;
+        ctx.font = `${node.kind === "regional" ? 650 : 600} ${node.kind === "regional" ? 10 : 8}px Segoe UI, sans-serif`;
+        const width = clamp(ctx.measureText(label).width + 10, 35, 155);
+        roundedRect(node.x - width / 2, node.y + radius + 6, width, node.kind === "regional" ? 19 : 16, 4);
+        ctx.fillStyle = "rgba(3,12,21,.88)"; ctx.fill();
+        ctx.fillStyle = inFocus ? "#e5f1f7" : "#7690a1";
+        ctx.fillText(label, node.x, node.y + radius + (node.kind === "regional" ? 15.5 : 14));
       }
     });
-    ctx.restore();
+    ctx.globalAlpha = 1; ctx.restore();
+  }
+
+  function createCracks() {
+    const count = 10;
+    const angles = Array.from({ length: count }, (_, index) => (index + .2 + Math.random() * .55) / count * Math.PI * 2);
+    const rays = angles.map(angle => {
+      const points = [[0, 0]]; let radius = 0;
+      while (radius < 1.5) {
+        radius += .12 + Math.random() * .13;
+        const bend = angle + (Math.random() - .5) * .28;
+        points.push([Math.cos(bend) * radius, Math.sin(bend) * radius]);
+      }
+      return points;
+    });
+    const shards = angles.map((angle, index) => {
+      const next = rays[(index + 1) % count];
+      return {
+        polygon: [...rays[index], ...next.slice(1).reverse()], angle: angle + Math.PI / count,
+        spin: (Math.random() - .5) * 2.5, speed: .75 + Math.random() * .65,
+      };
+    });
+    return { rays, shards };
+  }
+
+  const cracks = createCracks();
+  function strokePartial(points, progress, unit) {
+    if (progress <= 0) return;
+    const lengths = points.slice(1).map((point, index) => Math.hypot(point[0] - points[index][0], point[1] - points[index][1]));
+    let remaining = progress * lengths.reduce((total, value) => total + value, 0);
+    ctx.beginPath(); ctx.moveTo(points[0][0] * unit, points[0][1] * unit);
+    for (let index = 1; index < points.length; index += 1) {
+      const length = lengths[index - 1];
+      if (remaining >= length) { ctx.lineTo(points[index][0] * unit, points[index][1] * unit); remaining -= length; }
+      else {
+        const ratio = remaining / length;
+        ctx.lineTo((points[index - 1][0] + (points[index][0] - points[index - 1][0]) * ratio) * unit, (points[index - 1][1] + (points[index][1] - points[index - 1][1]) * ratio) * unit);
+        break;
+      }
+    }
+    ctx.stroke();
+  }
+
+  function circleClip(unit) { ctx.beginPath(); ctx.arc(0, 0, unit * .92, 0, Math.PI * 2); ctx.clip(); }
+
+  function drawIntro() {
+    if (!state.intro || state.intro.done || !introLogo.complete) return;
+    const elapsed = (performance.now() - state.intro.start) / 1000;
+    const size = Math.min(innerWidth, innerHeight) * .3;
+    const unit = size / 2;
+    const centerX = innerWidth / 2;
+    const centerY = innerHeight / 2 - unit * .42;
+    const crackStart = 3.35;
+    const crackEnd = 5.8;
+    const burst = state.intro.burst;
+
+    if (elapsed < burst) {
+      const grow = easeOutBack(elapsed / .75);
+      const crackProgress = clamp((elapsed - crackStart) / (crackEnd - crackStart), 0, 1);
+      const strain = clamp((elapsed - crackEnd) / (burst - crackEnd), 0, 1);
+      const shake = crackProgress * 2 + strain * 7;
+      ctx.save();
+      ctx.translate(centerX + (Math.random() - .5) * shake, centerY + (Math.random() - .5) * shake);
+      ctx.scale(grow * (1 + strain * .06), grow * (1 + strain * .06));
+      const aura = ctx.createRadialGradient(0, 0, unit * .3, 0, 0, unit * 2.5);
+      aura.addColorStop(0, `rgba(34,195,246,${.2 + crackProgress * .25})`); aura.addColorStop(1, "rgba(34,195,246,0)");
+      ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(0, 0, unit * 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.drawImage(introLogo, -unit, -unit, size, size);
+      if (crackProgress > 0) {
+        ctx.save(); circleClip(unit); ctx.lineCap = "round"; ctx.lineJoin = "round";
+        cracks.rays.forEach((ray, index) => {
+          const progress = clamp((crackProgress - index / cracks.rays.length * .55) / .42, 0, 1);
+          ctx.shadowColor = "#22c3f6"; ctx.shadowBlur = 16 + strain * 15;
+          ctx.strokeStyle = "rgba(148,230,255,.95)"; ctx.lineWidth = 2.2 + strain * 2.5;
+          strokePartial(ray, progress, unit);
+        });
+        ctx.restore();
+      }
+      ctx.restore();
+
+      const fade = 1 - clamp((elapsed - 5.5) / .8, 0, 1);
+      if (elapsed > .75 && fade > 0) {
+        const titleSize = clamp(unit * .18, 18, 34);
+        const titleY = centerY + unit * 1.25;
+        ctx.globalAlpha = clamp((elapsed - .75) / .65, 0, 1) * fade;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `800 ${titleSize}px Segoe UI, sans-serif`;
+        ctx.shadowColor = "#22c3f6"; ctx.shadowBlur = 20; ctx.fillStyle = "#f3fbff";
+        ctx.fillText("SENTINEL", centerX, titleY);
+        ctx.shadowBlur = 0; ctx.font = `650 ${titleSize * .55}px Segoe UI, sans-serif`; ctx.fillStyle = "#22c3f6";
+        ctx.fillText("FLUXO NEURAL DE REDES", centerX, titleY + titleSize * 1.05);
+        const message = "Todas as regionais e suas conexões em uma única malha.";
+        const typed = Math.floor(message.length * clamp((elapsed - 1.65) / 1.6, 0, 1));
+        ctx.font = `500 ${clamp(unit * .075, 12, 16)}px Segoe UI, sans-serif`; ctx.fillStyle = "#c4d8e4";
+        ctx.fillText(message.slice(0, typed), centerX, titleY + titleSize * 2.05);
+        if (elapsed < crackStart) {
+          ctx.globalAlpha *= .65; ctx.font = "600 10px Consolas, monospace"; ctx.fillStyle = "#819cad";
+          ctx.fillText("CLIQUE PARA AVANÇAR", centerX, titleY + titleSize * 2.85);
+        }
+        ctx.globalAlpha = 1;
+      }
+      return;
+    }
+
+    const progress = clamp((elapsed - burst) / 1.15, 0, 1);
+    const eased = easeOutCubic(progress);
+    cracks.shards.forEach(shard => {
+      const distance = eased * unit * 3.4 * shard.speed;
+      ctx.save();
+      ctx.globalAlpha = 1 - progress * progress;
+      ctx.translate(centerX + Math.cos(shard.angle) * distance, centerY + Math.sin(shard.angle) * distance + progress * progress * unit * .45);
+      ctx.rotate(shard.spin * eased);
+      ctx.beginPath(); shard.polygon.forEach(([x, y], index) => index ? ctx.lineTo(x * unit, y * unit) : ctx.moveTo(x * unit, y * unit)); ctx.closePath();
+      ctx.save(); ctx.clip(); ctx.translate(-centerX, -centerY); ctx.drawImage(introLogo, centerX - unit, centerY - unit, size, size); ctx.restore();
+      ctx.strokeStyle = `rgba(87,211,255,${1 - progress})`; ctx.lineWidth = 2; ctx.shadowColor = "#22c3f6"; ctx.shadowBlur = 12; ctx.stroke();
+      ctx.restore();
+    });
+    const wave = easeOutCubic(progress);
+    ctx.globalAlpha = 1 - progress; ctx.strokeStyle = "#22c3f6"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(centerX, centerY, unit * .8 + wave * Math.max(innerWidth, innerHeight) * .65, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function startIntro() {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    state.intro = { start: performance.now(), burst: 6.5, duration: 1.45, done: reduce };
+    if (reduce) {
+      state.nodes.forEach(node => { node.x = node.tx; node.y = node.ty; node.opacity = 1; });
+      document.body.classList.remove("intro-active");
+      return;
+    }
+    state.nodes.forEach(node => { node.x = 0; node.y = 0; node.opacity = 0; });
+  }
+
+  function updateIntro() {
+    if (!state.intro || state.intro.done) return;
+    const elapsed = (performance.now() - state.intro.start) / 1000;
+    const afterBurst = elapsed - state.intro.burst;
+    state.nodes.forEach(node => {
+      const progress = clamp((afterBurst - node.delay) / state.intro.duration, 0, 1);
+      const eased = progress ? easeOutBack(progress) : 0;
+      node.x = node.tx * eased; node.y = node.ty * eased; node.opacity = clamp(progress * 2.4, 0, 1);
+    });
+    if (afterBurst > state.intro.duration + .85) {
+      state.intro.done = true;
+      state.nodes.forEach(node => { node.x = node.tx; node.y = node.ty; node.opacity = 1; });
+      document.body.classList.remove("intro-active");
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    drawBackground();
+    if (state.data) drawGraph();
+    drawIntro();
   }
 
   function loop(now) {
-    state.time = now; simulate(); draw(); state.last = now; requestAnimationFrame(loop);
+    state.time = now; updateIntro(); updatePhysics(); draw(); requestAnimationFrame(loop);
   }
 
   function toast(message) {
@@ -295,64 +515,76 @@
       state.data = await response.json();
       if (!state.data.success) throw new Error(state.data.message || "Resposta inválida");
       populateUi(); buildGraph();
-      setTimeout(() => ui.loading.classList.add("hidden"), 350);
     } catch (error) {
-      ui.loading.classList.add("hidden");
+      document.body.classList.remove("intro-active");
       toast("Não foi possível carregar a topologia do Sentinel.");
       console.error(error);
     }
   }
 
-  document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => {
-    document.querySelectorAll("[data-view]").forEach(item => item.classList.toggle("active", item === button));
-    state.view = button.dataset.view; applyFilters(); fitGraph();
+  [ui.search, ui.regional, ui.type].forEach(control => control.addEventListener(control.tagName === "INPUT" ? "input" : "change", () => {
+    applyFilters(); fitGraph();
   }));
-  [ui.search, ui.uf, ui.status].forEach(control => control.addEventListener(control.tagName === "INPUT" ? "input" : "change", applyFilters));
-  document.getElementById("closePanel").addEventListener("click", () => ui.panel.classList.remove("open"));
+  document.getElementById("closePanel").addEventListener("click", () => { ui.panel.classList.remove("open"); state.selected = null; });
   document.getElementById("tableButton").addEventListener("click", () => ui.table.classList.toggle("open"));
   document.getElementById("closeTable").addEventListener("click", () => ui.table.classList.remove("open"));
+  document.getElementById("reorganizeButton").addEventListener("click", reorganize);
   document.getElementById("zoomIn").addEventListener("click", () => state.camera.scale = Math.min(2.5, state.camera.scale * 1.18));
-  document.getElementById("zoomOut").addEventListener("click", () => state.camera.scale = Math.max(.2, state.camera.scale / 1.18));
+  document.getElementById("zoomOut").addEventListener("click", () => state.camera.scale = Math.max(.08, state.camera.scale / 1.18));
   document.getElementById("fitButton").addEventListener("click", fitGraph);
-  ui.failureButton.addEventListener("click", () => {
-    state.failureMode = !state.failureMode; ui.failureButton.classList.toggle("active", state.failureMode);
-    ui.failureBanner.classList.toggle("open", state.failureMode);
+  ui.connectionRank.addEventListener("click", event => {
+    const row = event.target.closest("[data-id]"); if (!row) return;
+    ui.regional.value = row.dataset.id; applyFilters(); fitGraph(); selectRegional(row.dataset.id);
   });
-  document.getElementById("cancelFailure").addEventListener("click", () => {
-    state.failureMode = false; state.simulated.clear(); ui.failureButton.classList.remove("active"); ui.failureBanner.classList.remove("open");
+  ui.categoryRank.addEventListener("click", event => {
+    const row = event.target.closest("[data-type]"); if (!row) return;
+    ui.type.value = ui.type.value === row.dataset.type ? "" : row.dataset.type; applyFilters(); fitGraph();
   });
-  document.querySelectorAll(".ranking").forEach(list => list.addEventListener("click", event => {
-    const row = event.target.closest("[data-id]"); if (row) showDetails(row.dataset.id);
-  }));
   ui.tableBody.addEventListener("click", event => {
-    const row = event.target.closest("[data-id]"); if (row) { ui.table.classList.remove("open"); showDetails(row.dataset.id); }
+    const row = event.target.closest("[data-id]"); if (row) { ui.table.classList.remove("open"); selectRegional(row.dataset.id); }
   });
 
   canvas.addEventListener("pointerdown", event => {
+    if (state.intro && !state.intro.done) {
+      const elapsed = (performance.now() - state.intro.start) / 1000;
+      if (elapsed < 3.6) state.intro.start = performance.now() - 3.6 * 1000;
+      return;
+    }
     const node = nodeAt(event.clientX, event.clientY);
     state.pointer = { x: event.clientX, y: event.clientY, cameraX: state.camera.x, cameraY: state.camera.y };
     state.dragNode = node; state.dragging = true; canvas.classList.add("dragging"); canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener("pointermove", event => {
-    if (!state.dragging || !state.pointer) return;
-    if (state.dragNode && state.dragNode.kind !== "core") {
-      const point = worldPoint(event.clientX, event.clientY); state.dragNode.x = point.x; state.dragNode.y = point.y; state.dragNode.vx = 0; state.dragNode.vy = 0;
+    if (state.intro && !state.intro.done) return;
+    if (!state.dragging || !state.pointer) {
+      const node = nodeAt(event.clientX, event.clientY);
+      if (node !== state.hover) { state.hover = node; canvas.classList.toggle("pointer", Boolean(node)); }
+      return;
+    }
+    if (state.dragNode) {
+      const point = worldPoint(event.clientX, event.clientY);
+      const dx = point.x - state.dragNode.x, dy = point.y - state.dragNode.y;
+      state.dragNode.x = point.x; state.dragNode.y = point.y;
+      state.dragNode.tx += dx; state.dragNode.ty += dy;
+      if (state.dragNode.kind === "regional") {
+        const linked = state.neighbors.get(state.dragNode.id) || [];
+        linked.forEach(id => { const device = state.byId.get(id); device.x += dx; device.y += dy; device.tx += dx; device.ty += dy; });
+      }
     } else {
       state.camera.x = state.pointer.cameraX + event.clientX - state.pointer.x;
       state.camera.y = state.pointer.cameraY + event.clientY - state.pointer.y;
     }
   });
   canvas.addEventListener("pointerup", event => {
-    const moved = state.pointer && Math.hypot(event.clientX - state.pointer.x, event.clientY - state.pointer.y) > 5;
+    if (!state.pointer) return;
+    const moved = Math.hypot(event.clientX - state.pointer.x, event.clientY - state.pointer.y) > 5;
     const node = nodeAt(event.clientX, event.clientY);
-    if (!moved && node?.kind === "regional") {
-      if (state.failureMode) { state.simulated.has(node.id) ? state.simulated.delete(node.id) : state.simulated.add(node.id); }
-      else showDetails(node.id);
-    }
+    if (!moved && node) selectRegional(node.kind === "regional" ? node.id : node.regional_id);
     state.dragging = false; state.dragNode = null; state.pointer = null; canvas.classList.remove("dragging");
   });
+  canvas.addEventListener("pointerleave", () => { if (!state.dragging) { state.hover = null; canvas.classList.remove("pointer"); } });
   canvas.addEventListener("wheel", event => {
-    event.preventDefault(); state.camera.scale = Math.max(.2, Math.min(2.5, state.camera.scale * (event.deltaY > 0 ? .9 : 1.1)));
+    event.preventDefault(); state.camera.scale = clamp(state.camera.scale * (event.deltaY > 0 ? .9 : 1.1), .08, 2.5);
   }, { passive: false });
   window.addEventListener("resize", () => { resize(); fitGraph(); });
 

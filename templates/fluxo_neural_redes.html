@@ -7,11 +7,12 @@
   <title>Sentinel | Fluxo Neural de Redes</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='fluxo_neural_de_redes/styles.css') }}">
 </head>
-<body>
+<body class="intro-active">
   <canvas id="network" aria-label="Fluxo neural das regionais do Sentinel"></canvas>
   <div class="ambient" aria-hidden="true"></div>
+  <img id="introLogo" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="" hidden>
 
-  <header class="topbar surface">
+  <header class="topbar surface interface">
     <div class="brand">
       <img src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
       <div>
@@ -21,15 +22,11 @@
     </div>
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-      <input id="searchInput" type="search" placeholder="Buscar regional" autocomplete="off">
+      <input id="searchInput" type="search" placeholder="Buscar regional ou dispositivo" autocomplete="off">
     </label>
-    <div class="view-switch" role="group" aria-label="Camadas da rede">
-      <button class="active" data-view="regionals">Regionais</button>
-      <button data-view="infra">+ Infraestrutura</button>
-    </div>
-    <button id="failureButton" class="danger-button" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"></path><path d="M6.4 7.4a8 8 0 1 0 11.2 0"></path></svg>
-      Simular falha
+    <button id="reorganizeButton" class="icon-command" type="button" title="Reorganizar a malha">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.3L3 16M3 21v-5h5"></path></svg>
+      <span>Reorganizar</span>
     </button>
     <button id="tableButton" class="icon-command" type="button" title="Alternar tabela">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M9 4v16"></path></svg>
@@ -37,32 +34,24 @@
     </button>
   </header>
 
-  <aside class="sidebar surface">
+  <aside class="sidebar surface interface">
     <div class="metrics" id="metrics"></div>
-    <label class="field-label" for="ufFilter">Estado</label>
-    <select id="ufFilter"><option value="">Todos os estados</option></select>
-    <label class="field-label" for="statusFilter">Situação</label>
-    <select id="statusFilter">
-      <option value="">Todas</option>
-      <option value="online">Operação normal</option>
-      <option value="alert">Com alertas</option>
-    </select>
+    <label class="field-label" for="regionalFilter">Regional</label>
+    <select id="regionalFilter"><option value="">Todas as regionais</option></select>
+    <label class="field-label" for="typeFilter">Tipo de conexão</label>
+    <select id="typeFilter"><option value="">Todos os tipos</option></select>
     <section>
       <h2>Mais conectadas</h2>
       <div id="connectionRank" class="ranking"></div>
     </section>
     <section>
-      <h2>Regionais em atenção</h2>
-      <div id="alertRank" class="ranking"></div>
+      <h2>Tipos de conexão</h2>
+      <div id="categoryRank" class="ranking categories"></div>
     </section>
-    <div class="key">
-      <span><i class="online"></i>Normal</span>
-      <span><i class="warning"></i>Atenção</span>
-      <span><i class="offline"></i>Falha</span>
-    </div>
+    <div class="key" id="typeLegend"></div>
   </aside>
 
-  <div class="canvas-tools surface">
+  <div class="canvas-tools surface interface">
     <button id="zoomIn" title="Aproximar" aria-label="Aproximar">+</button>
     <button id="zoomOut" title="Afastar" aria-label="Afastar">−</button>
     <button id="fitButton" title="Enquadrar rede" aria-label="Enquadrar rede">
@@ -70,30 +59,25 @@
     </button>
   </div>
 
-  <aside id="detailPanel" class="detail-panel surface" aria-live="polite">
+  <aside id="detailPanel" class="detail-panel surface interface" aria-live="polite">
     <button id="closePanel" class="close-button" aria-label="Fechar detalhes">×</button>
     <div id="detailContent"></div>
   </aside>
 
-  <section id="tableView" class="table-view surface" aria-label="Tabela das regionais">
+  <section id="tableView" class="table-view surface interface" aria-label="Tabela das regionais">
     <div class="table-head">
-      <div><small>VISÃO OPERACIONAL</small><h2>Regionais e conexões</h2></div>
+      <div><small>TOPOLOGIA SENTINEL</small><h2>Regionais e conexões</h2></div>
       <button id="closeTable" class="close-button" aria-label="Fechar tabela">×</button>
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Regional</th><th>UF</th><th>Status</th><th>VPNs</th><th>Links</th><th>Servidores</th><th>Switches</th><th>APs</th><th>Firewalls</th></tr></thead>
+        <thead><tr><th>Regional</th><th>UF</th><th>Conexões</th><th>Links</th><th>Firewalls</th><th>Switches</th><th>Servidores</th><th>VPNs</th><th>Antenas</th></tr></thead>
         <tbody id="tableBody"></tbody>
       </table>
     </div>
   </section>
 
-  <div id="failureBanner" class="failure-banner surface" role="status">
-    <strong>Simulação ativa</strong><span>Selecione uma regional no mapa</span><button id="cancelFailure">Cancelar</button>
-  </div>
-  <div id="loading" class="loading"><img src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt=""><strong>Carregando fluxo neural</strong></div>
   <div id="toast" class="toast" role="status"></div>
-
   <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js') }}"></script>
 </body>
 </html>
