@@ -59,6 +59,7 @@ from regional_access import (
     update_group_mapping,
 )
 from security_hardening import configure_security
+from fluxo_neural import build_neural_flow_payload
 
 # Importa o módulo de gerenciamento de VMs
 from vm_manager import verificar_vm_online, obter_servicos_vm, obter_logs_vm, obter_detalhes_vm, verificar_vm_completo, gerar_relatorio_completo, gerar_relatorio_simples
@@ -3686,6 +3687,13 @@ def mapa_monitoramento():
     return render_template('mapa_monitoramento.html')
 
 
+@app.route('/fluxo-neural-redes')
+@login_required
+def fluxo_neural_redes():
+    """Visualizacao interativa das regionais e de suas conexoes."""
+    return render_template('fluxo_neural_redes.html')
+
+
 @app.route('/mapa/checklist-preview')
 @login_required
 def mapa_checklist_preview():
@@ -4575,6 +4583,31 @@ def api_mapa_dados():
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
             return jsonify(filter_map_payload(cached, _current_user_groups(), _available_regional_codes()))
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route('/api/fluxo-neural/dados')
+@login_required
+def api_fluxo_neural_dados():
+    """Aggregated and sanitized topology consumed by the neural flow canvas."""
+    try:
+        cached, idade = _mapa_carregar_cache()
+        if not cached:
+            cached = _mapa_salvar_cache(_montar_dados_mapa_monitoramento())
+            idade = 0
+        filtered = filter_map_payload(
+            cached,
+            _current_user_groups(),
+            _available_regional_codes(),
+        )
+        payload = build_neural_flow_payload(filtered)
+        payload["cache_idade_segundos"] = int(idade or 0)
+        return jsonify(payload)
+    except Exception:
+        current_app.logger.exception("Falha ao montar o fluxo neural de redes")
+        return jsonify({
+            "success": False,
+            "message": "Nao foi possivel carregar o fluxo neural de redes.",
+        }), 500
 
 
 @app.route('/api/operational-state')
