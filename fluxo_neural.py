@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from hashlib import sha256
+from io import BytesIO
 
 
 DEVICE_GROUPS = (
@@ -18,6 +19,10 @@ DEVICE_LABELS = {
     "aps": "Antena UniFi",
     "redes_wifi": "Rede Wi-Fi",
 }
+EXPORT_COLUMNS = (
+    "Regional", "Codigo", "UF", "Status regional", "Atualizacao",
+    "Tipo", "Dispositivo", "Resumo", "Campo", "Valor",
+)
 DEVICE_DETAIL_FIELDS = {
     "servidores": (
         ("IP", ("ip",)), ("Funcao", ("funcao", "descricao")),
@@ -236,3 +241,104 @@ def build_neural_flow_payload(map_payload):
         "dispositivos": devices,
         "conexoes": connections,
     }
+
+
+def build_neural_export_rows(payload, *, regional_id="", device_type="", query=""):
+    """Flatten the sanitized topology using the same filters as the UI table."""
+    regional_id = str(regional_id or "").strip()
+    device_type = str(device_type or "").strip()
+    query = str(query or "").strip().casefold()
+    devices_by_regional = {}
+    for device in payload.get("dispositivos") or []:
+        devices_by_regional.setdefault(device.get("regional_id"), []).append(device)
+
+    rows = []
+    for regional in payload.get("regionais") or []:
+        if regional_id and regional.get("id") != regional_id:
+            continue
+        regional_text = " ".join(str(regional.get(key) or "") for key in ("nome", "codigo", "uf")).casefold()
+        regional_matches = not query or query in regional_text
+        matched_devices = []
+        for device in devices_by_regional.get(regional.get("id"), []):
+            if device_type and device.get("tipo") != device_type:
+                continue
+            device_text = " ".join((
+                str(device.get("nome") or ""),
+                str(device.get("detalhe") or ""),
+                " ".join(
+                    f"{detail.get('rotulo', '')} {detail.get('valor', '')}"
+                    for detail in (device.get("detalhes") or [])
+                ),
+            )).casefold()
+            if regional_matches or not query or query in device_text:
+                matched_devices.append(device)
+        if (device_type or query) and not matched_devices and not regional_matches:
+            continue
+        if device_type and not matched_devices:
+            continue
+
+        base = {
+            "Regional": str(regional.get("nome") or ""),
+            "Codigo": str(regional.get("codigo") or ""),
+            "UF": str(regional.get("uf") or ""),
+            "Status regional": str(regional.get("status") or ""),
+            "Atualizacao": str(regional.get("ultima_atualizacao") or ""),
+        }
+        if not matched_devices:
+            rows.append({
+                **base,
+                "Tipo": "",
+                "Dispositivo": "",
+                "Resumo": "",
+                "Campo": "",
+                "Valor": "",
+            })
+            continue
+        for device in matched_devices:
+            details = device.get("detalhes") or [{"rotulo": "", "valor": ""}]
+            for detail in details:
+                rows.append({
+                    **base,
+                    "Tipo": DEVICE_LABELS.get(device.get("tipo"), str(device.get("tipo") or "")),
+                    "Dispositivo": str(device.get("nome") or ""),
+                    "Resumo": str(device.get("detalhe") or ""),
+                    "Campo": str(detail.get("rotulo") or ""),
+                    "Valor": str(detail.get("valor") or ""),
+                })
+    return rows
+
+
+def build_neural_xlsx(rows):
+    """Create a styled XLSX in memory without allowing spreadsheet formulas."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    def safe_text(value):
+        text = str(value or "")
+        return f"'{text}" if text.startswith(("=", "+", "-", "@")) else text
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Fluxo Neural"
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = f"A1:J{max(len(rows) + 1, 2)}"
+    worksheet.append(EXPORT_COLUMNS)
+    for row in rows:
+        worksheet.append([safe_text(row.get(column)) for column in EXPORT_COLUMNS])
+
+    header_fill = PatternFill("solid", fgColor="07517D")
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(vertical="center")
+    widths = (24, 24, 8, 18, 23, 18, 30, 34, 22, 40)
+    for index, width in enumerate(widths, start=1):
+        worksheet.column_dimensions[get_column_letter(index)].width = width
+    for row in worksheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()

@@ -18,6 +18,7 @@ import socket
 import platform
 import unicodedata
 import zipfile
+from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -59,7 +60,11 @@ from regional_access import (
     update_group_mapping,
 )
 from security_hardening import configure_security
-from fluxo_neural import build_neural_flow_payload
+from fluxo_neural import (
+    build_neural_export_rows,
+    build_neural_flow_payload,
+    build_neural_xlsx,
+)
 
 # Importa o módulo de gerenciamento de VMs
 from vm_manager import verificar_vm_online, obter_servicos_vm, obter_logs_vm, obter_detalhes_vm, verificar_vm_completo, gerar_relatorio_completo, gerar_relatorio_simples
@@ -4612,37 +4617,42 @@ def api_mapa_dados():
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
+def _fluxo_neural_payload_atual():
+    """Build the RBAC-filtered projection shared by the canvas and exports."""
+    cached, idade = _mapa_carregar_cache()
+    if not cached:
+        cached = _mapa_salvar_cache(_montar_dados_mapa_monitoramento())
+        idade = 0
+    unifi_snapshot = PROJECT_ROOT / "data" / "unifi.json"
+    unifi_mais_novo = (
+        unifi_snapshot.exists()
+        and _MAPA_CACHE_FILE.exists()
+        and unifi_snapshot.stat().st_mtime > _MAPA_CACHE_FILE.stat().st_mtime
+    )
+    if cached and (not _mapa_cache_esta_fresco(idade) or unifi_mais_novo):
+        _mapa_iniciar_refresh_background()
+    wifi_overlay = overlay_wifi_networks(
+        cached,
+        _filtrar_antenas_unifi_ocultas(load_data("unifi") or {}),
+        _mapa_encontrar_regional_unifi,
+    )
+    filtered = filter_map_payload(
+        cached,
+        _current_user_groups(),
+        _available_regional_codes(),
+    )
+    payload = build_neural_flow_payload(filtered)
+    payload["cache_idade_segundos"] = int(idade or 0)
+    payload["inventario_wifi"] = wifi_overlay
+    return payload
+
+
 @app.route('/api/fluxo-neural/dados')
 @login_required
 def api_fluxo_neural_dados():
     """Sanitized per-device topology consumed by the neural flow canvas."""
     try:
-        cached, idade = _mapa_carregar_cache()
-        if not cached:
-            cached = _mapa_salvar_cache(_montar_dados_mapa_monitoramento())
-            idade = 0
-        unifi_snapshot = PROJECT_ROOT / "data" / "unifi.json"
-        unifi_mais_novo = (
-            unifi_snapshot.exists()
-            and _MAPA_CACHE_FILE.exists()
-            and unifi_snapshot.stat().st_mtime > _MAPA_CACHE_FILE.stat().st_mtime
-        )
-        if cached and (not _mapa_cache_esta_fresco(idade) or unifi_mais_novo):
-            _mapa_iniciar_refresh_background()
-        wifi_overlay = overlay_wifi_networks(
-            cached,
-            _filtrar_antenas_unifi_ocultas(load_data("unifi") or {}),
-            _mapa_encontrar_regional_unifi,
-        )
-        filtered = filter_map_payload(
-            cached,
-            _current_user_groups(),
-            _available_regional_codes(),
-        )
-        payload = build_neural_flow_payload(filtered)
-        payload["cache_idade_segundos"] = int(idade or 0)
-        payload["inventario_wifi"] = wifi_overlay
-        response = jsonify(payload)
+        response = jsonify(_fluxo_neural_payload_atual())
         response.headers["Cache-Control"] = "no-store, max-age=0"
         return response
     except Exception:
@@ -4650,6 +4660,42 @@ def api_fluxo_neural_dados():
         return jsonify({
             "success": False,
             "message": "Nao foi possivel carregar o fluxo neural de redes.",
+        }), 500
+
+
+@app.route('/api/fluxo-neural/exportar.xlsx')
+@login_required
+def api_fluxo_neural_exportar_xlsx():
+    """Export the currently filtered, sanitized table as a real XLSX file."""
+    try:
+        regional_id = str(request.args.get("regional") or "").strip()[:120]
+        device_type = str(request.args.get("tipo") or "").strip()[:40]
+        query = str(request.args.get("busca") or "").strip()[:120]
+        allowed_types = {"servidores", "switches", "links", "firewalls", "vpns", "aps", "redes_wifi"}
+        if device_type and device_type not in allowed_types:
+            return jsonify({"success": False, "message": "Tipo de conexao invalido."}), 400
+
+        rows = build_neural_export_rows(
+            _fluxo_neural_payload_atual(),
+            regional_id=regional_id,
+            device_type=device_type,
+            query=query,
+        )
+        output = BytesIO(build_neural_xlsx(rows))
+        filename = f"fluxo_neural_sentinel_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        response = send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
+    except Exception:
+        current_app.logger.exception("Falha ao exportar fluxo neural em XLSX")
+        return jsonify({
+            "success": False,
+            "message": "Nao foi possivel exportar o fluxo neural.",
         }), 500
 
 
