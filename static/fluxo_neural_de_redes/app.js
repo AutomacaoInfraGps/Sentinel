@@ -38,6 +38,25 @@
     aps: { label: "Antenas UniFi", singular: "Antena", color: "#e6edf2", mono: "AP" },
     redes_wifi: { label: "Redes Wi-Fi", singular: "Rede Wi-Fi", color: "#5bd6ff", mono: "WF" },
   };
+  const starshipClasses = [
+    { key: "NAVE_INTERCEPTADOR", label: "Interceptador" },
+    { key: "NAVE_EXPLORACAO", label: "Exploracao" },
+    { key: "NAVE_CRUZADOR", label: "Cruzador" },
+    { key: "NAVE_CARGUEIRO", label: "Cargueiro" },
+    { key: "NAVE_PORTA_NAVES", label: "Porta-naves" },
+    { key: "NAVE_FURTIVA", label: "Furtiva" },
+    { key: "NAVE_CIENTIFICA", label: "Cientifica" },
+    { key: "NAVE_CAPITANIA", label: "Capitania" },
+    { key: "NAVE_TRANSPORTE", label: "Transporte" },
+  ];
+  const starshipPalettes = [
+    "none",
+    "hue-rotate(32deg) saturate(1.18) brightness(1.04)",
+    "hue-rotate(78deg) saturate(1.2) brightness(1.05)",
+    "hue-rotate(142deg) saturate(1.15) brightness(1.04)",
+    "hue-rotate(208deg) saturate(1.22) brightness(1.06)",
+    "sepia(.24) saturate(1.42) hue-rotate(318deg) brightness(1.05)",
+  ];
   const planetTextures = new Map();
   const state = {
     data: null, nodes: [], edges: [], byId: new Map(), neighbors: new Map(),
@@ -66,6 +85,10 @@
     const name = normalizeCelestialName(node.nome);
     if (["NEPTUNO", "NEPTUNE"].includes(name)) return celestialTextures.get("NETUNO");
     return celestialTextures.get(name) || null;
+  }
+
+  function starshipTexture(node) {
+    return node?.shipProfile ? celestialTextures.get(node.shipProfile.key) : null;
   }
 
   function switchCelestialKey(name) {
@@ -244,7 +267,7 @@
   }
 
   function relaxInitialRegionalLayout(regionals) {
-    for (let pass = 0; pass < 70; pass += 1) {
+    for (let pass = 0; pass < 110; pass += 1) {
       for (let leftIndex = 0; leftIndex < regionals.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < regionals.length; rightIndex += 1) {
           const left = regionals[leftIndex];
@@ -256,7 +279,7 @@
             const angle = (leftIndex + rightIndex + 1) * 1.73;
             dx = Math.cos(angle); dy = Math.sin(angle); distance = 1;
           }
-          const minimum = (left.layoutRadius + right.layoutRadius) * .96 + 38;
+          const minimum = (left.layoutRadius + right.layoutRadius) * 1.06 + 68;
           if (distance >= minimum) continue;
           const correction = (minimum - distance) * .24;
           const unitX = dx / distance;
@@ -290,19 +313,35 @@
       devicesByRegional.get(device.regional_id).push(device);
     });
 
+    const fleetOrder = [...regionals]
+      .filter(regional => !isGalaxyRegional(regional))
+      .sort((left, right) => String(left.codigo || left.nome).localeCompare(String(right.codigo || right.nome), "pt-BR"));
+    const fleetIndex = new Map(fleetOrder.map((regional, index) => [regional.id, index]));
+
     let orbitIndex = 0;
     regionals.forEach(regional => {
       const isHub = isGalaxyRegional(regional);
       const deviceCount = (devicesByRegional.get(regional.id) || []).length;
-      const layoutRadius = deviceCount ? 108 + Math.floor((deviceCount - 1) / 10) * 58 : 44;
+      const deviceLayoutRadius = deviceCount ? 108 + Math.floor((deviceCount - 1) / 10) * 58 : 44;
+      const layoutRadius = isHub ? Math.max(deviceLayoutRadius, 190) : deviceLayoutRadius;
       const angle = orbitIndex * goldenAngle + .35;
-      const distance = 255 * Math.sqrt(orbitIndex + .9);
-      const x = isHub ? 0 : Math.cos(angle) * distance * 1.12 + (Math.random() - .5) * 75;
-      const y = isHub ? 0 : Math.sin(angle) * distance * .74 + (Math.random() - .5) * 65;
+      const distance = 310 * Math.sqrt(orbitIndex + .95);
+      const x = isHub ? 0 : Math.cos(angle) * distance * 1.16 + (Math.random() - .5) * 55;
+      const y = isHub ? 0 : Math.sin(angle) * distance * .9 + (Math.random() - .5) * 50;
+      const shipIndex = fleetIndex.get(regional.id) ?? 0;
+      const shipClass = starshipClasses[shipIndex % starshipClasses.length];
+      const paletteIndex = Math.floor(shipIndex / starshipClasses.length) % starshipPalettes.length;
+      const shipProfile = isHub ? null : {
+        ...shipClass,
+        fleetIndex: shipIndex,
+        filter: starshipPalettes[paletteIndex],
+        mirrored: paletteIndex % 2 === 1,
+        rotation: ((shipIndex % 7) - 3) * .055,
+      };
       if (!isHub) orbitIndex += 1;
       nodes.push({
-        ...regional, kind: "regional", isHub, layoutRadius,
-        radius: isHub ? 50 : 30, x, y, tx: x, ty: y,
+        ...regional, kind: "regional", isHub, shipProfile, layoutRadius,
+        radius: isHub ? 72 : 30, x, y, tx: x, ty: y,
         vx: 0, vy: 0, opacity: 0, delay: Math.random() * .35,
       });
     });
@@ -440,6 +479,7 @@
     ui.detail.innerHTML = `
       <div class="detail-kicker">${escapeHtml(regional.uf || "Regional Sentinel")}</div>
       <h2>${escapeHtml(regional.nome)}</h2><div class="detail-code">${escapeHtml(regional.codigo)}</div>
+      ${state.selected?.shipProfile ? `<div class="detail-summary"><span><small>Nave da frota</small><strong>${escapeHtml(state.selected.shipProfile.label)}</strong></span><span><small>Identificacao</small><strong>SN-${String(state.selected.shipProfile.fleetIndex + 1).padStart(2, "0")}</strong></span></div>` : ""}
       ${regional.descricao ? `<p class="detail-description">${escapeHtml(regional.descricao)}</p>` : ""}
       ${(regional.status || regional.ultima_atualizacao) ? `<div class="detail-summary">
         ${regional.status ? `<span><small>Status</small><strong>${escapeHtml(regional.status)}</strong></span>` : ""}
@@ -537,7 +577,9 @@
   function nodeAt(clientX, clientY) {
     const point = worldPoint(clientX, clientY);
     return [...state.visibleNodes].reverse().find(node => {
-      const celestialRadius = node.tipo === "redes_wifi"
+      const celestialRadius = node.kind === "regional" && !node.isHub
+        ? node.radius * 1.75
+        : node.isHub ? node.radius * 1.7 : node.tipo === "redes_wifi"
         ? 30
         : ["servidores", "switches", "vpns", "aps"].includes(node.tipo) ? 26 : node.radius;
       return Math.hypot(node.x - point.x, node.y - point.y) <= celestialRadius + 10 / state.camera.scale;
@@ -655,9 +697,11 @@
       halo.addColorStop(.48, `${color}${active ? "48" : "2e"}`);
       halo.addColorStop(1, `${color}00`);
       ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2); ctx.fill();
+      const ship = node.kind === "regional" && !node.isHub ? starshipTexture(node) : null;
       if (node.isHub) {
-        const width = radius * 3.45;
-        const height = radius * 2.05;
+        const width = radius * 3.8;
+        const height = radius * 2.25;
+        labelRadius = height / 2;
         ctx.save();
         ctx.shadowColor = "#55ccff";
         ctx.shadowBlur = (active ? 28 : 18) / state.camera.scale;
@@ -668,6 +712,28 @@
           ctx.drawImage(texture, node.x - radius, node.y - radius, radius * 2, radius * 2);
         }
         ctx.restore();
+      } else if (ship) {
+        const width = radius * 3.65;
+        const height = radius * 3.65;
+        labelRadius = height / 2;
+        const profile = node.shipProfile;
+        const renderedShip = cachedCelestialTexture(
+          ship,
+          `ship:${profile.key}:${Math.floor(profile.fleetIndex / starshipClasses.length)}`,
+          176,
+          176,
+          profile.filter,
+        );
+        if (renderedShip) {
+          ctx.save();
+          ctx.translate(node.x, node.y);
+          ctx.rotate(profile.rotation + Math.sin(state.time * .00035 + profile.fleetIndex) * .025);
+          ctx.scale(profile.mirrored ? -1 : 1, 1);
+          ctx.shadowColor = active ? "#8ee9ff" : "#22c3f6";
+          ctx.shadowBlur = (active ? 24 : 10) / state.camera.scale;
+          ctx.drawImage(renderedShip, -width / 2, -height / 2, width, height);
+          ctx.restore();
+        }
       } else if (!["redes_wifi", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
         ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
@@ -730,7 +796,7 @@
         const size = radius * 2.7;
         labelRadius = size / 2;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
-      } else if (!node.isHub && !["servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
+      } else if (!node.isHub && !ship && !["servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
         ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
