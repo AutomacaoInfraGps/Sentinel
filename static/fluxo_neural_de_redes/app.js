@@ -492,21 +492,28 @@
       });
       if ((typeFilter || query) && !devices.length && !regionalMatches) return;
       if (typeFilter && !devices.length) return;
-      const base = [regional.nome, regional.codigo, regional.uf || "", regional.status || "", regional.ultima_atualizacao || ""];
+      const base = {
+        regional: regional.nome,
+        codigo: regional.codigo,
+        uf: regional.uf || "",
+        status: regional.status || "",
+        atualizacao: regional.ultima_atualizacao || "",
+      };
       if (!devices.length) {
-        rows.push([...base, "", "", "", "", ""]);
+        rows.push({ ...base, categoria: "", dispositivo: "", resumo: "", detalhes: [] });
         return;
       }
       devices.forEach(device => {
-        const details = (device.detalhes || []).length ? device.detalhes : [{ rotulo: "", valor: "" }];
-        details.forEach(detail => rows.push([
+        rows.push({
           ...base,
-          categories[device.tipo]?.singular || device.tipo,
-          device.nome,
-          device.detalhe || "",
-          detail.rotulo || "",
-          detail.valor || "",
-        ]));
+          categoria: categories[device.tipo]?.singular || device.tipo,
+          dispositivo: device.nome,
+          resumo: device.detalhe || "",
+          detalhes: (device.detalhes || []).map(detail => ({
+            rotulo: detail.rotulo || "",
+            valor: detail.valor || "",
+          })),
+        });
       });
     });
     return rows;
@@ -525,11 +532,10 @@
     if (!rows.length) { toast("Nao ha dados nos filtros atuais para exportar."); return; }
     const report = window.open("", "sentinel-fluxo-neural-pdf");
     if (!report) { toast("O navegador bloqueou a janela de exportacao."); return; }
-    const headers = ["Regional", "Codigo", "UF", "Status", "Atualizacao", "Tipo", "Dispositivo", "Resumo", "Campo", "Valor"];
     const generatedAt = new Date().toLocaleString("pt-BR");
     report.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fluxo Neural de Redes - Sentinel</title><style>
-      @page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{margin:0;color:#173042;font:9px Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:9px;border-bottom:2px solid #07517d;padding-bottom:7px}h1{margin:0;color:#07517d;font-size:18px}p{margin:3px 0 0;color:#526b7a}small{color:#6d818d}table{width:100%;border-collapse:collapse;table-layout:fixed}th{padding:5px 4px;background:#07517d;color:white;text-align:left;font-size:8px}td{padding:4px;border:1px solid #cbd9e1;vertical-align:top;overflow-wrap:anywhere}tr:nth-child(even) td{background:#f2f7fa}th:nth-child(1){width:12%}th:nth-child(2){width:11%}th:nth-child(3){width:3%}th:nth-child(4){width:6%}th:nth-child(5){width:9%}th:nth-child(6){width:7%}th:nth-child(7){width:15%}th:nth-child(8){width:12%}th:nth-child(9){width:9%}th:nth-child(10){width:16%}
-    </style></head><body><header><div><h1>SENTINEL | FLUXO NEURAL DE REDES</h1><p>${escapeHtml(exportFilterDescription())}</p></div><small>Gerado em ${escapeHtml(generatedAt)}</small></header><table><thead><tr>${headers.map(header => `<th>${header}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(value => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`).join("")}</tbody></table><script>window.addEventListener("load",()=>{window.focus();window.print()});window.addEventListener("afterprint",()=>window.close());<\/script></body></html>`);
+      @page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{margin:0;color:#173042;font:9px Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:9px;border-bottom:2px solid #07517d;padding-bottom:7px}h1{margin:0;color:#07517d;font-size:18px}p{margin:3px 0 0;color:#526b7a}.report-meta{color:#6d818d;text-align:right}.report-count{display:block;margin-top:3px;color:#07517d;font-weight:700}table{width:100%;border-collapse:collapse;table-layout:fixed}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}th{padding:6px 5px;background:#07517d;color:white;text-align:left;font-size:8px}td{padding:5px;border:1px solid #cbd9e1;vertical-align:top;overflow-wrap:anywhere}tbody tr:nth-child(even) td{background:#f2f7fa}.regional strong,.device-name{display:block;color:#0b344b}.regional small,.device-summary{display:block;margin-top:2px;color:#6d818d}.status{display:inline-block;margin-top:3px;padding:2px 4px;border-radius:3px;background:#e5f6f1;color:#087354;font-size:7px}.details{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 7px;margin:0}.details dt{color:#526b7a;font-weight:700}.details dd{margin:0;color:#173042}.empty{color:#8799a4;font-style:italic}th:nth-child(1){width:18%}th:nth-child(2){width:4%}th:nth-child(3){width:10%}th:nth-child(4){width:18%}th:nth-child(5){width:15%}th:nth-child(6){width:35%}
+    </style></head><body><header><div><h1>SENTINEL | FLUXO NEURAL DE REDES</h1><p>${escapeHtml(exportFilterDescription())}</p></div><div class="report-meta">Gerado em ${escapeHtml(generatedAt)}<span class="report-count">${rows.length} registro(s)</span></div></header><table><thead><tr><th>Regional</th><th>UF</th><th>Categoria</th><th>Dispositivo</th><th>Resumo</th><th>Detalhes</th></tr></thead><tbody>${rows.map(row => `<tr><td class="regional"><strong>${escapeHtml(row.regional)}</strong><small>${escapeHtml(row.codigo)}</small>${row.status ? `<span class="status">${escapeHtml(row.status)}</span>` : ""}<small>${escapeHtml(row.atualizacao)}</small></td><td>${escapeHtml(row.uf)}</td><td>${escapeHtml(row.categoria)}</td><td><strong class="device-name">${escapeHtml(row.dispositivo)}</strong></td><td><span class="device-summary">${escapeHtml(row.resumo)}</span></td><td>${row.detalhes.length ? `<dl class="details">${row.detalhes.map(detail => `<dt>${escapeHtml(detail.rotulo)}</dt><dd>${escapeHtml(detail.valor)}</dd>`).join("")}</dl>` : `<span class="empty">Sem outros detalhes registrados</span>`}</td></tr>`).join("")}</tbody></table><script>window.addEventListener("load",()=>{window.focus();window.print()});window.addEventListener("afterprint",()=>window.close());<\/script></body></html>`);
     report.document.close();
   }
 

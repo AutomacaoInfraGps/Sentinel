@@ -135,10 +135,9 @@ class NeuralFlowPayloadTests(unittest.TestCase):
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["Regional"], "Bahia")
-        self.assertEqual(rows[0]["Tipo"], "Servidor")
+        self.assertEqual(rows[0]["Categoria"], "Servidor")
         self.assertEqual(rows[0]["Dispositivo"], "Sirius")
-        self.assertEqual(rows[0]["Campo"], "IP")
-        self.assertEqual(rows[0]["Valor"], "10.0.0.10")
+        self.assertEqual(rows[0]["IP"], "10.0.0.10")
 
     def test_xlsx_is_valid_and_neutralizes_formula_cells(self):
         content = build_neural_xlsx([{
@@ -153,6 +152,54 @@ class NeuralFlowPayloadTests(unittest.TestCase):
         self.assertEqual(worksheet["B2"].value, "REG_BAHIA")
         self.assertTrue(worksheet["G2"].value.startswith("'="))
         self.assertEqual(worksheet.freeze_panes, "A2")
+        self.assertFalse(worksheet.sheet_view.showGridLines)
+
+    def test_xlsx_keeps_each_device_in_one_row_with_details_as_columns(self):
+        rows = [{
+            "Regional": "Bahia",
+            "Codigo": "REG_BAHIA",
+            "Categoria": "Servidor",
+            "Dispositivo": "Acrab",
+            "IP": "10.254.13.10",
+            "Funcao": "API",
+            "Modelo": "VMware",
+            "Porta": "443",
+        }]
+
+        workbook = load_workbook(BytesIO(build_neural_xlsx(rows)))
+        worksheet = workbook["Fluxo Neural"]
+        headers = [cell.value for cell in worksheet[1]]
+
+        self.assertEqual(worksheet.max_row, 2)
+        self.assertEqual(worksheet.cell(2, headers.index("Dispositivo") + 1).value, "Acrab")
+        self.assertEqual(worksheet.cell(2, headers.index("IP") + 1).value, "10.254.13.10")
+        self.assertEqual(worksheet.cell(2, headers.index("Funcao") + 1).value, "API")
+        self.assertEqual(worksheet.cell(2, headers.index("Porta") + 1).value, "443")
+
+    def test_export_keeps_every_device_category_in_a_single_row(self):
+        payload = build_neural_flow_payload({
+            "regionais": [{
+                "codigo": "REG_BAHIA",
+                "nome": "Bahia",
+                "servidores": [{"nome": "Acrab", "ip": "10.0.0.1", "modelo": "VMware"}],
+                "switches": [{"host": "SW-BA-01", "ip": "10.0.0.2", "firmware": "1.2"}],
+                "links": [{"nome": "WAN1", "provedor": "VIVO", "velocidade": "500 Mbps"}],
+                "firewalls": [{"hostname": "FGT-BA", "modelo": "FortiGate-100F", "firmware": "7.4"}],
+                "vpns": [{"tunel": "VPN-BA", "remote_ip": "192.0.2.1", "status": "online"}],
+                "aps": [{"nome": "AP-BA-01", "ip": "10.0.0.3", "clientes": 12}],
+                "redes_wifi": [{"nome": "MARTE", "rede": "USUARIOS", "bandas": ["5 GHz"]}],
+            }],
+        })
+
+        rows = build_neural_export_rows(payload)
+
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(len({row["Dispositivo"] for row in rows}), 7)
+        self.assertEqual(next(row for row in rows if row["Categoria"] == "Switch")["Firmware"], "1.2")
+        self.assertEqual(next(row for row in rows if row["Categoria"] == "Firewall")["Modelo"], "FortiGate-100F")
+        self.assertEqual(next(row for row in rows if row["Categoria"] == "VPN")["IP remoto"], "192.0.2.1")
+        self.assertEqual(next(row for row in rows if row["Categoria"] == "Antena UniFi")["Clientes"], "12")
+        self.assertEqual(next(row for row in rows if row["Categoria"] == "Rede Wi-Fi")["Bandas"], "5 GHz")
 
 
 if __name__ == "__main__":

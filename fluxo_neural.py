@@ -19,9 +19,9 @@ DEVICE_LABELS = {
     "aps": "Antena UniFi",
     "redes_wifi": "Rede Wi-Fi",
 }
-EXPORT_COLUMNS = (
+EXPORT_BASE_COLUMNS = (
     "Regional", "Codigo", "UF", "Status regional", "Atualizacao",
-    "Tipo", "Dispositivo", "Resumo", "Campo", "Valor",
+    "Categoria", "Dispositivo", "Resumo",
 )
 DEVICE_DETAIL_FIELDS = {
     "servidores": (
@@ -287,31 +287,34 @@ def build_neural_export_rows(payload, *, regional_id="", device_type="", query="
         if not matched_devices:
             rows.append({
                 **base,
-                "Tipo": "",
+                "Categoria": "",
                 "Dispositivo": "",
                 "Resumo": "",
-                "Campo": "",
-                "Valor": "",
             })
             continue
         for device in matched_devices:
-            details = device.get("detalhes") or [{"rotulo": "", "valor": ""}]
-            for detail in details:
-                rows.append({
-                    **base,
-                    "Tipo": DEVICE_LABELS.get(device.get("tipo"), str(device.get("tipo") or "")),
-                    "Dispositivo": str(device.get("nome") or ""),
-                    "Resumo": str(device.get("detalhe") or ""),
-                    "Campo": str(detail.get("rotulo") or ""),
-                    "Valor": str(detail.get("valor") or ""),
-                })
+            row = {
+                **base,
+                "Categoria": DEVICE_LABELS.get(device.get("tipo"), str(device.get("tipo") or "")),
+                "Dispositivo": str(device.get("nome") or ""),
+                "Resumo": str(device.get("detalhe") or ""),
+            }
+            for detail in device.get("detalhes") or []:
+                label = str(detail.get("rotulo") or "").strip()
+                if not label:
+                    continue
+                if label in EXPORT_BASE_COLUMNS:
+                    label = f"Detalhe - {label}"
+                row[label] = str(detail.get("valor") or "")
+            rows.append(row)
     return rows
 
 
 def build_neural_xlsx(rows):
     """Create a styled XLSX in memory without allowing spreadsheet formulas."""
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.worksheet.table import Table, TableStyleInfo
     from openpyxl.utils import get_column_letter
 
     def safe_text(value):
@@ -322,18 +325,49 @@ def build_neural_xlsx(rows):
     worksheet = workbook.active
     worksheet.title = "Fluxo Neural"
     worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = f"A1:J{max(len(rows) + 1, 2)}"
-    worksheet.append(EXPORT_COLUMNS)
+    worksheet.sheet_view.showGridLines = False
+    worksheet.sheet_properties.tabColor = "22C3F6"
+
+    detail_columns = []
     for row in rows:
-        worksheet.append([safe_text(row.get(column)) for column in EXPORT_COLUMNS])
+        for column in row:
+            if column not in EXPORT_BASE_COLUMNS and column not in detail_columns:
+                detail_columns.append(column)
+    columns = (*EXPORT_BASE_COLUMNS, *detail_columns)
+    worksheet.append(columns)
+    for row in rows:
+        worksheet.append([safe_text(row.get(column)) for column in columns])
 
     header_fill = PatternFill("solid", fgColor="07517D")
+    header_border = Border(bottom=Side(style="medium", color="22C3F6"))
     for cell in worksheet[1]:
         cell.fill = header_fill
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(vertical="center")
-    widths = (24, 24, 8, 18, 23, 18, 30, 34, 22, 40)
-    for index, width in enumerate(widths, start=1):
+        cell.border = header_border
+    worksheet.row_dimensions[1].height = 24
+
+    if rows:
+        table_ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
+        table = Table(displayName="InventarioFluxoNeural", ref=table_ref)
+        table.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium2",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        worksheet.add_table(table)
+
+    minimum_widths = {
+        "Regional": 22, "Codigo": 22, "UF": 7, "Status regional": 16,
+        "Atualizacao": 22, "Categoria": 16, "Dispositivo": 26, "Resumo": 28,
+    }
+    for index, column in enumerate(columns, start=1):
+        longest = max(
+            [len(str(column))] + [len(str(row.get(column) or "")) for row in rows]
+        )
+        width = max(minimum_widths.get(column, 14), min(longest + 3, 42))
         worksheet.column_dimensions[get_column_letter(index)].width = width
     for row in worksheet.iter_rows(min_row=2):
         for cell in row:
