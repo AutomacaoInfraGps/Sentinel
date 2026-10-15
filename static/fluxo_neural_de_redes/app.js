@@ -38,31 +38,12 @@
     aps: { label: "Antenas UniFi", singular: "Antena", color: "#e6edf2", mono: "AP" },
     redes_wifi: { label: "Redes Wi-Fi", singular: "Rede Wi-Fi", color: "#5bd6ff", mono: "WF" },
   };
-  const starshipClasses = [
-    { key: "NAVE_INTERCEPTADOR", label: "Interceptador" },
-    { key: "NAVE_EXPLORACAO", label: "Exploracao" },
-    { key: "NAVE_CRUZADOR", label: "Cruzador" },
-    { key: "NAVE_CARGUEIRO", label: "Cargueiro" },
-    { key: "NAVE_PORTA_NAVES", label: "Porta-naves" },
-    { key: "NAVE_FURTIVA", label: "Furtiva" },
-    { key: "NAVE_CIENTIFICA", label: "Cientifica" },
-    { key: "NAVE_CAPITANIA", label: "Capitania" },
-    { key: "NAVE_TRANSPORTE", label: "Transporte" },
-  ];
-  const starshipPalettes = [
-    "none",
-    "hue-rotate(32deg) saturate(1.18) brightness(1.04)",
-    "hue-rotate(78deg) saturate(1.2) brightness(1.05)",
-    "hue-rotate(142deg) saturate(1.15) brightness(1.04)",
-    "hue-rotate(208deg) saturate(1.22) brightness(1.06)",
-    "sepia(.24) saturate(1.42) hue-rotate(318deg) brightness(1.05)",
-  ];
   const planetTextures = new Map();
   const state = {
     data: null, nodes: [], edges: [], byId: new Map(), neighbors: new Map(),
     visibleNodes: [], visibleEdges: [], hover: null, selected: null,
     camera: { x: 0, y: 0, scale: 1 }, pointer: null, dragNode: null, dragging: false,
-    time: 0, intro: null, stars: [],
+    time: 0, intro: null, stars: [], tableExpanded: new Set(),
   };
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
@@ -96,38 +77,16 @@
     ]);
   }
 
-  function starshipTexture(node) {
-    return node?.shipProfile ? celestialTextures.get(node.shipProfile.key) : null;
+  function switchCelestialKey() {
+    return "ASTEROIDE_ROCHOSO";
   }
 
-  function switchCelestialKey(name) {
-    return stableVariantKey(name, [
-      "ASTEROIDE_ROCHOSO",
-      "ASTEROIDE_METALICO",
-      "ASTEROIDE_BASALTICO",
-      "ASTEROIDE_SILICATADO",
-    ]);
+  function vpnCelestialKey() {
+    return "SATELITE_PAINEIS";
   }
 
-  function vpnCelestialKey(name) {
-    return stableVariantKey(name, [
-      "SATELITE_PAINEIS",
-      "SATELITE_PARABOLICA",
-      "SATELITE_RETRANSMISSAO",
-    ]);
-  }
-
-  function apCelestialKey(name) {
-    return stableVariantKey(name, [
-      "NEBULOSA_ORION",
-      "NEBULOSA_HELICE",
-      "NEBULOSA_CARANGUEJO",
-      "NEBULOSA_CABECA_CAVALO",
-      "NEBULOSA_BORBOLETA",
-      "NEBULOSA_OLHO_GATO",
-      "NEBULOSA_AGUIA",
-      "NEBULOSA_ANEL",
-    ]);
+  function apCelestialKey() {
+    return "NEBULOSA_ANEL";
   }
 
   function stableNameHash(name) {
@@ -322,11 +281,6 @@
       devicesByRegional.get(device.regional_id).push(device);
     });
 
-    const fleetOrder = [...regionals]
-      .filter(regional => !isGalaxyRegional(regional))
-      .sort((left, right) => String(left.codigo || left.nome).localeCompare(String(right.codigo || right.nome), "pt-BR"));
-    const fleetIndex = new Map(fleetOrder.map((regional, index) => [regional.id, index]));
-
     let orbitIndex = 0;
     regionals.forEach(regional => {
       const isHub = isGalaxyRegional(regional);
@@ -337,20 +291,10 @@
       const distance = 310 * Math.sqrt(orbitIndex + .95);
       const x = isHub ? 0 : Math.cos(angle) * distance * 1.16 + (Math.random() - .5) * 55;
       const y = isHub ? 0 : Math.sin(angle) * distance * .9 + (Math.random() - .5) * 50;
-      const shipIndex = fleetIndex.get(regional.id) ?? 0;
-      const shipClass = starshipClasses[shipIndex % starshipClasses.length];
-      const paletteIndex = Math.floor(shipIndex / starshipClasses.length) % starshipPalettes.length;
-      const shipProfile = isHub ? null : {
-        ...shipClass,
-        fleetIndex: shipIndex,
-        filter: starshipPalettes[paletteIndex],
-        mirrored: paletteIndex % 2 === 1,
-        rotation: ((shipIndex % 7) - 3) * .055,
-      };
       if (!isHub) orbitIndex += 1;
       nodes.push({
-        ...regional, kind: "regional", isHub, shipProfile, layoutRadius,
-        radius: isHub ? 72 : 30, x, y, tx: x, ty: y,
+        ...regional, kind: "regional", isHub, layoutRadius,
+        radius: isHub ? 72 : 38, x, y, tx: x, ty: y,
         vx: 0, vy: 0, opacity: 0, delay: Math.random() * .35,
       });
     });
@@ -471,13 +415,60 @@
 
   function renderTable() {
     if (!state.data) return;
-    const visibleRegionalIds = new Set(state.visibleNodes.filter(node => node.kind === "regional").map(node => node.id));
-    ui.tableBody.innerHTML = state.data.regionais.filter(item => visibleRegionalIds.has(item.id)).map(item => `
-      <tr data-id="${escapeHtml(item.id)}">
-        <td><strong>${escapeHtml(item.nome)}</strong><br><small>${escapeHtml(item.codigo)}</small></td>
-        <td>${escapeHtml(item.uf || "-")}</td><td>${item.dispositivos.length}</td>
-        ${["links", "firewalls", "switches", "servidores", "vpns", "aps", "redes_wifi"].map(type => `<td>${item.totais[type] || 0}</td>`).join("")}
-      </tr>`).join("");
+    const query = ui.search.value.trim().toLocaleLowerCase("pt-BR");
+    const regionalFilter = ui.regional.value;
+    const typeFilter = ui.type.value;
+    if (regionalFilter) state.tableExpanded.add(regionalFilter);
+
+    const deviceMatchesQuery = device => !query || `${device.nome} ${device.detalhe || ""} ${(device.detalhes || []).map(item => `${item.rotulo} ${item.valor}`).join(" ")}`
+      .toLocaleLowerCase("pt-BR").includes(query);
+    const rows = state.data.regionais.map(regional => {
+      if (regionalFilter && regional.id !== regionalFilter) return "";
+      const regionalMatchesQuery = !query || `${regional.nome} ${regional.codigo} ${regional.uf || ""}`
+        .toLocaleLowerCase("pt-BR").includes(query);
+      const allDevices = state.data.dispositivos.filter(device => device.regional_id === regional.id);
+      const devices = allDevices.filter(device => (
+        (!typeFilter || device.tipo === typeFilter)
+        && (regionalMatchesQuery || deviceMatchesQuery(device))
+      ));
+      if ((typeFilter || query) && !devices.length && !regionalMatchesQuery) return "";
+      if (typeFilter && !devices.length) return "";
+
+      const expanded = state.tableExpanded.has(regional.id);
+      const filteredLabel = typeFilter ? categories[typeFilter].label : "dispositivos";
+      const sections = expanded ? Object.entries(categories).map(([type, category]) => {
+        if (typeFilter && type !== typeFilter) return "";
+        const entries = devices.filter(device => device.tipo === type);
+        if (!entries.length) return "";
+        return `<section class="table-device-section" style="--category:${category.color}">
+          <header><span><i></i>${category.label}</span><b>${entries.length}</b></header>
+          <div class="table-device-grid">${entries.map(device => `
+            <article class="table-device-card">
+              <button type="button" data-device-id="${escapeHtml(device.id)}">${escapeHtml(device.nome)}</button>
+              ${device.detalhe ? `<p>${escapeHtml(device.detalhe)}</p>` : ""}
+              <dl>${(device.detalhes || []).length
+                ? device.detalhes.map(detail => `<div><dt>${escapeHtml(detail.rotulo)}</dt><dd>${escapeHtml(detail.valor)}</dd></div>`).join("")
+                : `<div><dt>Informacao</dt><dd>Sem outros dados registrados</dd></div>`}
+              </dl>
+            </article>`).join("")}</div>
+        </section>`;
+      }).join("") : "";
+
+      return `<tr class="regional-table-row ${expanded ? "expanded" : ""}" data-table-regional="${escapeHtml(regional.id)}">
+        <td><button type="button" class="table-expand" aria-expanded="${expanded}"><span>${expanded ? "-" : "+"}</span><strong>${escapeHtml(regional.nome)}</strong><small>${escapeHtml(regional.codigo)}</small></button></td>
+        <td><span class="table-uf">${escapeHtml(regional.uf || "-")}</span></td>
+        <td><strong>${devices.length}</strong><small class="table-filter-caption">${escapeHtml(filteredLabel)}</small></td>
+        <td>${regional.status ? `<span class="table-status">${escapeHtml(regional.status)}</span>` : "-"}</td>
+        <td>${escapeHtml(regional.ultima_atualizacao || "-")}</td>
+      </tr>
+      <tr class="regional-table-detail" data-table-detail="${escapeHtml(regional.id)}" ${expanded ? "" : "hidden"}>
+        <td colspan="5"><div class="regional-table-content">
+          ${regional.descricao ? `<p class="table-regional-description">${escapeHtml(regional.descricao)}</p>` : ""}
+          ${sections || `<p class="table-empty">Nenhum dispositivo corresponde aos filtros atuais.</p>`}
+        </div></td>
+      </tr>`;
+    }).join("");
+    ui.tableBody.innerHTML = rows || `<tr><td colspan="5"><p class="table-empty">Nenhuma regional corresponde aos filtros atuais.</p></td></tr>`;
   }
 
   function selectRegional(id) {
@@ -488,7 +479,6 @@
     ui.detail.innerHTML = `
       <div class="detail-kicker">${escapeHtml(regional.uf || "Regional Sentinel")}</div>
       <h2>${escapeHtml(regional.nome)}</h2><div class="detail-code">${escapeHtml(regional.codigo)}</div>
-      ${state.selected?.shipProfile ? `<div class="detail-summary"><span><small>Nave da frota</small><strong>${escapeHtml(state.selected.shipProfile.label)}</strong></span><span><small>Identificacao</small><strong>SN-${String(state.selected.shipProfile.fleetIndex + 1).padStart(2, "0")}</strong></span></div>` : ""}
       ${regional.descricao ? `<p class="detail-description">${escapeHtml(regional.descricao)}</p>` : ""}
       ${(regional.status || regional.ultima_atualizacao) ? `<div class="detail-summary">
         ${regional.status ? `<span><small>Status</small><strong>${escapeHtml(regional.status)}</strong></span>` : ""}
@@ -587,7 +577,7 @@
     const point = worldPoint(clientX, clientY);
     return [...state.visibleNodes].reverse().find(node => {
       const celestialRadius = node.kind === "regional" && !node.isHub
-        ? node.radius * 1.75
+        ? node.radius * 1.5
         : node.isHub ? node.radius * 1.7 : node.tipo === "redes_wifi"
         ? 30
         : ["firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo) ? 26 : node.radius;
@@ -706,7 +696,7 @@
       halo.addColorStop(.48, `${color}${active ? "48" : "2e"}`);
       halo.addColorStop(1, `${color}00`);
       ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2); ctx.fill();
-      const ship = node.kind === "regional" && !node.isHub ? starshipTexture(node) : null;
+      const earth = node.kind === "regional" && !node.isHub ? celestialTextures.get("TERRA") : null;
       if (node.isHub) {
         const width = radius * 3.8;
         const height = radius * 2.25;
@@ -721,26 +711,18 @@
           ctx.drawImage(texture, node.x - radius, node.y - radius, radius * 2, radius * 2);
         }
         ctx.restore();
-      } else if (ship) {
-        const width = radius * 3.65;
-        const height = radius * 3.65;
+      } else if (earth) {
+        const width = radius * 2.9;
+        const height = radius * 2.9;
         labelRadius = height / 2;
-        const profile = node.shipProfile;
-        const renderedShip = cachedCelestialTexture(
-          ship,
-          `ship:${profile.key}:${Math.floor(profile.fleetIndex / starshipClasses.length)}`,
-          176,
-          176,
-          profile.filter,
-        );
-        if (renderedShip) {
+        const renderedEarth = cachedCelestialTexture(earth, "regional:earth", 176, 176);
+        if (renderedEarth) {
           ctx.save();
           ctx.translate(node.x, node.y);
-          ctx.rotate(profile.rotation + Math.sin(state.time * .00035 + profile.fleetIndex) * .025);
-          ctx.scale(profile.mirrored ? -1 : 1, 1);
+          ctx.rotate(Math.sin(state.time * .0002 + stableNameHash(node.id)) * .018);
           ctx.shadowColor = active ? "#8ee9ff" : "#22c3f6";
           ctx.shadowBlur = (active ? 24 : 10) / state.camera.scale;
-          ctx.drawImage(renderedShip, -width / 2, -height / 2, width, height);
+          ctx.drawImage(renderedEarth, -width / 2, -height / 2, width, height);
           ctx.restore();
         }
       } else if (!["redes_wifi", "firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
@@ -807,7 +789,7 @@
         const size = radius * 2.7;
         labelRadius = size / 2;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
-      } else if (!node.isHub && !ship && !["firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
+      } else if (!node.isHub && !earth && !["firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
         ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
@@ -1031,7 +1013,18 @@
     ui.type.value = ui.type.value === row.dataset.type ? "" : row.dataset.type; applyFilters(); fitGraph();
   });
   ui.tableBody.addEventListener("click", event => {
-    const row = event.target.closest("[data-id]"); if (row) { ui.table.classList.remove("open"); selectRegional(row.dataset.id); }
+    const deviceButton = event.target.closest("[data-device-id]");
+    if (deviceButton) {
+      ui.table.classList.remove("open");
+      selectDevice(deviceButton.dataset.deviceId);
+      return;
+    }
+    const row = event.target.closest("[data-table-regional]");
+    if (!row) return;
+    const id = row.dataset.tableRegional;
+    if (state.tableExpanded.has(id)) state.tableExpanded.delete(id);
+    else state.tableExpanded.add(id);
+    renderTable();
   });
 
   canvas.addEventListener("pointerdown", event => {

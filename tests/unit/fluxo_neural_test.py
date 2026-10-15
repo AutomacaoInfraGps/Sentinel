@@ -16,6 +16,8 @@ class NeuralFlowPayloadTests(unittest.TestCase):
                 "servidores": [{
                     "nome": "SRV-BA-01",
                     "ip": "10.0.0.1",
+                    "sistema_operacional": "Windows Server",
+                    "porta": 3389,
                     "password": "segredo",
                 }],
                 "links": [{"nome": "Link principal", "api_key": "segredo-2"}],
@@ -53,16 +55,37 @@ class NeuralFlowPayloadTests(unittest.TestCase):
             {"rotulo": "IP", "valor": "10.0.0.1"},
             server["detalhes"],
         )
+        self.assertIn(
+            {"rotulo": "Sistema operacional", "valor": "Windows Server"},
+            server["detalhes"],
+        )
+        self.assertIn(
+            {"rotulo": "Porta", "valor": "3389"},
+            server["detalhes"],
+        )
 
     def test_combines_link_interface_and_provider(self):
         payload = build_neural_flow_payload({
             "regionais": [{
                 "codigo": "REG_BAHIA",
-                "links": [{"nome": "WAN1", "provedor": "VIVO"}],
+                "links": [{
+                    "nome": "WAN1",
+                    "provedor": "VIVO",
+                    "velocidade": "500 Mbps",
+                    "packet_loss_percent": 0.2,
+                }],
             }],
         })
 
         self.assertEqual(payload["dispositivos"][0]["nome"], "WAN1 - VIVO")
+        self.assertIn(
+            {"rotulo": "Velocidade", "valor": "500 Mbps"},
+            payload["dispositivos"][0]["detalhes"],
+        )
+        self.assertIn(
+            {"rotulo": "Perda de pacotes", "valor": "0.2"},
+            payload["dispositivos"][0]["detalhes"],
+        )
 
     def test_prefers_firewall_commercial_model(self):
         payload = build_neural_flow_payload({

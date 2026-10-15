@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#06111c">
   <title>Sentinel | Fluxo Neural de Redes</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='fluxo_neural_de_redes/styles.css', v='20261014-2') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fluxo_neural_de_redes/styles.css', v='20261015-1') }}">
 </head>
 <body class="intro-active">
   <canvas id="network" aria-label="Fluxo neural das regionais do Sentinel"></canvas>
@@ -20,29 +20,9 @@
     <img data-celestial="NETUNO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-netuno.png', v='20261014-1') }}" alt="">
     <img data-celestial="ESTRELA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-estrela.png', v='20261014-1') }}" alt="">
     <img data-celestial="ASTEROIDE_ROCHOSO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-asteroide-rochoso.png', v='20261014-1') }}" alt="">
-    <img data-celestial="ASTEROIDE_METALICO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-asteroide-metalico.png', v='20261014-1') }}" alt="">
-    <img data-celestial="ASTEROIDE_BASALTICO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-asteroide-basaltico.png', v='20261014-1') }}" alt="">
-    <img data-celestial="ASTEROIDE_SILICATADO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-asteroide-silicatado.png', v='20261014-1') }}" alt="">
     <img data-celestial="SATELITE_PAINEIS" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-satelite-paineis.png', v='20261014-1') }}" alt="">
-    <img data-celestial="SATELITE_PARABOLICA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-satelite-parabolica.png', v='20261014-1') }}" alt="">
-    <img data-celestial="SATELITE_RETRANSMISSAO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-satelite-retransmissao.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_ORION" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-orion.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_HELICE" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-helice.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_CARANGUEJO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-caranguejo.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_CABECA_CAVALO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-cabeca-cavalo.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_BORBOLETA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-borboleta.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_OLHO_GATO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-olho-gato.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_AGUIA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-aguia.png', v='20261014-1') }}" alt="">
     <img data-celestial="NEBULOSA_ANEL" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-anel.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NAVE_INTERCEPTADOR" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-interceptador.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_EXPLORACAO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-exploracao.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_CRUZADOR" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-cruzador.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_CARGUEIRO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-cargueiro.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_PORTA_NAVES" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-porta-naves.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_FURTIVA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-furtiva.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_CIENTIFICA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-cientifica.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_CAPITANIA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-capitania.png', v='20261015-1') }}" alt="">
-    <img data-celestial="NAVE_TRANSPORTE" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nave-transporte.png', v='20261015-1') }}" alt="">
+    <img data-celestial="TERRA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-terra.png', v='20261015-1') }}" alt="">
     <img data-celestial="BURACO_NEGRO_ACREACAO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-buraco-negro-acreacao.png', v='20261015-1') }}" alt="">
     <img data-celestial="BURACO_NEGRO_RUBI" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-buraco-negro-rubi.png', v='20261015-1') }}" alt="">
     <img data-celestial="BURACO_NEGRO_LENTE" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-buraco-negro-lente.png', v='20261015-1') }}" alt="">
@@ -108,13 +88,13 @@
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Regional</th><th>UF</th><th>Conexões</th><th>Links</th><th>Firewalls</th><th>Switches</th><th>Servidores</th><th>VPNs</th><th>Antenas</th><th>Redes Wi-Fi</th></tr></thead>
+        <thead><tr><th>Regional</th><th>UF</th><th>Dispositivos exibidos</th><th>Status</th><th>Atualização</th></tr></thead>
         <tbody id="tableBody"></tbody>
       </table>
     </div>
   </section>
 
   <div id="toast" class="toast" role="status"></div>
-  <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js', v='20261015-2') }}"></script>
+  <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js', v='20261015-3') }}"></script>
 </body>
 </html>
