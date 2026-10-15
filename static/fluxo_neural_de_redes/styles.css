@@ -131,6 +131,14 @@ select:focus { border-color: var(--cyan); }
 .table-view.open { display: flex; flex-direction: column; }
 .table-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .table-head small { color: var(--cyan); font: 10px Consolas, monospace; }.table-head h2 { margin: 3px 0 0; font-size: 18px; }
+.table-head-actions { display: flex; align-items: center; gap: 6px; }
+.export-label { margin-right: 2px; color: var(--muted); font: 600 9px Consolas, monospace; }
+.export-command { height: 34px; min-width: 94px; padding: 0 12px; border: 1px solid var(--line); border-radius: 5px; background: rgba(34,195,246,.08); color: var(--soft); font: 700 10px Consolas, monospace; cursor: pointer; transition: border-color .18s ease, background .18s ease, color .18s ease; }
+.export-command-pdf { border-color: rgba(255,87,109,.5); }
+.export-command-xlsx { border-color: rgba(53,214,157,.5); }
+.export-command:hover { border-color: var(--cyan); background: rgba(34,195,246,.18); color: white; }
+.export-command:disabled { cursor: wait; opacity: .55; }
+.table-head-actions .close-button { width: 32px; height: 32px; margin-left: 3px; }
 .table-scroll { flex: 1; overflow: auto; }
 table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
 th { position: sticky; top: 0; z-index: 1; padding: 11px 12px; background: var(--panel-solid); color: var(--muted); font: 600 10px Consolas, monospace; text-align: left; text-transform: uppercase; }
@@ -188,4 +196,9 @@ th:nth-child(1) { width: 34%; } th:nth-child(2) { width: 8%; } th:nth-child(3) {
   .regional-table-detail > td { display: table-cell !important; }
   .regional-table-content { padding: 12px; }
   .table-device-grid { grid-template-columns: 1fr; }
+  .table-head { gap: 8px; padding: 10px; }.table-head h2 { font-size: 14px; }
+  .export-label { display: none; }
+  .export-command { min-width: 45px; padding: 0 7px; font-size: 0; }
+  .export-command-pdf::after { content: "PDF"; font-size: 9px; }
+  .export-command-xlsx::after { content: "XLSX"; font-size: 9px; }
 }

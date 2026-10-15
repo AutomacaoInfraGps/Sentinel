@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 import time
 import unittest
@@ -6,6 +7,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from sofia.service_auth import build_signature
+from sofia.scope_token import issue_regional_scope_token
 from web_config import app
 
 
@@ -13,6 +15,7 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
     PATH = "/api/internal/sofia/v1/health"
     CAPABILITIES_PATH = "/api/internal/sofia/v1/capabilities"
     ALERTS_PATH = "/api/internal/sofia/v1/alerts"
+    REGIONALS_PATH = "/api/internal/sofia/v1/regionals/query"
     KEY_ID = "test-service-key-v1"
     SECRET = "test-secret-with-at-least-thirty-two-bytes-123456789"
 
@@ -50,16 +53,18 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
         nonce="unique-service-nonce-0001",
         timestamp=None,
         secret=None,
+        method="GET",
+        body=b"",
     ):
         timestamp = str(timestamp if timestamp is not None else int(time.time()))
         path = path or self.PATH
         signature = build_signature(
             secret or self.SECRET,
-            "GET",
+            method,
             path,
             timestamp,
             nonce,
-            b"",
+            body,
         )
         return {
             "X-Sentinel-Key-Id": self.KEY_ID,
@@ -119,9 +124,63 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
                         "method": "GET",
                         "path": "/api/internal/sofia/v1/alerts",
                     },
+                    {
+                        "id": "regionals.read",
+                        "method": "POST",
+                        "path": "/api/internal/sofia/v1/regionals/query",
+                    },
                 ],
             },
         )
+
+    def _signed_post(self, path, payload, nonce):
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        return self.client.post(
+            path,
+            data=body,
+            content_type="application/json",
+            headers=self._headers(
+                path=path,
+                nonce=nonce,
+                method="POST",
+                body=body,
+            ),
+        )
+
+    def test_regional_query_requires_and_enforces_signed_user_scope(self):
+        with app.app_context():
+            scope_token = issue_regional_scope_token({"REG_ABC"})
+
+        with patch(
+            "sofia.service_routes.consultar_inventario_regional",
+            return_value={"mode": "index", "total": 1, "regionals": []},
+        ) as inventory:
+            response = self._signed_post(
+                self.REGIONALS_PATH,
+                {
+                    "sentinel_scope_token": scope_token,
+                    "sections": [],
+                },
+                "unique-regionals-nonce-01",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["total"], 1)
+        self.assertEqual(
+            inventory.call_args.kwargs["allowed_regionals"],
+            {"REG_ABC"},
+        )
+
+        denied = self._signed_post(
+            self.REGIONALS_PATH,
+            {
+                "sentinel_scope_token": "invalid-token",
+                "regional": "REG_ABC",
+                "sections": ["servidores"],
+            },
+            "unique-regionals-nonce-02",
+        )
+        self.assertEqual(denied.status_code, 403)
 
     def test_valid_signed_alert_request_returns_minimal_read_only_snapshot(self):
         snapshot = {

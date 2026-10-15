@@ -28,6 +28,8 @@
     detail: document.getElementById("detailContent"),
     table: document.getElementById("tableView"),
     tableBody: document.getElementById("tableBody"),
+    exportPdf: document.getElementById("exportPdf"),
+    exportXlsx: document.getElementById("exportXlsx"),
   };
   const categories = {
     links: { label: "Links", singular: "Link", color: "#22c3f6", mono: "LK" },
@@ -470,6 +472,97 @@
       </tr>`;
     }).join("");
     ui.tableBody.innerHTML = rows || `<tr><td colspan="5"><p class="table-empty">Nenhuma regional corresponde aos filtros atuais.</p></td></tr>`;
+  }
+
+  function exportTableRows() {
+    if (!state.data) return [];
+    const query = ui.search.value.trim().toLocaleLowerCase("pt-BR");
+    const regionalFilter = ui.regional.value;
+    const typeFilter = ui.type.value;
+    const rows = [];
+    state.data.regionais.forEach(regional => {
+      if (regionalFilter && regional.id !== regionalFilter) return;
+      const regionalMatches = !query || `${regional.nome} ${regional.codigo} ${regional.uf || ""}`
+        .toLocaleLowerCase("pt-BR").includes(query);
+      const devices = state.data.dispositivos.filter(device => {
+        if (device.regional_id !== regional.id || typeFilter && device.tipo !== typeFilter) return false;
+        const text = `${device.nome} ${device.detalhe || ""} ${(device.detalhes || []).map(item => `${item.rotulo} ${item.valor}`).join(" ")}`
+          .toLocaleLowerCase("pt-BR");
+        return regionalMatches || !query || text.includes(query);
+      });
+      if ((typeFilter || query) && !devices.length && !regionalMatches) return;
+      if (typeFilter && !devices.length) return;
+      const base = [regional.nome, regional.codigo, regional.uf || "", regional.status || "", regional.ultima_atualizacao || ""];
+      if (!devices.length) {
+        rows.push([...base, "", "", "", "", ""]);
+        return;
+      }
+      devices.forEach(device => {
+        const details = (device.detalhes || []).length ? device.detalhes : [{ rotulo: "", valor: "" }];
+        details.forEach(detail => rows.push([
+          ...base,
+          categories[device.tipo]?.singular || device.tipo,
+          device.nome,
+          device.detalhe || "",
+          detail.rotulo || "",
+          detail.valor || "",
+        ]));
+      });
+    });
+    return rows;
+  }
+
+  function exportFilterDescription() {
+    const parts = [];
+    if (ui.regional.value) parts.push(`Regional: ${ui.regional.options[ui.regional.selectedIndex]?.text || ui.regional.value}`);
+    if (ui.type.value) parts.push(`Tipo: ${categories[ui.type.value]?.label || ui.type.value}`);
+    if (ui.search.value.trim()) parts.push(`Busca: ${ui.search.value.trim()}`);
+    return parts.length ? parts.join(" | ") : "Todas as regionais e conexoes";
+  }
+
+  function exportPdf() {
+    const rows = exportTableRows();
+    if (!rows.length) { toast("Nao ha dados nos filtros atuais para exportar."); return; }
+    const report = window.open("", "sentinel-fluxo-neural-pdf");
+    if (!report) { toast("O navegador bloqueou a janela de exportacao."); return; }
+    const headers = ["Regional", "Codigo", "UF", "Status", "Atualizacao", "Tipo", "Dispositivo", "Resumo", "Campo", "Valor"];
+    const generatedAt = new Date().toLocaleString("pt-BR");
+    report.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fluxo Neural de Redes - Sentinel</title><style>
+      @page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{margin:0;color:#173042;font:9px Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:9px;border-bottom:2px solid #07517d;padding-bottom:7px}h1{margin:0;color:#07517d;font-size:18px}p{margin:3px 0 0;color:#526b7a}small{color:#6d818d}table{width:100%;border-collapse:collapse;table-layout:fixed}th{padding:5px 4px;background:#07517d;color:white;text-align:left;font-size:8px}td{padding:4px;border:1px solid #cbd9e1;vertical-align:top;overflow-wrap:anywhere}tr:nth-child(even) td{background:#f2f7fa}th:nth-child(1){width:12%}th:nth-child(2){width:11%}th:nth-child(3){width:3%}th:nth-child(4){width:6%}th:nth-child(5){width:9%}th:nth-child(6){width:7%}th:nth-child(7){width:15%}th:nth-child(8){width:12%}th:nth-child(9){width:9%}th:nth-child(10){width:16%}
+    </style></head><body><header><div><h1>SENTINEL | FLUXO NEURAL DE REDES</h1><p>${escapeHtml(exportFilterDescription())}</p></div><small>Gerado em ${escapeHtml(generatedAt)}</small></header><table><thead><tr>${headers.map(header => `<th>${header}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(value => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`).join("")}</tbody></table><script>window.addEventListener("load",()=>{window.focus();window.print()});window.addEventListener("afterprint",()=>window.close());<\/script></body></html>`);
+    report.document.close();
+  }
+
+  async function exportXlsx() {
+    const rows = exportTableRows();
+    if (!rows.length) { toast("Nao ha dados nos filtros atuais para exportar."); return; }
+    const params = new URLSearchParams();
+    if (ui.regional.value) params.set("regional", ui.regional.value);
+    if (ui.type.value) params.set("tipo", ui.type.value);
+    if (ui.search.value.trim()) params.set("busca", ui.search.value.trim());
+    ui.exportXlsx.disabled = true;
+    try {
+      const response = await fetch(`/api/fluxo-neural/exportar.xlsx?${params}`, {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = decodeURIComponent(match?.[1] || "fluxo_neural_sentinel.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      const objectUrl = link.href;
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error(error);
+      toast("Nao foi possivel exportar o arquivo XLSX.");
+    } finally {
+      ui.exportXlsx.disabled = false;
+    }
   }
 
   function selectRegional(id) {
@@ -1009,6 +1102,8 @@
   });
   document.getElementById("tableButton").addEventListener("click", () => ui.table.classList.toggle("open"));
   document.getElementById("closeTable").addEventListener("click", () => ui.table.classList.remove("open"));
+  ui.exportPdf.addEventListener("click", exportPdf);
+  ui.exportXlsx.addEventListener("click", exportXlsx);
   document.getElementById("reorganizeButton").addEventListener("click", reorganize);
   document.getElementById("zoomIn").addEventListener("click", () => state.camera.scale = Math.min(2.5, state.camera.scale * 1.18));
   document.getElementById("zoomOut").addEventListener("click", () => state.camera.scale = Math.max(.08, state.camera.scale / 1.18));

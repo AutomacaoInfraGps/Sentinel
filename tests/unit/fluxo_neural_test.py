@@ -1,6 +1,13 @@
 import unittest
+from io import BytesIO
 
-from fluxo_neural import build_neural_flow_payload
+from openpyxl import load_workbook
+
+from fluxo_neural import (
+    build_neural_export_rows,
+    build_neural_flow_payload,
+    build_neural_xlsx,
+)
 
 
 class NeuralFlowPayloadTests(unittest.TestCase):
@@ -99,6 +106,53 @@ class NeuralFlowPayloadTests(unittest.TestCase):
         })
 
         self.assertEqual(payload["dispositivos"][0]["nome"], "FortiGate-100F")
+
+    def test_export_rows_follow_regional_type_and_text_filters(self):
+        payload = build_neural_flow_payload({
+            "regionais": [
+                {
+                    "codigo": "REG_BAHIA",
+                    "nome": "Bahia",
+                    "uf": "BA",
+                    "servidores": [{"nome": "Sirius", "ip": "10.0.0.10"}],
+                    "links": [{"nome": "WAN1", "provedor": "VIVO"}],
+                },
+                {
+                    "codigo": "REG_GOIAS",
+                    "nome": "Goias",
+                    "uf": "GO",
+                    "servidores": [{"nome": "Rigel", "ip": "10.0.1.10"}],
+                },
+            ],
+        })
+
+        rows = build_neural_export_rows(
+            payload,
+            regional_id="REG_BAHIA",
+            device_type="servidores",
+            query="sirius",
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["Regional"], "Bahia")
+        self.assertEqual(rows[0]["Tipo"], "Servidor")
+        self.assertEqual(rows[0]["Dispositivo"], "Sirius")
+        self.assertEqual(rows[0]["Campo"], "IP")
+        self.assertEqual(rows[0]["Valor"], "10.0.0.10")
+
+    def test_xlsx_is_valid_and_neutralizes_formula_cells(self):
+        content = build_neural_xlsx([{
+            "Regional": "Bahia",
+            "Codigo": "REG_BAHIA",
+            "Dispositivo": "=HYPERLINK(\"https://example.invalid\")",
+        }])
+        workbook = load_workbook(BytesIO(content), data_only=False)
+        worksheet = workbook["Fluxo Neural"]
+
+        self.assertEqual(worksheet["A2"].value, "Bahia")
+        self.assertEqual(worksheet["B2"].value, "REG_BAHIA")
+        self.assertTrue(worksheet["G2"].value.startswith("'="))
+        self.assertEqual(worksheet.freeze_panes, "A2")
 
 
 if __name__ == "__main__":
