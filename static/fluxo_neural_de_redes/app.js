@@ -58,6 +58,7 @@
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() === "REG_GALAXIA";
 
   function celestialTexture(node) {
+    if (node.tipo === "links") return celestialTextures.get("COMETA_LINK");
     if (node.tipo === "firewalls") return celestialTextures.get(firewallCelestialKey(node.nome));
     if (node.tipo === "servidores") return celestialTextures.get("ESTRELA");
     if (node.tipo === "switches") return celestialTextures.get(switchCelestialKey(node.nome));
@@ -580,7 +581,7 @@
         ? node.radius * 1.5
         : node.isHub ? node.radius * 1.7 : node.tipo === "redes_wifi"
         ? 30
-        : ["firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo) ? 26 : node.radius;
+        : ["links", "firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo) ? 30 : node.radius;
       return Math.hypot(node.x - point.x, node.y - point.y) <= celestialRadius + 10 / state.camera.scale;
     });
   }
@@ -725,7 +726,7 @@
           ctx.drawImage(renderedEarth, -width / 2, -height / 2, width, height);
           ctx.restore();
         }
-      } else if (!["redes_wifi", "firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
+      } else if (!["redes_wifi", "links", "firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
         ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
         ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
@@ -735,6 +736,7 @@
         const key = normalizeCelestialName(node.nome);
         const isAndromeda = key === "ANDROMEDA";
         const isSaturn = key === "SATURNO";
+        const isLink = node.tipo === "links";
         const isFirewall = node.tipo === "firewalls";
         const isStar = node.tipo === "servidores";
         const isSwitch = node.tipo === "switches";
@@ -744,17 +746,17 @@
         const switchKey = isSwitch ? switchCelestialKey(node.nome) : "";
         const vpnKey = isVpn ? vpnCelestialKey(node.nome) : "";
         const apKey = isAp ? apCelestialKey(node.nome) : "";
-        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isFirewall ? 4.2 : isAp ? 3.8 : isStar ? 3.35 : isVpn ? 3.4 : isSwitch ? 2.9 : 2.7);
-        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isFirewall ? 3.2 : isAp ? 3.8 : isStar ? 3.35 : isVpn ? 3.4 : isSwitch ? 2.9 : 2.7);
+        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isLink ? 4.8 : isFirewall ? 4.2 : isAp ? 3.8 : isStar ? 3.35 : isVpn ? 3.4 : isSwitch ? 2.9 : 2.7);
+        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isLink ? 2.05 : isFirewall ? 3.2 : isAp ? 3.8 : isStar ? 3.35 : isVpn ? 3.4 : isSwitch ? 2.9 : 2.7);
         labelRadius = Math.max(labelRadius, height / 2);
-        const detailThreshold = isStar ? .52 : isAp ? .48 : isFirewall ? .42 : isVpn ? .42 : isSwitch ? .34 : 0;
+        const detailThreshold = isStar ? .52 : isAp ? .48 : isFirewall ? .42 : isVpn ? .42 : isLink ? .38 : isSwitch ? .34 : 0;
         const detailedCelestial = state.camera.scale >= detailThreshold || active || (focus && inFocus);
 
         if (detailedCelestial) {
-          const cacheWidth = isAndromeda ? 256 : isSaturn ? 256 : isFirewall ? 192 : isAp ? 160 : isVpn ? 160 : isStar ? 128 : isSwitch ? 144 : 192;
-          const cacheHeight = isAndromeda ? 128 : isSaturn ? 172 : isFirewall ? 146 : isAp ? 160 : isVpn ? 160 : isStar ? 128 : isSwitch ? 144 : 192;
+          const cacheWidth = isAndromeda ? 256 : isSaturn ? 256 : isLink ? 224 : isFirewall ? 192 : isAp ? 160 : isVpn ? 160 : isStar ? 128 : isSwitch ? 144 : 192;
+          const cacheHeight = isAndromeda ? 128 : isSaturn ? 172 : isLink ? 76 : isFirewall ? 146 : isAp ? 160 : isVpn ? 160 : isStar ? 128 : isSwitch ? 144 : 192;
           const filter = isStar ? stellarFilter(node.nome) : "none";
-          const textureKey = isStar ? `star:${filter}` : isFirewall ? firewallKey : isSwitch ? switchKey : isVpn ? vpnKey : isAp ? apKey : key;
+          const textureKey = isStar ? `star:${filter}` : isLink ? "COMETA_LINK" : isFirewall ? firewallKey : isSwitch ? switchKey : isVpn ? vpnKey : isAp ? apKey : key;
           const renderedTexture = cachedCelestialTexture(
             celestial, textureKey, cacheWidth, cacheHeight, filter,
           );
@@ -765,7 +767,14 @@
               ctx.shadowColor = isFirewall ? "#ff4d68" : isStar ? color : "#69d9ff";
               ctx.shadowBlur = 18 / state.camera.scale;
             }
-            if (isAp) {
+            if (isLink) {
+              const parent = state.byId.get(node.parentId);
+              const direction = parent ? Math.atan2(node.y - parent.y, node.x - parent.x) : 0;
+              const sway = Math.sin(state.time * .0012 + stableNameHash(node.nome)) * .035;
+              ctx.translate(node.x, node.y);
+              ctx.rotate(direction + sway);
+              ctx.drawImage(renderedTexture, -width / 2, -height / 2, width, height);
+            } else if (isAp) {
               const rotation = ((stableNameHash(node.nome) % 13) - 6) * .07;
               ctx.translate(node.x, node.y);
               ctx.rotate(rotation);
@@ -778,7 +787,7 @@
         } else {
           ctx.save();
           ctx.globalAlpha = opacity * .78;
-          ctx.fillStyle = isFirewall || isSwitch || isVpn || isAp ? color : "#eaf8ff";
+          ctx.fillStyle = isLink || isFirewall || isSwitch || isVpn || isAp ? color : "#eaf8ff";
           ctx.beginPath();
           ctx.arc(node.x, node.y, Math.max(3.2, radius * .28), 0, Math.PI * 2);
           ctx.fill();
@@ -789,7 +798,7 @@
         const size = radius * 2.7;
         labelRadius = size / 2;
         ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
-      } else if (!node.isHub && !earth && !["firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
+      } else if (!node.isHub && !earth && !["links", "firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
         ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
