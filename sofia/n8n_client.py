@@ -43,7 +43,7 @@ def _configured_token():
     return token
 
 
-def consultar_sofia(*, mensagem, allowed_regionals):
+def consultar_sofia(*, mensagem, allowed_regionals, scope_token):
     regionals = sorted({
         str(regional).strip()
         for regional in (allowed_regionals or [])
@@ -51,6 +51,8 @@ def consultar_sofia(*, mensagem, allowed_regionals):
     })[:200]
     if not regionals:
         return "Nao ha regionais disponiveis para o seu perfil de acesso."
+    if not isinstance(scope_token, str) or not scope_token.strip():
+        raise SofiaN8nError("Escopo regional da SofIA nao configurado")
 
     try:
         response = requests.post(
@@ -59,6 +61,7 @@ def consultar_sofia(*, mensagem, allowed_regionals):
             json={
                 "message": str(mensagem or "")[:1000],
                 "allowed_regionals": regionals,
+                "sentinel_scope_token": scope_token.strip(),
             },
             timeout=(5, 180),
             allow_redirects=False,

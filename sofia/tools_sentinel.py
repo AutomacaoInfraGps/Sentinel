@@ -171,3 +171,116 @@ def nome_regional(codigo_regional, allowed_regionals=None):
     regional = _regionais(allowed_regionals).get(codigo_regional) or {}
     return str(regional.get("nome") or codigo_regional or "Regional")
 
+
+REGIONAL_QUERY_SECTIONS = frozenset({"servidores", "links", "switches"})
+
+
+def _public_value(record, *keys, limit=160):
+    for key in keys:
+        value = record.get(key)
+        if value in (None, "") or isinstance(value, (dict, list, tuple, set)):
+            continue
+        return str(value).strip()[:limit]
+    return ""
+
+
+def _public_servers(regional):
+    result = []
+    for server in regional.get("servidores") or []:
+        result.append({
+            "name": _public_value(server, "nome", "id"),
+            "ip": _public_value(server, "ip"),
+            "function": _public_value(server, "funcao", "descricao"),
+            "model": _public_value(server, "modelo"),
+            "operating_system": _public_value(server, "sistema_operacional"),
+            "status": _status_servidor(server),
+            "last_check": _public_value(server, "ultima_verificacao", limit=80),
+        })
+    return result
+
+
+def _public_links(regional):
+    result = []
+    for link in _internet_links(regional):
+        result.append({
+            "name": _public_value(link, "nome", "interface_monitorada", "interface"),
+            "provider": _public_value(link, "provedor", "alias", "descricao"),
+            "network": _public_value(link, "ip_exibicao", "ip"),
+            "speed": _public_value(link, "velocidade"),
+            "packet_loss_percent": _public_value(link, "packet_loss_percent"),
+            "status": _status_link(link),
+            "last_check": _public_value(link, "ultima_verificacao", limit=80),
+        })
+    return result
+
+
+def _public_switches(codigo_regional, allowed_regionals):
+    result = []
+    for switch in _switches(codigo_regional, allowed_regionals):
+        result.append({
+            "name": _public_value(switch, "host", "nome", "hostname"),
+            "ip": _public_value(switch, "ip"),
+            "model": _public_value(switch, "modelo", "model"),
+            "firmware": _public_value(switch, "firmware", "version"),
+            "status": _status_switch(switch),
+            "diagnostic": _public_value(switch, "warning_resumo", "status_reason"),
+            "last_check": _public_value(switch, "ultima_verificacao", limit=80),
+        })
+    return result
+
+
+def consultar_inventario_regional(
+    *, codigo_regional=None, secoes=None, allowed_regionals=None
+):
+    """Return a closed, credential-free projection for the SofIA tools."""
+    regionals = _regionais(allowed_regionals)
+    if not codigo_regional:
+        return {
+            "mode": "index",
+            "total": len(regionals),
+            "regionals": [
+                {
+                    "code": code,
+                    "name": _public_value(regional, "nome") or code,
+                    "state": _public_value(regional, "uf", "estado", limit=40),
+                }
+                for code, regional in sorted(regionals.items())
+            ],
+        }
+
+    normalized_code = str(codigo_regional).strip().upper()
+    regional = regionals.get(normalized_code)
+    if not regional:
+        return None
+
+    requested = {
+        str(section).strip().lower()
+        for section in (secoes or [])
+        if str(section).strip()
+    }
+    invalid = requested - REGIONAL_QUERY_SECTIONS
+    if invalid:
+        raise ValueError("Secao regional nao permitida.")
+
+    response = {
+        "mode": "detail",
+        "regional": {
+            "code": normalized_code,
+            "name": _public_value(regional, "nome") or normalized_code,
+            "description": _public_value(regional, "descricao", limit=240),
+            "state": _public_value(regional, "uf", "estado", limit=40),
+        },
+        "summary": {
+            "servers": resumo_servidores(normalized_code, allowed_regionals),
+            "links": resumo_links(normalized_code, allowed_regionals),
+            "switches": resumo_switches(normalized_code, allowed_regionals),
+        },
+    }
+    if "servidores" in requested:
+        response["servers"] = _public_servers(regional)
+    if "links" in requested:
+        response["links"] = _public_links(regional)
+    if "switches" in requested:
+        response["switches"] = _public_switches(normalized_code, allowed_regionals)
+    return response
+

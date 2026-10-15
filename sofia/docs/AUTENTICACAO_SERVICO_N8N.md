@@ -9,12 +9,50 @@ cookie do navegador, senha do Active Directory ou credencial pessoal.
 GET /api/internal/sofia/v1/health
 GET /api/internal/sofia/v1/capabilities
 GET /api/internal/sofia/v1/alerts
+POST /api/internal/sofia/v1/regionals/query
 ```
 
 As rotas retornam a disponibilidade da API, o contrato fechado de capacidades
 e uma visao minima dos alertas ativos em modo somente leitura. A resposta de
 alertas e limitada a 100 itens e nao inclui inventario completo, credenciais,
 segredos ou dados de sessao de usuarios.
+
+## Consulta regional
+
+Ao encaminhar uma mensagem para o n8n, o Sentinel inclui
+`sentinel_scope_token`. Esse token e assinado exclusivamente pelo Sentinel,
+expira em cinco minutos e contem as regionais autorizadas para o usuario
+logado. O n8n deve trata-lo como metadado opaco: nao deve decodificar, alterar,
+armazenar nem incluir o token no prompt do Ollama.
+
+Para listar somente o indice autorizado de regionais:
+
+```json
+{
+  "sentinel_scope_token": "<token recebido do Sentinel>",
+  "sections": []
+}
+```
+
+Para consultar uma regional especifica:
+
+```json
+{
+  "sentinel_scope_token": "<token recebido do Sentinel>",
+  "regional": "REG_BAHIA",
+  "sections": ["servidores", "links", "switches"]
+}
+```
+
+As secoes sao opcionais e fechadas nessa allowlist. Sem `regional`, a resposta
+traz apenas codigo, nome e estado para evitar excesso de contexto. Com uma
+regional, a resposta sempre inclui os resumos e pode incluir os detalhes das
+secoes solicitadas. Campos como senha, usuario tecnico, token, community SNMP,
+cookie e `credential_ref` nunca sao projetados para essa API.
+
+O corpo JSON deve ser serializado antes do calculo da assinatura, e os mesmos
+bytes precisam ser enviados na requisicao. Alterar espacos ou a ordem dos
+campos depois de assinar invalida o HMAC.
 
 ## Controles
 

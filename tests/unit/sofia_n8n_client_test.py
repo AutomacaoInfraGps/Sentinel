@@ -30,6 +30,7 @@ class SofiaN8nClientTest(unittest.TestCase):
         reply = consultar_sofia(
             mensagem="Resumo dos alertas atuais",
             allowed_regionals={"REG_UBERLANDIA", "REG_ABC"},
+            scope_token="signed-scope-token",
         )
 
         self.assertEqual(reply, "RESUMO OPERACIONAL\nTotal: 2")
@@ -37,6 +38,10 @@ class SofiaN8nClientTest(unittest.TestCase):
         self.assertEqual(
             request.kwargs["json"]["allowed_regionals"],
             ["REG_ABC", "REG_UBERLANDIA"],
+        )
+        self.assertEqual(
+            request.kwargs["json"]["sentinel_scope_token"],
+            "signed-scope-token",
         )
         self.assertEqual(request.kwargs["headers"]["X-Sentinel-Sofia-Token"], "t" * 32)
         self.assertFalse(request.kwargs["allow_redirects"])
@@ -50,6 +55,7 @@ class SofiaN8nClientTest(unittest.TestCase):
                 consultar_sofia(
                     mensagem="Resumo dos alertas atuais",
                     allowed_regionals={"REG_ABC"},
+                    scope_token="signed-scope-token",
                 )
 
     def test_empty_scope_does_not_call_the_orchestrator(self):
@@ -57,6 +63,7 @@ class SofiaN8nClientTest(unittest.TestCase):
             reply = consultar_sofia(
                 mensagem="Resumo dos alertas atuais",
                 allowed_regionals=set(),
+                scope_token="",
             )
         self.assertIn("Nao ha regionais", reply)
         post.assert_not_called()
@@ -71,6 +78,7 @@ class SofiaN8nClientTest(unittest.TestCase):
         reply = consultar_sofia(
             mensagem="Resumo",
             allowed_regionals={"REG_ABC"},
+            scope_token="signed-scope-token",
         )
 
         self.assertEqual(reply, "Linha 1.\nLinha 2.")

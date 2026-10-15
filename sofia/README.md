@@ -44,6 +44,7 @@ Ela ja possui:
 - Logs de auditoria em JSONL.
 - Respostas deterministicas, sem LLM externo.
 - Consultas somente leitura sobre dados ja carregados no Sentinel.
+- API interna regional com escopo assinado, projecao sanitizada e consulta sob demanda.
 - Historico da conversa preservado no navegador durante a sessao da aba.
 
 Ela ainda nao executa:
@@ -168,6 +169,11 @@ Hoje a SofIA responde perguntas sobre:
 - Alertas de switches no Zabbix.
 - Dashboard do Sentinel.
 - VPNs/IPsec apenas como resposta informativa, ainda sem consulta real habilitada.
+
+O agente n8n/Ollama nao recebe os arquivos JSON nem acessa o cofre. Para
+consultas regionais, ele usa `POST /api/internal/sofia/v1/regionals/query` com
+um token curto emitido pelo Sentinel. Isso limita a resposta ao escopo do
+usuario e evita enviar todo o inventario para o contexto do modelo.
 
 O catalogo detalhado fica em:
 

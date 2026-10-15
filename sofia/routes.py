@@ -10,6 +10,7 @@ from flask_login import current_user, login_required
 from .audit import registrar_evento_sofia
 from .n8n_client import SofiaN8nError, consultar_sofia
 from .permissions import usuario_pode_executar
+from .scope_token import SofiaScopeError, issue_regional_scope_token
 from .tools_sentinel import codigos_regionais
 from regional_access import access_scope, effective_user_groups
 
@@ -114,9 +115,11 @@ def chat():
             getattr(current_user, "dn", ""),
         )
         scope = access_scope(groups, codigos_regionais())
+        scope_token = issue_regional_scope_token(scope["allowed"])
         reply = consultar_sofia(
             mensagem=message,
             allowed_regionals=scope["allowed"],
+            scope_token=scope_token,
         )
         audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
@@ -127,7 +130,7 @@ def chat():
             detalhe=audit_detail,
         )
         return _json_response({"reply": reply})
-    except SofiaN8nError as exc:
+    except (SofiaN8nError, SofiaScopeError) as exc:
         current_app.logger.exception("Falha no webhook privado da SofIA")
         registrar_evento_sofia(
             usuario=username,

@@ -2,10 +2,12 @@
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from .service_auth import authenticate_service_request
 from .map_alerts import load_map_alert_snapshot
+from .scope_token import SofiaScopeError, read_regional_scope_token
+from .tools_sentinel import consultar_inventario_regional
 
 
 sofia_service_bp = Blueprint("sofia_service", __name__)
@@ -26,6 +28,11 @@ SERVICE_CAPABILITIES = (
         "id": "alerts.read",
         "method": "GET",
         "path": "/api/internal/sofia/v1/alerts",
+    },
+    {
+        "id": "regionals.read",
+        "method": "POST",
+        "path": "/api/internal/sofia/v1/regionals/query",
     },
 )
 
@@ -105,5 +112,39 @@ def service_alerts():
             "truncated": len(alerts) > len(visible),
         }
     )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@sofia_service_bp.post("/api/internal/sofia/v1/regionals/query")
+def service_regionals_query():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "message": "JSON invalido."}), 400
+    try:
+        allowed_regionals = read_regional_scope_token(
+            payload.get("sentinel_scope_token")
+        )
+        sections = payload.get("sections") or []
+        if not isinstance(sections, list) or len(sections) > 3:
+            raise ValueError("Secoes regionais invalidas.")
+        result = consultar_inventario_regional(
+            codigo_regional=payload.get("regional"),
+            secoes=sections,
+            allowed_regionals=allowed_regionals,
+        )
+    except SofiaScopeError:
+        return jsonify({"success": False, "message": "Escopo regional invalido."}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    if result is None:
+        return jsonify({"success": False, "message": "Regional nao encontrada."}), 404
+    response = jsonify({
+        "success": True,
+        "service": "sentinel",
+        "mode": "read-only",
+        "api_version": "v1",
+        "data": result,
+    })
     response.headers["Cache-Control"] = "no-store"
     return response
