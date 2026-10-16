@@ -15,8 +15,8 @@
             --ink: #102a35;
             --muted: #667982;
             --line: #d5e0e5;
-            --canvas: #e9eff2;
-            --surface: #ffffff;
+            --canvas: #07465d;
+            --surface: #f2f7fb;
             --brand: #073b4c;
             --brand-deep: #052b38;
             --cyan: #1c9ed1;
@@ -33,18 +33,18 @@
             display: grid;
             place-items: center;
             padding: 28px;
-            background: var(--canvas);
+            background: linear-gradient(135deg, #022f42 0%, var(--canvas) 54%, #0d7696 100%);
             color: var(--ink);
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         }
 
         .login-shell {
-            width: min(1040px, 100%);
+            width: min(1120px, 100%);
             min-height: 610px;
             display: grid;
-            grid-template-columns: minmax(330px, 0.84fr) minmax(430px, 1.16fr);
+            grid-template-columns: minmax(430px, 1fr) minmax(430px, 1fr);
             overflow: hidden;
-            border: 1px solid #cbd8de;
+            border: 1px solid rgba(113, 211, 244, 0.38);
             border-radius: 8px;
             background: var(--surface);
             box-shadow: 0 24px 70px rgba(18, 47, 60, 0.16);
@@ -57,7 +57,7 @@
             justify-content: space-between;
             padding: 44px;
             overflow: hidden;
-            background: var(--brand);
+            background: #052f40;
             color: #fff;
         }
 
@@ -71,36 +71,17 @@
             transform: rotate(-18deg);
         }
 
-        .brand-top,
+        .brand-logo,
         .brand-copy,
         .brand-meta { position: relative; z-index: 1; }
 
-        .brand-top {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .brand-top img {
-            width: 58px;
-            height: 58px;
+        .brand-logo {
+            width: 100%;
+            max-width: 445px;
+            height: auto;
+            align-self: center;
             object-fit: contain;
-        }
-
-        .brand-top span {
-            display: block;
-            color: #8edbf4;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .brand-top strong {
-            display: block;
-            margin-top: 2px;
-            font-size: 21px;
-            letter-spacing: 0;
+            filter: drop-shadow(0 12px 24px rgba(0, 161, 228, 0.2));
         }
 
         .brand-copy { max-width: 350px; }
@@ -114,17 +95,8 @@
             text-transform: uppercase;
         }
 
-        .brand-copy h1 {
-            max-width: 330px;
-            margin: 0;
-            font-size: clamp(35px, 4vw, 50px);
-            font-weight: 750;
-            line-height: 1.03;
-            letter-spacing: 0;
-        }
-
         .brand-copy p {
-            margin: 18px 0 0;
+            margin: 0;
             color: #c3d4db;
             font-size: 15px;
             line-height: 1.6;
@@ -144,6 +116,7 @@
             display: flex;
             align-items: center;
             padding: 48px clamp(42px, 6vw, 76px);
+            background: var(--surface);
         }
 
         .login-content { width: 100%; max-width: 440px; margin: 0 auto; }
@@ -210,7 +183,7 @@
             padding: 12px 46px 12px 43px;
             border: 1px solid var(--line);
             border-radius: 6px;
-            background: #fbfcfd;
+            background: #eaf2fb;
             color: var(--ink);
             font-size: 14px;
             transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
@@ -278,12 +251,11 @@
         .login-foot i { color: var(--green); }
 
         @media (max-width: 800px) {
-            body { display: block; padding: 0; background: var(--surface); }
+            body { display: block; padding: 0; background: #052f40; }
             .login-shell { min-height: 100svh; grid-template-columns: 1fr; border: 0; border-radius: 0; box-shadow: none; }
-            .brand-panel { min-height: 235px; padding: 28px; }
-            .brand-copy { margin-top: 34px; }
-            .brand-copy h1 { max-width: none; font-size: 34px; }
-            .brand-copy p, .brand-meta { display: none; }
+            .brand-panel { min-height: 250px; padding: 26px; }
+            .brand-logo { max-width: 390px; margin: auto; }
+            .brand-copy, .brand-meta { display: none; }
             .login-panel { align-items: flex-start; padding: 36px 26px 46px; }
         }
 
@@ -298,14 +270,10 @@
 <body>
     <main class="login-shell">
         <section class="brand-panel" aria-label="Identidade Sentinel">
-            <div class="brand-top">
-                <img src="{{ url_for('static', filename='branding/sentinel_icon.svg') }}" alt="">
-                <div><span>Grupo GPS</span><strong>SENTINEL</strong></div>
-            </div>
+            <img class="brand-logo" src="{{ url_for('static', filename='branding/sentinel_regionais_logo.png', v='20261016-1') }}" alt="Sentinel - Infraestrutura Regional - Grupo GPS">
 
             <div class="brand-copy">
                 <p class="eyebrow">Operações de tecnologia</p>
-                <h1>Infraestrutura Regional</h1>
                 <p>Visão centralizada dos ambientes e serviços que sustentam as operações regionais.</p>
             </div>
 
