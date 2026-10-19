@@ -219,6 +219,7 @@
         .state.status-alto { fill: rgba(136, 19, 55, .96); }
         .state.status-medio { fill: rgba(154, 82, 20, .96); }
         .state.status-warning { fill: rgba(146, 91, 10, .96); }
+        .state.status-maintenance { fill: rgba(202, 138, 4, .96); }
         .state.status-critico { fill: rgba(127, 29, 29, .96); }
         .state.status-sem-monitoramento { fill: rgba(15, 45, 63, .9); }
         .state.status-alto,
@@ -310,6 +311,7 @@
         .dot.status-alto .dot-core { fill: #fb7185; }
         .dot.status-medio .dot-core { fill: #fb923c; }
         .dot.status-warning .dot-core { fill: var(--yellow); }
+        .dot.status-maintenance .dot-core { fill: var(--yellow); }
         .dot.status-critico .dot-core { fill: var(--red); }
         .dot.status-alto .dot-halo,
         .dot.status-medio .dot-halo,
@@ -427,6 +429,7 @@
         .tooltip-guide.status-alto { stroke: rgba(251, 113, 133, .72); }
         .tooltip-guide.status-medio { stroke: rgba(251, 146, 60, .72); }
         .tooltip-guide.status-warning { stroke: rgba(250, 204, 21, .72); }
+        .tooltip-guide.status-maintenance { stroke: rgba(250, 204, 21, .72); }
 
         .fixed-tooltip rect {
             fill: rgba(8, 15, 31, .9);
@@ -435,6 +438,7 @@
         }
 
         .fixed-tooltip.status-warning rect { stroke: #facc15; }
+        .fixed-tooltip.status-maintenance rect { stroke: #facc15; }
         .fixed-tooltip.status-alto rect { stroke: #fb7185; }
         .fixed-tooltip.status-medio rect { stroke: #fb923c; }
         .fixed-tooltip.status-critico rect { stroke: #f87171; }
@@ -698,6 +702,7 @@
         }
 
         .alert-card.status-warning { border-left-color: var(--yellow); }
+        .alert-card.status-maintenance { border-left-color: var(--yellow); }
         .alert-card.status-alto { border-left-color: #fb7185; }
         .alert-card.status-medio { border-left-color: #fb923c; }
         .alert-card.status-ok { border-left-color: var(--green); }
@@ -705,6 +710,32 @@
         .alert-card.status-alto,
         .alert-card.status-medio,
         .alert-card.status-warning { animation: warningCardPulse 2.8s ease-in-out infinite; }
+
+        .chip.maintenance {
+            color: #fde68a;
+            border-color: rgba(250, 204, 21, .48);
+            background: rgba(202, 138, 4, .16);
+        }
+
+        .maintenance-notice {
+            padding: 14px;
+            border: 1px solid rgba(250, 204, 21, .42);
+            border-left: 4px solid var(--yellow);
+            border-radius: 8px;
+            background: rgba(202, 138, 4, .12);
+            color: #fef3c7;
+        }
+
+        .maintenance-notice strong,
+        .maintenance-notice span {
+            display: block;
+        }
+
+        .maintenance-notice span {
+            margin-top: 4px;
+            color: #dbeafe;
+            font-size: .78rem;
+        }
         .alert-card.status-critico.card-enter {
             animation: cardEnter .28s ease-out both, criticalCardPulse 2.2s ease-in-out infinite .28s;
         }
@@ -1074,6 +1105,7 @@
             if (status === 'medio') return 'status-medio';
             if (status === 'atencao') return 'status-warning';
             if (status === 'warning') return 'status-warning';
+            if (status === 'maintenance') return 'status-maintenance';
             if (status === 'sem-monitoramento') return 'status-sem-monitoramento';
             return 'status-ok';
         }
@@ -1085,6 +1117,7 @@
                 medio: 'Médio',
                 atencao: 'Atenção',
                 warning: 'Atenção',
+                maintenance: 'Manutenção',
                 ok: 'OK'
             }[status] || 'OK';
         }
@@ -1096,6 +1129,7 @@
                 medio: 2,
                 atencao: 1,
                 warning: 1,
+                maintenance: 0.5,
                 ok: 0
             }[status] || 0;
         }
@@ -1114,6 +1148,7 @@
         }
 
         function visibleRegionalAlerts(regional) {
+            if (regional && regional.em_manutencao) return [];
             return sortAlertsBySeverity((regional.alertas || []).filter((alerta) => (
                 Number(alerta.quantidade || 0) > 0 && !isInactiveAlert(alerta)
             )));
@@ -1130,7 +1165,9 @@
                 .sort();
             return JSON.stringify({
                 alerts,
-                totais: regional.totais || {}
+                totais: regional.totais || {},
+                em_manutencao: Boolean(regional.em_manutencao),
+                manutencoes: regional.manutencoes || []
             });
         }
 
@@ -1375,6 +1412,7 @@
         }
 
         function regionalVisualStatus(regional) {
+            if (regional && regional.em_manutencao) return 'maintenance';
             const alerts = visibleRegionalAlerts(regional);
             if (alerts.some((alerta) => alerta.severidade === 'critico')) return 'critico';
             if (alerts.some((alerta) => alerta.severidade === 'alto')) return 'alto';
@@ -1389,7 +1427,7 @@
 
         function problemRegionals() {
             return (appData?.regionais || [])
-                .filter((regional) => regionalAlerts(regional).length)
+                .filter((regional) => !regional.em_manutencao && visibleRegionalAlerts(regional).length)
                 .sort((a, b) => alertTotal(b) - alertTotal(a));
         }
 
@@ -1468,7 +1506,7 @@
 
             const statesByUf = {};
             appData.regionais.forEach((regional) => {
-                if (!regional.uf) return;
+                if (!regional.uf || regional.em_manutencao) return;
                 statesByUf[regional.uf] = statesByUf[regional.uf] || [];
                 statesByUf[regional.uf].push(regional);
             });
@@ -1601,7 +1639,7 @@
             dotPositions = {};
             const byUf = {};
             appData.regionais.forEach((regional) => {
-                if (!regional.uf || !stateCentroids[regional.uf]) return;
+                if (regional.em_manutencao || !regional.uf || !stateCentroids[regional.uf]) return;
                 byUf[regional.uf] = byUf[regional.uf] || [];
                 byUf[regional.uf].push(regional);
             });
@@ -1618,7 +1656,7 @@
                     const visualStatus = regionalVisualStatus(regional);
                     const isActive = regional.codigo === activeRegional;
                     const isHiddenByFocus = activeRegional && !isActive;
-                    const isNewAlert = pendingVisualUpdateRegionals.has(regional.codigo) && visualStatus !== 'ok';
+                    const isNewAlert = pendingVisualUpdateRegionals.has(regional.codigo) && !['ok', 'maintenance'].includes(visualStatus);
                     dot.setAttribute('class', `dot ${statusClass(visualStatus)} ${isActive ? 'active' : ''} ${isHiddenByFocus ? 'focus-hidden' : ''} ${isNewAlert ? 'alert-new recent-alert' : ''}`);
                     dot.addEventListener('click', (event) => {
                         event.stopPropagation();
@@ -1648,6 +1686,10 @@
         }
 
         function tooltipDetail(regional) {
+            if (regional.em_manutencao) {
+                const maintenance = (regional.manutencoes || [])[0] || {};
+                return maintenance.nome || 'Alertas suprimidos durante a manutenção';
+            }
             const alerts = sortAlertsBySeverity(regionalAlerts(regional));
             if (!alerts.length) return '';
             const visible = alerts.slice(0, 2);
@@ -1670,7 +1712,8 @@
 
         function drawFixedTooltips(viewport) {
             const problematic = (appData.regionais || []).filter((regional) => (
-                regionalAlerts(regional).length
+                !regional.em_manutencao
+                && regionalAlerts(regional).length
                 && dotPositions[regional.codigo]
                 && (!activeRegional || regional.codigo === activeRegional)
             ));
@@ -1797,6 +1840,9 @@
         }
 
         function chips(regional) {
+            if (regional.em_manutencao) {
+                return '<span class="chip maintenance">Manutenção</span>';
+            }
             return sortAlertsBySeverity(regionalAlerts(regional))
                 .map((alerta) => {
                     const chipClass = ['alto', 'medio', 'atencao', 'warning'].includes(alerta.severidade)
@@ -1882,7 +1928,9 @@
                 return;
             }
 
-            const regionals = (appData.regionais || []).filter((regional) => regional.uf === uf);
+            const regionals = (appData.regionais || []).filter((regional) => (
+                regional.uf === uf && !regional.em_manutencao
+            ));
             activeRegional = null;
             activeState = uf;
             updateAlertTabs(regionals);
@@ -1923,6 +1971,43 @@
             return status || 'alerta';
         }
 
+        function escapeMapHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatMaintenanceTimestamp(value) {
+            const timestamp = Number(value);
+            if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+            return new Intl.DateTimeFormat('pt-BR', {
+                dateStyle: 'short',
+                timeStyle: 'short'
+            }).format(new Date(timestamp * 1000));
+        }
+
+        function renderMaintenanceDetails(regional) {
+            const maintenances = regional.manutencoes || [];
+            if (!maintenances.length) {
+                return '<div class="maintenance-notice"><strong>Regional em manutenção</strong><span>Alertas operacionais temporariamente suprimidos.</span></div>';
+            }
+            return maintenances.map((maintenance) => {
+                const end = formatMaintenanceTimestamp(maintenance.active_till);
+                const group = maintenance.grupo_zabbix ? `Grupo Zabbix: ${escapeMapHtml(maintenance.grupo_zabbix)}` : '';
+                return `
+                    <div class="maintenance-notice">
+                        <strong>${escapeMapHtml(maintenance.nome || 'Manutenção programada')}</strong>
+                        ${maintenance.descricao ? `<span>${escapeMapHtml(maintenance.descricao)}</span>` : ''}
+                        ${group ? `<span>${group}</span>` : ''}
+                        ${end ? `<span>Ativa até ${end}</span>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
         function renderRegionalDetail(codigo) {
             const regional = (appData.regionais || []).find((item) => item.codigo === codigo);
             if (!regional) return;
@@ -1930,7 +2015,22 @@
             activeState = regional.uf || null;
             updateAlertTabs([regional]);
             panelTitle.textContent = regional.codigo;
-            panelSubtitle.textContent = regional.descricao || 'Dispositivos com alerta nesta regional.';
+            panelSubtitle.textContent = regional.em_manutencao
+                ? 'Regional em manutenção. Alertas operacionais suprimidos.'
+                : (regional.descricao || 'Dispositivos com alerta nesta regional.');
+
+            if (regional.em_manutencao) {
+                problemDetail.innerHTML = `
+                    ${backButtonHtml()}
+                    ${renderMaintenanceDetails(regional)}
+                `;
+                problemDetail.hidden = false;
+                alertList.hidden = true;
+                animatePanel();
+                drawMap();
+                bindBackButtons();
+                return;
+            }
 
             const groups = [
                 ['aps', 'APs'],

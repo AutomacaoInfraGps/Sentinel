@@ -8,6 +8,7 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user, login_required
 
 from .audit import registrar_evento_sofia
+from .engine import processar_mensagem_sofia, solicita_status_manutencao
 from .n8n_client import SofiaN8nError, consultar_sofia
 from .permissions import usuario_pode_executar
 from .scope_token import SofiaScopeError, issue_regional_scope_token
@@ -116,12 +117,20 @@ def chat():
         )
         scope = access_scope(groups, codigos_regionais())
         scope_token = issue_regional_scope_token(scope["allowed"])
-        reply = consultar_sofia(
-            mensagem=message,
-            allowed_regionals=scope["allowed"],
-            scope_token=scope_token,
-        )
-        audit_detail = "Resposta da SofIA via n8n"
+        if solicita_status_manutencao(message):
+            reply = processar_mensagem_sofia(
+                usuario=username,
+                mensagem=message,
+                allowed_regionals=scope["allowed"],
+            )
+            audit_detail = "Consulta read-only de manutencoes regionais"
+        else:
+            reply = consultar_sofia(
+                mensagem=message,
+                allowed_regionals=scope["allowed"],
+                scope_token=scope_token,
+            )
+            audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
             usuario=username,
             status="sucesso",

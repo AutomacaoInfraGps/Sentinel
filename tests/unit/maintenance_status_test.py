@@ -2,6 +2,7 @@ import unittest
 
 from maintenance_status import (
     apply_device_maintenance,
+    apply_regional_maintenance,
     apply_zabbix_maintenance,
     is_device_in_maintenance,
     is_maintenance_status,
@@ -10,6 +11,56 @@ from maintenance_status import (
 
 
 class MaintenanceStatusTests(unittest.TestCase):
+    def test_applies_group_maintenance_to_matching_regional(self):
+        regionals = {
+            "REG_UBERLANDIA": {
+                "em_manutencao": False,
+                "manutencoes": [],
+            },
+        }
+        maintenances = [{
+            "maintenanceid": "441",
+            "name": "MIGRACAO UBERLANDIA LINK",
+            "active_till": "1792897200",
+            "hostgroups": [{"groupid": "8", "name": "REG_UBERLANDIA"}],
+        }]
+
+        linked = apply_regional_maintenance(
+            regionals,
+            maintenances,
+            lambda available, group: group if group in available else None,
+        )
+
+        self.assertEqual(linked, {"REG_UBERLANDIA"})
+        self.assertTrue(regionals["REG_UBERLANDIA"]["em_manutencao"])
+        self.assertEqual(
+            regionals["REG_UBERLANDIA"]["manutencoes"][0]["nome"],
+            "MIGRACAO UBERLANDIA LINK",
+        )
+
+    def test_uses_maintenance_name_when_host_group_does_not_identify_regional(self):
+        regionals = {
+            "REG_UBERLANDIA": {"em_manutencao": False, "manutencoes": []},
+        }
+        maintenances = [{
+            "maintenanceid": "442",
+            "name": "MIGRACAO UBERLANDIA LINK",
+            "hostgroups": [{"groupid": "9", "name": "LINKS"}],
+        }]
+
+        linked = apply_regional_maintenance(
+            regionals,
+            maintenances,
+            lambda available, value: (
+                "REG_UBERLANDIA"
+                if "UBERLANDIA" in str(value).upper()
+                else None
+            ),
+        )
+
+        self.assertEqual(linked, {"REG_UBERLANDIA"})
+        self.assertTrue(regionals["REG_UBERLANDIA"]["em_manutencao"])
+
     def test_recognizes_maintenance_status_variants(self):
         for status in ("maintenance", "manutence", "maintence", "manutencao", "manutenção", "em manutencao", "em manutenção"):
             with self.subTest(status=status):
@@ -41,7 +92,11 @@ class MaintenanceStatusTests(unittest.TestCase):
 
     def test_does_not_override_online_ap_in_group_maintenance(self):
         data = {"aps": [{"ip": "10.0.0.13", "status": "online"}]}
-        result = apply_zabbix_maintenance(data, [{"ip": "10.0.0.13", "maintenanceid": "444"}])
+        result = apply_zabbix_maintenance(data, [{
+            "ip": "10.0.0.13",
+            "maintenanceid": "444",
+            "maintenance_scope": "group",
+        }])
 
         self.assertEqual(result["aps"][0]["status"], "online")
         self.assertFalse(result["aps"][0]["em_manutencao"])
@@ -55,7 +110,11 @@ class MaintenanceStatusTests(unittest.TestCase):
             "em_manutencao": True,
             "maintenanceid": "444",
         }]}
-        result = apply_zabbix_maintenance(data, [{"ip": "10.0.0.14", "maintenanceid": "444"}])
+        result = apply_zabbix_maintenance(data, [{
+            "ip": "10.0.0.14",
+            "maintenanceid": "444",
+            "maintenance_scope": "group",
+        }])
 
         self.assertEqual(result["aps"][0]["status"], "online")
         self.assertFalse(result["aps"][0]["em_manutencao"])
@@ -84,12 +143,13 @@ class MaintenanceStatusTests(unittest.TestCase):
         self.assertEqual(result[0]["status_disponibilidade"], "maintenance")
         self.assertEqual(result[0]["status"], "maintenance")
 
-    def test_keeps_online_device_online(self):
+    def test_marks_online_device_in_direct_maintenance(self):
         devices = [{"ip": "10.0.0.40", "status": "online"}]
         result = apply_device_maintenance(devices, [{"ip": "10.0.0.40", "maintenanceid": "12"}])
 
-        self.assertEqual(result[0]["status"], "online")
-        self.assertFalse(result[0]["em_manutencao"])
+        self.assertEqual(result[0]["status"], "maintenance")
+        self.assertEqual(result[0]["status_controladora"], "online")
+        self.assertTrue(result[0]["em_manutencao"])
 
 
 if __name__ == "__main__":

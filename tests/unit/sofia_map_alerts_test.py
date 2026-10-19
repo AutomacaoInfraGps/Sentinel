@@ -8,6 +8,29 @@ from sofia.map_alerts import load_map_alert_snapshot
 
 
 class SofiaMapAlertsTest(unittest.TestCase):
+    def test_ignores_alerts_from_regional_in_maintenance(self):
+        payload = {
+            "cache_atualizado_em": "2026-10-19T14:00:00-03:00",
+            "cache_ttl_segundos": 300,
+            "regionais": [{
+                "codigo": "REG_UBERLANDIA",
+                "em_manutencao": True,
+                "alertas": [{
+                    "tipo": "vpns",
+                    "quantidade": 2,
+                    "severidade": "alto",
+                    "descricao": "vpns offline",
+                }],
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = Path(temp_dir) / "map.json"
+            cache.write_text(json.dumps(payload), encoding="utf-8")
+            snapshot = load_map_alert_snapshot(cache)
+
+        self.assertEqual(snapshot["summary"]["total"], 0)
+        self.assertEqual(snapshot["alerts"], [])
+
     def test_uses_the_same_aggregate_counts_as_the_map(self):
         payload = {
             "cache_atualizado_em": "2026-10-09T07:40:32",

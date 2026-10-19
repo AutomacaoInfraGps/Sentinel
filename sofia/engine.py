@@ -7,6 +7,7 @@ import unicodedata
 
 from .tools_sentinel import (
     alertas_switches_ativos,
+    consultar_manutencoes_regionais,
     identificar_regional,
     nome_regional,
     resumo_links,
@@ -91,6 +92,12 @@ def solicita_resumo_geral_alertas(mensagem):
         "quantos",
         "quantas",
     )
+
+
+def solicita_status_manutencao(mensagem):
+    """Identify read-only questions about active maintenance windows."""
+    texto = _normalizar_mensagem(mensagem)
+    return _contem_termo(texto, "manutencao", "maintenance")
 
 
 def _quer_explicacao(texto):
@@ -225,6 +232,44 @@ def _resumo_regional(codigo, allowed_regionals=None):
     return f"Resumo da {regional}: servidores: {servidores}; links de internet: {links}; switches: {switches}."
 
 
+def _resposta_manutencoes_regionais(codigo=None, allowed_regionals=None):
+    result = consultar_manutencoes_regionais(allowed_regionals)
+    if not result.get("available"):
+        return "Não consegui consultar as manutenções regionais do Zabbix neste momento."
+
+    regionals = result.get("regionals") or []
+    if codigo:
+        item = next(
+            (regional for regional in regionals if regional.get("code") == codigo),
+            None,
+        )
+        name = nome_regional(codigo, allowed_regionals)
+        if not item:
+            return f"A {name} não está em manutenção no Zabbix."
+        windows = ", ".join(
+            window.get("name") or "manutenção programada"
+            for window in item.get("maintenance_windows") or []
+        )
+        detail = f" Janela ativa: {windows}." if windows else ""
+        return f"A {name} está em manutenção no Zabbix.{detail}"
+
+    if not regionals:
+        return "Não há regionais em manutenção no Zabbix neste momento."
+    details = []
+    for item in regionals:
+        windows = ", ".join(
+            window.get("name") or "manutenção programada"
+            for window in item.get("maintenance_windows") or []
+        )
+        label = item.get("name") or item.get("code") or "Regional"
+        details.append(f"{label} ({windows})" if windows else label)
+    return (
+        f"Há {len(regionals)} regional(is) em manutenção no Zabbix: "
+        + "; ".join(details)
+        + "."
+    )
+
+
 def processar_mensagem_sofia(*, usuario, mensagem, allowed_regionals=None):
     """Classify an allowed topic without invoking tools or external models."""
     del usuario
@@ -233,6 +278,12 @@ def processar_mensagem_sofia(*, usuario, mensagem, allowed_regionals=None):
 
     if _contem_termo(msg, "ola", "oi", "bom", "boa"):
         return SOFIA_INITIAL_REPLY
+
+    if solicita_status_manutencao(msg):
+        return _resposta_manutencoes_regionais(
+            regional_code,
+            allowed_regionals,
+        )
 
     topico_conhecimento = _identificar_topico_conhecimento(msg)
     if topico_conhecimento == "seguranca":

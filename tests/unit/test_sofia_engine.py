@@ -13,6 +13,7 @@ class SofiaEngineTests(unittest.TestCase):
             "resumo_servidores": engine.resumo_servidores,
             "resumo_switches": engine.resumo_switches,
             "alertas_switches_ativos": engine.alertas_switches_ativos,
+            "consultar_manutencoes_regionais": engine.consultar_manutencoes_regionais,
         }
 
         engine.identificar_regional = (
@@ -45,6 +46,16 @@ class SofiaEngineTests(unittest.TestCase):
                 "alerta": "CPU alta",
             }
         ]
+        engine.consultar_manutencoes_regionais = lambda allowed_regionals=None: {
+            "available": True,
+            "total": 1,
+            "regionals": [{
+                "code": "REG_ABC",
+                "name": "REG_ABC",
+                "in_maintenance": True,
+                "maintenance_windows": [{"name": "MIGRACAO ABC"}],
+            }],
+        }
 
     def tearDown(self):
         for name, original in self._originals.items():
@@ -81,11 +92,31 @@ class SofiaEngineTests(unittest.TestCase):
         self.assertIn("SWT-ABC-01", resposta)
         self.assertIn("CPU alta", resposta)
 
+    def test_responde_regionais_em_manutencao(self):
+        resposta = self.perguntar("tem alguma regional em manutenção?")
+
+        self.assertIn("1 regional", resposta)
+        self.assertIn("REG_ABC", resposta)
+        self.assertIn("MIGRACAO ABC", resposta)
+
+    def test_responde_manutencao_de_regional_especifica(self):
+        resposta = self.perguntar("a regional ABC está em manutenção?")
+
+        self.assertIn("REG_ABC está em manutenção", resposta)
+
     def test_identifica_apenas_resumo_geral_para_o_n8n(self):
         self.assertTrue(engine.solicita_resumo_geral_alertas("Resumo dos alertas atuais"))
         self.assertTrue(engine.solicita_resumo_geral_alertas("Quantos alertas ativos temos agora?"))
         self.assertFalse(engine.solicita_resumo_geral_alertas("Tem alerta de switch?"))
         self.assertFalse(engine.solicita_resumo_geral_alertas("Como estao os links?"))
+
+    def test_identifica_consulta_de_manutencao(self):
+        self.assertTrue(engine.solicita_status_manutencao(
+            "Tem alguma regional em manutenção?"
+        ))
+        self.assertFalse(engine.solicita_status_manutencao(
+            "Tem alguma regional com alerta?"
+        ))
 
     def test_resposta_explicativa_dashboard_usa_knowledge(self):
         resposta = self.perguntar("me explica o dashboard")

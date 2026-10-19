@@ -43,6 +43,15 @@ class FakeSwitchManager:
         }]
     }
 
+    def obter_manutencoes_ativas(self, cache_seconds=60):
+        return [{
+            "maintenanceid": "441",
+            "name": "MIGRACAO ABC",
+            "active_since": "1792400400",
+            "active_till": "1792486800",
+            "hostgroups": [{"groupid": "8", "name": "REG_ABC"}],
+        }]
+
 
 class SofiaRegionalInventoryTest(unittest.TestCase):
     def setUp(self):
@@ -64,6 +73,12 @@ class SofiaRegionalInventoryTest(unittest.TestCase):
         )
         self.assertEqual(index["total"], 1)
         self.assertEqual(index["regionals"][0]["code"], "REG_ABC")
+        self.assertEqual(index["maintenance"]["total"], 1)
+        self.assertTrue(index["regionals"][0]["in_maintenance"])
+        self.assertEqual(
+            index["regionals"][0]["maintenance_windows"][0]["name"],
+            "MIGRACAO ABC",
+        )
 
         detail = tools_sentinel.consultar_inventario_regional(
             codigo_regional="REG_ABC",
@@ -74,6 +89,7 @@ class SofiaRegionalInventoryTest(unittest.TestCase):
         self.assertIn("Sirius", rendered)
         self.assertIn("Example ISP", rendered)
         self.assertIn("ABC - SWITCH - 01", rendered)
+        self.assertIn("MIGRACAO ABC", rendered)
         self.assertNotIn("must-never-leak", rendered)
         self.assertNotIn("technical-user", rendered)
         self.assertNotIn("community", rendered)

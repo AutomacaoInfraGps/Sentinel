@@ -5,6 +5,9 @@ from threading import RLock
 import re
 import unicodedata
 
+from maintenance_status import apply_regional_maintenance
+from regional_matching import find_regional_code
+
 
 _LOCK = RLock()
 _regionais_manager = None
@@ -172,6 +175,65 @@ def nome_regional(codigo_regional, allowed_regionals=None):
     return str(regional.get("nome") or codigo_regional or "Regional")
 
 
+def consultar_manutencoes_regionais(allowed_regionals=None):
+    """Return a scoped, credential-free view of active regional maintenance."""
+    regionals = _regionais(allowed_regionals)
+    state = {
+        code: {
+            "nome": (regional or {}).get("nome") or code,
+            "em_manutencao": False,
+            "manutencoes": [],
+        }
+        for code, regional in regionals.items()
+    }
+    if _switches_manager is None or not hasattr(
+        _switches_manager, "obter_manutencoes_ativas"
+    ):
+        return {"available": False, "total": 0, "regionals": []}
+
+    try:
+        maintenances = _switches_manager.obter_manutencoes_ativas(
+            cache_seconds=60
+        )
+        apply_regional_maintenance(
+            state,
+            maintenances,
+            lambda available, value: find_regional_code(
+                available,
+                value,
+                _normalizar,
+            ),
+        )
+    except Exception:
+        return {"available": False, "total": 0, "regionals": []}
+
+    visible = []
+    for code, regional in sorted(state.items()):
+        if not regional.get("em_manutencao"):
+            continue
+        windows = []
+        for maintenance in regional.get("manutencoes") or []:
+            windows.append({
+                "name": _public_value(maintenance, "nome", limit=160),
+                "description": _public_value(
+                    maintenance, "descricao", limit=240
+                ),
+                "active_since": _public_value(
+                    maintenance, "active_since", limit=40
+                ),
+                "active_till": _public_value(
+                    maintenance, "active_till", limit=40
+                ),
+            })
+        visible.append({
+            "code": code,
+            "name": _public_value(regional, "nome") or code,
+            "in_maintenance": True,
+            "maintenance_windows": windows,
+        })
+    return {"available": True, "total": len(visible), "regionals": visible}
+
+
 REGIONAL_QUERY_SECTIONS = frozenset({"servidores", "links", "switches"})
 
 
@@ -234,15 +296,29 @@ def consultar_inventario_regional(
 ):
     """Return a closed, credential-free projection for the SofIA tools."""
     regionals = _regionais(allowed_regionals)
+    maintenance = consultar_manutencoes_regionais(allowed_regionals)
+    maintenance_by_code = {
+        item["code"]: item
+        for item in maintenance.get("regionals") or []
+    }
     if not codigo_regional:
         return {
             "mode": "index",
             "total": len(regionals),
+            "maintenance": {
+                "available": maintenance["available"],
+                "total": maintenance["total"],
+            },
             "regionals": [
                 {
                     "code": code,
                     "name": _public_value(regional, "nome") or code,
                     "state": _public_value(regional, "uf", "estado", limit=40),
+                    "in_maintenance": code in maintenance_by_code,
+                    "maintenance_windows": (
+                        maintenance_by_code.get(code, {}).get("maintenance_windows")
+                        or []
+                    ),
                 }
                 for code, regional in sorted(regionals.items())
             ],
@@ -269,6 +345,12 @@ def consultar_inventario_regional(
             "name": _public_value(regional, "nome") or normalized_code,
             "description": _public_value(regional, "descricao", limit=240),
             "state": _public_value(regional, "uf", "estado", limit=40),
+            "in_maintenance": normalized_code in maintenance_by_code,
+            "maintenance_windows": (
+                maintenance_by_code.get(normalized_code, {}).get(
+                    "maintenance_windows"
+                ) or []
+            ),
         },
         "summary": {
             "servers": resumo_servidores(normalized_code, allowed_regionals),

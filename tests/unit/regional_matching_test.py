@@ -55,6 +55,20 @@ class RegionalMatchingTests(unittest.TestCase):
 
         self.assertEqual(code, "REG_BELO_HORIZONTE")
 
+    def test_host_group_prefix_matches_regional_identity(self):
+        regionals = {
+            "REG_UBERLANDIA": {"nome": "REG_UBERLANDIA"},
+            "REG_BAHIA": {"nome": "REG_BAHIA"},
+        }
+
+        code = find_regional_code(
+            regionals,
+            normalize("LINKS REG_UBERLANDIA"),
+            normalize,
+        )
+
+        self.assertEqual(code, "REG_UBERLANDIA")
+
 
 if __name__ == "__main__":
     unittest.main()

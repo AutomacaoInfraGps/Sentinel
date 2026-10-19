@@ -723,11 +723,19 @@
                         data-total-vpns="{{ regional.total_vpns }}"
                         data-total-antenas="{{ total_antenas }}"
                         data-firewall-expiring="{{ 'true' if regional.tem_firewall_a_vencer else 'false' }}"
-                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %} {% for switch in regional.switches %} {{ switch.host }} {{ switch.ip }} {{ switch.modelo or '' }} {{ switch.local or '' }} {% endfor %} {% for antena in antenas %} {{ antena.nome }} {{ antena.ip }} {{ antena.modelo }} {% endfor %}">
+                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% if regional.em_manutencao %} manutenção {% endif %} {% for manutencao in regional.manutencoes|default([], true) %} {{ manutencao.nome }} {% endfor %} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %} {% for switch in regional.switches %} {{ switch.host }} {{ switch.ip }} {{ switch.modelo or '' }} {{ switch.local or '' }} {% endfor %} {% for antena in antenas %} {{ antena.nome }} {{ antena.ip }} {{ antena.modelo }} {% endfor %}">
                         <div class="card border-0 shadow-sm h-100 transition-all regional-card"
                             id="card-regional-{{ regional.codigo }}">
                             <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 fw-bold">{{ regional.nome }}</h6>
+                                <div class="d-flex align-items-center gap-2 min-w-0">
+                                    <h6 class="mb-0 fw-bold text-truncate">{{ regional.nome }}</h6>
+                                    {% if regional.em_manutencao %}
+                                    <span class="badge rounded-pill bg-warning text-dark flex-shrink-0"
+                                          title="{{ regional.manutencoes[0].nome if regional.manutencoes else 'Regional em manutenção' }}">
+                                        <i class="bi bi-tools me-1"></i>Manutenção
+                                    </span>
+                                    {% endif %}
+                                </div>
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
                                             type="button" data-bs-toggle="dropdown">

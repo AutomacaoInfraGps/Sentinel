@@ -63,6 +63,8 @@ def load_map_alert_snapshot(path=None, now=None):
     alerts = []
     counts = {severity: 0 for severity in SEVERITY_MAP.values()}
     for regional in payload.get("regionais") or []:
+        if regional.get("em_manutencao"):
+            continue
         regional_code = str(regional.get("codigo") or regional.get("nome") or "Sem regional").strip()
         # This is the map snapshot time, not the time when a device last changed.
         occurred_at = _brasilia_iso(updated_at)

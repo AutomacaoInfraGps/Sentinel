@@ -38,13 +38,50 @@ def normalize_ip(value):
         return ""
 
 
+def apply_regional_maintenance(regionals, maintenances, resolve_regional):
+    """Marca regionais associadas aos host groups de manutencoes ativas."""
+    linked = set()
+    for maintenance in maintenances or []:
+        matched_groups = []
+        for hostgroup in maintenance.get("hostgroups") or []:
+            group_name = str(hostgroup.get("name") or "").strip()
+            code = resolve_regional(regionals, group_name)
+            if not code or code not in regionals:
+                continue
+            matched_groups.append((code, group_name))
+
+        if not matched_groups:
+            maintenance_name = str(maintenance.get("name") or "").strip()
+            code = resolve_regional(regionals, maintenance_name)
+            if code and code in regionals:
+                matched_groups.append((code, ""))
+
+        for code, group_name in matched_groups:
+            regional = regionals[code]
+            regional["em_manutencao"] = True
+            regional.setdefault("manutencoes", [])
+            details = {
+                "maintenanceid": str(maintenance.get("maintenanceid") or ""),
+                "nome": maintenance.get("name") or "Manutenção programada",
+                "descricao": maintenance.get("description") or "",
+                "grupo_zabbix": group_name,
+                "active_since": maintenance.get("active_since"),
+                "active_till": maintenance.get("active_till"),
+            }
+            if details not in regional["manutencoes"]:
+                regional["manutencoes"].append(details)
+            linked.add(code)
+    return linked
+
+
 def apply_device_maintenance(devices, maintenance_hosts, status_field="status"):
-    """Marca dispositivos offline quando o IP esta em manutencao direta."""
+    """Marca dispositivos vinculados diretamente a uma manutencao ativa."""
     result = deepcopy(devices or [])
     hosts_by_ip = {
         normalize_ip(host.get("ip")): host
         for host in maintenance_hosts or []
         if normalize_ip(host.get("ip"))
+        and str(host.get("maintenance_scope") or "direct").lower() != "group"
     }
     for device in result:
         current = str(device.get(status_field) or device.get("status") or "").strip().lower()
@@ -52,12 +89,15 @@ def apply_device_maintenance(devices, maintenance_hosts, status_field="status"):
             device.get("status_controladora") if current == MAINTENANCE_STATUS else current
         ).strip().lower()
         host = hosts_by_ip.get(normalize_ip(device.get("ip")))
-        if not host or controller != "offline":
+        if not host:
             device[status_field] = controller or current
             if status_field != "status" and str(device.get("status") or "").lower() == MAINTENANCE_STATUS:
                 device["status"] = controller or current
             device["em_manutencao"] = False
-            for field in ("status_controladora", "maintenance_source", "zabbix_hostid", "zabbix_host", "maintenanceid"):
+            for field in (
+                "status_controladora", "maintenance_source", "maintenance_scope",
+                "zabbix_hostid", "zabbix_host", "maintenanceid",
+            ):
                 device.pop(field, None)
             continue
         device["status_controladora"] = controller
@@ -68,6 +108,7 @@ def apply_device_maintenance(devices, maintenance_hosts, status_field="status"):
         device["zabbix_hostid"] = host.get("hostid")
         device["zabbix_host"] = host.get("name") or host.get("host")
         device["maintenanceid"] = host.get("maintenanceid")
+        device["maintenance_scope"] = "direct"
     return result
 
 

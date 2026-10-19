@@ -98,6 +98,7 @@ from gerenciar_vms import GerenciadorVMs
 from gerenciar_contatos_email import GerenciadorContatosEmail
 from switches_backup_utils import create_switch_backup
 from maintenance_status import (
+    apply_regional_maintenance,
     apply_device_maintenance,
     apply_zabbix_maintenance,
     is_maintenance_status,
@@ -4070,6 +4071,8 @@ def _mapa_criar_regional(codigo, info=None):
         "totais": {},
         "alertas": [],
         "status": "ok",
+        "em_manutencao": False,
+        "manutencoes": [],
     }
 
 
@@ -4185,6 +4188,8 @@ def _mapa_adicionar_alerta(regional, tipo, quantidade, severidade, descricao):
         "severidade": severidade,
         "descricao": descricao,
     })
+    if regional.get("em_manutencao"):
+        return
     prioridade = {
         "ok": 0,
         "atencao": 1,
@@ -4225,6 +4230,7 @@ def _mapa_recalcular_regionais(regionais):
         "regionais_com_switches": 0,
         "regionais_sem_switches": 0,
         "regionais_com_alerta": 0,
+        "regionais_maintenance": 0,
         "servidores_online": 0,
         "servidores_offline": 0,
         "servidores_warning": 0,
@@ -4258,7 +4264,7 @@ def _mapa_recalcular_regionais(regionais):
 
     for regional in regionais.values():
         regional["alertas"] = []
-        regional["status"] = "ok"
+        regional["status"] = "maintenance" if regional.get("em_manutencao") else "ok"
 
         for grupo, prefixo in (
             ("servidores", "servidores"),
@@ -4346,15 +4352,58 @@ def _mapa_recalcular_regionais(regionais):
             resumo["regionais_com_switches"] += 1
         else:
             resumo["regionais_sem_switches"] += 1
-        if regional["status"] != "ok":
+        if regional.get("em_manutencao"):
+            resumo["regionais_maintenance"] += 1
+        elif regional["status"] != "ok":
             resumo["regionais_com_alerta"] += 1
 
         regional["totais"]["redes_wifi"] = len(regional["redes_wifi"])
+        regional["totais"]["regionais_maintenance"] = int(bool(regional.get("em_manutencao")))
         regional["totais"]["total"] = sum(
             len(regional[grupo])
             for grupo in ("servidores", "switches", "links", "aps", "vpns", "firewalls", "admins", "redes_wifi")
         )
     return resumo
+
+
+def _mapa_aplicar_manutencoes_regionais(regionais, manutencoes):
+    """Marca regionais vinculadas a host groups com manutencao ativa."""
+    return apply_regional_maintenance(
+        regionais,
+        manutencoes,
+        _mapa_encontrar_regional_por_nome,
+    )
+
+
+def _mapa_sincronizar_manutencoes_payload(payload, cache_seconds=60):
+    """Atualiza a camada de manutencao sem reconstruir o inventario do mapa."""
+    if not isinstance(payload, dict):
+        return payload
+    lista_regionais = payload.get("regionais") or []
+    regionais = {
+        regional.get("codigo"): regional
+        for regional in lista_regionais
+        if isinstance(regional, dict) and regional.get("codigo")
+    }
+    if not regionais:
+        return payload
+
+    try:
+        manutencoes = gerenciador_switches.obter_manutencoes_ativas(
+            cache_seconds=cache_seconds,
+        )
+    except Exception as exc:
+        current_app.logger.warning(
+            "Falha ao atualizar camada de manutencoes regionais: %s",
+            exc,
+        )
+        return payload
+    for regional in regionais.values():
+        regional["em_manutencao"] = False
+        regional["manutencoes"] = []
+    _mapa_aplicar_manutencoes_regionais(regionais, manutencoes)
+    payload["resumo"] = _mapa_recalcular_regionais(regionais)
+    return payload
 
 
 def _montar_dados_mapa_monitoramento():
@@ -4591,6 +4640,20 @@ def _montar_dados_mapa_monitoramento():
     except Exception as exc:
         current_app.logger.warning("Falha ao conciliar manutencao de servidores/firewalls: %s", exc)
 
+    try:
+        manutencoes_ativas = gerenciador_switches.obter_manutencoes_ativas(cache_seconds=60)
+        regionais_em_manutencao = _mapa_aplicar_manutencoes_regionais(
+            regionais,
+            manutencoes_ativas,
+        )
+        if regionais_em_manutencao:
+            current_app.logger.info(
+                "Regionais em manutencao no mapa: %s",
+                ", ".join(sorted(regionais_em_manutencao)),
+            )
+    except Exception as exc:
+        current_app.logger.warning("Falha ao conciliar manutencoes regionais: %s", exc)
+
     resumo = _mapa_recalcular_regionais(regionais)
     return {
         "success": True,
@@ -4622,12 +4685,14 @@ def api_mapa_dados():
 
         if cached and force_refresh:
             refresh_started = _mapa_iniciar_refresh_background()
+            _mapa_sincronizar_manutencoes_payload(cached)
             cached["cache_status"] = "refreshing" if refresh_started else "stale_refreshing"
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = "Atualizacao iniciada em segundo plano."
             return jsonify(filter_map_payload(cached, _current_user_groups(), _available_regional_codes()))
 
         if cached and not force_refresh:
+            _mapa_sincronizar_manutencoes_payload(cached)
             if _mapa_cache_esta_fresco(idade):
                 cached["cache_status"] = "fresh"
                 cached["cache_idade_segundos"] = int(idade or 0)
@@ -4641,6 +4706,7 @@ def api_mapa_dados():
 
         _mapa_atualizar_fontes_operacionais()
         dados = _montar_dados_mapa_monitoramento()
+        _mapa_sincronizar_manutencoes_payload(dados)
         dados = _mapa_salvar_cache(dados)
         dados["cache_status"] = "fresh"
         dados["cache_idade_segundos"] = 0
@@ -4649,6 +4715,7 @@ def api_mapa_dados():
         current_app.logger.exception("Falha ao montar dados do mapa")
         cached, idade = _mapa_carregar_cache()
         if cached:
+            _mapa_sincronizar_manutencoes_payload(cached)
             cached["cache_status"] = "stale_error"
             cached["cache_idade_segundos"] = int(idade or 0) if idade is not None else None
             cached["message"] = f"Falha ao atualizar; exibindo ultimo cache: {exc}"
@@ -4670,6 +4737,7 @@ def _fluxo_neural_payload_atual():
     )
     if cached and (not _mapa_cache_esta_fresco(idade) or unifi_mais_novo):
         _mapa_iniciar_refresh_background()
+    _mapa_sincronizar_manutencoes_payload(cached)
     wifi_overlay = overlay_wifi_networks(
         cached,
         _filtrar_antenas_unifi_ocultas(load_data("unifi") or {}),
@@ -5302,6 +5370,8 @@ def listar_regionais():
                     'codigo': codigo_regional,
                     'nome': regional_info.get('nome', codigo_regional),
                     'descricao': regional_info.get('descricao', ''),
+                    'em_manutencao': False,
+                    'manutencoes': [],
                     'total_servidores': len(servidores),
                     'total_links': len(links),
                     'total_switches': len(switches),
@@ -5317,7 +5387,23 @@ def listar_regionais():
                     'firewalls': firewalls_resumo,
                     'antenas': antenas,
                 })
-        
+
+        try:
+            regionais_por_codigo = {
+                regional['codigo']: regional
+                for regional in regionais_dados
+            }
+            _mapa_aplicar_manutencoes_regionais(
+                regionais_por_codigo,
+                gerenciador_switches.obter_manutencoes_ativas(cache_seconds=60),
+            )
+        except Exception as exc:
+            current_app.logger.warning(
+                "Falha ao aplicar manutencoes nos cards regionais: %s",
+                exc,
+            )
+        log_stage("manutencoes")
+
         log_stage("montagem")
         response = render_template('regionais.html', regionais=regionais_dados)
         log_stage("template")

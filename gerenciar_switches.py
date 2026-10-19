@@ -87,6 +87,8 @@ class GerenciadorSwitches:
         self.auth_token = None
         self._maintenance_cache = []
         self._maintenance_cache_time = 0
+        self._active_maintenance_cache = []
+        self._active_maintenance_cache_time = 0
         self._switches_load_lock = Lock()
         self._metadata_lock = Lock()
         self.switches = []
@@ -785,10 +787,51 @@ class GerenciadorSwitches:
             host.get("maintenanceid") for host in hosts
         )
         return [
-            dict(host)
+            {**host, "maintenance_scope": "direct"}
             for host in hosts
             if (str(host.get("maintenanceid") or ""), str(host.get("hostid") or "")) in direct
         ]
+
+    def obter_manutencoes_ativas(self, cache_seconds=60):
+        """Lista janelas ativas e seus grupos de hosts associados."""
+        now = time.monotonic()
+        cache_time = getattr(self, "_active_maintenance_cache_time", 0)
+        if cache_time and now - cache_time < cache_seconds:
+            return [dict(item) for item in getattr(self, "_active_maintenance_cache", [])]
+
+        hosts = self.obter_hosts_em_manutencao(cache_seconds=cache_seconds)
+        maintenance_ids = sorted({
+            str(host.get("maintenanceid"))
+            for host in hosts
+            if host.get("maintenanceid")
+        })
+        if not maintenance_ids:
+            self._active_maintenance_cache = []
+            self._active_maintenance_cache_time = now
+            return []
+
+        response = self._call_api("maintenance.get", {
+            "output": [
+                "maintenanceid", "name", "description", "maintenance_type",
+                "active_since", "active_till",
+            ],
+            "maintenanceids": maintenance_ids,
+            "selectHostGroups": ["groupid", "name"],
+            "selectHosts": ["hostid", "host", "name"],
+            "sortfield": "name",
+        })
+        if not isinstance(response, dict) or "result" not in response:
+            raise RuntimeError("Falha ao consultar manutencoes ativas no Zabbix")
+
+        active_ids = set(maintenance_ids)
+        maintenances = [
+            dict(item)
+            for item in response.get("result") or []
+            if str(item.get("maintenanceid") or "") in active_ids
+        ]
+        self._active_maintenance_cache = maintenances
+        self._active_maintenance_cache_time = now
+        return [dict(item) for item in maintenances]
     
     def _carregar_switches(self):
         """Carrega dados dos switches do Excel"""

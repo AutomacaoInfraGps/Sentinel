@@ -102,6 +102,33 @@ resumo_links()
 resumo_switches()
 ```
 
+## Manutencoes Regionais
+
+Status: implementado em modo somente leitura.
+
+Exemplos:
+
+```text
+Tem alguma regional em manutencao?
+Quais regionais estao em manutencao?
+A regional Uberlandia esta em manutencao?
+```
+
+O que a SofIA responde:
+
+- quantidade e nomes das regionais em manutencao ativa no Zabbix;
+- nome da janela de manutencao;
+- estado de manutencao de uma regional especifica;
+- somente regionais permitidas pelo escopo do usuario.
+
+As regionais em manutencao continuam suprimidas dos alertas operacionais.
+
+Funcao usada:
+
+```text
+consultar_manutencoes_regionais()
+```
+
 ## Servidores e VMs
 
 Status: implementado.
