@@ -382,7 +382,7 @@
                     <h2 class="fw-bold mb-1">
                         {{ unifi_data.aps_maintenance | default(0) }}
                     </h2>
-                    <div>Em Manutencao</div>
+                    <div>Manutenção</div>
                 </div>
             </div>
         </div>
@@ -473,17 +473,17 @@
                                         <span class="alert-text"><i class="bi bi-x-circle me-1"></i>Offline: {{ site.offline }}</span>
                                         {% endif %}
                                         {% if site.maintenance > 0 %}
-                                        <span class="text-warning"><i class="bi bi-tools me-1"></i>Manutencao: {{ site.maintenance }}</span>
+                                        <span class="text-warning"><i class="bi bi-tools me-1"></i>Manutenção: {{ site.maintenance }}</span>
                                         {% endif %}
                                     </div>
                                 </div>
                                 <div class="antena-region-body">
                                 {% for ap in site.aps %}
                                     <div class="antena-card antena-search-item"
-                                        data-status="{{ ap.status | default('offline') | lower }}"
+                                        data-status="{{ 'maintenance' if ap.em_manutencao or ap.status is maintenance else ap.status | default('offline') | lower }}"
                                         data-search-text="{{ site.nome }} {{ ap.nome }} {{ ap.modelo }} {{ ap.ip }} {{ ap.status }}">
-                                        <div class="antena-card-header {{ ap.status | default('offline') | lower }}">
-                                            <i class="bi bi-{{ 'tools' if ap.em_manutencao else ('wifi' if ap.status == 'online' else 'wifi-off') }}"></i>
+                                        <div class="antena-card-header {{ 'maintenance' if ap.em_manutencao or ap.status is maintenance else ap.status | default('offline') | lower }}">
+                                            <i class="bi bi-{{ 'tools' if ap.em_manutencao or ap.status is maintenance else ('wifi' if ap.status == 'online' else 'wifi-off') }}"></i>
                                             <span class="text-truncate">{{ ap.nome }}</span>
                                         </div>
                                         <div class="antena-card-body">
@@ -501,7 +501,7 @@
                                             </div>
                                             <div class="row-item">
                                                 <span class="label">Status:</span>
-                                                <span class="badge bg-{{ 'warning text-dark' if ap.em_manutencao else ('success' if ap.status == 'online' else 'danger') }}">{{ 'MANUTENCAO' if ap.em_manutencao else ap.status | upper }}</span>
+                                                <span class="badge bg-{{ 'warning text-dark' if ap.em_manutencao or ap.status is maintenance else ('success' if ap.status == 'online' else 'danger') }}">{{ 'Manutenção' if ap.em_manutencao or ap.status is maintenance else ap.status | title }}</span>
                                             </div>
                                             <div class="row-item">
                                                 <span class="label">Usuários:</span>
@@ -632,7 +632,7 @@ function atualizarFiltroAntenaAtivo() {
         const partes = [];
         if (filtroAntenaAtual === 'online') partes.push('Somente antenas online');
         else if (filtroAntenaAtual === 'offline') partes.push('Somente antenas offline');
-        else if (filtroAntenaAtual === 'maintenance') partes.push('Somente antenas em manutencao');
+        else if (filtroAntenaAtual === 'maintenance') partes.push('Somente antenas em manutenção');
         if (antenaBuscaAtual) partes.push(`Busca: "${$('#antenasSearchInput').val()}"`);
         $('#antenasFilterSummaryText').text(partes.join(' | '));
         summary.css('display', 'flex');

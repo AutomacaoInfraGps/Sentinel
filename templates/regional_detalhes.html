@@ -119,6 +119,8 @@
 
     .regional-vpn-status.up { background: #198754; }
     .regional-vpn-status.down { background: #dc3545; }
+    .regional-vpn-status.maintenance { background: #ffc107; color: #212529; }
+    .regional-vpn-tunnel.maintenance { border-left-color: #ffc107; }
 
     .regional-unifi-card {
         height: 100%;
@@ -462,9 +464,10 @@
                 {% if regional.servidores %}
                 <div class="row">
                     {% for servidor in regional.servidores %}
+                    {% set servidor_manutencao = servidor.em_manutencao or servidor.status is maintenance %}
                     <div class="col-md-6 col-lg-4 mb-4" data-notification-search="{{ servidor.nome }} {{ servidor.ip }} {{ servidor.id }}">
-                        <div id="servidor-card-{{ servidor.id }}" class="card border-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} h-100">
-                            <div id="servidor-card-header-{{ servidor.id }}" class="card-header bg-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }} text-white d-flex justify-content-between align-items-center">
+                        <div id="servidor-card-{{ servidor.id }}" class="card border-{{ 'warning' if servidor_manutencao else ('success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning') }} h-100">
+                            <div id="servidor-card-header-{{ servidor.id }}" class="card-header bg-{{ 'warning' if servidor_manutencao else ('success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning') }} {{ 'text-dark' if servidor_manutencao else 'text-white' }} d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 fw-bold">
                                     <i class="bi bi-server me-2"></i>
                                     {{ servidor.nome }}
@@ -485,13 +488,13 @@
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">Status:</span>
                                         <span id="status-badge-{{ servidor.id }}"
-                                            class="badge bg-{{ 'success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning' }}">
+                                            class="badge bg-{{ 'warning text-dark' if servidor_manutencao else ('success' if servidor.status == 'online' else 'danger' if servidor.status == 'offline' else 'warning') }}">
                                             
                                             <i id="status-icon-{{ servidor.id }}"
                                             class="bi bi-{{ 'wifi' if servidor.status == 'online' else 'wifi-off' if servidor.status == 'offline' else 'exclamation-triangle' }} me-1"></i>
                                             
                                             <span id="status-text-{{ servidor.id }}">
-                                                {{ servidor.status.title() }}
+                                                {{ 'Manutenção' if servidor_manutencao else servidor.status.title() }}
                                             </span>
                                         </span>
                                     </div>
@@ -711,11 +714,12 @@
                                     {% endif %}
                                     
                                     {% if link.status and link.status != 'unknown' %}
+                                    {% set link_manutencao = link.em_manutencao or link.status is maintenance %}
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-muted">Status:</span>
-                                        <span class="badge bg-{{ 'success' if link.status == 'online' else 'danger' if link.status == 'offline' else 'warning' }}">
+                                        <span class="badge bg-{{ 'warning text-dark' if link_manutencao else ('success' if link.status == 'online' else 'danger' if link.status == 'offline' else 'warning') }}">
                                             <i class="bi bi-{{ 'router' if link.status == 'online' else 'router-off' if link.status == 'offline' else 'exclamation-triangle' }} me-1"></i>
-                                            {{ link.status.title() }}
+                                            {{ 'Manutenção' if link_manutencao else link.status.title() }}
                                         </span>
                                     </div>
                                     {% endif %}
@@ -796,14 +800,15 @@
                 <div class="row">
                     {% for antena in antenas %}
                     {% set antena_online = antena.status|default('', true)|lower == 'online' %}
+                    {% set antena_manutencao = antena.em_manutencao or antena.status is maintenance %}
                     <div class="col-md-6 col-lg-4 mb-4">
                         <article class="regional-unifi-card">
                             <div class="card-header d-flex justify-content-between align-items-center gap-3">
                                 <h6 class="mb-0 fw-bold text-break">
                                     <i class="bi bi-broadcast-pin me-2"></i>{{ antena.nome }}
                                 </h6>
-                                <span class="badge {{ 'bg-success' if antena_online else ('bg-warning text-dark' if antena.status in ['warning', 'maintenance'] else 'bg-danger') }}">
-                                    {{ 'Online' if antena_online else ('Manutencao' if antena.status == 'maintenance' else antena.status|default('Desconhecido', true)|title) }}
+                                <span class="badge {{ 'bg-warning text-dark' if antena_manutencao else ('bg-success' if antena_online else ('bg-warning text-dark' if antena.status == 'warning' else 'bg-danger')) }}">
+                                    {{ 'Manutenção' if antena_manutencao else ('Online' if antena_online else antena.status|default('Desconhecido', true)|title) }}
                                 </span>
                             </div>
                             <div class="card-body">
@@ -850,14 +855,15 @@
                 {% if regional.switches %}
                 <div class="row">
                     {% for switch in regional.switches %}
+                    {% set switch_manutencao = switch.em_manutencao or switch.status is maintenance %}
                     <div class="col-md-6 col-lg-4 mb-4">
-                        <div class="card border-{{ 'success' if switch.status == 'online' else 'warning' if switch.status == 'warning' else 'secondary' if switch.status == 'inativo' else 'danger' }} h-100">
-                            <div class="card-header bg-{{ 'success' if switch.status == 'online' else 'warning' if switch.status == 'warning' else 'secondary' if switch.status == 'inativo' else 'danger' }} text-white d-flex justify-content-between align-items-center">
+                        <div class="card border-{{ 'warning' if switch_manutencao else ('success' if switch.status == 'online' else 'warning' if switch.status == 'warning' else 'secondary' if switch.status == 'inativo' else 'danger') }} h-100">
+                            <div class="card-header bg-{{ 'warning' if switch_manutencao else ('success' if switch.status == 'online' else 'warning' if switch.status == 'warning' else 'secondary' if switch.status == 'inativo' else 'danger') }} {{ 'text-dark' if switch_manutencao else 'text-white' }} d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 fw-bold">
                                     <i class="bi bi-hdd-network me-2"></i>
                                     {{ switch.host }}
                                 </h6>
-                                <span class="badge bg-light text-dark">{{ switch.status|default('desconhecido', true)|title }}</span>
+                                <span class="badge bg-light text-dark">{{ 'Manutenção' if switch_manutencao else switch.status|default('desconhecido', true)|title }}</span>
                             </div>
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -874,7 +880,12 @@
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="small text-muted">Status:</span>
-                                    {% if switch.status == 'online' %}
+                                    {% if switch_manutencao %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-tools me-1"></i>
+                                        Manutenção
+                                    </span>
+                                    {% elif switch.status == 'online' %}
                                     <span class="badge bg-success">
                                         <i class="bi bi-wifi me-1"></i>
                                         Online
@@ -969,12 +980,13 @@
                 <div class="regional-vpn-list">
                     {% for vpn in regional.vpns %}
                     {% set vpn_online = vpn.status|default('', true)|lower in ['up', 'online'] %}
-                    <article class="regional-vpn-tunnel {{ 'up' if vpn_online else 'down' }}">
+                    {% set vpn_manutencao = vpn.em_manutencao or vpn.status is maintenance %}
+                    <article class="regional-vpn-tunnel {{ 'maintenance' if vpn_manutencao else ('up' if vpn_online else 'down') }}">
                         <div>
                             <div class="regional-vpn-name">{{ vpn.tunel or vpn.nome or 'VPN' }}</div>
                             <div class="regional-vpn-meta">Ultima verificacao: {{ vpn.ultima_verificacao or vpn.updated_at or 'N/A' }}</div>
                         </div>
-                        <span class="regional-vpn-status {{ 'up' if vpn_online else 'down' }}">{{ 'UP' if vpn_online else 'DOWN' }}</span>
+                        <span class="regional-vpn-status {{ 'maintenance' if vpn_manutencao else ('up' if vpn_online else 'down') }}">{{ 'Manutenção' if vpn_manutencao else ('UP' if vpn_online else 'DOWN') }}</span>
                     </article>
                     {% endfor %}
                 </div>
@@ -1007,6 +1019,7 @@
                 {% if regional.firewalls %}
                 <div class="row">
                     {% for firewall in regional.firewalls %}
+                    {% set firewall_manutencao = firewall.em_manutencao or firewall.status is maintenance or firewall.status_disponibilidade is maintenance %}
                     <div class="col-md-6 col-lg-4 mb-4">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
@@ -1014,7 +1027,9 @@
                                     <i class="bi bi-shield-shaded me-2"></i>
                                     {{ firewall.nome }}
                                 </h6>
-                                {%- if firewall.status == 'ready' %}
+                                {%- if firewall_manutencao %}
+                                <span class="badge bg-warning text-dark">Manutenção</span>
+                                {%- elif firewall.status == 'ready' %}
                                 <span class="badge bg-success">Online</span>
                                 {%- elif firewall.status in ('offline','down') %}
                                 <span class="badge bg-danger">Offline</span>
@@ -1819,9 +1834,26 @@ function escapeHtml(value) {
 }
 
 function badgeStatusClass(status) {
+    if (isMaintenanceStatus(status)) return 'warning text-dark';
     if (status === 'online') return 'success';
     if (status === 'offline') return 'danger';
     return 'warning';
+}
+
+function isMaintenanceStatus(status) {
+    const normalized = String(status || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    return ['maintenance', 'manutence', 'maintence', 'manutencao', 'em manutencao'].includes(normalized);
+}
+
+function statusDisplayLabel(status) {
+    if (isMaintenanceStatus(status)) return 'Manutenção';
+    if (status === 'online') return 'Online';
+    if (status === 'offline') return 'Offline';
+    return 'Atenção';
 }
 
 function extractLocalNetworkInfo(links) {
@@ -1930,13 +1962,14 @@ function aplicarResultadoTesteServidor(resultado) {
     const card = document.getElementById(`servidor-card-${idServidor}`);
     const cardHeader = document.getElementById(`servidor-card-header-${idServidor}`);
     const status = resultado.status || 'warning';
-    const tone = status === 'online' ? 'success' : (status === 'offline' ? 'danger' : 'warning');
+    const emManutencao = isMaintenanceStatus(status);
+    const tone = status === 'online' ? 'success' : (status === 'offline' && !emManutencao ? 'danger' : 'warning');
 
     if (badge && texto && icone) {
         badge.classList.remove('bg-success', 'bg-danger', 'bg-warning');
         badge.classList.add(`bg-${tone}`);
-        texto.innerText = status === 'online' ? 'Online' : (status === 'offline' ? 'Offline' : 'Atenção');
-        icone.className = `bi bi-${status === 'online' ? 'wifi' : (status === 'offline' ? 'wifi-off' : 'exclamation-triangle')} me-1`;
+        texto.innerText = statusDisplayLabel(status);
+        icone.className = `bi bi-${emManutencao ? 'tools' : (status === 'online' ? 'wifi' : (status === 'offline' ? 'wifi-off' : 'exclamation-triangle'))} me-1`;
     }
 
     if (card) {
@@ -1945,8 +1978,9 @@ function aplicarResultadoTesteServidor(resultado) {
     }
 
     if (cardHeader) {
-        cardHeader.classList.remove('bg-success', 'bg-danger', 'bg-warning');
+        cardHeader.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
         cardHeader.classList.add(`bg-${tone}`);
+        cardHeader.classList.add(emManutencao ? 'text-dark' : 'text-white');
     }
 
     const verificacao = document.getElementById(`servidor-verificacao-${idServidor}`);

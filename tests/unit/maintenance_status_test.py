@@ -4,11 +4,19 @@ from maintenance_status import (
     apply_device_maintenance,
     apply_zabbix_maintenance,
     is_device_in_maintenance,
+    is_maintenance_status,
     normalize_ip,
 )
 
 
 class MaintenanceStatusTests(unittest.TestCase):
+    def test_recognizes_maintenance_status_variants(self):
+        for status in ("maintenance", "manutence", "maintence", "manutencao", "manutenção", "em manutencao", "em manutenção"):
+            with self.subTest(status=status):
+                self.assertTrue(is_maintenance_status(status))
+
+        self.assertFalse(is_maintenance_status("offline"))
+
     def test_overrides_offline_by_ip(self):
         data = {"aps": [{"nome": "AP-01", "ip": "10.0.0.10", "status": "offline"}]}
         hosts = [{"hostid": "7", "name": "AP-01", "ip": "10.0.0.10", "maintenanceid": "3"}]

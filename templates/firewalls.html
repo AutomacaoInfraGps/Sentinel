@@ -380,7 +380,7 @@
                     <div class="number">{{ total_firewalls_inativos|default(0) }}</div><div class="label"><i class="bi bi-pause-circle-fill me-1"></i>Inativo</div>
                 </div>
                 <div class="stat-card" id="card-fw-maintenance" style="background: #d97706;" onclick="aplicarFiltroFirewall('fw-maintenance')">
-                    <div class="number">{{ total_firewalls_maintenance|default(0) }}</div><div class="label"><i class="bi bi-tools me-1"></i>Manutencao</div>
+                    <div class="number">{{ total_firewalls_maintenance|default(0) }}</div><div class="label"><i class="bi bi-tools me-1"></i>Manutenção</div>
                 </div>
             </div>
         </section>
@@ -456,8 +456,8 @@
                     <span class="badge bg-success mt-1">Online</span>
                     {%- elif firewall.status_disponibilidade == 'offline' %}
                     <span class="badge bg-danger mt-1">Offline</span>
-                    {%- elif firewall.status_disponibilidade == 'maintenance' %}
-                    <span class="badge bg-warning text-dark mt-1">Manutencao</span>
+                    {%- elif firewall.em_manutencao or firewall.status_disponibilidade is maintenance or firewall.status is maintenance %}
+                    <span class="badge bg-warning text-dark mt-1">Manutenção</span>
                     {%- else %}
                     <span class="badge bg-secondary mt-1">Inativo</span>
                     {%- endif %}
@@ -620,7 +620,7 @@ function _reaplicarFiltros() {
             'fw-online': `${totalDispositivosVisiveis} firewall(s) online`,
             'fw-offline': `${totalDispositivosVisiveis} firewall(s) offline`,
             'fw-inativo': `${totalDispositivosVisiveis} firewall(s) inativo(s)`,
-            'fw-maintenance': `${totalDispositivosVisiveis} firewall(s) em manutencao`,
+            'fw-maintenance': `${totalDispositivosVisiveis} firewall(s) em manutenção`,
             'lic-total': `${totalDispositivosVisiveis} firewall(s) com licencas`,
             'vencer': `${totalDispositivosVisiveis} firewall(s) com licencas a vencer`,
             'expirado': `${totalDispositivosVisiveis} firewall(s) com licencas expiradas`,

@@ -561,7 +561,7 @@
             </div>
             <div class="stats-label">
                 <i class="bi bi-tools me-1"></i>
-                Em Manutencao
+                Manutenção
             </div>
         </div>
     </div>
@@ -763,8 +763,8 @@
                             <span class="status-badge status-online" title="Online"></span>
                             {% elif switch.status == 'inativo' %}
                             <span class="status-badge status-inativo" title="Inativo"></span>
-                            {% elif switch.status == 'maintenance' %}
-                            <span class="status-badge status-maintenance" title="Em manutencao"></span>
+                            {% elif switch.em_manutencao or switch.status is maintenance %}
+                            <span class="status-badge status-maintenance" title="Manutenção"></span>
                             {% elif switch.status in ['offline', 'não encontrado', 'erro', 'desconhecido'] %}
                             <span class="status-badge status-offline" title="Offline"></span>
                             {% elif switch.status == 'warning' %}
@@ -788,8 +788,8 @@
                                 <span class="text-warning">Atenção</span>
                                 {% elif switch.status == 'inativo' %}
                                 <span class="text-secondary">Inativo</span>
-                                {% elif switch.status == 'maintenance' %}
-                                <span class="text-warning">Em manutenção</span>
+                                {% elif switch.em_manutencao or switch.status is maintenance %}
+                                <span class="text-warning">Manutenção</span>
                                 {% elif switch.status == 'não encontrado' %}
                                 <span class="text-danger">Não encontrado</span>
                                 {% elif switch.status == 'erro' %}
@@ -1159,7 +1159,7 @@ function obterTextoStatus(status) {
     if (status === 'offline') return 'Offline';
     if (status === 'warning') return 'Atenção';
     if (status === 'inativo') return 'Inativo';
-    if (status === 'maintenance') return 'Em manutencao';
+    if (status === 'maintenance') return 'Manutenção';
     if (status === 'não encontrado') return 'Não encontrado';
     if (status === 'erro') return 'Erro';
     return 'Desconhecido';
@@ -1315,7 +1315,7 @@ function obterTextoFiltroStatus(status) {
     if (status === 'offline') return 'Somente switches indisponíveis';
     if (status === 'warning') return 'Somente switches em atenção';
     if (status === 'inativo') return 'Somente switches inativos';
-    if (status === 'maintenance') return 'Somente switches em manutencao';
+    if (status === 'maintenance') return 'Somente switches em manutenção';
     return 'Todos os switches';
 }
 

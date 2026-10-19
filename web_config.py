@@ -97,7 +97,12 @@ from gerenciar_fortigate import GerenciadorFortigate
 from gerenciar_vms import GerenciadorVMs
 from gerenciar_contatos_email import GerenciadorContatosEmail
 from switches_backup_utils import create_switch_backup
-from maintenance_status import apply_device_maintenance, apply_zabbix_maintenance, normalize_ip
+from maintenance_status import (
+    apply_device_maintenance,
+    apply_zabbix_maintenance,
+    is_maintenance_status,
+    normalize_ip,
+)
 from operational_state import load_operational_state, publish_group_records, publish_map_snapshot
 from notification_center import (
     build_notifications,
@@ -164,6 +169,7 @@ BRANDING_ASSET_FILES = {
 # Habilitar reload automático de templates
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
+app.jinja_env.tests["maintenance"] = is_maintenance_status
 
 # Configuração Flask-Login
 login_manager = LoginManager()

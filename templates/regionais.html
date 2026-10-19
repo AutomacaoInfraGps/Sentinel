@@ -833,14 +833,15 @@
                                 <div class="regional-device-section" data-device="antennas">
                                     <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-wifi"></i>Antenas UniFi</span><span class="regional-device-count">{{ total_antenas }}</span></h6>
                                     {% for antena in antenas[:3] %}
+                                    {% set antena_manutencao = antena.em_manutencao or antena.status is maintenance %}
                                     <div class="regional-device-row d-flex align-items-center mb-1 gap-2">
                                         <i class="bi bi-broadcast-pin" style="color:var(--section-color)"></i>
                                         <div class="small text-truncate">
                                             <div class="text-truncate">{{ antena.nome }}</div>
                                             <div class="text-muted text-truncate" style="font-size:0.72rem;">{{ antena.ip }}{% if antena.modelo %} · {{ antena.modelo }}{% endif %}</div>
                                         </div>
-                                        <span class="badge ms-auto {{ 'bg-success' if antena.status == 'online' else ('bg-warning text-dark' if antena.status in ['warning', 'maintenance'] else 'bg-danger') }}">
-                                            {{ 'Online' if antena.status == 'online' else ('Manutenção' if antena.status == 'maintenance' else antena.status|capitalize) }}
+                                        <span class="badge ms-auto {{ 'bg-warning text-dark' if antena_manutencao else ('bg-success' if antena.status == 'online' else ('bg-warning text-dark' if antena.status == 'warning' else 'bg-danger')) }}">
+                                            {{ 'Manutenção' if antena_manutencao else ('Online' if antena.status == 'online' else antena.status|capitalize) }}
                                         </span>
                                     </div>
                                     {% endfor %}
@@ -854,11 +855,12 @@
                                 <div class="regional-device-section" data-device="switches">
                                     <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-hdd-network"></i>Switches</span><span class="regional-device-count">{{ regional.total_switches }}</span></h6>
                                     {% for switch in regional.switches[:2] %}
+                                    {% set switch_manutencao = switch.em_manutencao or switch.status is maintenance %}
                                     <div class="regional-device-row d-flex align-items-center mb-1 gap-2">
                                         <i class="bi bi-hdd-network text-secondary"></i>
                                         <code class="small text-truncate">{{ switch.ip or switch.host or switch.nome }}</code>
-                                        <span class="badge ms-auto {{ 'bg-success' if switch.status == 'online' else 'bg-danger' }}">
-                                            {{ switch.status|default('desconhecido')|capitalize }}
+                                        <span class="badge ms-auto {{ 'bg-warning text-dark' if switch_manutencao else ('bg-success' if switch.status == 'online' else 'bg-danger') }}">
+                                            {{ 'Manutenção' if switch_manutencao else switch.status|default('desconhecido')|capitalize }}
                                         </span>
                                     </div>
                                     {% endfor %}
@@ -872,11 +874,12 @@
                                 <div class="regional-device-section" data-device="vpns">
                                     <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-shield-lock"></i>VPNs IPsec</span><span class="regional-device-count">{{ regional.total_vpns }}</span></h6>
                                     {% for vpn in regional.vpns[:2] %}
+                                    {% set vpn_manutencao = vpn.em_manutencao or vpn.status is maintenance %}
                                     <div class="regional-device-row d-flex align-items-center mb-1 gap-2">
                                         <i class="bi bi-shield-lock text-primary"></i>
                                         <span class="small text-truncate">{{ vpn.tunel or vpn.nome }}</span>
-                                        <span class="badge ms-auto {{ 'bg-success' if vpn.status in ['up', 'online'] else 'bg-danger' }}">
-                                            {{ 'Online' if vpn.status in ['up', 'online'] else 'Offline' }}
+                                        <span class="badge ms-auto {{ 'bg-warning text-dark' if vpn_manutencao else ('bg-success' if vpn.status in ['up', 'online'] else 'bg-danger') }}">
+                                            {{ 'Manutenção' if vpn_manutencao else ('Online' if vpn.status in ['up', 'online'] else 'Offline') }}
                                         </span>
                                     </div>
                                     {% endfor %}
@@ -1178,13 +1181,16 @@ function atualizarIndicadoresStatus(codigo, resultados) {
         
         if (indicador.length > 0) {
             // Remove classes e ícones anteriores
-            indicador.find('i').removeClass('bi-question-circle bi-check-circle bi-x-circle bi-exclamation-circle')
+            indicador.find('i').removeClass('bi-question-circle bi-check-circle bi-x-circle bi-exclamation-circle bi-tools')
                               .removeClass('text-muted text-success text-danger text-warning');
             
             // Adiciona o ícone e cor apropriados
             if (status === 'online') {
                 indicador.find('i').addClass('bi-check-circle text-success');
                 indicador.attr('title', 'Online');
+            } else if (status === 'maintenance' || status === 'manutencao' || status === 'manutenção') {
+                indicador.find('i').addClass('bi-tools text-warning');
+                indicador.attr('title', 'Manutenção');
             } else if (status === 'offline') {
                 indicador.find('i').addClass('bi-x-circle text-danger');
                 indicador.attr('title', resultado.erro || 'Offline');

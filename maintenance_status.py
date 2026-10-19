@@ -5,16 +5,26 @@ import ipaddress
 
 
 MAINTENANCE_STATUS = "maintenance"
+MAINTENANCE_STATUS_ALIASES = {
+    MAINTENANCE_STATUS,
+    "manutence",
+    "maintence",
+    "manutencao",
+    "manutenção",
+    "em manutencao",
+    "em manutenção",
+}
+
+
+def is_maintenance_status(value):
+    """Reconhece as variantes legadas do status de manutencao."""
+    return str(value or "").strip().lower() in MAINTENANCE_STATUS_ALIASES
 
 
 def is_device_in_maintenance(device, status_field="status"):
     """Indica manutencao mesmo quando o cache ainda conserva status offline."""
-    status = str(device.get(status_field) or device.get("status") or "").strip().lower()
-    return bool(device.get("em_manutencao")) or status in {
-        MAINTENANCE_STATUS,
-        "manutencao",
-        "em manutencao",
-    }
+    status = device.get(status_field) or device.get("status")
+    return bool(device.get("em_manutencao")) or is_maintenance_status(status)
 
 
 def normalize_ip(value):
