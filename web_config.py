@@ -4094,6 +4094,8 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
 
 _MAPA_UNIFI_SITE_ALIAS = {
     "BH": "REG_REGIONAL BELO HORIZONTE",
+    "PARA": "REG_PARA",
+    "ORMEC_PARA": "REG_ORMEC_PARA",
     "REGIONAL_BH": "REG_REGIONAL BELO HORIZONTE",
     "SAO_JOSE_DOS_CAMPOS": "REG_SJC",
     "SANTO_ANDRE": "REG_ABC",

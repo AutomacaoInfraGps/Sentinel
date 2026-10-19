@@ -756,7 +756,7 @@
       const backbone = edge.kind === "backbone";
       const color = backbone ? "#4bbde8" : categories[edge.type].color;
       const opacity = (
-        focus ? (focused ? (backbone ? .62 : .95) : .025) : (backbone ? .16 : .2)
+        focus ? (focused ? (backbone ? .62 : .95) : state.selected ? 0 : .025) : (backbone ? .16 : .2)
       ) * Math.min(edge.source.opacity, edge.target.opacity);
       if (opacity < .01) return;
       const dx = edge.target.x - edge.source.x, dy = edge.target.y - edge.source.y;
@@ -785,7 +785,7 @@
       const inFocus = !focus || focus.has(node.id);
       const active = node === state.hover || node === state.selected;
       const color = node.kind === "regional" ? "#22c3f6" : categories[node.tipo].color;
-      const opacity = node.opacity * (inFocus ? 1 : .09);
+      const opacity = node.opacity * (inFocus ? 1 : state.selected ? 0 : .09);
       if (opacity < .01) return;
       ctx.globalAlpha = opacity;
       const radius = node.radius * (active ? 1.14 : 1);
