@@ -4807,7 +4807,12 @@ def _operational_record_is_newer(canonical, operational):
     return bool(operational_time) or not canonical_time
 
 
-def _fresh_operational_records(group, regional=None, state=None):
+def _fresh_operational_records(
+    group,
+    regional=None,
+    state=None,
+    available_regionals=None,
+):
     state = state if state is not None else load_operational_state()
     group_data = (state.get("groups") or {}).get(group) or {}
     if not snapshot_is_fresh(group_data.get("updated_at")):
@@ -4817,7 +4822,11 @@ def _fresh_operational_records(group, regional=None, state=None):
         records = filter_records(
             records,
             _current_user_groups(),
-            available_regionals=_available_regional_codes(),
+            available_regionals=(
+                available_regionals
+                if available_regionals is not None
+                else _available_regional_codes()
+            ),
         )
     if regional is None:
         return records
@@ -5174,18 +5183,25 @@ def listar_regionais():
         firewalls_agrupados = _agrupar_firewalls_regionais_cache(
             regionais_map,
             operational_state=operational_state,
+            available_regionals=available_regionals,
         )
         log_stage("firewalls")
 
         vpns_agrupadas = (
             _agrupar_vpns_por_regional(
-                _fresh_operational_records("vpns", state=operational_state)
+                _fresh_operational_records(
+                    "vpns",
+                    state=operational_state,
+                    available_regionals=available_regionals,
+                )
             ).get("vpns_por_regional") or {}
         )
         log_stage("vpns")
 
         switches_operacionais_agrupados = _agrupar_switches_operacionais_atuais(
-            operational_state=operational_state
+            operational_state=operational_state,
+            regionais_configuradas=regionais_map,
+            available_regionals=available_regionals,
         )
         log_stage("switches")
 
@@ -5403,16 +5419,23 @@ def _formatar_ultima_verificacao_switch(valor):
         return str(valor)
 
 
-def _agrupar_switches_operacionais_atuais(operational_state=None):
+def _agrupar_switches_operacionais_atuais(
+    operational_state=None,
+    regionais_configuradas=None,
+    available_regionals=None,
+):
     switches_operacionais = _fresh_operational_records(
-        "switches", state=operational_state
+        "switches",
+        state=operational_state,
+        available_regionals=available_regionals,
     )
     if not switches_operacionais:
         return None
-    regionais_configuradas = {
-        codigo: gerenciador_regionais.obter_regional(codigo) or {}
-        for codigo in gerenciador_regionais.listar_regionais()
-    }
+    if regionais_configuradas is None:
+        gerenciador_regionais.listar_regionais()
+        regionais_configuradas = dict(
+            gerenciador_regionais.regionais.get("regionais") or {}
+        )
     return _agrupar_switches_por_regionais_configuradas(
         switches_operacionais,
         regionais_configuradas,
@@ -5452,17 +5475,35 @@ def _obter_switches_detalhe_regional(
     return regional_switch, switches
 
 
-def _obter_links_detalhe_regional(codigo_regional, regional_info):
+def _obter_links_detalhe_regional(
+    codigo_regional,
+    regional_info,
+    operational_state=None,
+    available_regionals=None,
+):
     links_canonicos = _obter_links_internet_exibicao(regional_info)
     if isinstance((regional_info or {}).get("links_internet_auto"), list):
         return links_canonicos
 
-    links_operacionais = _fresh_operational_records("links", codigo_regional)
+    links_operacionais = _fresh_operational_records(
+        "links",
+        codigo_regional,
+        state=operational_state,
+        available_regionals=available_regionals,
+    )
     return links_operacionais or links_canonicos
 
 
-def _obter_vpns_detalhe_regional(codigo_regional):
-    vpns = _fresh_operational_records("vpns")
+def _obter_vpns_detalhe_regional(
+    codigo_regional,
+    operational_state=None,
+    available_regionals=None,
+):
+    vpns = _fresh_operational_records(
+        "vpns",
+        state=operational_state,
+        available_regionals=available_regionals,
+    )
     if not vpns:
         return []
     agrupadas = _agrupar_vpns_por_regional(vpns).get("vpns_por_regional") or {}
@@ -5480,12 +5521,33 @@ def _servidor_para_exibicao(servidor):
 @app.route('/regional/<codigo_regional>')
 @login_required
 def detalhar_regional(codigo_regional):
-    """Página de detalhamento de uma regional"""
+    """Página de detalhamento de uma regional."""
+    started_at = time.monotonic()
+    previous_stage_at = started_at
+
+    def log_stage(stage):
+        nonlocal previous_stage_at
+        now = time.monotonic()
+        current_app.logger.info(
+            "[regional_detalhes] regional=%s etapa=%s delta=%.3fs total=%.3fs",
+            codigo_regional,
+            stage,
+            now - previous_stage_at,
+            now - started_at,
+        )
+        previous_stage_at = now
+
     try:
-        regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+        regionais_map = dict(
+            gerenciador_regionais.regionais.get("regionais") or {}
+        )
+        available_regionals = list(regionais_map)
+        regional_info = regionais_map.get(codigo_regional)
         if not regional_info:
             flash('Regional não encontrada', 'error')
             return redirect(url_for('listar_regionais'))
+        operational_state = load_operational_state()
+        log_stage("snapshots")
 
         def _formatar_ultima_verificacao(valor):
             texto = str(valor or '').strip()
@@ -5509,7 +5571,12 @@ def detalhar_regional(codigo_regional):
         # NÃO verifica automaticamente aqui
         servidores_completos = []
 
-        servidores_operacionais = _fresh_operational_records("servidores", codigo_regional)
+        servidores_operacionais = _fresh_operational_records(
+            "servidores",
+            codigo_regional,
+            state=operational_state,
+            available_regionals=available_regionals,
+        )
         operacionais_por_id = {
             str(servidor.get("id")): servidor
             for servidor in servidores_operacionais
@@ -5549,25 +5616,32 @@ def detalhar_regional(codigo_regional):
             )
 
             servidores_completos.append(servidor_completo)
+        log_stage("servidores")
 
         links_completos = []
-        links_fonte = _obter_links_detalhe_regional(codigo_regional, regional_info)
+        links_fonte = _obter_links_detalhe_regional(
+            codigo_regional,
+            regional_info,
+            operational_state=operational_state,
+            available_regionals=available_regionals,
+        )
         for link in links_fonte:
             link_completo = _preparar_link_para_template(link)
             link_completo["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
                 link_completo.get("ultima_verificacao")
             )
             links_completos.append(link_completo)
+        log_stage("links")
 
-        vpns_completas = _obter_vpns_detalhe_regional(codigo_regional)
+        vpns_completas = _obter_vpns_detalhe_regional(
+            codigo_regional,
+            operational_state=operational_state,
+            available_regionals=available_regionals,
+        )
+        log_stage("vpns")
 
         antenas_completas = []
-        regionais_map = {}
         try:
-            regionais_map = {
-                codigo: gerenciador_regionais.obter_regional(codigo) or {}
-                for codigo in gerenciador_regionais.listar_regionais()
-            }
             unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
             antenas_completas = _agrupar_antenas_unifi_por_regional(
                 regionais_map,
@@ -5579,133 +5653,29 @@ def detalhar_regional(codigo_regional):
                 codigo_regional,
                 exc,
             )
+        log_stage("antenas_unifi")
 
-        # Buscar firewalls desta regional usando o mesmo matching da página principal
-        firewalls_completos = []
-        try:
-            adom = _get_fortimanager_adom()
-            regionais_map = regionais_map or {
-                codigo: gerenciador_regionais.obter_regional(codigo) or {}
-                for codigo in gerenciador_regionais.listar_regionais()
-            }
-            try:
-                fm_client = FortiManagerClient()
-                fm_client.login()
-                fm_devices = fm_client.list_devices(adom)
-                fm_devices_list = fm_devices.get('result', [{}])[0] if isinstance(fm_devices.get('result', []), list) and fm_devices.get('result') else {}
-                devices_data = fm_devices_list.get('data', []) if isinstance(fm_devices_list, dict) else []
+        # A tela usa o snapshot já coletado. Consultas ao FortiManager ficam
+        # restritas às ações explícitas de atualização para não bloquear a navegação.
+        firewalls_completos = _agrupar_firewalls_regionais_cache(
+            regionais_map,
+            operational_state=operational_state,
+            available_regionals=available_regionals,
+        ).get(codigo_regional, [])
+        log_stage("firewalls")
 
-                for device_data in devices_data:
-                    if not isinstance(device_data, dict):
-                        continue
-                    device_name = device_data.get('name', '').strip()
-                    if not device_name:
-                        continue
-
-                    if _resolver_regional_firewall(device_name, regionais_map) != codigo_regional:
-                        continue
-
-                    device_ip       = device_data.get('ip', '')
-                    device_hostname = device_data.get('hostname', '')
-                    device_model    = device_data.get('platform_str', 'N/A')
-                    device_serial   = device_data.get('sn', 'N/A')
-                    device_status   = device_data.get('status', 'unknown')
-                    device_firmware = _formatar_firmware_firewall(device_data)
-
-                    try:
-                        licenses_data = fm_client.proxy_monitor_license(adom, device_name)
-
-                        firewall_info = {
-                            'nome': device_name,
-                            'hostname': device_hostname,
-                            'ip': device_ip,
-                            'status': device_status,
-                            'model': device_model,
-                            'serial': device_serial,
-                            'firmware': device_firmware,
-                            'licencas': [],
-                            'licencas_criticas': 0,
-                            'licencas_expiradas': 0,
-                            'ultima_verificacao': datetime.now().isoformat()
-                        }
-
-                        # Falha na consulta nao altera, sozinha, a disponibilidade do firewall.
-                        if isinstance(licenses_data, dict) and licenses_data.get('_erro'):
-                            erro_licenca = licenses_data.get('_erro')
-                            firewall_info['licencas'].append({
-                                'nome': 'forticare', 'tipo': 'forticare',
-                                'status': 'indisponivel', 'dias_restantes': 0,
-                                'expiracao': 'N/A', 'notificacao_critica': False,
-                                'notificacao_expirada': False,
-                                'motivo': 'Timeout ao consultar o FortiManager' if erro_licenca == 'timeout' else 'FortiManager sem tunel com o firewall' if erro_licenca == 'offline' else 'Erro ao consultar a licenca no FortiManager',
-                                'detalhe': licenses_data.get('_detalhe'),
-                            })
-
-                        # Processar apenas forticare
-                        elif isinstance(licenses_data, dict) and 'forticare' in licenses_data:
-                            license_info = licenses_data['forticare']
-                            if isinstance(license_info, dict):
-                                dias_rest = 0
-                                expires_timestamp = license_info.get('expires', 0)
-                                if not expires_timestamp:
-                                    support = license_info.get('support', {})
-                                    if isinstance(support, dict):
-                                        for sub in ('hardware', 'enhanced'):
-                                            expires_timestamp = support.get(sub, {}).get('expires', 0)
-                                            if expires_timestamp:
-                                                break
-                                if expires_timestamp and isinstance(expires_timestamp, (int, float)) and expires_timestamp > 0:
-                                    try:
-                                        from datetime import datetime as dt_class
-                                        exp_date = dt_class.fromtimestamp(expires_timestamp)
-                                        dias_rest = max(0, (exp_date.date() - dt_class.now().date()).days)
-                                    except Exception:
-                                        dias_rest = 0
-
-                                lic_status = license_info.get('status', 'unknown')
-                                lic_obj = {
-                                    'nome': 'forticare', 'tipo': 'forticare',
-                                    'status': lic_status,
-                                    'dias_restantes': dias_rest,
-                                    'expiracao': expires_timestamp if expires_timestamp else 'N/A',
-                                    'notificacao_critica': False,
-                                    'notificacao_expirada': lic_status in ('expired', 'no_license'),
-                                }
-                                if lic_obj['notificacao_expirada']:
-                                    firewall_info['licencas_expiradas'] += 1
-                                elif 0 < dias_rest <= _FIREWALL_ALERTA_DIAS:
-                                    lic_obj['notificacao_critica'] = True
-                                    firewall_info['licencas_criticas'] += 1
-                                firewall_info['licencas'].append(lic_obj)
-
-                        _aplicar_fallback_forticare_device_data(firewall_info, device_data)
-                        firewalls_completos.append(firewall_info)
-
-                    except Exception as e:
-                        current_app.logger.warning(f"Erro ao buscar licenças de {device_name}: {str(e)}")
-                        firewalls_completos.append({
-                            'nome': device_name, 'hostname': device_hostname,
-                            'ip': device_ip, 'status': 'erro',
-                            'model': device_model, 'serial': device_serial,
-                            'firmware': device_firmware,
-                            'licencas': [], 'licencas_criticas': 0, 'licencas_expiradas': 0,
-                            'erro': str(e), 'ultima_verificacao': datetime.now().isoformat()
-                        })
-
-                fm_client.logout()
-            except Exception as e:
-                current_app.logger.warning(f"Erro ao conectar FortiManager: {str(e)}")
-        except Exception as e:
-            current_app.logger.warning(f"Erro ao buscar firewalls da regional: {str(e)})")
-
+        switches_operacionais_agrupados = _agrupar_switches_operacionais_atuais(
+            operational_state=operational_state,
+            regionais_configuradas=regionais_map,
+            available_regionals=available_regionals,
+        )
         switches_regional_nome, switches_completos = _obter_switches_detalhe_regional(
             codigo_regional,
             regional_info,
+            switches_operacionais_agrupados=switches_operacionais_agrupados,
+            agrupamento_precarregado=True,
         )
-
-        firewalls_operacionais = _fresh_operational_records("firewalls", codigo_regional)
-        if firewalls_operacionais:
-            firewalls_completos = firewalls_operacionais
+        log_stage("switches")
 
         for firewall in firewalls_completos:
             firewall["ultima_verificacao_formatada"] = _formatar_ultima_verificacao(
@@ -5725,7 +5695,9 @@ def detalhar_regional(codigo_regional):
             'switches_regional_nome': switches_regional_nome
         }
 
-        return render_template('regional_detalhes.html', regional=regional_completa)
+        response = render_template('regional_detalhes.html', regional=regional_completa)
+        log_stage("template")
+        return response
 
     except Exception as e:
         flash(f'Erro ao carregar regional: {str(e)}', 'error')
@@ -5814,16 +5786,25 @@ def _formatar_preventiva_data(valor):
 
 def _obter_firewalls_regionais_cache(codigo_regional):
     codigo_norm = str(codigo_regional or "").strip().upper()
-    regionais_map = {
-        codigo: gerenciador_regionais.obter_regional(codigo) or {}
-        for codigo in gerenciador_regionais.listar_regionais()
-    }
-    return _agrupar_firewalls_regionais_cache(regionais_map).get(codigo_norm, [])
+    available_regionals = gerenciador_regionais.listar_regionais()
+    regionais_map = dict(
+        gerenciador_regionais.regionais.get("regionais") or {}
+    )
+    return _agrupar_firewalls_regionais_cache(
+        regionais_map,
+        available_regionals=available_regionals,
+    ).get(codigo_norm, [])
 
 
-def _agrupar_firewalls_regionais_cache(regionais_map, operational_state=None):
+def _agrupar_firewalls_regionais_cache(
+    regionais_map,
+    operational_state=None,
+    available_regionals=None,
+):
     firewalls = _fresh_operational_records(
-        "firewalls", state=operational_state
+        "firewalls",
+        state=operational_state,
+        available_regionals=available_regionals,
     )
     if not firewalls:
         cached = _carregar_cache_dashboard("firewalls", ttl_seconds=86400) or {}
