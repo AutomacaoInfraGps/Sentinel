@@ -45,6 +45,9 @@
     }
 
     .cert-stat {
+        display: flex;
+        align-items: center;
+        gap: 14px;
         background: #f8fafc;
         border: 1px solid #d7e1ec;
         border-radius: 8px;
@@ -59,7 +62,23 @@
         color: #182235;
     }
 
-    .cert-stat span {
+    .cert-stat-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 42px;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        color: #fff;
+        background: #0F6C8C;
+        font-size: 1rem;
+    }
+
+    .cert-stat.ok .cert-stat-icon { background: #2fac66; }
+    .cert-stat.warn .cert-stat-icon { background: #f5b21b; color: #473400; }
+    .cert-stat.bad .cert-stat-icon { background: #e33b4f; }
+
+    .cert-stat > div > span {
         display: block;
         margin-top: 8px;
         color: #4a5a70;
@@ -81,8 +100,45 @@
         box-shadow: 0 10px 26px rgba(15, 23, 42, .08);
     }
 
+    .cert-inventory-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        color: #fff;
+        background: linear-gradient(135deg, #012e40, #0f6c8c);
+    }
+
+    .cert-inventory-header h2 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 750;
+    }
+
+    .cert-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #d7e1ec;
+        background: #f8fafc;
+    }
+
+    .cert-search-wrap { position: relative; }
+    .cert-search-wrap i {
+        position: absolute;
+        top: 50%;
+        left: 13px;
+        transform: translateY(-50%);
+        color: #6c7d86;
+    }
+
+    .cert-search-wrap .form-control { padding-left: 40px; }
+
     .cert-table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
     }
 
@@ -100,7 +156,7 @@
     .cert-table td {
         padding: 14px;
         border-bottom: 1px solid #e2e8f0;
-        vertical-align: top;
+        vertical-align: middle;
         color: #243044;
     }
 
@@ -110,12 +166,46 @@
 
     .cert-subject {
         font-weight: 700;
+        color: #173744;
+        overflow-wrap: anywhere;
     }
 
     .cert-small {
         color: #617089;
         font-size: 12px;
-        word-break: break-all;
+        overflow-wrap: anywhere;
+    }
+
+    .cert-issuer {
+        display: -webkit-box;
+        overflow: hidden;
+        color: #435563;
+        font-size: .84rem;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .cert-validity {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #344b57;
+        font-size: .84rem;
+        white-space: nowrap;
+    }
+
+    .cert-row { border-left: 4px solid transparent; }
+    .cert-row[data-status="valid"] { border-left-color: #2fac66; }
+    .cert-row[data-status="warning"] { border-left-color: #f5b21b; }
+    .cert-row[data-status="expired"] { border-left-color: #e33b4f; }
+    .cert-row[data-status="other"] { border-left-color: #87949c; }
+
+    .cert-empty-filter {
+        display: none;
+        padding: 34px 16px;
+        color: #647782;
+        text-align: center;
     }
 
     .cert-badge {
@@ -168,6 +258,10 @@
             align-items: flex-start;
             flex-direction: column;
         }
+
+        .cert-toolbar { grid-template-columns: 1fr; }
+        .cert-table { min-width: 760px; }
+        .cert-table-wrap { overflow-x: auto; }
     }
 </style>
 
@@ -184,20 +278,20 @@
 
     <div class="cert-stats">
         <div class="cert-stat">
-            <strong>{{ total }}</strong>
-            <span>Total</span>
+            <span class="cert-stat-icon"><i class="bi bi-patch-check"></i></span>
+            <div><strong>{{ total }}</strong><span>Total</span></div>
         </div>
         <div class="cert-stat ok">
-            <strong>{{ validos }}</strong>
-            <span>Validos</span>
+            <span class="cert-stat-icon"><i class="bi bi-check-circle"></i></span>
+            <div><strong>{{ validos }}</strong><span>Válidos</span></div>
         </div>
         <div class="cert-stat warn">
-            <strong>{{ alertas }}</strong>
-            <span>A vencer</span>
+            <span class="cert-stat-icon"><i class="bi bi-exclamation-triangle"></i></span>
+            <div><strong>{{ alertas }}</strong><span>A vencer</span></div>
         </div>
         <div class="cert-stat bad">
-            <strong>{{ expirados }}</strong>
-            <span>Expirados</span>
+            <span class="cert-stat-icon"><i class="bi bi-x-circle"></i></span>
+            <div><strong>{{ expirados }}</strong><span>Expirados</span></div>
         </div>
     </div>
 
@@ -206,7 +300,30 @@
     {% endif %}
 
     <div class="cert-table-wrap">
+        <div class="cert-inventory-header">
+            <h2><i class="bi bi-card-checklist me-2"></i>Inventário de certificados</h2>
+            <span class="badge bg-light text-dark" id="certResultCount">{{ total }} certificado(s)</span>
+        </div>
+        <div class="cert-toolbar">
+            <div class="cert-search-wrap">
+                <i class="bi bi-search"></i>
+                <input type="search" class="form-control" id="certSearchInput" placeholder="Buscar certificado, emissor ou thumbprint">
+            </div>
+            <select class="form-select" id="certStatusFilter" aria-label="Filtrar certificados por status">
+                <option value="all">Todos os status</option>
+                <option value="valid">Válidos</option>
+                <option value="warning">A vencer</option>
+                <option value="expired">Expirados</option>
+                <option value="other">Outros</option>
+            </select>
+        </div>
         <table class="cert-table">
+            <colgroup>
+                <col style="width: 34%;">
+                <col style="width: 31%;">
+                <col style="width: 20%;">
+                <col style="width: 15%;">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Certificado</th>
@@ -217,13 +334,14 @@
             </thead>
             <tbody>
                 {% for cert in certificates %}
-                <tr>
+                {% set cert_filter_status = 'expired' if cert.status_text == 'Expirado' else ('warning' if cert.status_class == 'table-warning' else ('valid' if cert.status_class == 'table-success' else 'other')) %}
+                <tr class="cert-row" data-status="{{ cert_filter_status }}" data-search-text="{{ cert.subject }} {{ cert.issuer }} {{ cert.thumbprint }} {{ cert.notAfter }} {{ cert.status_text }}">
                     <td>
-                        <div class="cert-subject">{{ cert.subject or 'Sem subject' }}</div>
-                        <div class="cert-small">{{ cert.thumbprint or 'Sem thumbprint' }}</div>
+                        <div class="cert-subject"><i class="bi bi-file-earmark-lock me-2"></i>{{ cert.subject or 'Sem subject' }}</div>
+                        <div class="cert-small mt-1">{{ cert.thumbprint or 'Sem thumbprint' }}</div>
                     </td>
-                    <td>{{ cert.issuer or 'Nao informado' }}</td>
-                    <td>{{ cert.notAfter or 'Nao informado' }}</td>
+                    <td><div class="cert-issuer" title="{{ cert.issuer or 'Não informado' }}">{{ cert.issuer or 'Não informado' }}</div></td>
+                    <td><span class="cert-validity"><i class="bi bi-calendar3"></i>{{ cert.notAfter or 'Não informado' }}</span></td>
                     <td><span class="cert-badge {{ cert.status_class }}">{{ cert.status_text }}</span></td>
                 </tr>
                 {% else %}
@@ -233,10 +351,48 @@
                 {% endfor %}
             </tbody>
         </table>
+        <div class="cert-empty-filter" id="certEmptyFilter">
+            <i class="bi bi-search fs-3 d-block mb-2"></i>
+            Nenhum certificado corresponde aos filtros informados.
+        </div>
     </div>
 </div>
 
 <script>
+const certSearchInput = document.getElementById('certSearchInput');
+const certStatusFilter = document.getElementById('certStatusFilter');
+const certRows = Array.from(document.querySelectorAll('.cert-row'));
+
+function normalizarBuscaCertificado(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+function filtrarCertificados() {
+    if (!certRows.length) return;
+    const termo = normalizarBuscaCertificado(certSearchInput?.value);
+    const status = certStatusFilter?.value || 'all';
+    let visiveis = 0;
+
+    certRows.forEach((row) => {
+        const correspondeTexto = !termo || normalizarBuscaCertificado(row.dataset.searchText).includes(termo);
+        const correspondeStatus = status === 'all' || row.dataset.status === status;
+        const mostrar = correspondeTexto && correspondeStatus;
+        row.classList.toggle('d-none', !mostrar);
+        if (mostrar) visiveis += 1;
+    });
+
+    const contador = document.getElementById('certResultCount');
+    if (contador) contador.textContent = `${visiveis} certificado(s)`;
+    document.getElementById('certEmptyFilter')?.style.setProperty('display', visiveis ? 'none' : 'block');
+}
+
+certSearchInput?.addEventListener('input', filtrarCertificados);
+certStatusFilter?.addEventListener('change', filtrarCertificados);
+
 document.getElementById('refreshCertificatesBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('refreshCertificatesBtn');
     const original = btn.innerHTML;

@@ -7,7 +7,7 @@
     <script src="{{ url_for('static', filename='security.js') }}"></script>
     <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='branding/sentinel_favicon.png') }}">
     {% if sofia_enabled %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css', v='20261016-3') }}">
     {% endif %}
     {% if current_user.is_authenticated %}
         <link rel="stylesheet" href="{{ url_for('static', filename='notifications/notifications.css') }}">
@@ -370,15 +370,6 @@
             transition: all 0.3s ease;
         }
 
-        .sidebar-link-icon-image {
-            width: 38px;
-            height: 38px;
-            object-fit: contain;
-            margin-right: 0.5rem;
-            flex: 0 0 38px;
-            transform: translateY(2px);
-        }
-        
         .sidebar-link:hover, .sidebar-link.active {
             background-color: rgba(1, 46, 64, 0.08);
             color: var(--primary-color);
@@ -552,17 +543,317 @@
                 font-size: 2rem;
             }
         }
+
+        /* Estrutura operacional Sentinel */
+        body {
+            background: #edf3f6;
+            color: #173340;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #052f40;
+            border-right: 1px solid rgba(94, 210, 245, 0.2);
+            box-shadow: none;
+        }
+
+        .sidebar-header {
+            min-height: 104px;
+            padding: 16px 18px;
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-header a { width: 100%; }
+
+        .sidebar-brand-full {
+            display: block;
+            width: 100%;
+            max-width: 218px;
+            height: auto;
+            filter: drop-shadow(0 7px 14px rgba(0, 162, 230, 0.18));
+        }
+
+        .sidebar-item { border-bottom-color: rgba(255, 255, 255, 0.07); }
+
+        .sidebar-link {
+            min-height: 52px;
+            padding: 13px 18px;
+            color: #d4e2e8;
+            font-size: 0.92rem;
+        }
+
+        .sidebar-link > i:first-child { color: #74d8f5; }
+
+        .sidebar-link > i,
+        .sidebar-sublink > i,
+        .sidebar-sublink.text-danger > i {
+            color: #fff !important;
+        }
+
+        .sidebar-link:hover,
+        .sidebar-link.active {
+            background: rgba(71, 190, 228, 0.14);
+            color: #fff;
+            box-shadow: inset 3px 0 #35c6f4;
+        }
+
+        .sidebar-submenu { background: #042936; }
+
+        .sidebar-sublink {
+            min-height: 43px;
+            padding: 10px 18px 10px 43px;
+            color: #b9cbd3;
+            font-size: 0.86rem;
+        }
+
+        .sidebar-sublink:hover,
+        .sidebar-sublink.active {
+            background: rgba(71, 190, 228, 0.12);
+            color: #fff;
+        }
+
+        .sidebar-user-info {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .sidebar-user-info .fw-bold { color: #fff; }
+        .sidebar-user-info .text-muted { color: #a9c7d2 !important; }
+        .sidebar-user-info > div > i { color: #fff !important; }
+        .sidebar-user-details {
+            display: grid;
+            gap: 7px;
+            width: 100%;
+            padding: 12px 18px 13px 43px;
+        }
+
+        .sidebar-user-detail {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-width: 0;
+            color: #d8e8ee;
+            font-size: 0.82rem;
+        }
+
+        .sidebar-user-detail i {
+            flex: 0 0 16px;
+            color: #fff;
+            text-align: center;
+        }
+
+        .sidebar-user-detail span {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+        .sidebar-divider { background-color: rgba(255, 255, 255, 0.1); }
+
+        .sidebar-footer {
+            padding: 14px 18px 18px;
+            border-top-color: rgba(255, 255, 255, 0.1);
+            background: #042936;
+        }
+
+        .sidebar-footer-brand {
+            display: inline-flex;
+            opacity: 0.92;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar-footer-brand:hover { opacity: 1; }
+        .sidebar-footer-brand svg { width: 104px; }
+
+        .content-wrapper {
+            margin-left: 260px;
+            min-height: 100vh;
+            padding: 0 0 38px;
+            background: #edf3f6;
+        }
+
+        .content-wrapper > .container {
+            width: 100%;
+            max-width: none;
+            padding: 28px clamp(22px, 2.7vw, 44px);
+        }
+
+        .main-container {
+            max-width: none;
+            margin: 0;
+            padding: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 5px 18px rgba(20, 54, 68, 0.08);
+        }
+
+        .card:hover { transform: none; }
+        .card-header { border-radius: 8px 8px 0 0 !important; }
+        .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-info,
+        .form-control, .form-select, .alert, .table, .page-search-card {
+            border-radius: 6px;
+        }
+
+        .footer {
+            margin: 0 0 0 260px;
+            padding: 12px 24px 22px;
+            color: #687d87;
+            background: #edf3f6;
+        }
+
+        /* Refinamento compartilhado das telas operacionais de infraestrutura. */
+        .infra-screen .content-wrapper > .container { padding-top: 22px; }
+
+        .infra-screen .main-container > .container,
+        .infra-screen .main-container > .container-fluid,
+        .infra-screen .main-container .container.py-4 {
+            width: 100%;
+            max-width: none;
+            padding-right: 0 !important;
+            padding-left: 0 !important;
+        }
+
+        .infra-screen .main-container h1.display-4,
+        .infra-screen .main-container h1.display-5 {
+            font-size: clamp(1.65rem, 2.4vw, 2.15rem);
+            letter-spacing: 0;
+        }
+
+        .infra-screen .card {
+            border: 1px solid rgba(1, 46, 64, 0.11);
+            box-shadow: 0 4px 14px rgba(20, 54, 68, 0.07);
+        }
+
+        .infra-screen .card-header { padding: 12px 16px; }
+        .infra-screen .card-body { padding: 16px; }
+
+        .infra-screen .stats-card,
+        .infra-screen .stat-card {
+            height: 100%;
+            min-height: 104px;
+            margin-bottom: 0;
+            border-radius: 8px;
+        }
+
+        .infra-screen .table-responsive,
+        .infra-screen .cert-table-wrap {
+            border: 1px solid rgba(1, 46, 64, 0.1);
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 4px 14px rgba(20, 54, 68, 0.05);
+        }
+
+        .infra-screen .table { margin-bottom: 0; }
+        .infra-screen .table > :not(caption) > * > * {
+            padding: 11px 13px;
+            vertical-align: middle;
+        }
+
+        .infra-screen .btn { min-height: 38px; }
+        .infra-screen .row { --bs-gutter-x: 1.15rem; }
+
+        .infra-page-header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 20px;
+            padding-bottom: 17px;
+            border-bottom: 1px solid #ccdbe2;
+        }
+
+        .infra-page-header h1,
+        .infra-page-header h2,
+        .infra-page-header h4 {
+            margin: 0;
+            color: #123746;
+            font-size: clamp(1.65rem, 2.4vw, 2.15rem);
+            font-weight: 750;
+            letter-spacing: 0;
+        }
+
+        .infra-page-header p {
+            margin: 6px 0 0;
+            color: #637883;
+            font-size: .9rem;
+        }
+
+        .infra-page-eyebrow {
+            margin-bottom: 5px;
+            color: #0F6C8C;
+            font: 700 .7rem Consolas, monospace;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .infra-page-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .infra-page-actions .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        .infra-screen .stats-card-filter,
+        .infra-screen .email-stats-card,
+        .infra-screen .cert-stat,
+        .infra-screen .admin-stat-item .stat-card {
+            border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(20, 54, 68, .08);
+        }
+
+        @media (max-width: 768px) {
+            .infra-page-header { align-items: stretch; flex-direction: column; }
+            .infra-page-actions { justify-content: stretch; }
+            .infra-page-actions .btn,
+            .infra-page-actions form { flex: 1 1 auto; }
+            .infra-page-actions form .btn { width: 100%; }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { left: -260px; }
+            .content-wrapper { margin-left: 0; padding-top: 58px; }
+            .content-wrapper > .container { padding: 16px 12px; }
+            .footer { margin-left: 0; }
+            .navbar {
+                position: fixed;
+                inset: 0 0 auto;
+                z-index: 1020;
+                min-height: 58px;
+                background: #052f40 !important;
+                border-bottom: 1px solid rgba(94, 210, 245, 0.2);
+                box-shadow: none;
+            }
+            .navbar-brand, .navbar .nav-link { color: #fff !important; }
+            .navbar-toggler { border-color: rgba(255, 255, 255, 0.35); background: #fff; }
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+{% set infrastructure_endpoints = [
+    'servidores', 'replicacao_ad', 'antenas_unifi', 'listar_vms',
+    'listar_links', 'vpn_ipsec', 'listar_switches', 'listar_firewalls',
+    'listar_admin_logins', 'validade_certificados',
+    'cadastro_emails_contatos', 'relatorios_infra'
+] %}
+<body class="{{ 'infra-screen' if request.endpoint in infrastructure_endpoints else '' }}">
     <!-- Novo Menu Lateral e Navbar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <a href="{{ url_for('index') }}" class="d-flex align-items-center text-decoration-none">
-                <img class="sidebar-brand-logo" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
-                <span class="sidebar-brand-wordmark">SENTINEL</span>
+                <img class="sidebar-brand-full" src="{{ url_for('static', filename='branding/sentinel_regionais_logo.png', v='20261016-1') }}" alt="Sentinel - Infraestrutura Regional">
             </a>
             <button class="btn-close d-md-none" id="closeSidebar"></button>
         </div>
@@ -570,7 +861,7 @@
         <ul class="sidebar-menu">
             <li class="sidebar-item">
                 <a href="#" class="sidebar-link sidebar-toggle" data-target="regionais-menu">
-                    <img class="sidebar-link-icon-image" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
+                    <i class="bi bi-buildings me-2"></i>
                     <span>Regionais</span>
                     <i class="bi bi-chevron-right ms-auto"></i>
                 </a>
@@ -659,14 +950,14 @@
                     </li>
                     <li>
                         <a href="{{ url_for('listar_firewalls') }}" class="sidebar-sublink">
-                            <i class="bi bi-shield-check me-2" style="color: #FF6B6B;"></i>
+                            <i class="bi bi-shield-check me-2"></i>
                             <span>Firewalls</span>
                         </a>
                     </li>
                     {% if sentinel_access.operator %}
                     <li>
                         <a href="{{ url_for('listar_admin_logins') }}" class="sidebar-sublink">
-                            <i class="bi bi-person-badge me-2" style="color: #0F6C8C;"></i>
+                            <i class="bi bi-person-badge me-2"></i>
                             <span>Monitor de Admins</span>
                         </a>
                     </li>
@@ -742,27 +1033,17 @@
                 </a>
                 <ul class="sidebar-submenu" id="user-menu">
                     <li class="sidebar-user-info">
-                        <div class="d-flex align-items-center p-3">
-                            <i class="bi bi-building me-2 text-primary"></i>
-                            <div>
-                                <div class="fw-bold">{{ current_user.display_name or current_user.id }}</div>
-                                <small class="text-muted">{{ current_user.id }}@galaxia.local</small>
-                                <small class="d-block text-muted">
-                                    {% if sentinel_access.corporate %}Acesso corporativo
-                                    {% elif sentinel_access.full_view %}Visão completa
-                                    {% else %}{{ sentinel_access.allowed|length }} regional(is){% endif %}
-                                </small>
+                        <div class="sidebar-user-details">
+                            <div class="sidebar-user-detail">
+                                <i class="bi bi-envelope"></i>
+                                <span>{{ current_user.id }}@galaxia.local</span>
+                            </div>
+                            <div class="sidebar-user-detail">
+                                <i class="bi bi-eye"></i>
+                                <span>{% if sentinel_access.corporate %}Acesso corporativo{% elif sentinel_access.full_view %}Visão completa{% else %}{{ sentinel_access.allowed|length }} regional(is){% endif %}</span>
                             </div>
                         </div>
                     </li>
-                    {% if sentinel_access.access_admin %}
-                    <li>
-                        <a href="{{ url_for('permissoes_regionais') }}" class="sidebar-sublink">
-                            <i class="bi bi-shield-lock me-2"></i>
-                            <span>Permissões Regionais</span>
-                        </a>
-                    </li>
-                    {% endif %}
                     <li>
                         <form method="post" action="{{ url_for('logout') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -780,8 +1061,8 @@
         <div class="sidebar-footer">
             <a href="{{ url_for('index') }}" class="sidebar-footer-brand" aria-label="Grupo GPS">
                 <svg viewBox="0 0 360 90" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <text x="0" y="63" font-size="34" font-weight="500" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GRUPO</text>
-                    <text x="112" y="68" font-size="72" font-weight="900" fill="#012E40" font-family="Segoe UI, Arial, sans-serif">GPS</text>
+                    <text x="0" y="63" font-size="34" font-weight="500" fill="#C9E6F0" font-family="Segoe UI, Arial, sans-serif">GRUPO</text>
+                    <text x="112" y="68" font-size="72" font-weight="900" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif">GPS</text>
                 </svg>
             </a>
         </div>
@@ -805,29 +1086,13 @@
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li>
                         <div class="dropdown-item-text">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-building me-2 text-primary"></i>
-                                <div>
-                                    <div class="fw-bold">{{ current_user.display_name or current_user.id }}</div>
-                                    <small class="text-muted">{{ current_user.id }}@galaxia.local</small>
-                                    <small class="d-block text-muted">
-                                        {% if sentinel_access.corporate %}Acesso corporativo
-                                        {% elif sentinel_access.full_view %}Visão completa
-                                        {% else %}{{ sentinel_access.allowed|length }} regional(is){% endif %}
-                                    </small>
-                                </div>
+                            <div class="d-grid gap-2">
+                                <small><i class="bi bi-envelope me-2"></i>{{ current_user.id }}@galaxia.local</small>
+                                <small><i class="bi bi-eye me-2"></i>{% if sentinel_access.corporate %}Acesso corporativo{% elif sentinel_access.full_view %}Visão completa{% else %}{{ sentinel_access.allowed|length }} regional(is){% endif %}</small>
                             </div>
                         </div>
                     </li>
                     <li><hr class="dropdown-divider"></li>
-                    {% if sentinel_access.access_admin %}
-                    <li>
-                        <a class="dropdown-item" href="{{ url_for('permissoes_regionais') }}">
-                            <i class="bi bi-shield-lock me-2"></i>
-                            Permissões Regionais
-                        </a>
-                    </li>
-                    {% endif %}
                     <li>
                         <form method="post" action="{{ url_for('logout') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -890,7 +1155,7 @@
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% if sofia_enabled and current_user.is_authenticated %}
-        <script src="{{ url_for('static', filename='sofia/sofia.js') }}"></script>
+        <script src="{{ url_for('static', filename='sofia/sofia.js', v='20261016-3') }}"></script>
     {% endif %}
     {% if current_user.is_authenticated %}
         <script src="{{ url_for('static', filename='notifications/notifications.js') }}"></script>

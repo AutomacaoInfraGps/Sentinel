@@ -6,6 +6,7 @@ import unittest
 
 from core.secret_store import (
     DpapiCurrentUserProtector,
+    DpapiLocalMachineProtector,
     JsonSecretStore,
     SecretNotFoundError,
     SecretStoreError,
@@ -111,6 +112,16 @@ class DpapiCurrentUserTests(unittest.TestCase):
         self.assertEqual(
             protector.unprotect(protected),
             "segredo-dpapi-current-user",
+        )
+
+    def test_local_machine_roundtrip(self):
+        protector = DpapiLocalMachineProtector()
+        protected = protector.protect("segredo-dpapi-local-machine")
+
+        self.assertNotIn(b"segredo-dpapi-local-machine", protected)
+        self.assertEqual(
+            protector.unprotect(protected),
+            "segredo-dpapi-local-machine",
         )
 
 

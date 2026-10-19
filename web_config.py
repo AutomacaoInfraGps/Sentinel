@@ -4137,6 +4137,37 @@ def _mapa_encontrar_regional_unifi(regionais, nome):
     return None
 
 
+def _agrupar_antenas_unifi_por_regional(regionais, unifi_data):
+    """Agrupa o inventario UniFi usando o mesmo vinculo regional do mapa."""
+    agrupadas = {codigo: [] for codigo in regionais}
+    for ap_original in (unifi_data or {}).get("aps") or []:
+        ap = normalizar_modelo_ap(ap_original)
+        try:
+            clientes = int(ap.get("clientes") or 0)
+        except (TypeError, ValueError):
+            clientes = 0
+        referencia = ap.get("site") or ap.get("regional") or ap.get("nome")
+        codigo = _mapa_encontrar_regional_unifi(regionais, referencia)
+        if not codigo or codigo not in agrupadas:
+            codigo = _mapa_encontrar_regional_por_nome(regionais, referencia)
+        if not codigo or codigo not in agrupadas:
+            continue
+        agrupadas[codigo].append({
+            "nome": ap.get("nome") or ap.get("name") or "Access point",
+            "ip": ap.get("ip") or "",
+            "modelo": ap.get("modelo") or ap.get("modelo_codigo") or "",
+            "firmware": ap.get("firmware") or "",
+            "status": _mapa_status(ap.get("status")),
+            "clientes": clientes,
+            "site": ap.get("site") or "",
+            "em_manutencao": bool(ap.get("em_manutencao")),
+        })
+
+    for antenas in agrupadas.values():
+        antenas.sort(key=lambda item: str(item.get("nome") or "").casefold())
+    return agrupadas
+
+
 def _mapa_adicionar_alerta(regional, tipo, quantidade, severidade, descricao):
     if quantidade <= 0:
         return
@@ -5158,6 +5189,20 @@ def listar_regionais():
         )
         log_stage("switches")
 
+        try:
+            unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
+            antenas_agrupadas = _agrupar_antenas_unifi_por_regional(
+                regionais_map,
+                unifi_data,
+            )
+        except Exception as exc:
+            current_app.logger.warning(
+                "Falha ao carregar antenas UniFi nos cards regionais: %s",
+                exc,
+            )
+            antenas_agrupadas = {codigo: [] for codigo in regionais_map}
+        log_stage("antenas_unifi")
+
         firewalls_a_vencer = _obter_regionais_com_firewall_a_vencer()
         log_stage("alertas_firewall")
         regionais_dados = []
@@ -5184,6 +5229,10 @@ def listar_regionais():
                     for vpn in (vpns_agrupadas.get(codigo_regional, {}).get("tunels") or [])
                 ]
                 firewalls_cache = firewalls_agrupados.get(codigo_regional, [])
+                antenas = [
+                    dict(antena)
+                    for antena in antenas_agrupadas.get(codigo_regional, [])
+                ]
                 # Prepara resumo dos firewalls para exibição no card
                 firewalls_resumo = []
                 for fw in firewalls_cache:
@@ -5234,6 +5283,7 @@ def listar_regionais():
                     'total_switches': len(switches),
                     'total_vpns': len(vpns),
                     'total_firewalls': len(firewalls_resumo),
+                    'total_antenas': len(antenas),
                     'total_firewalls_a_vencer': firewalls_a_vencer.get(str(codigo_regional).strip().upper(), 0),
                     'tem_firewall_a_vencer': str(codigo_regional).strip().upper() in firewalls_a_vencer,
                     'servidores': servidores,
@@ -5241,6 +5291,7 @@ def listar_regionais():
                     'switches': switches,
                     'vpns': vpns,
                     'firewalls': firewalls_resumo,
+                    'antenas': antenas,
                 })
         
         log_stage("montagem")
@@ -5510,11 +5561,30 @@ def detalhar_regional(codigo_regional):
 
         vpns_completas = _obter_vpns_detalhe_regional(codigo_regional)
 
+        antenas_completas = []
+        regionais_map = {}
+        try:
+            regionais_map = {
+                codigo: gerenciador_regionais.obter_regional(codigo) or {}
+                for codigo in gerenciador_regionais.listar_regionais()
+            }
+            unifi_data = _filtrar_antenas_unifi_ocultas(load_data("unifi") or {})
+            antenas_completas = _agrupar_antenas_unifi_por_regional(
+                regionais_map,
+                unifi_data,
+            ).get(codigo_regional, [])
+        except Exception as exc:
+            current_app.logger.warning(
+                "Erro ao carregar antenas UniFi da regional %s: %s",
+                codigo_regional,
+                exc,
+            )
+
         # Buscar firewalls desta regional usando o mesmo matching da página principal
         firewalls_completos = []
         try:
             adom = _get_fortimanager_adom()
-            regionais_map = {
+            regionais_map = regionais_map or {
                 codigo: gerenciador_regionais.obter_regional(codigo) or {}
                 for codigo in gerenciador_regionais.listar_regionais()
             }
@@ -5648,6 +5718,7 @@ def detalhar_regional(codigo_regional):
             'descricao': regional_info.get('descricao', ''),
             'servidores': servidores_completos,
             'links': links_completos,
+            'antenas': antenas_completas,
             'vpns': vpns_completas,
             'firewalls': firewalls_completos,
             'switches': switches_completos,

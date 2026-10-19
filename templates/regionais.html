@@ -282,6 +282,242 @@
             grid-template-columns: 1fr;
         }
     }
+
+    .regionais-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 24px;
+        margin-bottom: 22px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #ccdae1;
+    }
+
+    .regionais-heading small {
+        display: block;
+        margin-bottom: 6px;
+        color: #1688b1;
+        font: 700 0.7rem Consolas, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .regionais-heading h1 {
+        margin: 0;
+        color: #0c3445;
+        font-size: clamp(1.65rem, 2.5vw, 2.25rem);
+        font-weight: 750;
+        letter-spacing: 0;
+    }
+
+    .regionais-heading p {
+        margin: 6px 0 0;
+        color: #637883;
+        font-size: 0.9rem;
+    }
+
+    .regionais-actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    .regionais-actions .btn { min-height: 40px; display: inline-flex; align-items: center; }
+
+    .regionais-stats-section { gap: 10px; }
+    .regionais-stats-grid { gap: 10px; }
+
+    .regionais-stats-card .stats-card {
+        min-height: 96px;
+        align-items: flex-start;
+        justify-content: center;
+        margin: 0;
+        padding: 14px 16px;
+        border: 1px solid #d4e0e5;
+        border-left: 4px solid #1688b1;
+        border-radius: 7px;
+        background: #fff !important;
+        color: #173744;
+        text-align: left;
+        box-shadow: 0 3px 12px rgba(17, 55, 70, 0.05);
+    }
+
+    .regionais-stats-card .stats-number {
+        margin: 0 0 7px;
+        color: #0a4056;
+        font-size: 1.75rem;
+        line-height: 1;
+    }
+
+    .regionais-stats-card .stats-label {
+        min-height: 0;
+        justify-content: flex-start;
+        color: #607681;
+        font-size: 0.76rem;
+        opacity: 1;
+    }
+
+    .stats-card-filter[data-filter-regional="with-servers"],
+    .stats-card-filter[data-filter-regional="with-links"],
+    .stats-card-filter[data-filter-regional="with-switches"] { border-left-color: #22a77a; }
+    .stats-card-filter[data-filter-regional="without-servers"],
+    .stats-card-filter[data-filter-regional="without-switches"] { border-left-color: #8b9aa1; }
+    .stats-card-filter[data-filter-regional="without-links"] { border-left-color: #df4c5e; }
+    .stats-card-filter[data-filter-regional="firewall-expiring"] { border-left-color: #e29224; }
+
+    .stats-card-filter.active-filter {
+        border-color: #159bc9;
+        background: #eaf7fc !important;
+        box-shadow: 0 0 0 2px rgba(21, 155, 201, 0.12);
+    }
+
+    .stats-card-filter.active-filter::after { display: none; }
+    .stats-card-filter:hover { transform: translateY(-1px); box-shadow: 0 7px 16px rgba(17, 55, 70, 0.1); }
+
+    .page-search-card {
+        border: 1px solid #d4e0e5;
+        background: #fff;
+        box-shadow: 0 3px 12px rgba(17, 55, 70, 0.05);
+    }
+
+    .regionais-list { width: 100%; }
+
+    .regionais-list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+    .regionais-list-header h2 {
+        margin: 0;
+        color: #123746;
+        font-size: 1rem;
+        font-weight: 750;
+    }
+
+    .regionais-list-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+    .regionais-list-body { padding: 0; }
+
+    .regional-card {
+        border: 1px solid #d7e1e6 !important;
+        border-radius: 7px;
+        box-shadow: 0 3px 12px rgba(17, 55, 70, 0.07) !important;
+    }
+
+    .regional-card:hover {
+        border-color: #9fb9c4 !important;
+        box-shadow: 0 7px 18px rgba(17, 55, 70, 0.12) !important;
+    }
+
+    .regional-card .card-header {
+        background: #064b61 !important;
+        color: #fff;
+        border-bottom-color: #064b61;
+    }
+
+    .regional-card .card-header .btn-outline-secondary {
+        color: #c8e5ee;
+        border-color: rgba(200, 229, 238, 0.5);
+    }
+
+    .regional-card .card-header .btn-outline-secondary:hover,
+    .regional-card .card-header .btn-outline-secondary:focus {
+        color: #fff;
+        border-color: #78d4ef;
+        background: rgba(120, 212, 239, 0.12);
+    }
+
+    .regional-card .card-body {
+        padding: 16px;
+        background: #fff;
+    }
+
+    .regional-description {
+        margin-bottom: 12px;
+        color: #607681 !important;
+    }
+
+    .regional-device-section {
+        --section-color: #68808a;
+        margin: 0 0 9px;
+        padding: 10px 12px;
+        border-left: 3px solid var(--section-color);
+        border-radius: 7px;
+        background: #f6f9fa;
+    }
+
+    .regional-device-section:last-child { margin-bottom: 0; }
+    .regional-device-section[data-device="servers"] { --section-color: #1677ff; }
+    .regional-device-section[data-device="links"] { --section-color: #05a9d6; }
+    .regional-device-section[data-device="antennas"] { --section-color: #279b87; }
+    .regional-device-section[data-device="switches"] { --section-color: #687781; }
+    .regional-device-section[data-device="vpns"] { --section-color: #7258d6; }
+    .regional-device-section[data-device="firewalls"] { --section-color: #167c91; }
+
+    .regional-device-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 8px;
+        color: #264a59 !important;
+        font-size: 0.72rem !important;
+        font-weight: 750;
+        text-transform: uppercase;
+    }
+
+    .regional-device-title i { color: var(--section-color); }
+    .regional-device-heading { display: inline-flex; align-items: center; gap: 7px; }
+
+    .regional-device-count {
+        min-width: 24px;
+        margin-left: auto;
+        padding: 2px 7px;
+        border-radius: 999px;
+        color: #fff;
+        background: var(--section-color);
+        font-size: 0.68rem;
+        line-height: 1.35;
+        text-align: center;
+    }
+
+    .regional-device-row { min-height: 24px; }
+
+    .regional-device-empty {
+        padding-top: 12px;
+        padding-bottom: 12px;
+        text-align: center;
+    }
+
+    .regional-device-empty > i { font-size: 1.65rem !important; }
+
+    .regional-card .card-footer {
+        padding: 10px 16px;
+        border-top-color: #dce7eb;
+        background: #f8fafb !important;
+    }
+
+    @media (max-width: 768px) {
+        .regionais-header { align-items: flex-start; flex-direction: column; }
+        .regionais-actions { width: 100%; }
+        .regionais-actions .btn { flex: 1; justify-content: center; }
+        .regionais-list-header { align-items: flex-start; flex-direction: column; }
+        .regionais-list-actions { width: 100%; }
+        .regionais-list-actions .btn { flex: 1; }
+    }
+
+    @media (max-width: 576px) {
+        .regionais-stats-grid.regionais-stats-grid-servers,
+        .regionais-stats-grid.regionais-stats-grid-links {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .regionais-stats-card .stats-card {
+            min-height: 106px;
+            padding: 13px;
+        }
+
+        .regionais-stats-card .stats-label {
+            align-items: flex-start;
+            font-size: 0.7rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -317,23 +553,19 @@
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="regionais-header">
-            <div class="regionais-hero">
-                <img
-                    class="regionais-hero-logo"
-                    src="{{ url_for('static', filename='branding/sentinel_regionais_logo.png') }}"
-                    alt="Sentinel Infraestrutura Regional Grupo GPS"
-                >
-            </div>
-            <div>
-                <a href="{{ url_for('nova_regional') }}" class="btn btn-primary">
-                    <i class="bi bi-plus-circle me-2"></i>
-                    Nova Regional
-                </a>
-            </div>
-        </div>
+<div class="regionais-header">
+    <div class="regionais-heading">
+        <small>Sentinel | Operações</small>
+        <h1>Infraestrutura Regional</h1>
+        <p>{{ regionais|length }} regionais cadastradas e seus ativos de infraestrutura.</p>
+    </div>
+    <div class="regionais-actions">
+        <a href="{{ url_for('fluxo_neural_redes') }}" target="_blank" rel="noopener" class="btn btn-outline-secondary">
+            <i class="bi bi-bezier2 me-2"></i>Fluxo Neural
+        </a>
+        <a href="{{ url_for('nova_regional') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>Nova Regional
+        </a>
     </div>
 </div>
 
@@ -455,15 +687,10 @@
 </div>
 
 <!-- Lista de Regionais -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-list me-2"></i>
-                    Regionais Cadastradas
-                </h5>
-                <div>
+<section class="regionais-list">
+            <div class="regionais-list-header">
+                <h2><i class="bi bi-list me-2"></i>Regionais cadastradas</h2>
+                <div class="regionais-list-actions">
                     <button class="btn btn-outline-info btn-sm" onclick="verificarTodasRegionais(this)">
                         <i class="bi bi-arrow-clockwise me-1"></i>
                         Verificar Servidores
@@ -473,27 +700,30 @@
                         <i class="bi bi-wifi me-1"></i>
                         Atualizar Links
                     </button>
-                    <button class="btn btn-outline-light btn-sm ms-2"
+                    <button class="btn btn-outline-secondary btn-sm"
                             onclick="gerarPreventivasDispositivos(this)">
                         <i class="bi bi-file-earmark-zip me-1"></i>
                         Preventiva
                     </button>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="regionais-list-body">
                 {% if regionais %}
                 <div id="regionaisSearchEmpty" class="alert alert-info page-search-empty">
                     Nenhuma regional encontrada para o termo informado.
                 </div>
                 <div class="row">
                     {% for regional in regionais %}
+                    {% set antenas = regional.antenas|default([], true) %}
+                    {% set total_antenas = regional.total_antenas|default(antenas|length, true)|int %}
                     <div class="col-md-6 col-lg-4 mb-4 regional-search-item"
                         data-total-servidores="{{ regional.total_servidores }}"
                         data-total-links="{{ regional.total_links }}"
                         data-total-switches="{{ regional.total_switches }}"
                         data-total-vpns="{{ regional.total_vpns }}"
+                        data-total-antenas="{{ total_antenas }}"
                         data-firewall-expiring="{{ 'true' if regional.tem_firewall_a_vencer else 'false' }}"
-                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %} {% for switch in regional.switches %} {{ switch.host }} {{ switch.ip }} {{ switch.modelo or '' }} {{ switch.local or '' }} {% endfor %}">
+                        data-search-text="{{ regional.nome }} {{ regional.codigo }} {{ regional.descricao or '' }} {% for servidor in regional.servidores %} {{ servidor.nome }} {{ servidor.ip }} {% endfor %} {% for link in regional.links %} {{ link.provedor }} {{ link.ip }} {{ link.mascara or '' }} {% endfor %} {% for switch in regional.switches %} {{ switch.host }} {{ switch.ip }} {{ switch.modelo or '' }} {{ switch.local or '' }} {% endfor %} {% for antena in antenas %} {{ antena.nome }} {{ antena.ip }} {{ antena.modelo }} {% endfor %}">
                         <div class="card border-0 shadow-sm h-100 transition-all regional-card"
                             id="card-regional-{{ regional.codigo }}">
                             <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -542,42 +772,13 @@
                             </div>
                             
                             <div class="card-body">
-                                <p class="text-muted small mb-3">{{ regional.descricao or 'Sem descrição' }}</p>
-                                
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="small text-muted">Código:</span>
-                                        <code class="small">{{ regional.codigo }}</code>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted">Servidores:</span>
-                                        <span class="badge bg-primary">{{ regional.total_servidores }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted">Links:</span>
-                                        <span class="badge bg-info">{{ regional.total_links }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted">Switches:</span>
-                                        <span class="badge bg-secondary">{{ regional.total_switches }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted">VPNs:</span>
-                                        <span class="badge bg-dark">{{ regional.total_vpns }}</span>
-                                    </div>
-                                    {% if regional.total_firewalls is defined and regional.total_firewalls > 0 %}
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted">Firewalls:</span>
-                                        <span class="badge bg-warning text-dark">{{ regional.total_firewalls }}</span>
-                                    </div>
-                                    {% endif %}
-                                </div>
+                                <p class="regional-description small">{{ regional.descricao or 'Sem descrição' }}</p>
                                 
                                 {% if regional.total_servidores > 0 %}
-                                <div class="mb-3">
-                                    <h6 class="small text-muted mb-2">Servidores:</h6>
+                                <div class="regional-device-section" data-device="servers">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-server"></i>Servidores</span><span class="regional-device-count">{{ regional.total_servidores }}</span></h6>
                                     {% for servidor in regional.servidores[:3] %}
-                                    <div class="d-flex align-items-center mb-1">
+                                    <div class="regional-device-row d-flex align-items-center mb-1">
                                         <i class="bi bi-server me-2 text-primary"></i>
                                         <span class="small">{{ servidor.nome }}</span>
                                         <span class="ms-auto d-flex align-items-center">
@@ -600,17 +801,18 @@
                                     {% endif %}
                                 </div>
                                 {% else %}
-                                <div class="text-center py-3">
+                                <div class="regional-device-section regional-device-empty" data-device="servers">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-server"></i>Servidores</span><span class="regional-device-count">0</span></h6>
                                     <i class="bi bi-server text-muted fs-1"></i>
                                     <p class="text-muted small mb-0">Nenhum servidor cadastrado</p>
                                 </div>
                                 {% endif %}
 
                                 {% if regional.total_links > 0 %}
-                                <div class="mb-3">
-                                    <h6 class="small text-muted mb-2">Links de Internet:</h6>
+                                <div class="regional-device-section" data-device="links">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-router"></i>Links de Internet</span><span class="regional-device-count">{{ regional.total_links }}</span></h6>
                                     {% for link in regional.links[:2] %}
-                                    <div class="d-flex align-items-center mb-1">
+                                    <div class="regional-device-row d-flex align-items-center mb-1">
                                         <i class="bi bi-router me-2 text-info"></i>
                                         <span class="small">{{ link.provedor }}:</span>
                                         <code class="small ms-auto">{{ link.ip_exibicao or ((link.ip if link.ip else 'sem_ip_publico') ~ (link.mascara if link.ip and link.mascara else '')) }}</code>
@@ -627,11 +829,32 @@
                                 </div>
                                 {% endif %}
 
+                                {% if total_antenas > 0 %}
+                                <div class="regional-device-section" data-device="antennas">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-wifi"></i>Antenas UniFi</span><span class="regional-device-count">{{ total_antenas }}</span></h6>
+                                    {% for antena in antenas[:3] %}
+                                    <div class="regional-device-row d-flex align-items-center mb-1 gap-2">
+                                        <i class="bi bi-broadcast-pin" style="color:var(--section-color)"></i>
+                                        <div class="small text-truncate">
+                                            <div class="text-truncate">{{ antena.nome }}</div>
+                                            <div class="text-muted text-truncate" style="font-size:0.72rem;">{{ antena.ip }}{% if antena.modelo %} · {{ antena.modelo }}{% endif %}</div>
+                                        </div>
+                                        <span class="badge ms-auto {{ 'bg-success' if antena.status == 'online' else ('bg-warning text-dark' if antena.status in ['warning', 'maintenance'] else 'bg-danger') }}">
+                                            {{ 'Online' if antena.status == 'online' else ('Manutenção' if antena.status == 'maintenance' else antena.status|capitalize) }}
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                    {% if total_antenas > 3 %}
+                                    <div class="text-center mt-2"><small class="text-muted">+{{ total_antenas - 3 }} antena(s)</small></div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
                                 {% if regional.total_switches > 0 %}
-                                <div class="mb-3">
-                                    <h6 class="small text-muted mb-2">Switches:</h6>
+                                <div class="regional-device-section" data-device="switches">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-hdd-network"></i>Switches</span><span class="regional-device-count">{{ regional.total_switches }}</span></h6>
                                     {% for switch in regional.switches[:2] %}
-                                    <div class="d-flex align-items-center mb-1 gap-2">
+                                    <div class="regional-device-row d-flex align-items-center mb-1 gap-2">
                                         <i class="bi bi-hdd-network text-secondary"></i>
                                         <code class="small text-truncate">{{ switch.ip or switch.host or switch.nome }}</code>
                                         <span class="badge ms-auto {{ 'bg-success' if switch.status == 'online' else 'bg-danger' }}">
@@ -646,10 +869,10 @@
                                 {% endif %}
 
                                 {% if regional.total_vpns > 0 %}
-                                <div class="mb-3">
-                                    <h6 class="small text-muted mb-2">VPNs IPsec:</h6>
+                                <div class="regional-device-section" data-device="vpns">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-shield-lock"></i>VPNs IPsec</span><span class="regional-device-count">{{ regional.total_vpns }}</span></h6>
                                     {% for vpn in regional.vpns[:2] %}
-                                    <div class="d-flex align-items-center mb-1 gap-2">
+                                    <div class="regional-device-row d-flex align-items-center mb-1 gap-2">
                                         <i class="bi bi-shield-lock text-primary"></i>
                                         <span class="small text-truncate">{{ vpn.tunel or vpn.nome }}</span>
                                         <span class="badge ms-auto {{ 'bg-success' if vpn.status in ['up', 'online'] else 'bg-danger' }}">
@@ -664,8 +887,8 @@
                                 {% endif %}
 
                                 {% if regional.firewalls and regional.firewalls|length > 0 %}
-                                <div class="mb-3">
-                                    <h6 class="small text-muted mb-2">Firewalls:</h6>
+                                <div class="regional-device-section" data-device="firewalls">
+                                    <h6 class="regional-device-title"><span class="regional-device-heading"><i class="bi bi-shield-check"></i>Firewalls</span><span class="regional-device-count">{{ regional.total_firewalls }}</span></h6>
                                     {% for fw in regional.firewalls %}
                                     {# espelha regional_detalhes.html: sem_sinal=cinza, expirado/<=30d=vermelho, <=60d=amarelo, >60d=verde #}
                                     {% if fw.sem_sinal %}
@@ -679,7 +902,7 @@
                                     {% else %}
                                         {% set fw_color = 'text-success' %}
                                     {% endif %}
-                                    <div class="d-flex align-items-start mb-1">
+                                    <div class="regional-device-row d-flex align-items-start mb-1">
                                         <i class="bi bi-shield-fill me-2 {{ fw_color }}" style="margin-top:2px;"></i>
                                         <div class="small">
                                             <div>{{ fw.model or 'N/A' }}</div>
@@ -737,9 +960,7 @@
                 </div>
                 {% endif %}
             </div>
-        </div>
-    </div>
-</div>
+</section>
 
 {% endblock %}
 

@@ -219,16 +219,18 @@
     <div class="text-muted mt-2">Consultando Fortigate…</div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12 text-center">
-        <h1 class="display-4">
-            <i class="bi bi-shield-lock me-2"></i> VPN IPsec
-        </h1>
-        <p class="lead text-muted">
-            Monitoramento dos túneis VPN via Fortigate
-        </p>
+<header class="infra-page-header">
+    <div>
+        <div class="infra-page-eyebrow">Sentinel | Conectividade Segura</div>
+        <h1><i class="bi bi-shield-lock me-2"></i>VPN IPsec</h1>
+        <p>Monitoramento dos túneis VPN via FortiGate.</p>
     </div>
-</div>
+    <div class="infra-page-actions">
+        <button class="btn btn-primary" id="btnAtualizarVPN" onclick="verificarVPN()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Atualizar VPN
+        </button>
+    </div>
+</header>
 
 <!-- KPIs -->
 <div class="row mb-4">
@@ -274,15 +276,6 @@
             <div class="stats-number">{{ regionais_com_offline|length }}</div>
             <div class="stats-label">Regionais com VPN Offline</div>
         </div>
-    </div>
-</div>
-
-<!-- Botão -->
-<div class="row mb-4">
-    <div class="col-12 text-center">
-        <button class="btn btn-primary btn-lg" id="btnAtualizarVPN" onclick="verificarVPN()">
-            <i class="bi bi-arrow-clockwise me-2"></i> Atualizar VPN
-        </button>
     </div>
 </div>
 

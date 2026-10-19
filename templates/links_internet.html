@@ -256,6 +256,203 @@
             grid-template-columns: 1fr;
         }
     }
+
+    /* Composicao operacional da pagina de links. */
+    .links-page-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 20px;
+        padding-bottom: 17px;
+        border-bottom: 1px solid #ccdbe2;
+    }
+
+    .links-page-eyebrow {
+        margin-bottom: 5px;
+        color: #0F6C8C;
+        font: 700 0.7rem Consolas, monospace;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .links-page-header h1 {
+        margin: 0;
+        color: #123746;
+        font-size: clamp(1.65rem, 2.4vw, 2.15rem);
+        font-weight: 750;
+        letter-spacing: 0;
+    }
+
+    .links-page-header p {
+        margin: 6px 0 0;
+        color: #637883;
+        font-size: .9rem;
+    }
+
+    .links-page-header .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+    }
+
+    .links-stats-grid .stats-card {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        min-height: 92px !important;
+        margin-bottom: 0;
+        padding: 15px 16px;
+        border-radius: 8px;
+        text-align: left;
+    }
+
+    .links-stats-grid .stats-number {
+        margin: 0;
+        font-size: 1.85rem;
+        line-height: 1;
+    }
+
+    .links-stats-grid .stats-label {
+        margin-top: 6px;
+        font-size: .76rem;
+        font-weight: 650;
+        opacity: .9;
+    }
+
+    .links-stat-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        border: 1px solid rgba(255,255,255,.28);
+        border-radius: 50%;
+        background: rgba(255,255,255,.12);
+        font-size: 1rem;
+    }
+
+    .links-region-block {
+        background: #fff;
+        box-shadow: 0 5px 18px rgba(20, 54, 68, .07);
+    }
+
+    .links-region-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .links-region-title i {
+        display: grid;
+        place-items: center;
+        width: 31px;
+        height: 31px;
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 50%;
+        background: rgba(255,255,255,.1);
+    }
+
+    .links-region-counts span {
+        padding: 4px 8px;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 999px;
+        background: rgba(255,255,255,.08);
+    }
+
+    .links-region-items {
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .link-card {
+        position: relative;
+        margin-bottom: 0;
+        border-radius: 8px;
+        transition: box-shadow .2s ease, border-color .2s ease;
+    }
+
+    .link-card:hover {
+        transform: none;
+        border-color: rgba(15, 108, 140, .34);
+        box-shadow: 0 8px 20px rgba(1, 46, 64, .12);
+    }
+
+    .link-header {
+        min-height: 76px;
+        padding: 13px 15px;
+    }
+
+    .link-body {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        padding: 16px;
+    }
+
+    .link-meta-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .link-meta-item {
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid #e2eaee;
+        border-radius: 6px;
+        background: #f7fafb;
+    }
+
+    .link-meta-label {
+        display: block;
+        margin-bottom: 3px;
+        color: #6b7d85;
+        font-size: .67rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .link-meta-value {
+        display: block;
+        min-width: 0;
+        color: #183945;
+        font-size: .83rem;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+    }
+
+    .link-traffic-panel {
+        padding: 12px;
+        border-radius: 7px;
+        background: #f6f9fa;
+    }
+
+    .link-traffic-title {
+        color: #264a59;
+        font-size: .76rem;
+        font-weight: 750;
+        text-transform: uppercase;
+    }
+
+    .verification-time {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid #e5ecef;
+        font-size: .76rem;
+    }
+
+    @media (max-width: 768px) {
+        .links-page-header { align-items: stretch; flex-direction: column; }
+        .links-page-header .btn { width: 100%; }
+        .links-region-header { align-items: flex-start; flex-direction: column; }
+        .links-region-counts { justify-content: flex-start; flex-wrap: wrap; }
+        .link-meta-grid { grid-template-columns: 1fr; }
+    }
 </style>
 {% endblock %}
 
@@ -267,87 +464,68 @@
     <div class="loading-subtext">Obtendo informações do Fortigate. Isso pode levar alguns instantes...</div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <h1 class="display-4 text-center mb-4">
-            <i class="bi bi-globe me-3"></i>
-            Links de Internet
-        </h1>
-        <p class="lead text-center text-muted">
-            Monitoramento dos links de internet via Fortigate
-        </p>
+<header class="links-page-header">
+    <div>
+        <div class="links-page-eyebrow">Sentinel | Conectividade</div>
+        <h1><i class="bi bi-globe2 me-2"></i>Links de Internet</h1>
+        <p>Monitoramento dos links de internet via FortiGate.</p>
     </div>
-</div>
+    <button class="btn btn-primary" onclick="verificarLinks(this)">
+        <span class="spinner-border spinner-border-sm btn-spinner" style="display:none;"></span>
+        <span class="btn-text"><i class="bi bi-arrow-clockwise me-2"></i>Atualizar Links</span>
+    </button>
+</header>
 
 <!-- Estatisticas -->
-<div class="row row-cols-1 row-cols-md-5 g-3 mb-4">
+<div class="row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-3 mb-4 links-stats-grid">
     <div class="col">
         <div class="stats-card links-status-filter active-filter" data-link-filter="all" onclick="filtrarLinksStatus('all', this)" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
-            <div class="stats-number" id="stats-total-regionais">
-                {{ resumo_links.total_regionais | default(links_por_regional|length, true) }}
-            </div>
-            <div class="stats-label">
-                <i class="bi bi-diagram-3 me-1"></i>
-                Regionais
+            <span class="links-stat-icon"><i class="bi bi-diagram-3"></i></span>
+            <div>
+                <div class="stats-number" id="stats-total-regionais">{{ resumo_links.total_regionais | default(links_por_regional|length, true) }}</div>
+                <div class="stats-label">Regionais</div>
             </div>
         </div>
     </div>
 
     <div class="col">
         <div class="stats-card links-status-filter" data-link-filter="all" onclick="filtrarLinksStatus('all', this)" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);">
-            <div class="stats-number" id="stats-total-links">
-                {{ resumo_links.total_links | default(links|length, true) }}
-            </div>
-            <div class="stats-label">
-                <i class="bi bi-globe me-1"></i>
-                Total de Links
+            <span class="links-stat-icon"><i class="bi bi-globe"></i></span>
+            <div>
+                <div class="stats-number" id="stats-total-links">{{ resumo_links.total_links | default(links|length, true) }}</div>
+                <div class="stats-label">Total de Links</div>
             </div>
         </div>
     </div>
 
     <div class="col">
         <div class="stats-card links-status-filter" data-link-filter="online" onclick="filtrarLinksStatus('online', this)" style="background: linear-gradient(135deg, #20c997, #28a745);">
-            <div class="stats-number" id="stats-online">
-                {{ resumo_links.links_online | default(links|selectattr('status', 'equalto', 'online')|list|length, true) }}
-            </div>
-            <div class="stats-label">
-                <i class="bi bi-check-circle me-1"></i>
-                Links Online
+            <span class="links-stat-icon"><i class="bi bi-check-circle"></i></span>
+            <div>
+                <div class="stats-number" id="stats-online">{{ resumo_links.links_online | default(links|selectattr('status', 'equalto', 'online')|list|length, true) }}</div>
+                <div class="stats-label">Links Online</div>
             </div>
         </div>
     </div>
 
     <div class="col">
         <div class="stats-card links-status-filter" data-link-filter="offline" onclick="filtrarLinksStatus('offline', this)" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
-            <div class="stats-number" id="stats-offline">
-                {{ resumo_links.links_offline | default(links|selectattr('status', 'equalto', 'offline')|list|length, true) }}
-            </div>
-            <div class="stats-label">
-                <i class="bi bi-x-circle me-1"></i>
-                Links Offline
+            <span class="links-stat-icon"><i class="bi bi-x-circle"></i></span>
+            <div>
+                <div class="stats-number" id="stats-offline">{{ resumo_links.links_offline | default(links|selectattr('status', 'equalto', 'offline')|list|length, true) }}</div>
+                <div class="stats-label">Links Offline</div>
             </div>
         </div>
     </div>
 
     <div class="col">
         <div class="stats-card links-status-filter" data-link-filter="other" onclick="filtrarLinksStatus('other', this)" style="background: linear-gradient(135deg, #6c757d, #495057);">
-            <div class="stats-number" id="stats-inativos">
-                {{ resumo_links.links_inativos | default(0, true) }}
-            </div>
-            <div class="stats-label">
-                <i class="bi bi-pause-circle me-1"></i>
-                Inativos/Indefinidos
+            <span class="links-stat-icon"><i class="bi bi-pause-circle"></i></span>
+            <div>
+                <div class="stats-number" id="stats-inativos">{{ resumo_links.links_inativos | default(0, true) }}</div>
+                <div class="stats-label">Inativos/Indefinidos</div>
             </div>
         </div>
-    </div>
-</div>
-<!-- Botão para atualizar -->
-<div class="row mb-4">
-    <div class="col-12 text-center">
-        <button class="btn btn-primary btn-lg" onclick="verificarLinks(this)">
-            <span class="spinner-border spinner-border-sm btn-spinner" style="display:none;"></span>
-            <span class="btn-text"><i class="bi bi-arrow-clockwise me-2"></i>Atualizar Links</span>
-        </button>
     </div>
 </div>
 
@@ -383,7 +561,10 @@
         {% for regional, links_regional in links_por_regional.items() %}
         <section class="links-region-block" id="links-{{ regional|lower }}" data-regional="{{ regional }}" data-search-text="{{ regional }} {% for link in links_regional %} {{ link.nome }} {{ link.alias or '' }} {{ link.ip }} {{ link.mascara or '' }} {{ link.velocidade }} {{ link.tipo }} {{ link.status }} {% endfor %}">
             <header class="links-region-header">
-                <h4>{{ regional }}</h4>
+                <div class="links-region-title">
+                    <i class="bi bi-diagram-3"></i>
+                    <h4>{{ regional }}</h4>
+                </div>
                 <div class="links-region-counts">
                     <span class="ok">Online: {{ links_regional|selectattr('status', 'equalto', 'online')|list|length }}</span>
                     <span class="offline">Offline: {{ links_regional|selectattr('status', 'equalto', 'offline')|list|length }}</span>
@@ -395,7 +576,7 @@
                 <div class="card link-card h-100" id="link-{{ link.nome|replace('.', '-')|replace(' ', '-') }}" data-link="{{ link.nome }}" data-link-status="{{ link.status }}">
                     <div class="card-header link-header {{ 'link-online' if link.status == 'online' else 'link-offline' }}">
                         <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">{{ link.nome }}</h5>
+                            <h5 class="mb-0"><i class="bi bi-router me-2"></i>{{ link.nome }}</h5>
                             <span class="badge bg-light text-dark">{{ link.status|capitalize }}</span>
                         </div>
                         {% if link.alias %}
@@ -404,14 +585,14 @@
                     </div>
                     <div class="card-body link-body">
                         <div class="link-meta-grid">
-                            <p class="mb-0"><strong>IP:</strong> {{ link.ip }}</p>
-                            <p class="mb-0"><strong>Velocidade:</strong> {{ link.velocidade }}</p>
-                            <p class="mb-0"><strong>Tipo:</strong> {{ link.tipo|capitalize }}</p>
+                            <div class="link-meta-item"><span class="link-meta-label">IP</span><code class="link-meta-value">{{ link.ip }}</code></div>
+                            <div class="link-meta-item"><span class="link-meta-label">Velocidade</span><span class="link-meta-value">{{ link.velocidade }}</span></div>
+                            <div class="link-meta-item"><span class="link-meta-label">Tipo</span><span class="link-meta-value">{{ link.tipo|capitalize }}</span></div>
                         </div>
 
                         {% if link.estatisticas %}
-                        <hr>
-                        <h6 class="link-traffic-title">Estatísticas de Tráfego</h6>
+                        <div class="link-traffic-panel">
+                        <h6 class="link-traffic-title"><i class="bi bi-activity me-1"></i>Estatísticas de Tráfego</h6>
 
                         <div class="link-traffic-row">
                             <div class="link-traffic-head">
@@ -432,10 +613,12 @@
                                 <div class="link-progress-bar upload" style="width: {{ [(link.estatisticas.bandwidth_out / 1000000), 100]|min }}%"></div>
                             </div>
                         </div>
+                        </div>
                         {% endif %}
 
                         <div class="verification-time">
-                            Última verificação: {{ (link.ultima_verificacao or '')|replace('T', ' ')|replace('Z', '') }}
+                            <i class="bi bi-clock-history"></i>
+                            <span>Última verificação: {{ (link.ultima_verificacao or '')|replace('T', ' ')|replace('Z', '') }}</span>
                         </div>
                     </div>
                 </div>
@@ -545,7 +728,10 @@ function renderizarLinksPorRegional(linksPorRegional) {
         html += `
             <section class="links-region-block" id="links-${regional.toLowerCase()}" data-regional="${regional}" data-search-text="${regional} ${links.map(link => `${link.nome || ''} ${link.alias || ''} ${link.ip || ''} ${link.mascara || ''} ${link.velocidade || ''} ${link.tipo || ''} ${link.status || ''}`).join(' ')}">
                 <header class="links-region-header">
-                    <h4>${regional}</h4>
+                    <div class="links-region-title">
+                        <i class="bi bi-diagram-3"></i>
+                        <h4>${regional}</h4>
+                    </div>
                     <div class="links-region-counts">
                         <span class="ok">Online: ${online}</span>
                         <span class="offline">Offline: ${offline}</span>
@@ -568,19 +754,19 @@ function renderizarLinksPorRegional(linksPorRegional) {
                 <div class="card link-card h-100" id="link-${nome.replace(/[\.\s]+/g, '-')}" data-link="${nome}" data-link-status="${link.status || 'unknown'}">
                     <div class="card-header link-header ${badge}">
                         <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">${nome}</h5>
+                            <h5 class="mb-0"><i class="bi bi-router me-2"></i>${nome}</h5>
                             <span class="badge bg-light text-dark">${(link.status || 'offline').replace(/^./, m => m.toUpperCase())}</span>
                         </div>
                         ${alias ? `<div class="small text-white-50">${alias}</div>` : ''}
                     </div>
                     <div class="card-body link-body">
                         <div class="link-meta-grid">
-                            <p class="mb-0"><strong>IP:</strong> ${ip}</p>
-                            <p class="mb-0"><strong>Velocidade:</strong> ${velocidade}</p>
-                            <p class="mb-0"><strong>Tipo:</strong> ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}</p>
+                            <div class="link-meta-item"><span class="link-meta-label">IP</span><code class="link-meta-value">${ip}</code></div>
+                            <div class="link-meta-item"><span class="link-meta-label">Velocidade</span><span class="link-meta-value">${velocidade}</span></div>
+                            <div class="link-meta-item"><span class="link-meta-label">Tipo</span><span class="link-meta-value">${tipo.charAt(0).toUpperCase() + tipo.slice(1)}</span></div>
                         </div>
-                        <hr>
-                        <h6 class="link-traffic-title">Estatísticas de Tráfego</h6>
+                        <div class="link-traffic-panel">
+                        <h6 class="link-traffic-title"><i class="bi bi-activity me-1"></i>Estatísticas de Tráfego</h6>
                         <div class="link-traffic-row">
                             <div class="link-traffic-head">
                                 <span>Download:</span>
@@ -599,7 +785,8 @@ function renderizarLinksPorRegional(linksPorRegional) {
                                 <div class="link-progress-bar upload" style="width: ${calcularPercentualTrafego(estat.bandwidth_out)}%"></div>
                             </div>
                         </div>
-                        <div class="verification-time">Última verificação: ${formatarDataHora(link.ultima_verificacao)}</div>
+                        </div>
+                        <div class="verification-time"><i class="bi bi-clock-history"></i><span>Última verificação: ${formatarDataHora(link.ultima_verificacao)}</span></div>
                     </div>
                 </div>
             `;

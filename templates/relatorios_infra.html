@@ -3,17 +3,18 @@
 {% block title %}Relatórios de Infraestrutura - Infraestrutura Regional{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <h1 class="display-5 mb-4">
-            <i class="bi bi-file-earmark-text me-3"></i>
-            Relatórios de Infraestrutura
-        </h1>
-        <p class="lead text-muted">
-            Visualize e gerencie relatórios de todos os componentes da infraestrutura
-        </p>
+<header class="infra-page-header">
+    <div>
+        <div class="infra-page-eyebrow">Sentinel | Relatorios</div>
+        <h1><i class="bi bi-file-earmark-text me-2"></i>Relatórios de Infraestrutura</h1>
+        <p>Visualize e gerencie relatórios de todos os componentes da infraestrutura.</p>
     </div>
-</div>
+    <div class="infra-page-actions">
+        <button class="btn btn-primary" onclick="gerarRelatorioCompleto()">
+            <i class="bi bi-file-earmark-plus me-2"></i>Relatório Completo
+        </button>
+    </div>
+</header>
 
 <!-- Estatísticas de Relatórios -->
 <div class="row mb-4">
@@ -70,17 +71,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <div class="d-grid">
-                            <button class="btn btn-primary" onclick="gerarRelatorioCompleto()">
-                                <i class="bi bi-file-earmark-plus me-2"></i>
-                                <span class="btn-text">Relatório Completo</span>
-                                <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-4 mb-3">
                         <div class="d-grid">
                             <button class="btn btn-info" onclick="atualizarTodos()">
                                 <i class="bi bi-arrow-clockwise me-2"></i>
@@ -89,7 +80,7 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-4 mb-3">
                         <div class="d-grid">
                             <button class="btn btn-outline-secondary" onclick="limparAntigos()">
                                 <i class="bi bi-trash me-2"></i>
@@ -98,7 +89,7 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-4 mb-3">
                         <div class="d-grid">
                             <button class="btn btn-outline-success" onclick="exportarRelatorios()">
                                 <i class="bi bi-download me-2"></i>

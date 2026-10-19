@@ -52,19 +52,19 @@
     }
 
     .firewall-masonry {
-        column-count: 2;
-        column-gap: 1.5rem;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
     }
 
     .firewall-masonry .firewall-card-wrapper {
-        break-inside: avoid;
-        margin-bottom: 1.5rem;
+        margin-bottom: 0;
         width: 100%;
     }
 
     @media (max-width: 991.98px) {
         .firewall-masonry {
-            column-count: 1;
+            grid-template-columns: 1fr;
         }
     }
 
@@ -106,6 +106,121 @@
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 1rem;
         margin-bottom: 2rem;
+    }
+
+    .firewall-overview-stack {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .firewall-metric-panel {
+        display: grid;
+        grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+        gap: 16px;
+        padding: 14px;
+        border: 1px solid #d7e3e8;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(20, 54, 68, .06);
+    }
+
+    .firewall-metric-intro {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 5px 8px;
+    }
+
+    .firewall-metric-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        color: #fff;
+        background: #0A4A63;
+    }
+
+    .firewall-metric-intro h2 {
+        margin: 0;
+        color: #173744;
+        font-size: .95rem;
+        font-weight: 800;
+    }
+
+    .firewall-metric-intro p {
+        margin: 4px 0 0;
+        color: #697c85;
+        font-size: .75rem;
+        line-height: 1.35;
+    }
+
+    .firewall-metric-panel .stats-grid {
+        align-self: stretch;
+        grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+        gap: 9px;
+        margin: 0;
+    }
+
+    .firewall-metric-panel .stat-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 72px;
+        padding: 11px 13px;
+        text-align: left;
+    }
+
+    .firewall-metric-panel .stat-card .number {
+        font-size: 1.55rem;
+        line-height: 1;
+    }
+
+    .firewall-metric-panel .stat-card .label {
+        margin: 0;
+        font-size: .72rem;
+        text-align: right;
+    }
+
+    .firewall-metric-panel .stat-card.active {
+        outline: 2px solid #fff;
+        outline-offset: -5px;
+        box-shadow: 0 0 0 2px #0F6C8C;
+    }
+
+    .firewall-inventory-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin: 22px 0 12px;
+    }
+
+    .firewall-inventory-heading h2 {
+        margin: 0;
+        color: #173744;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .firewall-license-alert {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+    }
+
+    .firewall-license-alert .alert-heading { font-size: .95rem; }
+
+    @media (max-width: 991.98px) {
+        .firewall-metric-panel { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 575.98px) {
+        .firewall-metric-panel .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .firewall-metric-panel .stat-card { align-items: flex-start; flex-direction: column; }
+        .firewall-metric-panel .stat-card .label { text-align: left; }
     }
 
     .stat-card {
@@ -200,28 +315,27 @@
 
 <div class="container-fluid mt-4">
     <!-- Cabeçalho -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex align-items-center justify-content-between">
+    <header class="infra-page-header">
                 <div>
-                    <h1 class="mb-2">
+                    <div class="infra-page-eyebrow">Sentinel | Seguranca de Borda</div>
+                    <h1>
                         <i class="bi bi-shield-check" style="color: #FF6B6B;"></i>
                         Firewalls
                     </h1>
-                    <p class="text-muted mb-0">
+                    <p>
                         Monitoramento centralizado de FortiGates, disponibilidade e licenças por regional
                         {% if cache_atualizado_em %}
                             <span class="ms-2 small">Última consulta Forti: {{ cache_atualizado_em[:19].replace('T', ' ') }}</span>
                         {% endif %}
                     </p>
                 </div>
+                <div class="infra-page-actions">
                 <button class="btn btn-danger" onclick="recarregarFirewalls()" title="Consultar FortiManager agora">
                     <i class="bi bi-arrow-clockwise me-2"></i>
                     Atualizar
                 </button>
-            </div>
-        </div>
-    </div>
+                </div>
+    </header>
 
     <!-- Barra de Busca -->
     <div class="row mb-4">
@@ -242,60 +356,69 @@
         </div>
     </div>
 
-    <!-- Estatísticas -->
-    <h5 class="fw-bold mb-3">Firewalls</h5>
-    <div class="stats-grid mb-4" style="grid-template-columns: repeat(5, 1fr);">
-        <div class="stat-card active" id="card-all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('all')">
-            <div class="number">{{ total_firewalls }}</div>
-            <div class="label"><i class="bi bi-shield-fill me-1"></i>Total</div>
-        </div>
-        <div class="stat-card" id="card-fw-online" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('fw-online')">
-            <div class="number">{{ total_firewalls_online|default(0) }}</div>
-            <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Online</div>
-        </div>
-        <div class="stat-card" id="card-fw-offline" style="background: linear-gradient(135deg, #e53935, #ff6b1a);" onclick="aplicarFiltroFirewall('fw-offline')">
-            <div class="number">{{ total_firewalls_offline|default(0) }}</div>
-            <div class="label"><i class="bi bi-x-circle-fill me-1"></i>Offline</div>
-        </div>
-        <div class="stat-card" id="card-fw-inativo" style="background: linear-gradient(135deg, #5c6770, #343a40);" onclick="aplicarFiltroFirewall('fw-inativo')">
-            <div class="number">{{ total_firewalls_inativos|default(0) }}</div>
-            <div class="label"><i class="bi bi-pause-circle-fill me-1"></i>Inativo</div>
-        </div>
-        <div class="stat-card" id="card-fw-maintenance" style="background: #d97706;" onclick="aplicarFiltroFirewall('fw-maintenance')">
-            <div class="number">{{ total_firewalls_maintenance|default(0) }}</div>
-            <div class="label"><i class="bi bi-tools me-1"></i>Manutencao</div>
-        </div>
-    </div>
+    <!-- Visao operacional -->
+    <div class="firewall-overview-stack">
+        <section class="firewall-metric-panel" aria-labelledby="firewallAvailabilityTitle">
+            <div class="firewall-metric-intro">
+                <span class="firewall-metric-icon"><i class="bi bi-shield-check"></i></span>
+                <div>
+                    <h2 id="firewallAvailabilityTitle">Disponibilidade</h2>
+                    <p>Estado operacional dos equipamentos monitorados.</p>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card active" id="card-all" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('all')">
+                    <div class="number">{{ total_firewalls }}</div><div class="label"><i class="bi bi-shield-fill me-1"></i>Total</div>
+                </div>
+                <div class="stat-card" id="card-fw-online" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('fw-online')">
+                    <div class="number">{{ total_firewalls_online|default(0) }}</div><div class="label"><i class="bi bi-check-circle-fill me-1"></i>Online</div>
+                </div>
+                <div class="stat-card" id="card-fw-offline" style="background: linear-gradient(135deg, #e53935, #ff6b1a);" onclick="aplicarFiltroFirewall('fw-offline')">
+                    <div class="number">{{ total_firewalls_offline|default(0) }}</div><div class="label"><i class="bi bi-x-circle-fill me-1"></i>Offline</div>
+                </div>
+                <div class="stat-card" id="card-fw-inativo" style="background: linear-gradient(135deg, #5c6770, #343a40);" onclick="aplicarFiltroFirewall('fw-inativo')">
+                    <div class="number">{{ total_firewalls_inativos|default(0) }}</div><div class="label"><i class="bi bi-pause-circle-fill me-1"></i>Inativo</div>
+                </div>
+                <div class="stat-card" id="card-fw-maintenance" style="background: #d97706;" onclick="aplicarFiltroFirewall('fw-maintenance')">
+                    <div class="number">{{ total_firewalls_maintenance|default(0) }}</div><div class="label"><i class="bi bi-tools me-1"></i>Manutencao</div>
+                </div>
+            </div>
+        </section>
 
-    <h5 class="fw-bold mb-3">Licenças de Firewalls</h5>
-    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
-        <div class="stat-card" id="card-lic-total" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('lic-total')">
-            <div class="number">{{ total_firewalls }}</div>
-            <div class="label"><i class="bi bi-award-fill me-1"></i>Total</div>
-        </div>
-        <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
-            <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) }}</div>
-            <div class="label"><i class="bi bi-check-circle-fill me-1"></i>Licenças OK</div>
-        </div>
-        <div class="stat-card" id="card-vencer" style="background: linear-gradient(135deg, #e67e22, #d35400);" onclick="aplicarFiltroFirewall('vencer')">
-            <div class="number">{{ total_alertas }}</div>
-            <div class="label"><i class="bi bi-exclamation-triangle-fill me-1"></i>Licenças a Vencer</div>
-        </div>
-        <div class="stat-card" id="card-expirado" style="background: linear-gradient(135deg, #8f1d24, #c0392b);" onclick="aplicarFiltroFirewall('expirado')">
-            <div class="number">{{ total_expirados|default(0) }}</div>
-            <div class="label"><i class="bi bi-x-circle-fill me-1"></i>Licenças Expiradas</div>
-        </div>
+        <section class="firewall-metric-panel" aria-labelledby="firewallLicensesTitle">
+            <div class="firewall-metric-intro">
+                <span class="firewall-metric-icon"><i class="bi bi-award"></i></span>
+                <div>
+                    <h2 id="firewallLicensesTitle">Licenças</h2>
+                    <p>Validade do FortiCare associado aos equipamentos.</p>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card" id="card-lic-total" style="background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);" onclick="aplicarFiltroFirewall('lic-total')">
+                    <div class="number">{{ total_firewalls }}</div><div class="label"><i class="bi bi-award-fill me-1"></i>Total</div>
+                </div>
+                <div class="stat-card" id="card-ok" style="background: linear-gradient(135deg, #28a745, #20c997);" onclick="aplicarFiltroFirewall('ok')">
+                    <div class="number">{{ total_firewalls - total_alertas - (total_expirados|default(0)) }}</div><div class="label"><i class="bi bi-check-circle-fill me-1"></i>Licenças OK</div>
+                </div>
+                <div class="stat-card" id="card-vencer" style="background: linear-gradient(135deg, #e67e22, #d35400);" onclick="aplicarFiltroFirewall('vencer')">
+                    <div class="number">{{ total_alertas }}</div><div class="label"><i class="bi bi-exclamation-triangle-fill me-1"></i>A Vencer</div>
+                </div>
+                <div class="stat-card" id="card-expirado" style="background: linear-gradient(135deg, #8f1d24, #c0392b);" onclick="aplicarFiltroFirewall('expirado')">
+                    <div class="number">{{ total_expirados|default(0) }}</div><div class="label"><i class="bi bi-x-circle-fill me-1"></i>Expiradas</div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <!-- Alertas -->
     {% if total_alertas > 0 %}
     <div class="row mb-4">
         <div class="col-12">
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="alert alert-danger alert-dismissible fade show firewall-license-alert" role="alert">
                 <div class="d-flex align-items-center">
                     <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 1.5rem;"></i>
                     <div>
-                        <h4 class="alert-heading mb-1">Atenção: Licenças em Vencimento!</h4>
+                        <h4 class="alert-heading mb-1">Licenças próximas do vencimento</h4>
                         <p class="mb-0">{{ total_alertas }} firewall(s) com licença vencendo em até 60 dias. Clique acima para filtrar.</p>
                     </div>
                 </div>
@@ -307,6 +430,10 @@
 
     <!-- Firewalls por Regional -->
     {% if firewalls_por_regional %}
+    <div class="firewall-inventory-heading">
+        <h2><i class="bi bi-card-list me-2"></i>Inventário por regional</h2>
+        <span class="badge bg-secondary">{{ total_firewalls }} dispositivo(s)</span>
+    </div>
     <div class="firewall-masonry" id="firewallsContainer">
         {% for regional_code, firewalls in firewalls_por_regional.items() %}
         <div class="firewall-card-wrapper visible" data-regional="{{ regional_code }}" data-search-text="{{ regional_code }} {% for fw in firewalls %}{{ fw.nome }} {{ fw.hostname }} {{ fw.ip }} {{ fw.model }} {% endfor %}">
@@ -454,7 +581,7 @@ function aplicarFiltroSearch(textoBusca) {
 
 function _reaplicarFiltros() {
     const cards = document.querySelectorAll('.firewall-card-wrapper');
-    let totalVisivel = 0;
+    let totalDispositivosVisiveis = 0;
 
     cards.forEach(card => {
         const devices = Array.from(card.querySelectorAll('.firewall-device-card'));
@@ -484,23 +611,23 @@ function _reaplicarFiltros() {
 
         const mostrar = dispositivosVisiveis > 0;
         card.classList.toggle('visible', mostrar);
-        if (mostrar) totalVisivel++;
+        totalDispositivosVisiveis += dispositivosVisiveis;
     });
 
     const countElement = document.getElementById('firewallSearchCount');
     if (countElement) {
         const labels = {
-            'fw-online': `${totalVisivel} regional(is) com firewall online`,
-            'fw-offline': `${totalVisivel} regional(is) com firewall offline`,
-            'fw-inativo': `${totalVisivel} regional(is) com firewall inativo`,
-            'fw-maintenance': `${totalVisivel} regional(is) com firewall em manutencao`,
-            'lic-total': `${totalVisivel} regional(is) com licencas`,
-            'vencer': `${totalVisivel} regional(is) com licencas a vencer`,
-            'expirado': `${totalVisivel} regional(is) com licencas expiradas`,
-            'ok': `${totalVisivel} regional(is) com licencas OK`,
-            'all': `${totalVisivel} firewall(s)`
+            'fw-online': `${totalDispositivosVisiveis} firewall(s) online`,
+            'fw-offline': `${totalDispositivosVisiveis} firewall(s) offline`,
+            'fw-inativo': `${totalDispositivosVisiveis} firewall(s) inativo(s)`,
+            'fw-maintenance': `${totalDispositivosVisiveis} firewall(s) em manutencao`,
+            'lic-total': `${totalDispositivosVisiveis} firewall(s) com licencas`,
+            'vencer': `${totalDispositivosVisiveis} firewall(s) com licencas a vencer`,
+            'expirado': `${totalDispositivosVisiveis} firewall(s) com licencas expiradas`,
+            'ok': `${totalDispositivosVisiveis} firewall(s) com licencas OK`,
+            'all': `${totalDispositivosVisiveis} firewall(s)`
         };
-        countElement.textContent = labels[filtroAtivo] || `${totalVisivel} firewall(s)`;
+        countElement.textContent = labels[filtroAtivo] || `${totalDispositivosVisiveis} firewall(s)`;
     }
 }
 

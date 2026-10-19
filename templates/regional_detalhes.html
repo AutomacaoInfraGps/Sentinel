@@ -120,6 +120,32 @@
     .regional-vpn-status.up { background: #198754; }
     .regional-vpn-status.down { background: #dc3545; }
 
+    .regional-unifi-card {
+        height: 100%;
+        border: 1px solid #d8e6eb;
+        border-left: 4px solid #20a486;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+    }
+
+    .regional-unifi-card .card-header {
+        background: #edf8f5;
+        color: #073b4c;
+    }
+
+    .regional-unifi-field {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 7px 0;
+        border-bottom: 1px solid #edf2f4;
+    }
+
+    .regional-unifi-field:last-child { border-bottom: 0; }
+    .regional-unifi-field > :last-child { text-align: right; overflow-wrap: anywhere; }
+
     @media (max-width: 575.98px) {
         .regional-vpn-list { grid-template-columns: minmax(0, 1fr); }
         .regional-vpn-tunnel { align-items: flex-start; }
@@ -278,6 +304,16 @@
             <div class="stats-label">
                 <i class="bi bi-router me-1"></i>
                 Links de Internet
+            </div>
+        </button>
+    </div>
+
+    <div class="col-md col-sm-6 mb-3">
+        <button type="button" class="stats-card stats-card-jump" onclick="irParaSecaoRegional('regional-antenas-section')" style="background: linear-gradient(135deg, #168b78, #20a486);">
+            <div class="stats-number">{{ regional.antenas|default([], true)|length }}</div>
+            <div class="stats-label">
+                <i class="bi bi-wifi me-1"></i>
+                Antenas UniFi
             </div>
         </button>
     </div>
@@ -743,7 +779,56 @@
     </div>
 </div>
 
-<!-- Seção de Firewalls (Licenças) -->
+<!-- Antenas UniFi -->
+<div class="row mb-4 regional-section-anchor" id="regional-antenas-section">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-wifi me-2"></i>
+                    Antenas UniFi da Regional
+                </h5>
+                <span class="badge bg-light text-dark">{{ regional.antenas|default([], true)|length }}</span>
+            </div>
+            <div class="card-body">
+                {% set antenas = regional.antenas|default([], true) %}
+                {% if antenas %}
+                <div class="row">
+                    {% for antena in antenas %}
+                    {% set antena_online = antena.status|default('', true)|lower == 'online' %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <article class="regional-unifi-card">
+                            <div class="card-header d-flex justify-content-between align-items-center gap-3">
+                                <h6 class="mb-0 fw-bold text-break">
+                                    <i class="bi bi-broadcast-pin me-2"></i>{{ antena.nome }}
+                                </h6>
+                                <span class="badge {{ 'bg-success' if antena_online else ('bg-warning text-dark' if antena.status in ['warning', 'maintenance'] else 'bg-danger') }}">
+                                    {{ 'Online' if antena_online else ('Manutencao' if antena.status == 'maintenance' else antena.status|default('Desconhecido', true)|title) }}
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div class="regional-unifi-field"><span class="text-muted">IP</span><code>{{ antena.ip or 'N/A' }}</code></div>
+                                <div class="regional-unifi-field"><span class="text-muted">Modelo</span><strong>{{ antena.modelo or 'N/A' }}</strong></div>
+                                <div class="regional-unifi-field"><span class="text-muted">Firmware</span><span>{{ antena.firmware or 'N/A' }}</span></div>
+                                <div class="regional-unifi-field"><span class="text-muted">Clientes</span><span class="badge bg-info text-dark">{{ antena.clientes|default(0, true) }}</span></div>
+                                <div class="regional-unifi-field"><span class="text-muted">Site UniFi</span><span>{{ antena.site or 'N/A' }}</span></div>
+                            </div>
+                        </article>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-wifi-off text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">Nenhuma antena UniFi encontrada</h4>
+                    <p class="text-muted mb-0">Ainda nao ha access points associados a esta regional.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row mb-4 regional-section-anchor" id="regional-switches-section">
     <div class="col-12">
         <div class="card">

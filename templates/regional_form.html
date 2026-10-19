@@ -4,268 +4,281 @@
 
 {% block extra_css %}
 <style>
-    .regional-form-header-center {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
+    .regional-form-page { max-width: 1180px; margin: 0 auto; }
+    .regional-form-page-header {
+        display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+        margin-bottom: 20px; padding-bottom: 17px; border-bottom: 1px solid #ccdbe2;
     }
-
-    .regional-form-header-center .btn {
-        align-self: flex-start;
+    .regional-form-heading { display: flex; align-items: center; gap: 14px; }
+    .regional-form-heading-icon {
+        display: grid; width: 52px; height: 52px; flex: 0 0 52px; place-items: center;
+        border: 1px solid rgba(25, 180, 229, .35); border-radius: 8px; color: #fff;
+        background: #073f53; box-shadow: 0 7px 18px rgba(1, 46, 64, .13); font-size: 1.35rem;
     }
-
-    .regional-form-intro-center {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        gap: 0.75rem;
+    .regional-form-eyebrow {
+        margin-bottom: 4px; color: #0f6c8c; font: 700 .7rem Consolas, monospace;
+        letter-spacing: .08em; text-transform: uppercase;
     }
-
-    .regional-form-title {
-        display: flex;
-        align-items: center;
+    .regional-form-page-header h1 {
+        margin: 0; color: #123746; font-size: clamp(1.65rem, 2.4vw, 2.15rem);
+        font-weight: 750; letter-spacing: 0;
     }
-
-    .regional-form-title-center {
-        justify-content: center;
+    .regional-form-page-header p { margin: 5px 0 0; color: #637883; font-size: .9rem; }
+    .regional-form-panel {
+        overflow: hidden; border: 1px solid rgba(1, 46, 64, .12); border-radius: 8px;
+        background: #fff; box-shadow: 0 8px 24px rgba(20, 54, 68, .08);
     }
-
-    .regional-form-card-title {
-        display: flex;
-        align-items: center;
+    .regional-form-panel-header {
+        display: flex; align-items: center; justify-content: space-between; gap: 16px;
+        min-height: 58px; padding: 13px 20px; color: #fff; background: #073f53;
     }
-
-    .regional-form-card-title-center {
-        justify-content: center;
-        text-align: center;
+    .regional-form-panel-header h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+    .regional-form-state {
+        display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+        border: 1px solid rgba(255, 255, 255, .2); border-radius: 6px; color: #d7f4fc;
+        font-size: .72rem; font-weight: 700; text-transform: uppercase;
     }
-
-    .regional-form-brand-hero {
-        width: 138px;
-        height: auto;
-        object-fit: contain;
-        display: block;
+    .regional-form-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+    .regional-form-fields { padding: 24px; }
+    .regional-form-aside {
+        padding: 24px 22px; border-left: 1px solid #d9e5ea; background: #f3f8fa;
     }
-
-    .regional-form-brand-icon {
-        width: 2em;
-        height: 2em;
-        object-fit: contain;
-        flex: 0 0 auto;
-        transform: translateY(3px);
+    .regional-form-section-title {
+        display: flex; align-items: center; gap: 9px; margin: 0 0 18px; color: #123746;
+        font-size: .8rem; font-weight: 800; text-transform: uppercase;
     }
+    .regional-form-section-title i { color: #0faedb; }
+    .regional-form-page .form-label {
+        margin-bottom: 7px; color: #244654; font-size: .84rem; font-weight: 700;
+    }
+    .regional-form-page .form-control,
+    .regional-form-page .form-select {
+        min-height: 48px; border: 1px solid #cddbe2; border-radius: 6px;
+        color: #173340; background-color: #fff; box-shadow: none;
+    }
+    .regional-form-page textarea.form-control { min-height: 116px; resize: vertical; }
+    .regional-form-page .form-control:focus,
+    .regional-form-page .form-select:focus {
+        border-color: #10aeda; box-shadow: 0 0 0 3px rgba(16, 174, 218, .12);
+    }
+    .regional-form-page .form-text { margin-top: 6px; color: #71848d; font-size: .76rem; }
+    .regional-code-preview {
+        margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px solid #d4e2e8;
+    }
+    .regional-code-preview-label {
+        display: block; margin-bottom: 8px; color: #667d87; font-size: .72rem;
+        font-weight: 700; text-transform: uppercase;
+    }
+    .regional-code-preview-value {
+        display: block; min-height: 42px; padding: 10px 11px; overflow-wrap: anywhere;
+        border: 1px solid #c9dbe3; border-radius: 6px; color: #d91667; background: #fff;
+        font: 700 .82rem Consolas, monospace;
+    }
+    .regional-form-steps { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+    .regional-form-step {
+        display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px;
+        color: #55707b; font-size: .78rem; line-height: 1.45;
+    }
+    .regional-form-step span:first-child {
+        display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%;
+        color: #fff; background: #0f7595; font-size: .72rem; font-weight: 800;
+    }
+    .regional-form-step strong { display: block; margin-bottom: 2px; color: #173b49; }
+    .regional-form-actions {
+        display: flex; justify-content: flex-end; gap: 9px; padding: 16px 20px;
+        border-top: 1px solid #d9e5ea; background: #f8fafb;
+    }
+    .regional-form-actions .btn {
+        display: inline-flex; min-height: 42px; align-items: center; justify-content: center;
+        border-radius: 6px;
+    }
+    .regional-servers-panel { margin-top: 20px; }
 
-    .regional-form-brand-icon-sm {
-        width: 1.7em;
-        height: 1.7em;
-        object-fit: contain;
-        flex: 0 0 auto;
-        transform: translateY(2px);
+    @media (max-width: 900px) {
+        .regional-form-layout { grid-template-columns: 1fr; }
+        .regional-form-aside { border-top: 1px solid #d9e5ea; border-left: 0; }
+    }
+    @media (max-width: 576px) {
+        .regional-form-page-header { align-items: stretch; flex-direction: column; }
+        .regional-form-page-header .btn { align-self: flex-start; }
+        .regional-form-heading-icon { width: 44px; height: 44px; flex-basis: 44px; }
+        .regional-form-fields, .regional-form-aside { padding: 18px 15px; }
+        .regional-form-panel-header { align-items: flex-start; padding: 13px 15px; }
+        .regional-form-actions { padding: 14px 15px; }
+        .regional-form-actions .btn { flex: 1 1 0; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        {% if regional %}
-        <div class="d-flex align-items-center">
-            <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary me-3">
-                <i class="bi bi-arrow-left"></i>
-            </a>
+<div class="regional-form-page">
+    <header class="regional-form-page-header">
+        <div class="regional-form-heading">
+            <span class="regional-form-heading-icon" aria-hidden="true"><i class="bi bi-buildings"></i></span>
             <div>
-                <h1 class="display-5 mb-2 regional-form-title">
-                    {% if regional %}
-                    <i class="bi bi-building me-3"></i>
-                    {% else %}
-                    <img class="regional-form-brand-icon me-3" src="{{ url_for('static', filename='branding/sentinel_icon.svg') }}" alt="Sentinel">
-                    {% endif %}
-                    {{ acao }} Regional
-                </h1>
-                <p class="text-muted">{{ 'Edite os dados da regional' if regional else 'Adicione uma nova regional ao sistema' }}</p>
+                <div class="regional-form-eyebrow">Sentinel | Cadastro de regionais</div>
+                <h1>{{ acao }} Regional</h1>
+                <p>{{ 'Atualize a identificação e a localização da regional.' if regional else 'Cadastre uma unidade para iniciar o inventário de infraestrutura.' }}</p>
             </div>
         </div>
-        {% else %}
-        <div class="regional-form-header-center">
-            <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i>
-            </a>
-            <div class="regional-form-intro-center">
-                <img class="regional-form-brand-hero" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
-                <h1 class="display-5 mb-0 regional-form-title regional-form-title-center">{{ acao }} Regional</h1>
-                <p class="text-muted mb-0">Adicione uma nova regional ao sistema</p>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
+        <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Voltar para regionais
+        </a>
+    </header>
 
-<div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0 regional-form-card-title {{ '' if regional else 'regional-form-card-title-center' }}">
-                    {% if regional %}
-                    <i class="bi bi-pencil me-2"></i>
-                    {% else %}
-                    <img class="regional-form-brand-icon-sm me-2" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
-                    {% endif %}
-                    Dados da Regional
-                </h5>
-            </div>
-            <div class="card-body">
-                <form id="formRegional">
-                    {% if regional %}
-                    <input type="hidden" id="codigo_original" name="codigo_original" value="{{ regional.codigo }}">
-                    <input type="hidden" name="editando" value="true">
-                    {% endif %}
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="nome" class="form-label">
-                                {% if regional %}
-                                <i class="bi bi-building me-1"></i>
-                                {% else %}
-                                <img class="regional-form-brand-icon-sm me-1" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
-                                {% endif %}
-                                Nome da Regional *
-                            </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="nome" 
-                                   name="nome" 
-                                   value="{{ regional.nome if regional else '' }}"
-                                   placeholder="Ex: REG_GLOBAL SEGURANÇA"
-                                   required>
-                            <div class="form-text">Nome completo da regional</div>
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="codigo" class="form-label">
-                                <i class="bi bi-tag me-1"></i>
-                                Código da Regional
-                            </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="codigo" 
-                                   name="codigo" 
-                                   value="{{ regional.codigo if regional else '' }}"
-                                   placeholder="Ex: REG_GLOBAL_SEGURANCA">
-                            <div class="form-text">
-                                {{ 'Você pode ajustar o código ao renomear a regional' if regional else 'Deixe em branco para gerar automaticamente' }}
-                            </div>
-                        </div>
+    <form id="formRegional" class="regional-form-panel">
+        <div class="regional-form-panel-header">
+            <h2><i class="bi bi-geo-alt me-2"></i>Identificação da regional</h2>
+            <span class="regional-form-state">
+                <i class="bi bi-{{ 'pencil' if regional else 'plus-circle' }}"></i>
+                {{ 'Edição' if regional else 'Novo cadastro' }}
+            </span>
+        </div>
+
+        <div class="regional-form-layout">
+            <div class="regional-form-fields">
+                <h3 class="regional-form-section-title"><i class="bi bi-card-text"></i>Dados principais</h3>
+
+                {% if regional %}
+                <input type="hidden" id="codigo_original" name="codigo_original" value="{{ regional.codigo }}">
+                <input type="hidden" name="editando" value="true">
+                {% endif %}
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label"><i class="bi bi-building me-1"></i>Nome da Regional *</label>
+                        <input type="text" class="form-control" id="nome" name="nome"
+                               value="{{ regional.nome if regional else '' }}"
+                               placeholder="Ex: Regional Global Segurança" maxlength="100"
+                               autocomplete="organization" required>
+                        <div class="form-text">Nome usado nas telas, relatórios e consultas.</div>
                     </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="estado" class="form-label">
-                                <i class="bi bi-geo-alt me-1"></i>
-                                Estado / UF
-                            </label>
-                            <select class="form-select" id="estado" name="estado">
-                                <option value="">Selecione o estado</option>
-                                {% set estado_atual = regional.estado if regional and regional.estado is defined else '' %}
-                                {% for uf, nome_estado in [
-                                    ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
-                                    ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
-                                    ('GO', 'Goiás'), ('MA', 'Maranhão'), ('MT', 'Mato Grosso'), ('MS', 'Mato Grosso do Sul'),
-                                    ('MG', 'Minas Gerais'), ('PA', 'Pará'), ('PB', 'Paraíba'), ('PR', 'Paraná'),
-                                    ('PE', 'Pernambuco'), ('PI', 'Piauí'), ('RJ', 'Rio de Janeiro'), ('RN', 'Rio Grande do Norte'),
-                                    ('RS', 'Rio Grande do Sul'), ('RO', 'Rondônia'), ('RR', 'Roraima'), ('SC', 'Santa Catarina'),
-                                    ('SP', 'São Paulo'), ('SE', 'Sergipe'), ('TO', 'Tocantins')
-                                ] %}
-                                <option value="{{ uf }}" {% if estado_atual == uf %}selected{% endif %}>{{ uf }} - {{ nome_estado }}</option>
-                                {% endfor %}
-                            </select>
-                            <div class="form-text">Usado para posicionar e agrupar a regional no mapa.</div>
+
+                    <div class="col-md-6">
+                        <label for="codigo" class="form-label"><i class="bi bi-tag me-1"></i>Código da Regional</label>
+                        <input type="text" class="form-control" id="codigo" name="codigo"
+                               value="{{ regional.codigo if regional else '' }}"
+                               placeholder="Ex: REG_GLOBAL_SEGURANCA" maxlength="50" spellcheck="false">
+                        <div class="form-text">
+                            {{ 'Você pode ajustar o código ao renomear a regional.' if regional else 'Gerado automaticamente a partir do nome; pode ser ajustado.' }}
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="descricao" class="form-label">
-                            <i class="bi bi-text-paragraph me-1"></i>
-                            Descrição
-                        </label>
-                        <textarea class="form-control" 
-                                  id="descricao" 
-                                  name="descricao" 
-                                  rows="3"
-                                  placeholder="Descrição detalhada da regional...">{{ regional.descricao if regional else '' }}</textarea>
-                        <div class="form-text">Descrição opcional da regional</div>
+                    <div class="col-md-6">
+                        <label for="estado" class="form-label"><i class="bi bi-geo-alt me-1"></i>Estado / UF</label>
+                        <select class="form-select" id="estado" name="estado">
+                            <option value="">Selecione o estado</option>
+                            {% set estado_atual = regional.estado if regional and regional.estado is defined else '' %}
+                            {% for uf, nome_estado in [
+                                ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
+                                ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
+                                ('GO', 'Goiás'), ('MA', 'Maranhão'), ('MT', 'Mato Grosso'), ('MS', 'Mato Grosso do Sul'),
+                                ('MG', 'Minas Gerais'), ('PA', 'Pará'), ('PB', 'Paraíba'), ('PR', 'Paraná'),
+                                ('PE', 'Pernambuco'), ('PI', 'Piauí'), ('RJ', 'Rio de Janeiro'), ('RN', 'Rio Grande do Norte'),
+                                ('RS', 'Rio Grande do Sul'), ('RO', 'Rondônia'), ('RR', 'Roraima'), ('SC', 'Santa Catarina'),
+                                ('SP', 'São Paulo'), ('SE', 'Sergipe'), ('TO', 'Tocantins')
+                            ] %}
+                            <option value="{{ uf }}" {% if estado_atual == uf %}selected{% endif %}>{{ uf }} - {{ nome_estado }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Define a posição e o agrupamento geográfico no mapa.</div>
                     </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>Dica:</strong> Após criar a regional, você poderá adicionar servidores a ela.
-                    </div>
-                    
-                    <div class="d-flex gap-2 justify-content-end">
-                        <a href="{{ url_for('listar_regionais') }}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle me-1"></i>
-                            Cancelar
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            {% if regional %}
-                            <i class="bi bi-check-circle me-1"></i>
-                            {% else %}
-                            <img class="regional-form-brand-icon-sm me-1" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="Sentinel">
-                            {% endif %}
-                            <span class="btn-text">{{ 'Atualizar' if regional else 'Criar' }} Regional</span>
-                            <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        {% if regional %}
-        <!-- Servidores da Regional -->
-        <div class="card mt-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-server me-2"></i>
-                    Servidores da Regional
-                </h5>
-                <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
-                   class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-plus me-1"></i>
-                    Adicionar Servidor
-                </a>
-            </div>
-            <div class="card-body">
-                <div id="servidoresRegional">
-                    <div class="text-center py-3">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Carregando...</span>
-                        </div>
-                        <p class="text-muted mt-2">Carregando servidores...</p>
+
+                    <div class="col-12">
+                        <label for="descricao" class="form-label"><i class="bi bi-text-paragraph me-1"></i>Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3" maxlength="500"
+                                  placeholder="Contexto operacional, endereço ou observações relevantes...">{{ regional.descricao if regional else '' }}</textarea>
+                        <div class="form-text">Campo opcional para informações que ajudem a identificar a unidade.</div>
                     </div>
                 </div>
             </div>
+
+            <aside class="regional-form-aside" aria-label="Orientações do cadastro">
+                <div class="regional-code-preview">
+                    <span class="regional-code-preview-label">Código de identificação</span>
+                    <output class="regional-code-preview-value" id="codigoPreview">{{ regional.codigo if regional else 'SERÁ GERADO' }}</output>
+                </div>
+                <h3 class="regional-form-section-title"><i class="bi bi-diagram-3"></i>Próximas etapas</h3>
+                <ol class="regional-form-steps">
+                    <li class="regional-form-step">
+                        <span>1</span><div><strong>Cadastre a unidade</strong>Defina nome, código e localização.</div>
+                    </li>
+                    <li class="regional-form-step">
+                        <span>2</span><div><strong>Adicione os acessos</strong>Vincule servidores e credenciais protegidas.</div>
+                    </li>
+                    <li class="regional-form-step">
+                        <span>3</span><div><strong>Atualize o inventário</strong>Valide links, switches, VPNs e demais dispositivos.</div>
+                    </li>
+                </ol>
+            </aside>
         </div>
-        {% endif %}
+
+        <div class="regional-form-actions">
+            <a href="{{ url_for('listar_regionais') }}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-{{ 'check-circle' if regional else 'plus-circle' }} me-1"></i>
+                <span class="btn-text">{{ 'Atualizar' if regional else 'Criar' }} Regional</span>
+                <span class="loading-spinner spinner-border spinner-border-sm ms-2" role="status"></span>
+            </button>
+        </div>
+    </form>
+
+    {% if regional %}
+    <div class="card regional-servers-panel">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-server me-2"></i>Servidores da Regional</h5>
+            <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-plus me-1"></i>Adicionar Servidor
+            </a>
+        </div>
+        <div class="card-body">
+            <div id="servidoresRegional">
+                <div class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                    <p class="text-muted mt-2 mb-0">Carregando servidores...</p>
+                </div>
+            </div>
+        </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Auto-gerar código baseado no nome
+    const editando = {{ 'true' if regional else 'false' }};
+
+    function normalizarCodigo(valor) {
+        return valor
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase()
+            .trim()
+            .replace(/\s+/g, '_')
+            .replace(/[^A-Z0-9_]/g, '')
+            .replace(/_+/g, '_')
+            .substring(0, 50);
+    }
+
+    function atualizarPreviewCodigo() {
+        $('#codigoPreview').text($('#codigo').val().trim() || 'SERÁ GERADO');
+    }
+
     $('#nome').on('input', function() {
-        if (!{{ 'true' if regional else 'false' }}) {
-            const nome = $(this).val();
-            const codigo = nome.toUpperCase()
-                              .replace(/\s+/g, '_')
-                              .replace(/[^A-Z0-9_]/g, '')
-                              .substring(0, 50);
-            $('#codigo').val(codigo);
+        if (!editando) {
+            $('#codigo').val(normalizarCodigo($(this).val()));
+            atualizarPreviewCodigo();
         }
     });
-    
-    // Carrega servidores se estiver editando
+
+    $('#codigo').on('input', function() {
+        this.value = normalizarCodigo(this.value);
+        atualizarPreviewCodigo();
+    });
+
+    atualizarPreviewCodigo();
+
     {% if regional %}
     carregarServidoresRegional();
     {% endif %}
@@ -273,10 +286,16 @@ $(document).ready(function() {
 
 $('#formRegional').on('submit', function(e) {
     e.preventDefault();
-    
-    const btn = $(this).find('button[type="submit"]');
+    const form = this;
+    const btn = $(form).find('button[type="submit"]');
+
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
     showLoading(btn);
-    
+
     const formData = {
         nome: $('#nome').val().trim(),
         codigo: $('#codigo').val().trim(),
@@ -285,14 +304,7 @@ $('#formRegional').on('submit', function(e) {
         codigo_original: $('#codigo_original').val() || null,
         editando: {{ 'true' if regional else 'false' }}
     };
-    
-    // Validação
-    if (!formData.nome) {
-        showToast('Nome da regional é obrigatório', 'danger');
-        hideLoading(btn);
-        return;
-    }
-    
+
     $.ajax({
         url: '/api/regional',
         method: 'POST',
@@ -301,8 +313,7 @@ $('#formRegional').on('submit', function(e) {
         success: function(response) {
             if (response.success) {
                 showToast(response.message, 'success');
-                
-                setTimeout(() => {
+                setTimeout(function() {
                     window.location.href = '{{ url_for("listar_regionais") }}';
                 }, 1500);
             } else {
@@ -319,99 +330,65 @@ $('#formRegional').on('submit', function(e) {
 });
 
 {% if regional %}
+function escapeHtml(valor) {
+    return $('<div>').text(valor == null ? '' : String(valor)).html();
+}
+
+function estadoVazioServidores() {
+    return `
+        <div class="text-center py-4">
+            <i class="bi bi-server text-muted fs-1"></i>
+            <p class="text-muted mt-2">Nenhum servidor cadastrado</p>
+            <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" class="btn btn-primary">
+                <i class="bi bi-plus me-1"></i>Adicionar Primeiro Servidor
+            </a>
+        </div>
+    `;
+}
+
 function carregarServidoresRegional() {
     $.get(`/api/regional/{{ regional.codigo }}/verificar`)
         .done(function(response) {
-            if (response.success && response.resultados) {
+            if (response.success && Array.isArray(response.resultados) && response.resultados.length) {
                 renderizarServidores(response.resultados);
             } else {
-                $('#servidoresRegional').html(`
-                    <div class="text-center py-3">
-                        <i class="bi bi-server text-muted fs-1"></i>
-                        <p class="text-muted">Nenhum servidor cadastrado</p>
-                        <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
-                           class="btn btn-primary">
-                            <i class="bi bi-plus me-1"></i>
-                            Adicionar Primeiro Servidor
-                        </a>
-                    </div>
-                `);
+                $('#servidoresRegional').html(estadoVazioServidores());
             }
         })
         .fail(function() {
             $('#servidoresRegional').html(`
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    Erro ao carregar servidores da regional
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Erro ao carregar servidores da regional
                 </div>
             `);
         });
 }
 
 function renderizarServidores(servidores) {
-    if (servidores.length === 0) {
-        $('#servidoresRegional').html(`
-            <div class="text-center py-3">
-                <i class="bi bi-server text-muted fs-1"></i>
-                <p class="text-muted">Nenhum servidor cadastrado</p>
-                <a href="{{ url_for('novo_servidor_regional', codigo_regional=regional.codigo) }}" 
-                   class="btn btn-primary">
-                    <i class="bi bi-plus me-1"></i>
-                    Adicionar Primeiro Servidor
-                </a>
-            </div>
-        `);
-        return;
-    }
-    
-    let html = '<div class="row">';
-    
+    let html = '<div class="row g-3">';
+
     servidores.forEach(function(servidor) {
-        const statusClass = servidor.status === 'online' ? 'success' : 
-                           servidor.status === 'offline' ? 'danger' : 'warning';
-        const statusIcon = servidor.status === 'online' ? 'wifi' : 
-                          servidor.status === 'offline' ? 'wifi-off' : 'exclamation-triangle';
-        const tipoIcon = 'server';
-        
+        const status = String(servidor.status || 'desconhecido').toLowerCase();
+        const statusClass = status === 'online' ? 'success' : status === 'offline' ? 'danger' : 'warning';
+        const statusIcon = status === 'online' ? 'wifi' : status === 'offline' ? 'wifi-off' : 'exclamation-triangle';
+
         html += `
-            <div class="col-md-6 mb-3">
-                <div class="card border-${statusClass} h-100">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title mb-0">
-                                <i class="bi bi-${tipoIcon} me-1"></i>
-                                ${servidor.servidor}
-                            </h6>
-                            <span class="badge bg-${statusClass}">
-                                <i class="bi bi-${statusIcon} me-1"></i>
-                                ${servidor.status.toUpperCase()}
-                            </span>
-                        </div>
-                        
-                        <p class="text-muted small mb-2">
-                            <i class="bi bi-globe me-1"></i>
-                            ${servidor.ip}
-                        </p>
-                        
-                        ${servidor.tempo_resposta ? `
-                            <p class="text-muted small mb-0">
-                                <i class="bi bi-stopwatch me-1"></i>
-                                ${servidor.tempo_resposta}s
-                            </p>
-                        ` : ''}
-                        
-                        ${servidor.erro ? `
-                            <p class="text-danger small mb-0">
-                                <i class="bi bi-exclamation-circle me-1"></i>
-                                ${servidor.erro}
-                            </p>
-                        ` : ''}
+            <div class="col-md-6">
+                <div class="border rounded-2 p-3 h-100 border-${statusClass}">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <h6 class="mb-0"><i class="bi bi-server me-1"></i>${escapeHtml(servidor.servidor)}</h6>
+                        <span class="badge bg-${statusClass}">
+                            <i class="bi bi-${statusIcon} me-1"></i>${escapeHtml(status.toUpperCase())}
+                        </span>
                     </div>
+                    <p class="text-muted small mb-1"><i class="bi bi-globe me-1"></i>${escapeHtml(servidor.ip)}</p>
+                    ${servidor.tempo_resposta ? `<p class="text-muted small mb-0"><i class="bi bi-stopwatch me-1"></i>${escapeHtml(servidor.tempo_resposta)}s</p>` : ''}
+                    ${servidor.erro ? `<p class="text-danger small mb-0"><i class="bi bi-exclamation-circle me-1"></i>${escapeHtml(servidor.erro)}</p>` : ''}
                 </div>
             </div>
         `;
     });
-    
+
     html += '</div>';
     $('#servidoresRegional').html(html);
 }

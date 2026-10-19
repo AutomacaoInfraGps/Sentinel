@@ -10,24 +10,22 @@
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h1 class="display-5">
-            <i class="bi bi-hdd-stack me-3"></i>
-            Máquinas Virtuais
-        </h1>
-        <p class="text-muted">Gerenciamento de máquinas virtuais do Server Manager</p>
+<header class="infra-page-header">
+    <div>
+        <div class="infra-page-eyebrow">Sentinel | Virtualizacao</div>
+        <h1><i class="bi bi-hdd-stack me-2"></i>Máquinas Virtuais</h1>
+        <p>Gerenciamento de máquinas virtuais do Server Manager.</p>
     </div>
-    <div class="col-md-4 text-end">
-        <a href="/vms/cadastrar" class="btn btn-success me-2">
+    <div class="infra-page-actions">
+        <a href="/vms/cadastrar" class="btn btn-success">
             <i class="bi bi-plus-circle me-2"></i>
             Nova VM
         </a>
-        <button class="btn btn-outline-secondary me-2" onclick="atualizarVMs()">
+        <button class="btn btn-outline-secondary" onclick="atualizarVMs()">
             <i class="bi bi-arrow-clockwise me-2"></i>
             Atualizar
         </button>
-        <button class="btn btn-primary me-2" onclick="gerarRelatorio()">
+        <button class="btn btn-primary" onclick="gerarRelatorio()">
             <i class="bi bi-file-earmark-excel me-2"></i>
             Exportar Excel
         </button>
@@ -36,7 +34,7 @@
             Relatório Completo
         </button>
     </div>
-</div>
+</header>
 
 <!-- Filtros -->
 <div class="card mb-4">

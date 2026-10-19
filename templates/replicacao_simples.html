@@ -4,7 +4,20 @@
 
 {% block content %}
 <div class="container py-4">
-    <h1 class="mb-4">Replicação Active Directory</h1>
+    <header class="infra-page-header">
+        <div>
+            <div class="infra-page-eyebrow">Sentinel | Active Directory</div>
+            <h1><i class="bi bi-arrow-repeat me-2"></i>Replicação Active Directory</h1>
+            <p>Integridade e sincronização dos controladores de domínio.</p>
+        </div>
+        <div class="infra-page-actions">
+            <form action="/executar_replicacao_direto" method="post">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Atualizar Dados
+                </button>
+            </form>
+        </div>
+    </header>
     
     <div class="row mb-4">
         <div class="col-12">
@@ -12,12 +25,6 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Controle</h5>
-                        <form action="/executar_replicacao_direto" method="post">
-                            <button type="submit" class="btn btn-light btn-sm">
-                                <i class="bi bi-arrow-clockwise me-1"></i>
-                                Atualizar Dados
-                            </button>
-                        </form>
                     </div>
                 </div>
                 <div class="card-body">

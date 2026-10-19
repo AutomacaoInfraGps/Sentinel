@@ -98,6 +98,7 @@ class DpapiCurrentUserProtector:
     name = "windows-dpapi-current-user"
     _ENTROPY = b"Sentinel/secret-store/v1"
     _CRYPTPROTECT_UI_FORBIDDEN = 0x1
+    _PROTECT_FLAGS = _CRYPTPROTECT_UI_FORBIDDEN
 
     class _DataBlob(ctypes.Structure):
         _fields_ = [
@@ -162,7 +163,7 @@ class DpapiCurrentUserProtector:
             ctypes.byref(entropy),
             None,
             None,
-            self._CRYPTPROTECT_UI_FORBIDDEN,
+            self._PROTECT_FLAGS,
             ctypes.byref(output),
         ):
             self._raise_last_error("proteger")
@@ -194,6 +195,17 @@ class DpapiCurrentUserProtector:
             raise SecretStoreError("A credencial protegida esta corrompida.") from exc
         finally:
             self._kernel32.LocalFree(output.pbData)
+
+
+class DpapiLocalMachineProtector(DpapiCurrentUserProtector):
+    """Protect short-lived transfer data for accounts on the same machine."""
+
+    name = "windows-dpapi-local-machine"
+    _CRYPTPROTECT_LOCAL_MACHINE = 0x4
+    _PROTECT_FLAGS = (
+        DpapiCurrentUserProtector._CRYPTPROTECT_UI_FORBIDDEN
+        | _CRYPTPROTECT_LOCAL_MACHINE
+    )
 
 
 class JsonSecretStore:

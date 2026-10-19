@@ -39,11 +39,11 @@
     width: max-content;
     max-width: min(190px, calc(100vw - 130px));
     padding: 9px 12px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #28b7e5;
     border-radius: 8px;
-    color: #111827;
-    background: #fff;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
+    color: #fff;
+    background: #075b78;
+    box-shadow: 0 8px 22px rgba(1, 46, 64, 0.28);
     font-size: 0.84rem;
     font-weight: 700;
     line-height: 1.2;
@@ -59,17 +59,21 @@
     top: 50%;
     width: 13px;
     height: 13px;
-    border-top: 1px solid #cbd5e1;
-    border-right: 1px solid #cbd5e1;
-    background: #fff;
+    border-top: 1px solid #28b7e5;
+    border-right: 1px solid #28b7e5;
+    background: #075b78;
     transform: translateY(-50%) rotate(45deg);
 }
 
 .sofia-greeting:hover,
 .sofia-greeting:focus-visible {
-    border-color: #0f6c8c;
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
+    border-color: #74dcfb;
+    background: #064f6b;
+    box-shadow: 0 10px 26px rgba(1, 46, 64, 0.34);
 }
+
+.sofia-greeting:hover::after,
+.sofia-greeting:focus-visible::after { background: #064f6b; }
 
 .sofia-widget.is-open .sofia-greeting {
     display: none;
