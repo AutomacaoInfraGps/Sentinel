@@ -7,6 +7,7 @@ class SofiaEngineTests(unittest.TestCase):
     def setUp(self):
         self._originals = {
             "identificar_regional": engine.identificar_regional,
+            "listar_nomes_regionais": engine.listar_nomes_regionais,
             "nome_regional": engine.nome_regional,
             "total_regionais": engine.total_regionais,
             "resumo_links": engine.resumo_links,
@@ -24,6 +25,11 @@ class SofiaEngineTests(unittest.TestCase):
             "REG_ABC": "REG_ABC"
         }.get(codigo, "Regional")
         engine.total_regionais = lambda allowed_regionals=None: 3
+        engine.listar_nomes_regionais = lambda limite=50, allowed_regionals=None: [
+            "REG_ABC",
+            "REG_BAHIA",
+            "REG_CEARA",
+        ][:limite]
         engine.resumo_links = lambda codigo=None, allowed_regionals=None: {
             "total": 2,
             "online": 1,
@@ -72,6 +78,18 @@ class SofiaEngineTests(unittest.TestCase):
         resposta = self.perguntar("quantas regionais temos?")
         self.assertIn("3 regionais", resposta)
 
+    def test_lista_regionais_sem_depender_do_historico_do_modelo(self):
+        resposta = self.perguntar("Quais são elas?")
+
+        self.assertIn("3 regionais", resposta)
+        self.assertIn("- REG_ABC", resposta)
+        self.assertIn("- REG_CEARA", resposta)
+
+    def test_bom_dia_retorna_saudacao_em_vez_de_alertas(self):
+        resposta = self.perguntar("Bom dia SofIA")
+
+        self.assertEqual(resposta, engine.SOFIA_INITIAL_REPLY)
+
     def test_resumo_regional_sem_topico_especifico(self):
         resposta = self.perguntar("resumo da regional abc")
         self.assertIn("Resumo da REG_ABC", resposta)
@@ -116,6 +134,16 @@ class SofiaEngineTests(unittest.TestCase):
         ))
         self.assertFalse(engine.solicita_status_manutencao(
             "Tem alguma regional com alerta?"
+        ))
+
+    def test_identifica_respostas_factuais_locais(self):
+        self.assertTrue(engine.solicita_resposta_local("Bom dia SofIA"))
+        self.assertTrue(engine.solicita_resposta_local(
+            "Quantas regionais temos no Sentinel?"
+        ))
+        self.assertTrue(engine.solicita_resposta_local("Quais são elas?"))
+        self.assertFalse(engine.solicita_resposta_local(
+            "Resuma os alertas atuais"
         ))
 
     def test_resposta_explicativa_dashboard_usa_knowledge(self):

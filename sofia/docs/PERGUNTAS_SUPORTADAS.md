@@ -88,8 +88,12 @@ Me mostra a regional Campinas
 O que a SofIA responde:
 
 - total de regionais cadastradas;
+- lista completa das regionais autorizadas, inclusive na continuacao "Quais sao elas?";
 - resumo geral de uma regional quando ela identifica o nome/codigo;
 - resumo combinado de servidores, links e switches da regional.
+
+A saudacao, a quantidade e a listagem de regionais sao respondidas diretamente
+pelo inventario do Sentinel. O modelo nao calcula nem estima esses valores.
 
 Funcoes usadas:
 
