@@ -31,6 +31,7 @@ class SofiaN8nClientTest(unittest.TestCase):
             mensagem="Resumo dos alertas atuais",
             allowed_regionals={"REG_UBERLANDIA", "REG_ABC"},
             scope_token="signed-scope-token",
+            conversation_id="12345678-1234-4234-9234-123456789abc",
         )
 
         self.assertEqual(reply, "RESUMO OPERACIONAL\nTotal: 2")
@@ -42,6 +43,17 @@ class SofiaN8nClientTest(unittest.TestCase):
         self.assertEqual(
             request.kwargs["json"]["sentinel_scope_token"],
             "signed-scope-token",
+        )
+        self.assertEqual(
+            request.kwargs["json"]["sentinel_facts"],
+            {
+                "authorized_regionals_total": 2,
+                "authorized_regionals_complete": True,
+            },
+        )
+        self.assertEqual(
+            request.kwargs["json"]["conversation_id"],
+            "12345678-1234-4234-9234-123456789abc",
         )
         self.assertEqual(request.kwargs["headers"]["X-Sentinel-Sofia-Token"], "t" * 32)
         self.assertFalse(request.kwargs["allow_redirects"])
@@ -82,6 +94,28 @@ class SofiaN8nClientTest(unittest.TestCase):
         )
 
         self.assertEqual(reply, "Linha 1.\nLinha 2.")
+
+    @patch("sofia.n8n_client.requests.post")
+    def test_sends_all_51_authorized_regionals_without_truncation(self, post):
+        post.return_value = Mock(
+            status_code=200,
+            json=lambda: {"reply": "Inventário consultado."},
+        )
+        regionals = {f"REG_TESTE_{index:02d}" for index in range(1, 52)}
+
+        consultar_sofia(
+            mensagem="Quais regionais temos?",
+            allowed_regionals=regionals,
+            scope_token="signed-scope-token",
+            conversation_id="12345678-1234-4234-9234-123456789abc",
+        )
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(len(payload["allowed_regionals"]), 51)
+        self.assertEqual(
+            payload["sentinel_facts"]["authorized_regionals_total"],
+            51,
+        )
 
 
 if __name__ == "__main__":

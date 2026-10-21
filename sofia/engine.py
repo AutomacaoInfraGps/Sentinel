@@ -9,7 +9,6 @@ from .tools_sentinel import (
     alertas_switches_ativos,
     consultar_manutencoes_regionais,
     identificar_regional,
-    listar_nomes_regionais,
     nome_regional,
     resumo_links,
     resumo_servidores,
@@ -99,51 +98,6 @@ def solicita_status_manutencao(mensagem):
     """Identify read-only questions about active maintenance windows."""
     texto = _normalizar_mensagem(mensagem)
     return _contem_termo(texto, "manutencao", "maintenance")
-
-
-def solicita_saudacao(mensagem):
-    """Recognize a greeting without intercepting unrelated sentences."""
-    texto = _normalizar_mensagem(mensagem)
-    return texto in {
-        "oi",
-        "oi sofia",
-        "ola",
-        "ola sofia",
-        "bom dia",
-        "bom dia sofia",
-        "boa tarde",
-        "boa tarde sofia",
-        "boa noite",
-        "boa noite sofia",
-    }
-
-
-def solicita_total_regionais(mensagem):
-    texto = _normalizar_mensagem(mensagem)
-    return (
-        _contem_termo(texto, "regional", "regionais")
-        and _contem_termo(texto, "quantas", "quantos", "total", "quantidade")
-    )
-
-
-def solicita_listagem_regionais(mensagem):
-    texto = _normalizar_mensagem(mensagem)
-    if texto in {"quais sao elas", "quais elas", "liste elas", "mostre elas"}:
-        return True
-    return (
-        _contem_termo(texto, "regional", "regionais")
-        and _contem_termo(texto, "quais", "listar", "liste", "mostre", "nomes")
-    )
-
-
-def solicita_resposta_local(mensagem):
-    """Keep factual inventory answers outside the probabilistic agent."""
-    return any((
-        solicita_saudacao(mensagem),
-        solicita_status_manutencao(mensagem),
-        solicita_total_regionais(mensagem),
-        solicita_listagem_regionais(mensagem),
-    ))
 
 
 def _quer_explicacao(texto):
@@ -316,38 +270,19 @@ def _resposta_manutencoes_regionais(codigo=None, allowed_regionals=None):
     )
 
 
-def _resposta_listagem_regionais(allowed_regionals=None):
-    names = listar_nomes_regionais(limite=500, allowed_regionals=allowed_regionals)
-    if not names:
-        return "Não há regionais disponíveis para o seu perfil de acesso."
-    return (
-        f"Você tem acesso a {len(names)} regionais no Sentinel:\n"
-        + "\n".join(f"- {name}" for name in names)
-    )
-
-
 def processar_mensagem_sofia(*, usuario, mensagem, allowed_regionals=None):
     """Classify an allowed topic without invoking tools or external models."""
     del usuario
     msg = _normalizar_mensagem(mensagem)
     regional_code = identificar_regional(msg, allowed_regionals)
 
-    if solicita_saudacao(msg):
+    if _contem_termo(msg, "ola", "oi", "bom", "boa"):
         return SOFIA_INITIAL_REPLY
 
     if solicita_status_manutencao(msg):
         return _resposta_manutencoes_regionais(
             regional_code,
             allowed_regionals,
-        )
-
-    if solicita_listagem_regionais(msg):
-        return _resposta_listagem_regionais(allowed_regionals)
-
-    if solicita_total_regionais(msg):
-        return (
-            f"O Sentinel possui {total_regionais(allowed_regionals)} regionais "
-            "disponíveis para seu acesso."
         )
 
     topico_conhecimento = _identificar_topico_conhecimento(msg)

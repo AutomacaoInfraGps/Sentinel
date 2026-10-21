@@ -8,6 +8,7 @@
     const userKey = (widget.dataset.user || "anon").replace(/[^a-zA-Z0-9_.-]/g, "_");
     const storageKey = `sentinel.sofia.chat.${userKey}.v1`;
     const panelStorageKey = `sentinel.sofia.panel.${userKey}.v1`;
+    const conversationStorageKey = `sentinel.sofia.conversation.${userKey}.v1`;
     const maxStoredMessages = 50;
     const panel = document.getElementById("sofiaPanel");
     const launcher = document.getElementById("sofiaLauncher");
@@ -21,6 +22,31 @@
     const status = document.getElementById("sofiaStatus");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let waitingMessage = null;
+
+    function createConversationId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return window.crypto.randomUUID();
+        }
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (char) {
+            const random = Math.floor(Math.random() * 16);
+            const value = char === "x" ? random : ((random & 3) | 8);
+            return value.toString(16);
+        });
+    }
+
+    function loadConversationId() {
+        try {
+            const stored = window.sessionStorage.getItem(conversationStorageKey);
+            if (/^[a-f0-9-]{36}$/i.test(stored || "")) return stored;
+            const created = createConversationId();
+            window.sessionStorage.setItem(conversationStorageKey, created);
+            return created;
+        } catch (error) {
+            return createConversationId();
+        }
+    }
+
+    let conversationId = loadConversationId();
 
     function typeAssistantMessage(item) {
         if (!item || item.dataset.typed === "true" || item.dataset.typing === "true") return;
@@ -247,6 +273,8 @@
     clearButton.addEventListener("click", function () {
         try {
             window.sessionStorage.removeItem(storageKey);
+            conversationId = createConversationId();
+            window.sessionStorage.setItem(conversationStorageKey, conversationId);
         } catch (error) {
             // Nada a fazer: o historico visual ainda sera limpo abaixo.
         }
@@ -291,7 +319,10 @@
                     "Content-Type": "application/json",
                     "X-Sentinel-Request": "sofia-chat"
                 },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify({
+                    message: message,
+                    conversation_id: conversationId
+                })
             });
 
             const contentType = response.headers.get("content-type") || "";

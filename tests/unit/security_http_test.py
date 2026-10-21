@@ -72,7 +72,7 @@ class SecurityHTTPTest(unittest.TestCase):
         response = self.client.get("/api/test")
         self.assertEqual(response.status_code, 401)
 
-    def test_notification_api_refreshes_map_cache_and_keeps_last_known_alerts(self):
+    def test_notification_api_only_reads_snapshot_and_keeps_last_known_alerts(self):
         self._login_session("admin.notifications", ["SENTINEL_ADMINISTRATIVE_OU"])
         state = {
             "updated_at": "2026-10-02T10:00:00+00:00",
@@ -94,7 +94,7 @@ class SecurityHTTPTest(unittest.TestCase):
             patch("web_config.filter_records", side_effect=lambda records, *_args, **_kwargs: records),
             patch("web_config.can_operate_sentinel", return_value=False),
             patch("web_config._mapa_carregar_cache", return_value=({}, 999)),
-            patch("web_config._mapa_iniciar_refresh_background", return_value=True) as refresh,
+            patch("web_config._mapa_iniciar_refresh_background") as refresh,
             patch("web_config._mapa_refresh_esta_em_andamento", return_value=True),
             patch(
                 "web_config.decorate_with_read_state",
@@ -108,7 +108,7 @@ class SecurityHTTPTest(unittest.TestCase):
         self.assertTrue(payload["refreshing"])
         self.assertFalse(payload["snapshot_fresh"])
         self.assertTrue(any(item["device"] == "WAN TESTE" for item in payload["notifications"]))
-        refresh.assert_called_once_with()
+        refresh.assert_not_called()
 
     def test_login_form_and_security_headers_are_present(self):
         response = self.client.get("/login")

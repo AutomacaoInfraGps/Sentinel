@@ -3,12 +3,12 @@
 from collections import defaultdict, deque
 from threading import Lock
 import time
+import re
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user, login_required
 
 from .audit import registrar_evento_sofia
-from .engine import processar_mensagem_sofia, solicita_resposta_local
 from .n8n_client import SofiaN8nError, consultar_sofia
 from .permissions import usuario_pode_executar
 from .scope_token import SofiaScopeError, issue_regional_scope_token
@@ -89,6 +89,10 @@ def chat():
     if len(message) > MAX_MESSAGE_LENGTH:
         return _json_response({"error": f"A mensagem deve ter até {MAX_MESSAGE_LENGTH} caracteres."}, 413)
 
+    conversation_id = str(payload.get("conversation_id") or "").strip()
+    if not re.fullmatch(r"[a-f0-9-]{36}", conversation_id, flags=re.IGNORECASE):
+        return _json_response({"error": "Identificador da conversa inválido."}, 400)
+
     if not _rate_limit_allows(username):
         registrar_evento_sofia(
             usuario=username,
@@ -116,21 +120,14 @@ def chat():
             getattr(current_user, "dn", ""),
         )
         scope = access_scope(groups, codigos_regionais())
-        if solicita_resposta_local(message):
-            reply = processar_mensagem_sofia(
-                usuario=username,
-                mensagem=message,
-                allowed_regionals=scope["allowed"],
-            )
-            audit_detail = "Resposta deterministica read-only do Sentinel"
-        else:
-            scope_token = issue_regional_scope_token(scope["allowed"])
-            reply = consultar_sofia(
-                mensagem=message,
-                allowed_regionals=scope["allowed"],
-                scope_token=scope_token,
-            )
-            audit_detail = "Resposta da SofIA via n8n"
+        scope_token = issue_regional_scope_token(scope["allowed"])
+        reply = consultar_sofia(
+            mensagem=message,
+            allowed_regionals=scope["allowed"],
+            scope_token=scope_token,
+            conversation_id=conversation_id,
+        )
+        audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
             usuario=username,
             status="sucesso",

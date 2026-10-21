@@ -2186,7 +2186,7 @@
         loadData(false);
         setInterval(updateLiveClock, 1000);
         if (!IS_STATIC_MAP) {
-            setInterval(() => loadData(true), REFRESH_MS);
+            setInterval(() => loadData(false), REFRESH_MS);
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) loadData(false);
             });

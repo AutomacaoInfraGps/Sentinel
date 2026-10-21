@@ -24,6 +24,7 @@ class FortiManagerClient:
         self.session = requests.Session()
         self.session.verify = False
         self.sessionid = None
+        self._preferred_sdwan_monitor_resource = None
         # Se API key disponível, injeta header — não precisa de login/logout
         if self.api_key:
             self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
@@ -99,7 +100,10 @@ class FortiManagerClient:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        self.logout()
+        try:
+            self.logout()
+        finally:
+            self.session.close()
         return False
 
     def _request(self, method, url, data=None):
@@ -307,6 +311,10 @@ class FortiManagerClient:
             "/api/v2/monitor/virtual-wan-link/status",
         )
 
+        preferred = self._preferred_sdwan_monitor_resource
+        if preferred in endpoints:
+            endpoints = (preferred,) + tuple(item for item in endpoints if item != preferred)
+
         mapping = {}
         data_map = {}
         last_error = None
@@ -391,6 +399,7 @@ class FortiManagerClient:
                     data_map[iface_key] = item
 
             if mapping:
+                self._preferred_sdwan_monitor_resource = resource
                 return {"success": True, "mapping": mapping, "data": data_map, "source": resource}
 
         return {"success": False, "mapping": {}, "data": {}, "source": None, "message": last_error}

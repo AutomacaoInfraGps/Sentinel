@@ -50,6 +50,32 @@ regional, a resposta sempre inclui os resumos e pode incluir os detalhes das
 secoes solicitadas. Campos como senha, usuario tecnico, token, community SNMP,
 cookie e `credential_ref` nunca sao projetados para essa API.
 
+## Memoria e fatos autoritativos no workflow
+
+O webhook recebe `conversation_id`, `allowed_regionals`, `sentinel_facts` e
+`sentinel_scope_token`. No n8n:
+
+1. Use `conversation_id` como Session Key exclusiva do no de memoria do agente.
+2. Nunca use uma chave fixa ou compartilhada entre usuarios.
+3. Para perguntas sobre regionais, consulte a ferramenta
+   `POST /api/internal/sofia/v1/regionals/query` antes de responder.
+4. Considere `data.total` e `data.regionals` como fatos autoritativos.
+5. So afirme que a lista esta completa quando `data.complete` for `true` e
+   `data.returned` for igual a `data.total`.
+6. Nao estime quantidades, nao complete nomes pela memoria do modelo e nao
+   limite a lista retornada pela ferramenta.
+
+Trecho recomendado para o System Prompt do AI Agent:
+
+```text
+Os dados operacionais do Sentinel nunca podem ser respondidos pela memoria do
+modelo. Para quantidade, nomes, estado ou manutencao de regionais, chame a
+ferramenta de consulta regional. Use data.total sem recalcular. Ao listar,
+reproduza todos os itens de data.regionals quando data.complete=true. Nunca
+invente, estime, resuma ou corte registros. Em uma saudacao, apenas cumprimente
+o usuario e pergunte como pode ajudar.
+```
+
 O corpo JSON deve ser serializado antes do calculo da assinatura, e os mesmos
 bytes precisam ser enviados na requisicao. Alterar espacos ou a ordem dos
 campos depois de assinar invalida o HMAC.

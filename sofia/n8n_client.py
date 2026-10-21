@@ -43,7 +43,7 @@ def _configured_token():
     return token
 
 
-def consultar_sofia(*, mensagem, allowed_regionals, scope_token):
+def consultar_sofia(*, mensagem, allowed_regionals, scope_token, conversation_id=None):
     regionals = sorted({
         str(regional).strip()
         for regional in (allowed_regionals or [])
@@ -61,7 +61,12 @@ def consultar_sofia(*, mensagem, allowed_regionals, scope_token):
             json={
                 "message": str(mensagem or "")[:1000],
                 "allowed_regionals": regionals,
+                "sentinel_facts": {
+                    "authorized_regionals_total": len(regionals),
+                    "authorized_regionals_complete": True,
+                },
                 "sentinel_scope_token": scope_token.strip(),
+                "conversation_id": str(conversation_id or "").strip()[:64],
             },
             timeout=(5, 180),
             allow_redirects=False,
