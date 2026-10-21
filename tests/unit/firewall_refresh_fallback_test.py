@@ -20,6 +20,28 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
         with web_config.app.test_request_context("/firewalls?refresh=1"):
             return collector(return_data=True)
 
+    @patch.object(web_config, "_filter_regional_dict_for_current_user", side_effect=lambda data: data)
+    @patch.object(web_config.gerenciador_switches, "obter_hosts_em_manutencao_direta", return_value=[])
+    @patch.object(web_config, "_fresh_operational_records", return_value=[])
+    @patch.object(web_config, "_carregar_cache_dashboard")
+    @patch.object(web_config, "FortiManagerClient")
+    def test_background_reader_reuses_hourly_firewall_cache(
+        self,
+        client_class,
+        load_cache,
+        _fresh_records,
+        _maintenance_hosts,
+        _filter_regionals,
+    ):
+        load_cache.return_value = self.cached_snapshot
+        collector = getattr(web_config.listar_firewalls, "__wrapped__", web_config.listar_firewalls)
+
+        with web_config.app.test_request_context("/firewalls"):
+            result = collector(return_data=True)
+
+        self.assertEqual(1, result["total_firewalls"])
+        client_class.assert_not_called()
+
     @patch.object(web_config, "_carregar_cache_dashboard")
     @patch.object(web_config, "FortiManagerClient")
     def test_connection_failure_preserves_last_valid_snapshot(self, client_class, load_cache):

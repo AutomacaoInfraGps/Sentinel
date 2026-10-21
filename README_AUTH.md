@@ -3,17 +3,20 @@
 ## Configuração Implementada
 
 ### Configurações do AD
+
 - **Domínio DNS**: DOMINIO.LOCAL
 - **Domínio NetBIOS**: DOMINIO
 - **Servidor Principal**: DC01 (192.0.2.11)
 - **OU Autorizada**: `OU=Usuarios Administrativos,OU=Empresa,DC=Dominio,DC=local`
 
 ### Usuários Autorizados
+
 Baseado na consulta `dsquery`, os usuários na OU administrativa devem ser validados sem expor nomes reais na documentação.
 
 ## Como Usar
 
 ### Função Principal
+
 ```python
 from auth_ad import verificar_usuario_ad
 
@@ -28,6 +31,7 @@ else:
 ```
 
 ### Formato de Usuário
+
 - **Formato usado**: `DOMINIO\username`
 - **Autenticação**: NTLM (padrão Windows AD)
 - **Exemplo**: `DOMINIO\usuario.exemplo`
@@ -56,6 +60,7 @@ else:
 ## Teste Seguro
 
 Para testar sem risco de bloquear contas:
+
 ```bash
 python test_auth_safe.py
 ```

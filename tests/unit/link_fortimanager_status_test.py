@@ -8,6 +8,45 @@ from gerenciar_fortigate import GerenciadorFortigate, _parse_vpn_phase1_comments
 
 
 class LinkFortimanagerStatusTest(unittest.TestCase):
+    @patch.object(web_config, "_get_gerenciador_fortigate_regional")
+    def test_automatic_link_refresh_reuses_configuration_and_reads_live_status(
+        self, resolve_fortigate
+    ):
+        resolve_fortigate.return_value = {
+            "adom": "root",
+            "device": {"name": "FGT_REG_TESTE", "ip": "10.0.0.1"},
+        }
+        client = unittest.mock.MagicMock()
+        client.proxy_monitor_interfaces.return_value = {
+            "wan1": {"name": "wan1", "status": "up", "ip": "189.10.20.30"},
+        }
+        regional = {
+            "links_internet_auto": [{
+                "nome": "WAN1",
+                "interface_monitorada": "wan1",
+                "provedor": "OPERADORA TESTE",
+                "ip": "189.10.20.30",
+                "tipo": "physical",
+                "status": "offline",
+                "categoria": "internet",
+                "regra_origem": "links_internet_auto",
+                "origem_sync": "fortimanager",
+            }],
+        }
+
+        result = web_config._load_regional_interfaces(
+            "REG_TESTE",
+            regional,
+            fortimanager_client=client,
+            include_configuration=False,
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual("OPERADORA TESTE", result["interfaces"][0]["alias"])
+        self.assertEqual("online", result["interfaces"][0]["_link_mode_status"])
+        client.list_device_interfaces.assert_not_called()
+        client.proxy_monitor_interfaces.assert_called_once_with("root", "FGT_REG_TESTE")
+
     @patch.object(web_config, "snapshot_is_fresh", return_value=False)
     @patch.object(web_config, "load_operational_state")
     def test_stale_operational_group_never_reaches_pages(self, load_state, snapshot_fresh):

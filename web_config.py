@@ -822,7 +822,10 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
         _fail_background_job(job_id, exc, message='Erro ao verificar switches')
 
 
-def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
+def _executar_sincronizacao_links_todas_regionais(
+    progress_callback=None,
+    include_configuration=True,
+):
     app_obj = current_app._get_current_object() if has_app_context() else app
     regionais = gerenciador_regionais.listar_regionais()
     adom = _get_fortimanager_adom()
@@ -874,6 +877,7 @@ def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
                 include_sdwan=True,
                 auth_timeout=12,
                 fortimanager_client=cliente_do_worker(),
+                include_configuration=include_configuration,
             )
 
     max_workers = min(4, max(1, len(regionais_validas)))
@@ -2893,6 +2897,7 @@ def _load_regional_interfaces(
     fortimanager_devices=None,
     auth_timeout=None,
     fortimanager_client=None,
+    include_configuration=True,
 ) -> dict:
     resolved = _get_gerenciador_fortigate_regional(
         codigo_regional,
@@ -2912,33 +2917,53 @@ def _load_regional_interfaces(
         }
 
     interfaces = []
+    if not include_configuration:
+        for link in _obter_links_internet_exibicao(regional_info):
+            interface_name = str(
+                link.get("interface_monitorada") or link.get("nome") or ""
+            ).strip()
+            if not interface_name:
+                continue
+            provider = link.get("provedor") or link.get("alias") or ""
+            interfaces.append({
+                "name": interface_name,
+                "interface": interface_name,
+                "alias": provider,
+                "description": provider,
+                "ip": link.get("ip") or "",
+                "type": link.get("tipo") or "physical",
+                "role": "wan",
+                "status": link.get("status") or "unknown",
+                "addressing_mode": link.get("addressing_mode") or "",
+            })
     source = "fortimanager"
     proxy_error = None
 
     if device_info and device_info.get("name"):
-        try:
-            if fortimanager_client is not None:
-                interfaces_result = fortimanager_client.list_device_interfaces(adom, device_info.get("name"))
-            else:
-                with FortiManagerClient() as fm:
-                    interfaces_result = fm.list_device_interfaces(adom, device_info.get("name"))
-            interfaces_data = interfaces_result.get("result", [])
-            interfaces = interfaces_data[0].get("data", []) if interfaces_data else []
-            if interfaces:
-                source = "fortimanager"
-            else:
+        if include_configuration or not interfaces:
+            try:
+                if fortimanager_client is not None:
+                    interfaces_result = fortimanager_client.list_device_interfaces(adom, device_info.get("name"))
+                else:
+                    with FortiManagerClient() as fm:
+                        interfaces_result = fm.list_device_interfaces(adom, device_info.get("name"))
+                interfaces_data = interfaces_result.get("result", [])
+                interfaces = interfaces_data[0].get("data", []) if interfaces_data else []
+                if interfaces:
+                    source = "fortimanager"
+                else:
+                    current_app.logger.warning(
+                        "FortiManager não retornou interfaces para %s em %s; usando fallback direto no FortiGate",
+                        device_info.get("name"),
+                        adom,
+                    )
+            except Exception as exc:
+                proxy_error = str(exc)
                 current_app.logger.warning(
-                    "FortiManager não retornou interfaces para %s em %s; usando fallback direto no FortiGate",
-                    device_info.get("name"),
-                    adom,
+                    "Erro ao obter interfaces via FortiManager para %s: %s. Usando fallback direto no FortiGate",
+                    codigo_regional,
+                    exc,
                 )
-        except Exception as exc:
-            proxy_error = str(exc)
-            current_app.logger.warning(
-                "Erro ao obter interfaces via FortiManager para %s: %s. Usando fallback direto no FortiGate",
-                codigo_regional,
-                exc,
-            )
 
         try:
             if fortimanager_client is not None:
@@ -3420,6 +3445,7 @@ def _coletar_links_regional(
     include_sdwan=True,
     auth_timeout=None,
     fortimanager_client=None,
+    include_configuration=True,
 ) -> dict:
     links_existentes = [dict(link) for link in (regional_info.get("links") or [])]
     links_canonicos_existentes = [dict(link) for link in _selecionar_links_internet_canonicos(links_existentes)]
@@ -3431,6 +3457,7 @@ def _coletar_links_regional(
         fortimanager_devices=fortimanager_devices,
         auth_timeout=auth_timeout,
         fortimanager_client=fortimanager_client,
+        include_configuration=include_configuration,
     )
 
     if not interfaces_result.get("success"):
@@ -4021,7 +4048,9 @@ def _mapa_atualizar_fontes_operacionais():
     resultados = {}
 
     try:
-        resultados["links"] = _executar_sincronizacao_links_todas_regionais()
+        resultados["links"] = _executar_sincronizacao_links_todas_regionais(
+            include_configuration=False,
+        )
     except Exception as exc:
         current_app.logger.exception("Falha ao atualizar links para o estado operacional: %s", exc)
         resultados["links"] = {"success": False, "message": str(exc)}
@@ -4060,8 +4089,13 @@ def _mapa_atualizar_fontes_operacionais():
 
     try:
         coletor_firewalls = getattr(listar_firewalls, "__wrapped__", listar_firewalls)
-        with app.test_request_context("/firewalls?refresh=1"):
-            firewall_snapshot = coletor_firewalls(return_data=True)
+        firewall_snapshot = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
+        if not firewall_snapshot:
+            with app.test_request_context("/firewalls?refresh=1"):
+                firewall_snapshot = coletor_firewalls(
+                    return_data=True,
+                    force_refresh=True,
+                )
         if not isinstance(firewall_snapshot, dict):
             raise RuntimeError("Coletor de firewalls nao retornou um snapshot valido.")
         resultados["firewalls"] = {
@@ -8022,7 +8056,7 @@ def _invalidar_cache_dashboard(nome):
 
 @app.route('/firewalls')
 @login_required
-def listar_firewalls(return_data=False):
+def listar_firewalls(return_data=False, force_refresh=False):
     """Página de listagem de firewalls (FortiGates) com status de licenças"""
     try:
         def _formatar_ultima_verificacao_firewall(valor):
@@ -8062,7 +8096,7 @@ def listar_firewalls(return_data=False):
                 )
             return firewalls_por_regional
 
-        force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
+        force_refresh = bool(force_refresh) or request.args.get("refresh") in {"1", "true", "yes", "on"}
         if not force_refresh:
             firewalls_operacionais = _fresh_operational_records("firewalls")
             cached = None
@@ -8715,7 +8749,10 @@ def atualizar_cache_seguranca_dashboard():
     """Atualiza Firewalls/licencas e admins sem depender de uma sessao web."""
     resultados = {}
     with app.test_request_context("/dashboard-security-refresh"):
-        resultados["firewalls"] = listar_firewalls.__wrapped__(return_data=True)
+        resultados["firewalls"] = listar_firewalls.__wrapped__(
+            return_data=True,
+            force_refresh=True,
+        )
         resultados["admins"] = listar_admin_logins.__wrapped__(return_data=True)
     return resultados
 
