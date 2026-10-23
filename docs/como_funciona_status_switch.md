@@ -7,20 +7,21 @@ Este documento explica como o sistema determina se um switch está online, offli
 Quando o sistema verifica o status de um switch, ele segue os seguintes passos:
 
 1. **Busca o switch no Zabbix**:
+
    - Primeiro tenta encontrar pelo nome exato
    - Se não encontrar, tenta pelo IP
    - Se ainda não encontrar, tenta buscar por interfaces com o IP especificado
-
 2. **Verifica o status do host no Zabbix**:
+
    - Se o host estiver inativo no Zabbix, o switch é considerado **offline**
    - Se o host estiver ativo, continua a verificação
-
 3. **Busca problemas ativos**:
+
    - Consulta a API do Zabbix para verificar se existem problemas ativos para o switch
    - Se existirem problemas, o switch é considerado em estado de **warning**
    - Se não existirem problemas, o switch é considerado **online**
-
 4. **Coleta informações adicionais**:
+
    - Busca itens de monitoramento como CPU, memória, uptime e tráfego de interfaces
    - Estas informações são exibidas na interface, mas não afetam o status
 
@@ -28,11 +29,11 @@ Quando o sistema verifica o status de um switch, ele segue os seguintes passos:
 
 O sistema utiliza três estados principais para os switches:
 
-| Status | Descrição | Condição |
-|--------|-----------|----------|
-| **online** | Switch está funcionando normalmente | Host ativo no Zabbix e sem problemas |
-| **offline** | Switch está desligado ou inacessível | Host inativo no Zabbix |
-| **warning** | Switch está com algum problema | Host ativo no Zabbix, mas com problemas reportados |
+| Status            | Descrição                            | Condição                                         |
+| ----------------- | -------------------------------------- | -------------------------------------------------- |
+| **online**  | Switch está funcionando normalmente   | Host ativo no Zabbix e sem problemas               |
+| **offline** | Switch está desligado ou inacessível | Host inativo no Zabbix                             |
+| **warning** | Switch está com algum problema        | Host ativo no Zabbix, mas com problemas reportados |
 
 ## Trecho de Código Relevante
 
@@ -80,15 +81,16 @@ elif problemas:
 ## Exemplos
 
 1. **Switch Online**:
+
    - Host ativo no Zabbix
    - Sem problemas reportados
    - Indicado com um círculo verde na interface
-
 2. **Switch Offline**:
+
    - Host inativo no Zabbix
    - Indicado com um círculo vermelho na interface
-
 3. **Switch em Warning**:
+
    - Host ativo no Zabbix
    - Com problemas como:
      - Interface desconectada

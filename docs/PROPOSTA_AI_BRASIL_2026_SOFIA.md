@@ -1,7 +1,6 @@
 # Proposta de Participação no AI Brasil Experience 2026
 
 **Responsável:** Roosevelt H. D. Andrade Pimentel
-Paulo Sergio Satiro dos Santos 
 **Área:** Infraestrutura Regional / G
 **Evento:** AI Brasil Experience 2026
 **Data:** 28 e 29 de outubro de 2026
@@ -32,16 +31,16 @@ Os conhecimentos do evento poderão ser aplicados para:
 
 A programação pública do ingresso Experience informa os dias e as arenas, mas **não apresenta os horários individuais dessas palestras**. Por esse motivo, os horários serão confirmados no aplicativo ou na grade oficial atualizada do evento que estaremos acompanhando. Fora essas palestras que destaquei, temos outras que podem agregar no conhecimento e na área.
 
-| Data            | Arena              | Palestra                                                                                            | Horário    | Aplicação esperada                                                     |
-| --------------- | ------------------ | --------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| **28/10** | Todos Nós         | Além do Vibe Coding: da ideia à produção com segurança e governança                           | A confirmar | Levar melhorias do Sentinel e da SofIA para produção com mais controle |
-| **28/10** | Nós Transformamos | ROI de projeto de IA: como se calcula sem enganar a diretoria                                       | A confirmar | Criar indicadores reais para medir o retorno da SofIA                    |
-| **28/10** | Nós Somos CEIA    | Decisão em Escala: quando a IA deixa de gerar e começa a agir                                     | A confirmar | Definir limites entre recomendação, decisão e execução automatizada |
-| **28/10** | Nós Somos CEIA    | IA para agentes conversacionais                                                                     | A confirmar | Melhorar o entendimento e a qualidade das respostas da SofIA             |
-| **29/10** | Eu Faço           | Antes do agente, a arquitetura: construindo um segundo cérebro funcional                           | A confirmar | Estruturar memória, contexto e base de conhecimento da SofIA            |
-| **29/10** | Eu Faço           | Agentes de IA e a transformação da Engenharia de Software                                         | A confirmar | Aplicar agentes ao desenvolvimento, testes e manutenção dos sistemas   |
-| **29/10** | Nós Somos CEIA    | O novo fluxo de engenharia: inserindo agentes autônomos na cultura de DevSecOps da equipe          | A confirmar | Reforçar testes, segurança e controle no ciclo de desenvolvimento      |
-| **29/10** | Nós Somos CEIA    | Do trabalho individual aos workflows inteligentes: experiências com IA na coordenação de equipes | A confirmar | Criar automações integradas e reutilizáveis para outros projetos      |
+| Data            | Arena              | Palestra                                                                                            | Horário    | Aplicação esperada                                                                                                                  |
+| --------------- | ------------------ | --------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **28/10** | Todos Nós         | Além do Vibe Coding: da ideia à produção com segurança e governança                           | A confirmar | Definir como publicar novas funções da SofIA com testes, homologação, controle de versão e retorno seguro em caso de falha       |
+| **28/10** | Nós Transformamos | ROI de projeto de IA: como se calcula sem enganar a diretoria                                       | A confirmar | Medir redução do tempo de diagnóstico, precisão das respostas, uso pelos usuários e custo de processamento do Ollama             |
+| **28/10** | Nós Somos CEIA    | Decisão em Escala: quando a IA deixa de gerar e começa a agir                                     | A confirmar | Separar o que a SofIA pode informar, recomendar ou executar, exigindo permissão e aprovação humana para ações na infraestrutura  |
+| **28/10** | Nós Somos CEIA    | IA para agentes conversacionais                                                                     | A confirmar | Melhorar a interpretação das perguntas, a escolha das ferramentas do Sentinel e as respostas baseadas nos dados reais das regionais |
+| **29/10** | Eu Faço           | Antes do agente, a arquitetura: construindo um segundo cérebro funcional                           | A confirmar | Organizar memória, documentação e contexto operacional sem misturar usuários nem enviar dados sensíveis ao modelo                |
+| **29/10** | Eu Faço           | Agentes de IA e a transformação da Engenharia de Software                                         | A confirmar | Usar agentes para apoiar testes, análise de falhas e manutenção do Sentinel, preservando revisão e responsabilidade humana        |
+| **29/10** | Nós Somos CEIA    | O novo fluxo de engenharia: inserindo agentes autônomos na cultura de DevSecOps da equipe          | A confirmar | Proteger a SofIA contra prompt injection, abuso de ferramentas e vazamento de credenciais, com auditoria do n8n e das APIs            |
+| **29/10** | Nós Somos CEIA    | Do trabalho individual aos workflows inteligentes: experiências com IA na coordenação de equipes | A confirmar | Evoluir os fluxos do n8n para integrar alertas, diagnósticos, chamados e aprovações reutilizáveis em projetos futuros             |
 
 Fonte: [programação oficial do AI Brasil Experience 2026](https://experience2026.aibrasil.ai/programacao). A própria organização informa que horários, títulos e participantes podem sofrer alterações.
 
