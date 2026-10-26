@@ -1,0 +1,9 @@
+{
+  "areas": ["windows", "linux", "admanager", "firewalls"],
+  "tentativas": 2,
+  "intervalo_segundos": 10,
+  "timeout_seconds": 21600,
+  "retention_days": 180,
+  "max_events": 1000,
+  "remover_prints_apos_validacao": true
+}

@@ -1,0 +1,11 @@
+{
+  "fortianalyzer_url": "",
+  "fortimanager_url": "",
+  "fortianalyzer_adom": "",
+  "fortimanager_adom": "",
+  "browser_channel": "msedge",
+  "verify_tls": true,
+  "allow_http": false,
+  "timeout_seconds": 45,
+  "viewport": {"width": 1920, "height": 1080}
+}

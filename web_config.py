@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from threading import Lock, Thread
+from queue import Full
 from uuid import uuid4
 from gerenciar_fortigate import GerenciadorFortigate
 from fortimanager_client import FortiManagerClient, FortiManagerClientError
@@ -117,6 +118,13 @@ from notification_center import (
 from services.unifi_models import normalizar_modelo_ap
 from services.map_wifi_overlay import overlay_wifi_networks
 from services.alertad_notifications import load_alertad_notifications
+from services.access_review_v1.notifications import load_access_review_notifications
+from services.access_review_v1.queue import AccessReviewStorageError, access_review_queue
+from services.access_review_v1.runner import (
+    AccessReviewRunnerError,
+    run_access_review,
+    runner_status as access_review_runner_status,
+)
 from services.switch_update_v01.main import extract_version, fetch_web_identity
 from services.switch_update_v01.scheduler import SchedulerSettings, SwitchUpdateScheduler
 from services.switch_update_v01.sentinel_backend import install_switch_update_backend
@@ -350,6 +358,12 @@ _OPERATOR_ONLY_ENDPOINTS = {
     "api_fortigate_wan_status",
     "api_executar_completo",
     "executar_completo",
+    "revisao_acessos",
+    "api_executar_revisao_acessos",
+    "api_interromper_revisao_acessos",
+    "api_download_revisao_acessos",
+    "api_documentos_revisao_acessos",
+    "api_logs_revisao_acessos",
     "replicacao_ad",
     "executar_replicacao_direto",
     "executar_replicacao",
@@ -541,6 +555,11 @@ def _create_background_job(kind, total=0, message=None, detail=None, meta=None):
     return job_id
 
 
+def _persist_access_review_job(job):
+    if job.get('kind') == 'revisao_acessos' and job.get('meta', {}).get('_persisted'):
+        access_review_queue.store.save(job)
+
+
 def _update_background_job(job_id, **kwargs):
     with _background_jobs_lock:
         job = _background_jobs.get(job_id)
@@ -570,10 +589,11 @@ def _update_background_job(job_id, **kwargs):
 
         if 'percent' in kwargs and kwargs['percent'] is not None:
             job['percent'] = max(0, min(100, int(kwargs['percent'])))
-        elif job.get('total', 0) > 0:
+        elif job.get('total', 0) > 0 and job.get('kind') != 'revisao_acessos':
             job['percent'] = max(0, min(100, int(round((job.get('completed', 0) / job['total']) * 100))))
 
         job['updated_at'] = time.time()
+        _persist_access_review_job(job)
         return dict(job)
 
 
@@ -584,12 +604,15 @@ def _complete_background_job(job_id, result=None, message=None, detail=None):
             return None
 
         job['status'] = 'completed'
+        if job.get('kind') == 'revisao_acessos':
+            job.setdefault('meta', {})['execution_finished_at'] = time.time()
         job['completed'] = job.get('total', 0)
         job['percent'] = 100
         job['message'] = message or job.get('message')
         job['detail'] = detail or job.get('detail')
         job['result'] = result
         job['updated_at'] = time.time()
+        _persist_access_review_job(job)
         return dict(job)
 
 
@@ -600,10 +623,13 @@ def _fail_background_job(job_id, error, message=None, detail=None):
             return None
 
         job['status'] = 'failed'
+        if job.get('kind') == 'revisao_acessos':
+            job.setdefault('meta', {})['execution_finished_at'] = time.time()
         job['error'] = str(error)
         job['message'] = message or job.get('message') or 'Falha ao executar tarefa em segundo plano'
         job['detail'] = detail or str(error)
         job['updated_at'] = time.time()
+        _persist_access_review_job(job)
         return dict(job)
 
 
@@ -611,7 +637,36 @@ def _get_background_job(job_id):
     _cleanup_background_jobs()
     with _background_jobs_lock:
         job = _background_jobs.get(job_id)
+        if not job or job.get('kind') == 'revisao_acessos':
+            stored = access_review_queue.store.get(job_id)
+            if stored:
+                return stored
         return dict(job) if job else None
+
+
+def _append_background_job_event(job_id, audit_id, status, message):
+    """Acrescenta somente mensagens operacionais previamente sanitizadas."""
+    with _background_jobs_lock:
+        job = _background_jobs.get(job_id)
+        if not job:
+            return None
+        events = job.setdefault('meta', {}).setdefault('events', [])
+        events.append({
+            'audit_id': str(audit_id or ''),
+            'status': str(status or ''),
+            'message': str(message or '')[:800],
+            'occurred_at': datetime.now(timezone.utc).isoformat(),
+        })
+        del events[:-1000]
+        job['updated_at'] = time.time()
+        _persist_access_review_job(job)
+        app.logger.info(
+            'Revisao de acessos; job=%s audit=%s status=%s',
+            job_id,
+            str(audit_id or '')[:40],
+            str(status or '')[:20],
+        )
+        return dict(job)
 
 
 def _background_async_requested():
@@ -944,6 +999,79 @@ def _run_links_sync_job(job_id):
     except Exception as exc:
         app.logger.exception('Erro no job de links %s', job_id)
         _fail_background_job(job_id, exc, message='Erro ao sincronizar links das regionais')
+
+
+def _run_access_review_job(job_id, mode, audit_ids):
+    """Executa o projeto sem trazer saida, caminhos ou dados sensiveis ao Sentinel."""
+    try:
+        def update_progress(percent, message):
+            _update_background_job(
+                job_id,
+                percent=percent,
+                message=message,
+                detail="Acompanhe as etapas da area selecionada abaixo.",
+            )
+
+        _update_background_job(job_id, status='running', percent=1,
+                               message='Preparando a Revisão de Acessos...',
+                               meta={'execution_started_at': time.time()})
+        _append_background_job_event(job_id, 'queue', 'running', 'Item removido da fila e iniciado.')
+        result = run_access_review(
+            mode,
+            audit_ids=audit_ids,
+            execution_id=job_id,
+            source_execution_id=(_get_background_job(job_id).get('meta') or {}).get('source_execution_id'),
+            progress=update_progress,
+            event=lambda audit_id, status, message: _append_background_job_event(
+                job_id, audit_id, status, message
+            ),
+        )
+        if not result['success']:
+            _update_background_job(job_id, percent=100)
+            _fail_background_job(job_id, 'Uma ou mais áreas não foram concluídas.', message=result['message'],
+                                 detail='A orientação de cada área aparece nas etapas abaixo. As demais revisões da fila não são afetadas.')
+            return
+        _complete_background_job(
+            job_id,
+            result=result,
+            message="Revisao de acessos concluida.",
+            detail="Documentos validados. Resultado registrado no historico e no sino.",
+        )
+    except AccessReviewRunnerError as exc:
+        app.logger.warning(
+            "Falha na revisao de acessos; job=%s reason=%s",
+            job_id,
+            type(exc).__name__,
+        )
+        _update_background_job(job_id, percent=100)
+        _fail_background_job(
+            job_id,
+            "Falha operacional na Revisão de Acessos",
+            message="Não foi possível concluir a revisão de acessos.",
+            detail=str(exc),
+        )
+    except Exception as exc:
+        app.logger.error('Falha inesperada na revisao de acessos; job=%s reason=%s', job_id, type(exc).__name__)
+        _update_background_job(job_id, percent=100)
+        _fail_background_job(
+            job_id,
+            "Falha inesperada na Revisão de Acessos",
+            message="Não foi possível concluir a revisão de acessos.",
+            detail="Ocorreu uma falha interna. Consulte o administrador do Sentinel.",
+        )
+
+
+def _enqueue_access_review(job_id, mode, audit_ids):
+    with _background_jobs_lock:
+        job = dict(_background_jobs[job_id])
+        job['meta']['_persisted'] = True
+    return access_review_queue.enqueue(job_id, mode, audit_ids, _run_access_review_job,
+                                       job=job, restore=_restore_access_review_job)
+
+
+def _restore_access_review_job(job):
+    with _background_jobs_lock:
+        _background_jobs[job['id']] = job
 
 
 def _run_executar_completo_job(job_id):
@@ -4996,6 +5124,12 @@ def api_notifications():
             logger=current_app.logger,
         )
     )
+    notifications.extend(
+        load_access_review_notifications(
+            authorized=can_operate,
+            logger=current_app.logger,
+        )
+    )
     notifications = sort_notifications(notifications)
     cached_map, cache_age = _mapa_carregar_cache()
     refresh_started = False
@@ -7770,6 +7904,8 @@ def api_background_job_status(job_id):
     job = _get_background_job(job_id)
     if not job:
         return jsonify({'success': False, 'message': 'Job não encontrado'}), 404
+    if job.get('kind') == 'revisao_acessos' and not can_operate_sentinel(_current_user_groups()):
+        return jsonify({'success': False, 'message': 'Job não encontrado'}), 404
     if (
         job.get('owner')
         and job.get('owner') != str(current_user.get_id())
@@ -7779,6 +7915,13 @@ def api_background_job_status(job_id):
 
     public_job = dict(job)
     public_job.pop('owner', None)
+    if job.get('kind') == 'revisao_acessos':
+        public_job = {key: job.get(key) for key in (
+            'id', 'kind', 'status', 'percent', 'message', 'detail', 'created_at', 'updated_at'
+        )}
+        metadata = job.get('meta') or {}
+        public_job['meta'] = {key: metadata.get(key) for key in ('execution_started_at', 'execution_finished_at')}
+        public_job['meta']['events'] = metadata.get('events') or []
     return jsonify({
         'success': True,
         'job': public_job
@@ -11149,6 +11292,172 @@ def configuracoes():
 def executar_completo():
     """Página para executar verificação completa"""
     return render_template('executar_completo.html')
+
+
+@app.route('/revisao-acessos')
+@login_required
+def revisao_acessos():
+    """Painel operacional das auditorias mensais de revisao de acessos."""
+    access_review_queue.start(_run_access_review_job, _restore_access_review_job)
+    capabilities = {
+        area: {
+            mode: access_review_runner_status(selected=[area], mode=mode)
+            for mode in ('completa', 'somente_montagem')
+        }
+        for area in ('windows', 'linux', 'admanager', 'firewalls')
+    }
+    return render_template(
+        'revisao_acessos.html',
+        runner=access_review_runner_status(),
+        access_review_capabilities=capabilities,
+        audit_notifications=load_access_review_notifications(
+            authorized=True,
+            logger=current_app.logger,
+            limit=8,
+        ),
+    )
+
+
+@app.get('/api/revisao-acessos/logs')
+@login_required
+def api_logs_revisao_acessos():
+    items = load_access_review_notifications(authorized=True, logger=current_app.logger, limit=8)
+    return jsonify(success=True, logs=[{key: item.get(key) for key in (
+        'id', 'severity', 'log_label', 'url', 'duration_seconds', 'reviews', 'source_execution_id'
+    )} for item in items])
+
+
+@app.get('/api/revisao-acessos/documents')
+@login_required
+def api_documentos_revisao_acessos():
+    from services.access_review_v1.documents import list_document_executions
+    try:
+        return jsonify(success=True, executions=list_document_executions())
+    except OSError:
+        return jsonify(success=False, message='Não foi possível consultar os documentos.'), 503
+
+
+@app.get('/api/revisao-acessos/documents.zip')
+@login_required
+def api_download_revisao_acessos():
+    from services.access_review_v1.documents import build_documents_zip
+    from filelock import Timeout
+    from uuid import UUID
+    execution_id = request.args.get('execution_id', '')
+    try:
+        execution_id = str(UUID(execution_id))
+    except ValueError:
+        return jsonify(success=False, message='Selecione uma execução válida para baixar.'), 400
+    areas = request.args.getlist('area')
+    if areas and (len(areas) > 4 or len(set(areas)) != len(areas) or
+                  any(area not in {'windows', 'linux', 'admanager', 'firewalls'} for area in areas)):
+        return jsonify(success=False, message='Selecione documentos de áreas válidas.'), 400
+    try:
+        archive = build_documents_zip(execution_id=execution_id, audit_ids=areas) if areas else build_documents_zip(execution_id=execution_id)
+    except Timeout:
+        return jsonify(success=False, message='Há uma revisão em execução. Aguarde o término para baixar os documentos.'), 409
+    except FileNotFoundError:
+        return jsonify(success=False, message='Ainda não há documentos disponíveis para download.'), 404
+    except (OSError, ValueError, KeyError, TypeError):
+        return jsonify(success=False, message='Não foi possível preparar o download. Tente novamente.'), 503
+    name = f'RevAcc_{execution_id}.zip'
+    response = send_file(archive, mimetype='application/zip', as_attachment=True, download_name=name, max_age=0)
+    response.call_on_close(archive.close)
+    return response
+
+
+@app.post('/api/revisao-acessos/executions/<job_id>/cancel')
+@login_required
+def api_interromper_revisao_acessos(job_id):
+    from services.access_review_v1.runner import cancellation_path
+    job = _get_background_job(job_id)
+    if not job or job.get('kind') != 'revisao_acessos':
+        return jsonify(success=False, message='Execução não encontrada.'), 404
+    if job.get('status') not in {'queued', 'running'}:
+        return jsonify(success=False, message='Esta execução já foi encerrada.'), 409
+    try:
+        target = cancellation_path(access_review_queue.root, job_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch(exist_ok=True)
+    except (ValueError, OSError):
+        return jsonify(success=False, message='Não foi possível solicitar a interrupção.'), 503
+    return jsonify(success=True, message='Interrupção solicitada. Aguardando encerramento dos processos.'), 202
+
+
+@app.post('/api/revisao-acessos/executions')
+@login_required
+def api_executar_revisao_acessos():
+    request.max_content_length = 8193
+    if request.content_length is not None and request.content_length > 8192:
+        return jsonify({'success': False, 'message': 'Pedido de execucao excede o limite permitido.'}), 413
+    if len(request.get_data(cache=True)) > 8192:
+        return jsonify({'success': False, 'message': 'Pedido de execucao excede o limite permitido.'}), 413
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'success': False, 'message': 'JSON invalido.'}), 400
+    if set(payload) - {'mode', 'audits', 'source_execution_id'}:
+        return jsonify({'success': False, 'message': 'Campos de execucao invalidos.'}), 400
+    mode = str(payload.get('mode') or '').strip().casefold()
+    if mode not in {'completa', 'somente_montagem'}:
+        return jsonify({'success': False, 'message': 'Modo de execucao invalido.'}), 400
+    audit_ids = payload.get('audits')
+    allowed_audits = {'windows', 'linux', 'admanager', 'firewalls'}
+    if not isinstance(audit_ids, list) or not 1 <= len(audit_ids) <= 4:
+        return jsonify({'success': False, 'message': 'Selecione ao menos uma area.'}), 400
+    normalized_audits = []
+    for value in audit_ids:
+        audit_id = str(value or '').strip().casefold()
+        if audit_id not in allowed_audits or audit_id in normalized_audits:
+            return jsonify({'success': False, 'message': 'Selecao de areas invalida.'}), 400
+        normalized_audits.append(audit_id)
+    source_id = payload.get('source_execution_id')
+    if mode == 'somente_montagem':
+        from uuid import UUID
+        from services.access_review_v1.recovery import recovery_available
+        from services.access_review_v1.settings import DATA_ROOT
+        try:
+            source_id = str(UUID(str(source_id)))
+        except ValueError:
+            return jsonify(success=False, message='Selecione a execução original para gerar os documentos.'), 400
+        if any(not recovery_available(DATA_ROOT, source_id, area, verify_hash=True) for area in normalized_audits):
+            return jsonify(success=False, message='Os documentos selecionados não possuem todas as evidências preservadas desta execução.'), 409
+        status = {'available': True}
+    else:
+        if source_id:
+            return jsonify(success=False, message='Uma nova revisão não recebe uma execução de origem.'), 400
+        status = access_review_runner_status(selected=normalized_audits, mode=mode)
+    if not status['available']:
+        return jsonify({
+            'success': False,
+            'message': 'A seleção ainda não pode ser executada. Abra a ajuda do status e siga a orientação apresentada.',
+            'issues': status['diagnostics'],
+        }), 503
+    job_id = _create_background_job(
+        kind='revisao_acessos',
+        total=1,
+        message='Preparando revisao de acessos...',
+        detail='Aguardando a conclusão das revisões anteriores.',
+        meta={'mode': mode, 'audits': normalized_audits, 'events': [], 'source_execution_id': source_id},
+    )
+    _update_background_job(job_id, status='queued', message='Revisao adicionada a fila.')
+    _append_background_job_event(job_id, 'queue', 'queued', 'Execucao adicionada a fila.')
+    try:
+        position = _enqueue_access_review(job_id, mode, normalized_audits)
+    except Full:
+        _fail_background_job(job_id, 'Fila cheia.', message='Fila cheia. Tente novamente mais tarde.')
+        return jsonify({'success': False, 'message': 'Fila cheia. Tente novamente mais tarde.'}), 429
+    except AccessReviewStorageError:
+        with _background_jobs_lock:
+            _background_jobs.pop(job_id, None)
+        current_app.logger.warning('Fila da Revisao de Acessos indisponivel; job=%s', job_id)
+        return jsonify({'success': False, 'message': 'Fila temporariamente indisponivel.'}), 503
+    return jsonify({
+        'success': True,
+        'async': True,
+        'job_id': job_id,
+        'queue_position': position,
+        'message': 'Revisao de acessos adicionada a fila.',
+    }), 202
 
 @app.route('/dashboard/hierarquico')
 @login_required

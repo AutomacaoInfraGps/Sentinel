@@ -1,0 +1,917 @@
+{% extends "base.html" %}
+
+{% block title %}Revisão de Acessos - Sentinel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .access-hero {
+        background: linear-gradient(135deg, #012e40 0%, #0a4a63 62%, #0f6c8c 100%);
+        border-radius: 18px;
+        color: #fff;
+        padding: 1.75rem;
+        box-shadow: 0 16px 38px rgba(1, 46, 64, .24);
+        position: relative;
+        overflow: hidden;
+    }
+    .access-hero::after {
+        content: "";
+        position: absolute;
+        width: 230px;
+        height: 230px;
+        border: 38px solid rgba(23, 162, 184, .16);
+        border-radius: 50%;
+        right: -75px;
+        top: -95px;
+    }
+    .access-eyebrow { color: #75d8ec; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .run-panel { container-type:inline-size; }
+    .review-area-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem; margin-bottom:1rem; flex:1; align-items:center; min-height:116px; }
+    .review-area-choice { position:relative; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:.8rem; min-height:108px; padding:.75rem .5rem; color:#99a9b2; cursor:pointer; transition:color .22s ease; }
+    .review-area-icon { position:relative; width:clamp(48px,9cqi,60px); height:clamp(48px,9cqi,60px); flex:0 0 auto; display:grid; place-items:center; border-radius:14px; background:#e7ecef; color:#a1afb7; font-size:clamp(25px,4.8cqi,31px); transition:color .22s ease,background-color .22s ease; }
+    .review-area-icon::before, .document-area-icon::before { content:''; position:absolute; inset:0; border-radius:inherit; background:linear-gradient(135deg,#0a4a63,#17a2b8); opacity:0; transition:opacity .22s ease; }
+    .review-area-icon i, .document-area-icon i { position:relative; }
+    .review-area-name { font-size:.84rem; font-weight:600; line-height:1.35; }
+    .review-area-choice:has(input:checked) { color:#0c7e99; }
+    .review-area-choice:has(input:checked) .review-area-icon { color:#fff; }
+    .review-area-choice:has(input:checked) .review-area-icon::before { opacity:1; }
+    .review-area-choice:has(input:focus-visible) .review-area-icon { outline:2px solid #0c7e99; outline-offset:3px; }
+    @container(min-width:520px) { .review-area-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+    .run-panel:has(#progressPanel:not(.d-none)) .review-area-grid { flex:0 0 auto; }
+    @media(prefers-reduced-motion:reduce) { .review-area-choice,.document-area-options label,.review-area-icon,.document-area-icon,.review-area-icon::before,.document-area-icon::before { transition:none; } }
+    .review-operation-card { min-height:264px; width:100%; flex:1; }
+    .review-operation-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:62px; padding:1rem 1.25rem; }
+    .review-operation-header h2 { margin:0; font-size:.95rem; font-weight:600; }
+    .review-operation-body { display:flex; flex-direction:column; min-height:200px; padding:1.25rem; }
+    .review-operation-body > .document-actions { margin-top:auto; padding-top:.5rem; }
+    .document-refresh { display:inline-grid; place-items:center; flex:0 0 30px; width:30px; height:30px; padding:0; border:0; border-radius:50%; background:transparent; color:inherit; font-size:1.05rem; }
+    .document-refresh:hover, .document-refresh:focus-visible { background:rgba(255,255,255,.15); }
+    .document-area-options { display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin-bottom:.75rem; }
+    .document-area-options label { position:relative; display:inline-flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:.4rem; min-height:60px; padding:.25rem; font-size:.8rem; cursor:pointer; color:#99a9b2; transition:color .22s ease; }
+    .document-area-options label:has(input:checked) { color:#0c7e99; }
+    .document-area-options label:has(input:checked) .document-area-icon { color:#fff; }
+    .document-area-options label:has(input:checked) .document-area-icon::before { opacity:1; }
+    .document-area-options label:has(input:focus-visible) .document-area-icon { outline:2px solid #0c7e99; outline-offset:3px; }
+    .document-area-icon { position:relative; display:inline-grid; place-items:center; width:32px; height:32px; flex:0 0 32px; border-radius:9px; background:#e7ecef; color:#a1afb7; font-size:17px; transition:color .22s ease,background-color .22s ease; }
+    #documentExecutionDetails { flex:1 1 180px; }
+    #downloadDocuments { flex:0 0 auto; white-space:nowrap; }
+    .runner-status { display: flex; align-items: center; gap: .45rem; flex: 0 0 auto; }
+    .runner-badge {
+        display: inline-flex; align-items: center; padding: .48rem .78rem; border: 1px solid transparent;
+        border-radius: 999px; font-size: .76rem; font-weight: 700; white-space: nowrap;
+    }
+    .runner-badge.available { color: #176c36; background: #e5f7ec; border-color: #bce8cc; }
+    .runner-badge.unavailable { color: #932338; background: #fdecef; border-color: #f6c9d1; }
+    .status-help-button {
+        width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 1px solid #b7c7cf;
+        color: #0a4a63; background: #fff; display: inline-grid; place-items: center;
+    }
+    .status-help-button:hover, .status-help-button:focus { background: #eaf7fa; border-color: #17a2b8; }
+    .status-help-panel {
+        position:fixed; z-index:1080; width:min(360px, calc(100vw - 24px)); max-height:min(340px, calc(100vh - 24px));
+        overflow-y:auto; background:#fff; color:#244758; border:1px solid #c7dce5;
+        border-top:3px solid #17a2b8; border-radius:10px; padding:.9rem 1rem;
+        box-shadow:0 12px 32px rgba(1,46,64,.2); font-weight:400;
+    }
+    .execution-actions {
+        display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.75rem; margin-top:auto;
+    }
+    .selection-buttons { display:flex; align-items:center; justify-content:flex-end; gap:.65rem; flex-wrap:wrap; margin-left:auto; }
+    .selection-count { color: #536771; font-size: .78rem; margin-right: .2rem; }
+    .selection-button {
+        display: inline-flex; align-items: center; justify-content:center; gap: .4rem; min-height:40px; padding:.55rem .9rem;
+        color: #0a4a63; background: #fff; border: 1px solid #bfcfd6; border-radius: 8px; font-size: .78rem; font-weight: 600;
+        cursor: pointer;
+    }
+    .selection-button:hover { color: #063649; background: #eaf6f8; border-color: #63aabd; }
+    #clearAudits { min-width:95px; }
+    #selectAllAudits { min-width:145px; }
+    .run-button {
+        display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height:44px;
+        width:auto; min-width:190px; flex:0 0 auto; padding:.65rem 1rem; color: #fff; border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #087d57, #18b87d); font-weight: 700;
+        box-shadow: 0 8px 18px rgba(8,125,87,.22); cursor: pointer;
+        transition: transform .15s, box-shadow .15s, opacity .15s;
+    }
+    .run-button:not(:disabled):hover { color: #fff; transform: translateY(-1px); box-shadow: 0 11px 22px rgba(8,125,87,.28); }
+    .run-button:disabled { color: #77868d; background: #dce4e7; box-shadow: none; cursor: not-allowed; opacity: 1; }
+    .run-button .run-arrow { margin-left:.25rem; }
+    .run-panel .progress { height: 14px; background: #e7eef2; border-radius: 999px; direction: ltr; }
+    #progressBar { position: relative; overflow: hidden; background: linear-gradient(90deg, #0a4a63, #17a2b8); transition: width .8s cubic-bezier(.22,.61,.36,1); border-radius: inherit; }
+    #progressBar.is-running::after { content: ''; position: absolute; top: 0; bottom: 0; left: -35%; width: 35%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent); animation: review-progress-flow 2.2s linear infinite; }
+    #progressBar.is-failed { background: #cf354c; }
+    #progressBar.is-completed { background: #209b60; }
+    @keyframes review-progress-flow { from { transform: translateX(0); } to { transform: translateX(400%); } }
+    @media (prefers-reduced-motion: reduce) { #progressBar { transition: none; } #progressBar.is-running::after { animation: none; } }
+    .execution-event { border-left: 4px solid #27a7c1; padding: .38rem .55rem; margin-bottom: .3rem; color: #314a56; background: #f8fbfc; }
+    .execution-event.retry, .execution-event.warning { color: #725400; background: #fff9e6; border-color: #e6ac00; }
+    .execution-event.completed { color: #176c36; background: #edf8f1; border-color: #259653; }
+    .execution-event.failed { color: #a51f35; background: #fff0f2; border-color: #dc3545; }
+    .status-orb { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: #20a553; }
+    .status-orb.offline { background: #d7253f; }
+    .history-row { border-bottom: 1px solid #bdcfd8; padding: 1rem 0; }
+    .history-row:last-child { border-bottom: 0; }
+    #executionEvents {
+        height: 300px; min-height: 300px; max-height: 300px; overflow-y: auto; overflow-x: hidden;
+        overflow-wrap: anywhere; overscroll-behavior: contain; scrollbar-gutter: stable;
+        border: 1px solid #29424d; border-radius: 10px; padding: .85rem;
+        background: #071d27; color: #d9edf5; font: .82rem/1.55 Consolas, 'Courier New', monospace;
+    }
+    #executionEvents .execution-event { background: transparent; color: #d9edf5; border-bottom: 1px solid #29424d; }
+    #executionEvents .execution-event.completed { color: #8ce5ad; }
+    #executionEvents .execution-event.warning, #executionEvents .execution-event.retry { color: #ffe08a; }
+    #executionEvents .execution-event.failed { color: #ff99a8; }
+    .review-history-line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; }
+    .review-history-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .review-history-line .history-log-button { white-space: nowrap; }
+    .review-log-modal .modal-header { color: #fff; background: linear-gradient(135deg, #012e40, #0f6c8c); }
+    .review-log-modal .modal-dialog { width: min(1120px, calc(100vw - 32px)); max-width: 1120px; margin: 16px auto; }
+    .review-log-modal .modal-content { max-height: calc(100vh - 32px); overflow: hidden; border: 0; border-radius: 12px; box-shadow: 0 20px 55px rgba(1,46,64,.32); }
+    .review-log-modal .modal-body { min-height: 0; overflow: hidden; }
+    .review-log-modal .btn-close { filter: invert(1); }
+    .review-log-content { height: min(62vh, 620px); margin: 0; padding: 16px; overflow: auto; border-radius: 8px; background: #071d27; color: #d9edf5; font: .82rem/1.55 Consolas, 'Courier New', monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .review-log-content .execution-event { background: transparent; color: #d9edf5; border-bottom: 1px solid #29424d; padding: .65rem; }
+    .review-log-content .execution-event.completed { color: #8ce5ad; }
+    .review-log-content .execution-event.warning, .review-log-content .execution-event.retry { color: #ffe08a; }
+    .review-log-content .execution-event.failed { color: #ff99a8; }
+    @media (max-width: 767.98px) {
+        .access-hero { padding: 1.25rem; }
+    }
+
+    .review-state-legend { display:flex; flex-wrap:wrap; gap:1.25rem; padding:1rem 1.25rem; border-bottom:1px solid #dce7ec; font-size:.8rem; color:#536e7c; }
+    .review-state-legend>span { display:flex; align-items:center; gap:.5rem; }
+    .review-state { display:inline-grid; place-items:center; width:23px; height:23px; border-radius:50%; color:white; font-size:14px; line-height:1; }
+    .review-state.collection { background:#d9354b; }
+    .review-state.document { background:#f3bc35; color:#563a00; }
+    .review-state.success { background:#21975c; }
+    .review-state.unknown { background:#d9354b; }
+    .review-processes { display:flex; gap:1.2rem; padding:.25rem .4rem .5rem 0; }
+    .review-process { position:relative; display:grid; place-items:center; width:42px; height:42px; border-radius:11px; color:white; background:linear-gradient(135deg,#0a4a63,#17a2b8); font-size:21px; }
+    .review-process.not-included { background:#e7ecef; color:#a1afb7; box-shadow:none; }
+    .review-process .review-state { position:absolute; right:-7px; bottom:-6px; border:3px solid white; width:25px; height:25px; font-size:13px; }
+    .review-history-line { grid-template-columns:230px minmax(180px,1fr) auto; gap:1.5rem; }
+    .review-history-actions { display:flex; gap:.5rem; justify-content:flex-end; }
+    .review-history-actions button { white-space:nowrap; }
+    .review-history-entry { border-bottom:1px solid #bdcfd8; padding:1rem 0; }
+    .review-history-entry:last-child { border-bottom:0; }
+    .review-recovery { margin-top:1rem; padding:1rem; background:#f5fafc; border:1px solid #d7e4eb; border-radius:10px; }
+    .review-recovery-option { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; padding:.65rem 0; border-bottom:1px solid #dce7ec; }
+    .review-recovery-option label { display:flex; align-items:center; gap:.5rem; }
+    .review-recovery-option small { color:#637f8c; }
+    @media(max-width:767.98px) { .review-history-line { grid-template-columns:1fr; gap:.85rem; } .review-history-actions { justify-content:flex-start; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="access-hero mb-4">
+    <div class="position-relative" style="z-index:1">
+        <div class="access-eyebrow mb-2"><i class="bi bi-shield-check me-2"></i>Governança e segurança</div>
+        <h1 class="h2 mb-2">Revisão de Acessos</h1>
+        <p class="mb-0 col-lg-8 text-white-50">Execute e acompanhe as revisões mensais de acesso da Galáxia.</p>
+    </div>
+</section>
+
+<div class="row g-4">
+    <div class="col-lg-6 d-flex">
+        <section class="card run-panel review-operation-card">
+                <div class="card-header review-operation-header">
+                    <h2><i class="bi bi-play-circle me-2"></i>Iniciar revisão de acessos</h2>
+                    <div class="runner-status">
+                        <span id="runnerBadge" class="runner-badge {{ 'available' if runner.available else 'unavailable' }}">
+                            <span id="runnerOrb" class="status-orb {{ '' if runner.available else 'offline' }} me-2"></span>
+                            <span id="runnerStatusLabel">{{ 'Disponível' if runner.available else 'Indisponível' }}</span>
+                        </span>
+                        <button type="button" id="statusHelpButton" class="status-help-button" aria-describedby="statusHelpPanel" aria-label="Entender o status da execução">
+                            <i class="bi bi-question-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            <div class="card-body review-operation-body">
+                <p class="small text-muted mb-3">Selecione as áreas abaixo. A revisão continua em segundo plano após o início.</p>
+                <div class="review-area-grid" role="group" aria-label="Áreas da revisão">
+                    {% for audit_id, icon, title, description in [
+                        ('windows', 'bi-windows', 'Servidores Windows', 'Grupos, membros e permissões do Active Directory.'),
+                        ('linux', 'bi-terminal', 'Linux', 'Usuários do Zabbix e da organização Grafana.'),
+                        ('admanager', 'bi-people', 'ADManager Plus', 'Configurações e técnicos de Help Desk.'),
+                        ('firewalls', 'bi-shield-lock', 'Firewalls', 'Administradores do FortiAnalyzer e FortiManager.')
+                    ] %}
+                    <label class="review-area-choice" for="audit-{{ audit_id }}" title="{{ description }}">
+                        <input class="visually-hidden audit-choice" type="checkbox" value="{{ audit_id }}" id="audit-{{ audit_id }}" checked>
+                        <span class="review-area-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+                        <span class="review-area-name">{{ title }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div id="statusHelpPanel" class="status-help-panel small d-none" role="tooltip">
+                    <div id="statusSummary" class="fw-semibold mb-1">{{ runner.message }}</div>
+                    <ul id="statusIssues" class="mb-0 ps-3"></ul>
+                </div>
+
+                <div class="execution-actions">
+                    <span class="selection-count"><strong id="selectedAuditCount">0</strong> <span id="selectedAuditLabel">áreas selecionadas</span></span>
+                    <div class="selection-buttons">
+                        <button type="button" class="selection-button" id="clearAudits"><i class="bi bi-x-lg"></i>Limpar</button>
+                        <button type="button" class="selection-button" id="selectAllAudits"><i class="bi bi-check2-all"></i>Selecionar Todos</button>
+                        <button id="runButton" class="run-button">
+                            <i class="bi bi-play-fill"></i><span id="runButtonLabel">Iniciar Revisão</span><i class="bi bi-arrow-right run-arrow"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="progressPanel" class="mt-4 d-none" aria-live="polite">
+                    <button type="button" id="stopExecution" class="btn btn-sm btn-outline-danger mb-3 d-none">Interromper execução</button>
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong id="progressTitle">Preparando execução...</strong>
+                        <span><span id="executionDuration" class="small text-muted me-3">Duração: —</span><span id="progressPercent">0%</span></span>
+                    </div>
+                    <div class="progress" role="progressbar" aria-label="Progresso da revisão" aria-valuemin="0" aria-valuemax="100">
+                        <div id="progressBar" class="progress-bar" style="width:0%"></div>
+                    </div>
+                    <p id="progressDetail" class="small text-muted mt-2 mb-0"></p>
+                    <div class="small fw-semibold mt-3 mb-2">Log em tempo real</div>
+                    <div id="executionEvents" role="log" aria-label="Log da execução" tabindex="0"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-lg-6 d-flex">
+        <section class="card review-operation-card">
+            <div class="card-header review-operation-header">
+                <h2><i class="bi bi-folder-check me-2"></i>Documentos das revisões</h2>
+                <button type="button" id="refreshDocumentExecutions" class="document-refresh" aria-label="Atualizar lista de documentos" title="Atualizar lista de documentos"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
+            </div>
+            <div class="card-body review-operation-body">
+                <label for="documentExecution" class="form-label fw-semibold">Selecione a execução</label>
+                <select id="documentExecution" class="form-select mb-2" disabled><option value="">Carregando execuções...</option></select>
+                <fieldset id="documentAreaSelection" class="border-0 p-0 m-0 d-none">
+                    <legend class="small fw-semibold mb-2">Documentos para baixar</legend>
+                    <div id="documentAreaOptions" class="document-area-options"></div>
+                </fieldset>
+                <div class="document-actions d-flex align-items-center justify-content-between flex-wrap gap-3">
+                    <p id="documentExecutionDetails" class="small text-muted mb-0">Somente documentos finais aprovados de cada execução.</p>
+                    <button type="button" id="downloadDocuments" class="btn btn-sm btn-primary" disabled><i class="bi bi-file-earmark-zip me-1"></i>Baixar DOCX (.zip)</button>
+                </div>
+                <p id="downloadDocumentsStatus" class="small text-muted mt-2 mb-0 d-none" role="status"></p>
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-2"></i>Logs recentes</span>
+        <span id="recentLogsStatus" class="small" role="status"></span>
+    </div>
+    <div class="review-state-legend">
+        <span><b class="review-state collection">×</b> Falha na coleta</span>
+        <span><b class="review-state document">!</b> Falha na geração do documento</span>
+        <span><b class="review-state success">✓</b> Concluído com sucesso</span>
+    </div>
+    <div class="card-body" id="recentLogsList">Carregando logs...</div>
+</section>
+
+<div class="modal fade review-log-modal" id="executionLogModal" tabindex="-1" aria-labelledby="executionLogTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="executionLogTitle"><i class="bi bi-person-check me-2"></i>Log da Revisão de Acessos</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="executionLogSummary" class="small text-muted" aria-live="polite"></p>
+                <div id="executionLogEntries" class="review-log-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="refreshExecutionLog" class="btn btn-outline-primary">Atualizar log</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const button = document.getElementById('runButton');
+    if (!button) return;
+    const capabilities = {{ access_review_capabilities|tojson }};
+    const panel = document.getElementById('progressPanel');
+    const bar = document.getElementById('progressBar');
+    const percent = document.getElementById('progressPercent');
+    const title = document.getElementById('progressTitle');
+    const detail = document.getElementById('progressDetail');
+    const events = document.getElementById('executionEvents');
+    const badge = document.getElementById('runnerBadge');
+    const orb = document.getElementById('runnerOrb');
+    const statusLabel = document.getElementById('runnerStatusLabel');
+    const helpButton = document.getElementById('statusHelpButton');
+    const helpPanel = document.getElementById('statusHelpPanel');
+    const statusSummary = document.getElementById('statusSummary');
+    const statusIssues = document.getElementById('statusIssues');
+    const selectedAuditCount = document.getElementById('selectedAuditCount');
+    const selectedAuditLabel = document.getElementById('selectedAuditLabel');
+    const runButtonLabel = document.getElementById('runButtonLabel');
+    let lastRenderedEvent = '';
+    let jobActive = false;
+    const activeJobKey = 'sentinel-access-review-active-job';
+    const durationLabel = document.getElementById('executionDuration');
+    let timedJob = null;
+    function formatDuration(seconds) {
+        const value = Math.max(0, Math.floor(Number(seconds) || 0));
+        return [Math.floor(value / 3600), Math.floor(value / 60) % 60, value % 60]
+            .map(part => String(part).padStart(2, '0')).join(':');
+    }
+    function updateDuration() {
+        if (!timedJob) { durationLabel.textContent = 'Duração: —'; return; }
+        const metadata = timedJob.meta || {};
+        const start = metadata.execution_started_at;
+        if (!start) { durationLabel.textContent = timedJob.status === 'queued' ? 'Aguardando na fila' : 'Duração: —'; return; }
+        const terminal = ['completed', 'failed'].includes(timedJob.status);
+        const end = terminal ? metadata.execution_finished_at || timedJob.updated_at : Date.now() / 1000;
+        durationLabel.textContent = `Duração: ${formatDuration(end - start)}`;
+    }
+    setInterval(updateDuration, 1000);
+    const recentLogsList = document.getElementById('recentLogsList');
+    const recentLogsStatus = document.getElementById('recentLogsStatus');
+    let logsLoading = false;
+    let logsSignature = '';
+    const expandedRecoveries = new Set();
+    const recoverySelections = new Map();
+    const processIcons = {windows:'bi-windows', linux:'bi-terminal', admanager:'bi-people', firewalls:'bi-shield-lock'};
+    const processLabels = {windows:'Servidores Windows', linux:'Linux', admanager:'ADManager Plus', firewalls:'Firewalls'};
+    const stateLabels = {collection:'Falha na coleta', document:'Falha na geração do documento', success:'Concluído com sucesso', unknown:'Falha — este registro antigo não informa a etapa. Consulte o log.'};
+    const stateSymbols = {collection:'×', document:'!', success:'✓', unknown:'×'};
+
+    async function refreshRecentLogs() {
+        if (logsLoading || document.hidden) return;
+        logsLoading = true;
+        try {
+            const response = await fetch('/api/revisao-acessos/logs', {cache: 'no-store'});
+            const data = await response.json();
+            if (!response.ok || !data.success || !Array.isArray(data.logs)) throw new Error();
+            const signature = JSON.stringify(data.logs);
+            if (signature !== logsSignature) {
+                logsSignature = signature;
+                const fragment = document.createDocumentFragment();
+                data.logs.forEach(item => {
+                    const sourceId = new URL(item.url, window.location.origin).searchParams.get('execucao');
+                    const entry = document.createElement('div');
+                    entry.className = 'review-history-entry';
+                    const row = document.createElement('div');
+                    row.className = 'review-history-line';
+                    const name = document.createElement('span');
+                    name.className = 'review-history-name';
+                    const label = document.createElement('strong');
+                    label.className = 'small d-block';
+                    label.title = label.textContent = item.log_label;
+                    const duration = document.createElement('small');
+                    duration.className = 'text-muted';
+                    duration.textContent = 'Duração: ' + formatDuration(item.duration_seconds);
+                    name.append(label, duration);
+                    if (item.source_execution_id) {
+                        const origin = document.createElement('small');
+                        origin.className = 'text-muted d-block';
+                        origin.textContent = 'Nova geração · origem ' + item.source_execution_id.slice(0,8);
+                        name.appendChild(origin);
+                    }
+                    const processes = document.createElement('div');
+                    processes.className = 'review-processes';
+                    const reviews = [...(item.reviews || [])].sort((left,right) =>
+                        ['windows','linux','admanager','firewalls'].indexOf(left.id) - ['windows','linux','admanager','firewalls'].indexOf(right.id));
+                    ['windows','linux','admanager','firewalls'].forEach(area => {
+                        const review = reviews.find(item => item.id === area);
+                        const state = review && stateSymbols[review.state] ? review.state : 'unknown';
+                        const icon = document.createElement('span');
+                        icon.className = 'review-process' + (review ? '' : ' not-included');
+                        icon.title = processLabels[area] + ' — ' + (review ? stateLabels[state] : 'Não incluída nesta execução');
+                        icon.setAttribute('role', 'img');
+                        icon.setAttribute('aria-label', icon.title);
+                        icon.tabIndex = 0;
+                        const symbol = document.createElement('i');
+                        symbol.className = 'bi ' + processIcons[area];
+                        symbol.setAttribute('aria-hidden','true');
+                        const badge = document.createElement('span');
+                        badge.className = 'review-state ' + state;
+                        badge.textContent = stateSymbols[state];
+                        icon.appendChild(symbol);
+                        if (review) icon.appendChild(badge);
+                        processes.appendChild(icon);
+                    });
+                    const actions = document.createElement('div');
+                    actions.className = 'review-history-actions';
+                    const control = document.createElement('button');
+                    control.type = 'button';
+                    control.className = 'btn btn-sm btn-outline-secondary history-log-button';
+                    control.dataset.logUrl = item.url;
+                    control.textContent = 'Ver log';
+                    actions.appendChild(control);
+                    row.append(processes, name, actions);
+                    entry.appendChild(row);
+                    if (reviews.some(review => review.state === 'document')) {
+                        const toggle = document.createElement('button');
+                        toggle.type = 'button';
+                        toggle.className = 'btn btn-sm btn-outline-primary';
+                        toggle.textContent = 'Gerar documentos novamente';
+                        const recovery = document.createElement('form');
+                        recovery.className = 'review-recovery';
+                        recovery.id = 'recovery-' + sourceId;
+                        toggle.setAttribute('aria-controls', recovery.id);
+                        recovery.hidden = !expandedRecoveries.has(sourceId);
+                        toggle.setAttribute('aria-expanded',String(!recovery.hidden));
+                        toggle.addEventListener('click', () => {
+                            recovery.hidden = !recovery.hidden;
+                            toggle.setAttribute('aria-expanded',String(!recovery.hidden));
+                            if (recovery.hidden) expandedRecoveries.delete(sourceId); else expandedRecoveries.add(sourceId);
+                        });
+                        const heading = document.createElement('strong');
+                        heading.textContent = 'Gerar documentos novamente';
+                        recovery.appendChild(heading);
+                        const description = document.createElement('p');
+                        description.className = 'small text-muted mb-2';
+                        description.textContent = 'Selecione documentos desta execução. A geração reutiliza suas evidências e entra na mesma fila.';
+                        recovery.appendChild(description);
+                        const checks = [];
+                        reviews.forEach(review => {
+                            const option = document.createElement('div');
+                            option.className = 'review-recovery-option small';
+                            const label = document.createElement('label');
+                            const check = document.createElement('input');
+                            check.type = 'checkbox';
+                            check.className = 'form-check-input m-0';
+                            check.value = review.id;
+                            check.disabled = !review.can_regenerate;
+                            check.checked = review.can_regenerate && (recoverySelections.get(sourceId) || []).includes(review.id);
+                            const title = document.createElement('span');
+                            title.textContent = processLabels[review.id] || review.name;
+                            label.append(check,title);
+                            const reason = document.createElement('small');
+                            reason.textContent = review.reason;
+                            option.append(label,reason);
+                            recovery.appendChild(option);
+                            checks.push(check);
+                        });
+                        const footer = document.createElement('div');
+                        footer.className = 'd-flex align-items-center justify-content-between gap-3 mt-3';
+                        const message = document.createElement('span');
+                        message.className = 'small text-muted';
+                        message.setAttribute('role','status');
+                        const submit = document.createElement('button');
+                        submit.type = 'submit';
+                        submit.className = 'btn btn-sm btn-primary';
+                        const update = () => {
+                            const selected = checks.filter(check => !check.disabled && check.checked).map(check => check.value);
+                            recoverySelections.set(sourceId,selected);
+                            submit.textContent = 'Gerar ' + selected.length + ' documento(s)';
+                            submit.disabled = !selected.length || jobActive;
+                        };
+                        checks.forEach(check => check.addEventListener('change',update));
+                        update();
+                        footer.append(message,submit);
+                        recovery.appendChild(footer);
+                        recovery.addEventListener('submit', async event => {
+                            event.preventDefault();
+                            const audits = checks.filter(check => !check.disabled && check.checked).map(check => check.value);
+                            if (!audits.length || jobActive) return;
+                            submit.disabled = true;
+                            message.textContent = 'Validando as evidências da execução original...';
+                            try {
+                                const response = await fetch('/api/revisao-acessos/executions', {
+                                    method:'POST', headers:{'Content-Type':'application/json'},
+                                    body:JSON.stringify({mode:'somente_montagem',audits,source_execution_id:sourceId})
+                                });
+                                const data = await response.json();
+                                if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível gerar os documentos.');
+                                jobActive = true;
+                                stopButton.disabled = false;
+                                events.textContent = '';
+                                lastRenderedEvent = '';
+                                localStorage.setItem(activeJobKey,data.job_id);
+                                message.textContent = 'Nova geração adicionada à fila.';
+                                updateAvailability();
+                                poll(data.job_id);
+                            } catch(error) {
+                                message.textContent = error.message;
+                                update();
+                            }
+                        });
+                        actions.appendChild(toggle);
+                        entry.appendChild(recovery);
+                    }
+                    fragment.appendChild(entry);
+                });
+                if (!data.logs.length) fragment.appendChild(document.createTextNode('Nenhum resultado recebido ainda.'));
+                recentLogsList.replaceChildren(fragment);
+            }
+            recentLogsStatus.textContent = '';
+        } catch (_) {
+            recentLogsStatus.textContent = 'Atualização pendente';
+        } finally { logsLoading = false; }
+    }
+    setInterval(refreshRecentLogs, 10000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshRecentLogs(); });
+    const downloadButton = document.getElementById('downloadDocuments');
+    const downloadStatus = document.getElementById('downloadDocumentsStatus');
+    const documentExecution = document.getElementById('documentExecution');
+    const documentExecutionDetails = document.getElementById('documentExecutionDetails');
+    let documentExecutions = [];
+    const documentAreaSelection = document.getElementById('documentAreaSelection');
+    const documentAreaOptions = document.getElementById('documentAreaOptions');
+    let documentAreasForExecution = null;
+    function updateDocumentSelection() {
+        const selected = documentExecutions.find(item => item.id === documentExecution.value);
+        const optionsKey = documentExecution.value + ':' + JSON.stringify(selected && selected.area_options || []);
+        if (documentAreasForExecution !== optionsKey) {
+            documentAreasForExecution = optionsKey;
+            documentAreaOptions.replaceChildren();
+            ((selected && selected.area_options) || []).forEach(area => {
+                const label = document.createElement('label');
+                const check = document.createElement('input');
+                check.type = 'checkbox';
+                check.className = 'visually-hidden';
+                check.value = area.id;
+                check.checked = true;
+                const text = document.createElement('span');
+                text.textContent = area.label;
+                const icon = document.createElement('span');
+                icon.className = 'document-area-icon';
+                icon.setAttribute('aria-hidden','true');
+                const symbol = document.createElement('i');
+                symbol.className = 'bi ' + (processIcons[area.id] || 'bi-file-earmark-word');
+                icon.appendChild(symbol);
+                label.append(check,icon,text);
+                documentAreaOptions.appendChild(label);
+            });
+        }
+        const count = documentAreaOptions.querySelectorAll('input:checked').length;
+        documentAreaSelection.classList.toggle('d-none', !selected);
+        downloadButton.disabled = !selected || count === 0;
+        documentExecutionDetails.textContent = selected
+            ? `${count} área(s) selecionada(s). O ZIP incluirá somente seus documentos finais aprovados.`
+            : 'Nenhuma execução com documentos finais aprovados disponível.';
+    }
+    documentAreaOptions.addEventListener('change', updateDocumentSelection);
+    async function loadDocumentExecutions() {
+        const previous = documentExecution.value;
+        documentExecution.disabled = true;
+        downloadButton.disabled = true;
+        try {
+            const response = await fetch('/api/revisao-acessos/documents', {cache: 'no-store'});
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error();
+            documentExecutions = data.executions || [];
+            documentExecution.replaceChildren();
+            documentExecutions.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = `${item.label} — ${item.count} DOCX`;
+                documentExecution.appendChild(option);
+            });
+            if (!documentExecutions.length) documentExecution.add(new Option('Nenhum documento disponível', ''));
+            if (documentExecutions.some(item => item.id === previous)) documentExecution.value = previous;
+            documentExecution.disabled = !documentExecutions.length;
+            updateDocumentSelection();
+        } catch (_) {
+            documentExecution.replaceChildren(new Option('Não foi possível consultar as execuções', ''));
+            documentExecutionDetails.textContent = 'Use o ícone de atualização no cabeçalho para tentar novamente.';
+        }
+    }
+    documentExecution.addEventListener('change', updateDocumentSelection);
+    document.getElementById('refreshDocumentExecutions').addEventListener('click', loadDocumentExecutions);
+    loadDocumentExecutions();
+    downloadButton.addEventListener('click', async () => {
+        const executionId = documentExecution.value;
+        const areas = Array.from(documentAreaOptions.querySelectorAll('input:checked')).map(input => input.value);
+        if (!executionId || !areas.length) return;
+        downloadButton.disabled = true;
+        downloadStatus.classList.remove('d-none');
+        downloadStatus.textContent = 'Preparando os documentos...';
+        try {
+            const query = new URLSearchParams({execution_id: executionId});
+            areas.forEach(area => query.append('area', area));
+            const response = await fetch(`/api/revisao-acessos/documents.zip?${query}`, {cache: 'no-store'});
+            if (!response.ok || !(response.headers.get('Content-Type') || '').includes('application/zip')) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || 'Não foi possível baixar os documentos. Confirme sua sessão e tente novamente.');
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const filename = disposition.match(/filename="?([^";]+)"?/);
+            link.download = filename ? filename[1] : 'RevAcc_documentos.zip';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            downloadStatus.textContent = 'Download preparado com os DOCX disponíveis, organizados por área.';
+        } catch (error) {
+            downloadStatus.textContent = error.message;
+        } finally {
+            updateDocumentSelection();
+        }
+    });
+    const stopButton = document.getElementById('stopExecution');
+    stopButton.addEventListener('click', async () => {
+        if (!displayedJobId) return;
+        stopButton.disabled = true;
+        try {
+            const response = await fetch(`/api/revisao-acessos/executions/${encodeURIComponent(displayedJobId)}/cancel`, {method: 'POST'});
+            const data = await response.json();
+            detail.textContent = data.message || 'Não foi possível interromper.';
+            if (!response.ok) stopButton.disabled = false;
+        } catch (_) {
+            detail.textContent = 'Falha de comunicação ao solicitar a interrupção. Tente novamente.';
+            stopButton.disabled = false;
+        }
+    });
+    let displayedJobId = null;
+    let logJobId = null;
+    let logRequestVersion = 0;
+    const logModalElement = document.getElementById('executionLogModal');
+    document.body.appendChild(logModalElement);
+    const logModal = bootstrap.Modal.getOrCreateInstance(logModalElement);
+    const logSummary = document.getElementById('executionLogSummary');
+    const logEntries = document.getElementById('executionLogEntries');
+
+    async function loadExecutionLog() {
+        if (!logJobId) return;
+        const version = ++logRequestVersion;
+        logSummary.textContent = 'Carregando log...';
+        logEntries.textContent = '';
+        try {
+            const response = await fetch(`/api/background-jobs/${encodeURIComponent(logJobId)}`, {cache: 'no-store'});
+            if (!response.ok) throw new Error();
+            const data = await response.json();
+            if (version !== logRequestVersion) return;
+            if (!data.success || !data.job || data.job.kind !== 'revisao_acessos') throw new Error();
+            const job = data.job;
+            logSummary.textContent = [job.message, job.detail].filter(Boolean).join(' ');
+            const items = job.meta && job.meta.events || [];
+            items.forEach(item => {
+                const row = document.createElement('div');
+                const state = ['retry', 'warning', 'completed', 'failed'].includes(item.status) ? item.status : 'running';
+                row.className = `execution-event ${state}`;
+                const timestamp = new Date(item.occurred_at);
+                const time = Number.isNaN(timestamp.getTime()) ? '' : `${timestamp.toLocaleString('pt-BR', {timeZone: 'America/Sao_Paulo'})} — `;
+                row.textContent = time + (item.message || 'Etapa atualizada.');
+                logEntries.appendChild(row);
+            });
+            if (!items.length) logEntries.textContent = 'Ainda não há etapas registradas nesta execução.';
+        } catch (_) {
+            if (version !== logRequestVersion) return;
+            logSummary.textContent = 'Não foi possível consultar este log. A execução pode ter expirado ou sua sessão precisa ser renovada.';
+        }
+    }
+
+    function openExecutionLog(jobId) {
+        if (!jobId) return;
+        logJobId = jobId;
+        logModal.show();
+        loadExecutionLog();
+    }
+    document.getElementById('refreshExecutionLog').addEventListener('click', loadExecutionLog);
+    recentLogsList.addEventListener('click', event => {
+        const control = event.target.closest('.history-log-button');
+        if (control) {
+            const url = new URL(control.dataset.logUrl, window.location.origin);
+            openExecutionLog(url.searchParams.get('execucao'));
+        }
+    });
+
+    document.getElementById('selectAllAudits').addEventListener('click', () => {
+        document.querySelectorAll('.audit-choice').forEach(input => { input.checked = true; });
+        updateAvailability();
+    });
+    document.getElementById('clearAudits').addEventListener('click', () => {
+        document.querySelectorAll('.audit-choice').forEach(input => { input.checked = false; });
+        updateAvailability();
+    });
+
+    document.body.appendChild(helpPanel);
+    let helpHideTimer;
+    function positionStatusHelp() {
+        if (helpPanel.classList.contains('d-none')) return;
+        const rect = helpButton.getBoundingClientRect();
+        const width = helpPanel.offsetWidth;
+        const height = helpPanel.offsetHeight;
+        const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+        const top = rect.bottom + height + 10 <= window.innerHeight
+            ? rect.bottom + 8 : Math.max(12, rect.top - height - 8);
+        helpPanel.style.left = `${left}px`;
+        helpPanel.style.top = `${top}px`;
+    }
+    function showStatusHelp() {
+        clearTimeout(helpHideTimer);
+        helpPanel.classList.remove('d-none');
+        positionStatusHelp();
+    }
+    function scheduleHideStatusHelp() {
+        clearTimeout(helpHideTimer);
+        helpHideTimer = setTimeout(() => {
+            if (!helpButton.matches(':hover, :focus') && !helpPanel.matches(':hover')) {
+                helpPanel.classList.add('d-none');
+            }
+        }, 180);
+    }
+    helpButton.addEventListener('mouseenter', showStatusHelp);
+    helpButton.addEventListener('focus', showStatusHelp);
+    helpButton.addEventListener('mouseleave', scheduleHideStatusHelp);
+    helpButton.addEventListener('blur', scheduleHideStatusHelp);
+    helpPanel.addEventListener('mouseenter', () => clearTimeout(helpHideTimer));
+    helpPanel.addEventListener('mouseleave', scheduleHideStatusHelp);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') helpPanel.classList.add('d-none');
+    });
+    window.addEventListener('resize', positionStatusHelp);
+    window.addEventListener('scroll', positionStatusHelp, true);
+
+    function selectedAudits() {
+        return Array.from(document.querySelectorAll('.audit-choice:checked')).map(input => input.value);
+    }
+
+    function currentMode() { return 'completa'; }
+
+    function diagnosticsFor(audits, mode) {
+        const found = [];
+        const seen = new Set();
+        audits.forEach(area => {
+            const status = capabilities[area] && capabilities[area][mode];
+            (status && status.diagnostics || []).forEach(item => {
+                const key = `${item.code || ''}:${item.area || ''}:${item.message || ''}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    found.push(item);
+                }
+            });
+        });
+        return found;
+    }
+
+    function updateAvailability() {
+        const audits = selectedAudits();
+        selectedAuditCount.textContent = String(audits.length);
+        selectedAuditLabel.textContent = audits.length === 1 ? 'área selecionada' : 'áreas selecionadas';
+        runButtonLabel.textContent = audits.length === 0 ? 'Selecione uma área' : 'Iniciar Revisão';
+        const mode = 'completa';
+        const diagnostics = audits.length ? diagnosticsFor(audits, mode) : [];
+        const available = diagnostics.length === 0;
+        badge.classList.toggle('available', available);
+        badge.classList.toggle('unavailable', !available);
+        orb.classList.toggle('offline', !available);
+        statusLabel.textContent = available ? 'Disponível' : 'Indisponível';
+        statusSummary.textContent = !audits.length
+            ? 'Painel disponível. Selecione uma ou mais áreas para iniciar a revisão.'
+            : available ? 'As revisões selecionadas estão prontas para entrar na fila.'
+            : 'A execução está bloqueada somente para a seleção atual:';
+        statusIssues.textContent = '';
+        diagnostics.forEach(item => {
+            const row = document.createElement('li');
+            row.className = 'mb-1';
+            row.textContent = `${item.message} ${item.action}`;
+            statusIssues.appendChild(row);
+        });
+        button.disabled = jobActive || !available || audits.length === 0;
+        positionStatusHelp();
+    }
+
+    document.querySelectorAll('.audit-choice').forEach(input => {
+        input.addEventListener('change', updateAvailability);
+    });
+
+    function renderEvents(items) {
+        const entries = items || [];
+        const signature = JSON.stringify(entries);
+        if (signature === lastRenderedEvent) return;
+        lastRenderedEvent = signature;
+        const fragment = document.createDocumentFragment();
+        entries.forEach(item => {
+            const row = document.createElement('div');
+            const state = ['retry', 'warning', 'completed', 'failed'].includes(item.status) ? item.status : 'running';
+            row.className = `execution-event ${state}`;
+            const timestamp = new Date(item.occurred_at);
+            const time = Number.isNaN(timestamp.getTime()) ? ''
+                : `${timestamp.toLocaleTimeString('pt-BR', {timeZone: 'America/Sao_Paulo'})} — `;
+            row.textContent = time + (item.message || 'Etapa atualizada.');
+            fragment.appendChild(row);
+        });
+        events.replaceChildren(fragment);
+        if (!entries.length) events.textContent = 'Aguardando os primeiros eventos...';
+        events.scrollTop = events.scrollHeight;
+    }
+
+    function renderProgress(value, message, description, failed = false) {
+        const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
+        panel.classList.remove('d-none');
+        bar.style.width = `${safeValue}%`;
+        bar.parentElement.setAttribute('aria-valuenow', String(safeValue));
+        bar.classList.toggle('is-failed', failed);
+        bar.classList.toggle('is-completed', safeValue === 100 && !failed);
+        bar.classList.toggle('is-running', safeValue < 100 && !failed);
+        percent.textContent = `${Math.round(safeValue)}%`;
+        title.textContent = message || 'Revisões em andamento';
+        detail.textContent = description || '';
+    }
+
+    async function poll(jobId) {
+        displayedJobId = jobId;
+        try {
+            const response = await fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`, {cache: 'no-store'});
+            if (response.status === 401) {
+                window.location.assign('/login?next=/revisao-acessos');
+                return;
+            }
+            if (response.status === 404) {
+                localStorage.removeItem(activeJobKey);
+                jobActive = false;
+                renderProgress(0, 'Execução não encontrada', 'Ela pode ter expirado ou ter sido encerrada. Consulte os resultados recentes antes de iniciar outra.', true);
+                updateAvailability();
+                return;
+            }
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível consultar a execução.');
+            const job = data.job;
+            timedJob = job;
+            updateDuration();
+            stopButton.classList.toggle('d-none', !['queued', 'running'].includes(job.status));
+            renderProgress(job.percent, job.message, job.detail, job.status === 'failed');
+            renderEvents(job.meta && job.meta.events);
+            if (job.status === 'completed') {
+                refreshRecentLogs();
+                loadDocumentExecutions();
+                localStorage.removeItem(activeJobKey);
+                jobActive = false;
+                updateAvailability();
+                return;
+            }
+            if (job.status === 'failed') {
+                refreshRecentLogs();
+                loadDocumentExecutions();
+                localStorage.removeItem(activeJobKey);
+                jobActive = false;
+                updateAvailability();
+                return;
+            }
+            setTimeout(() => poll(jobId), 2000);
+        } catch (error) {
+            renderProgress(parseFloat(bar.style.width) || 0, 'Reconectando ao Sentinel...', 'A execução continua em segundo plano.');
+            setTimeout(() => poll(jobId), 4000);
+        }
+    }
+
+    button.addEventListener('click', async () => {
+        jobActive = true;
+        stopButton.disabled = false;
+        button.disabled = true;
+        const audits = selectedAudits();
+        if (!audits.length) {
+            renderProgress(0, 'Selecione ao menos uma área', 'Marque as revisões que deseja colocar na fila.', true);
+            jobActive = false;
+            updateAvailability();
+            return;
+        }
+        events.textContent = '';
+        lastRenderedEvent = '';
+        timedJob = null;
+        updateDuration();
+        renderProgress(0, 'Solicitando início...', 'Validando a configuração da Revisão de Acessos.');
+        try {
+            const response = await fetch('/api/revisao-acessos/executions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mode: currentMode(), audits})
+            });
+            let data = {};
+            try { data = await response.json(); } catch (_) { /* resposta sem JSON */ }
+            if (!response.ok || !data.success) {
+                const fallback = response.status === 429
+                    ? 'A fila está cheia no momento. Aguarde uma execução terminar e tente novamente.'
+                    : response.status === 503
+                        ? 'A seleção ainda possui uma pendência. Abra o botão de ajuda ao lado do status.'
+                        : 'Não foi possível iniciar a revisão. Atualize a página e tente novamente.';
+                const explanations = Array.isArray(data.issues)
+                    ? data.issues.map(item => `${item.message || ''} ${item.action || ''}`.trim()).filter(Boolean)
+                    : [];
+                throw new Error(explanations.join(' ') || data.message || fallback);
+            }
+            localStorage.setItem(activeJobKey, data.job_id);
+            poll(data.job_id);
+        } catch (error) {
+            renderProgress(0, 'Não foi possível iniciar', error.message, true);
+            jobActive = false;
+            updateAvailability();
+        }
+    });
+    const requestedJob = new URLSearchParams(window.location.search).get('execucao');
+    refreshRecentLogs();
+    const activeJob = requestedJob || localStorage.getItem(activeJobKey);
+    updateAvailability();
+    if (activeJob) {
+        jobActive = true;
+        updateAvailability();
+        poll(activeJob);
+    }
+})();
+</script>
+{% endblock %}
