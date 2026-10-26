@@ -22,7 +22,7 @@ from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from threading import Lock, Thread
+from threading import Lock, Thread, local
 from queue import Full
 from uuid import uuid4
 from gerenciar_fortigate import GerenciadorFortigate
@@ -877,7 +877,10 @@ def _run_switches_job(job_id, mode='all', regional=None, host=None):
         _fail_background_job(job_id, exc, message='Erro ao verificar switches')
 
 
-def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
+def _executar_sincronizacao_links_todas_regionais(
+    progress_callback=None,
+    include_configuration=True,
+):
     app_obj = current_app._get_current_object() if has_app_context() else app
     regionais = gerenciador_regionais.listar_regionais()
     adom = _get_fortimanager_adom()
@@ -903,6 +906,20 @@ def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
 
         regionais_validas.append((codigo_regional, regional_info))
 
+    clientes_por_worker = local()
+    clientes_criados = []
+    clientes_lock = Lock()
+
+    def cliente_do_worker():
+        client = getattr(clientes_por_worker, "fortimanager", None)
+        if client is None:
+            client = FortiManagerClient()
+            client.login()
+            clientes_por_worker.fortimanager = client
+            with clientes_lock:
+                clientes_criados.append(client)
+        return client
+
     def sincronizar_regional(item):
         codigo_regional, regional_info = item
         with app_obj.app_context():
@@ -914,49 +931,60 @@ def _executar_sincronizacao_links_todas_regionais(progress_callback=None):
                 fortimanager_devices=fortimanager_devices,
                 include_sdwan=True,
                 auth_timeout=12,
+                fortimanager_client=cliente_do_worker(),
+                include_configuration=include_configuration,
             )
 
     max_workers = min(4, max(1, len(regionais_validas)))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_map = {
-            executor.submit(sincronizar_regional, item): item[0]
-            for item in regionais_validas
-        }
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(sincronizar_regional, item): item[0]
+                for item in regionais_validas
+            }
 
-        for future in as_completed(future_map):
-            codigo_regional = future_map[future]
+            for future in as_completed(future_map):
+                codigo_regional = future_map[future]
+                try:
+                    _, resultado = future.result()
+
+                    links_resultado = resultado.get('links', [])
+                    if resultado.get('success'):
+                        links_para_persistir[codigo_regional] = links_resultado
+
+                    resultados[codigo_regional] = {
+                        'success': bool(resultado.get('success')),
+                        'message': resultado.get('message'),
+                        'status': resultado.get('status'),
+                        'total_atualizados': resultado.get('total_atualizados', 0),
+                        'total_criados': resultado.get('total_criados', 0),
+                        'total_links': len(links_resultado or []),
+                        'source': resultado.get('source'),
+                    }
+                except Exception as exc:
+                    app_obj.logger.exception(
+                        'Erro ao sincronizar links da regional %s',
+                        codigo_regional,
+                    )
+                    resultados[codigo_regional] = {
+                        'success': False,
+                        'message': f'Erro ao sincronizar regional: {exc}',
+                        'total_atualizados': 0,
+                        'total_criados': 0,
+                        'source': None,
+                    }
+                finally:
+                    concluidas += 1
+                    if callable(progress_callback):
+                        progress_callback(concluidas, total_regionais, codigo_regional, resultados.get(codigo_regional, {}))
+    finally:
+        for client in clientes_criados:
             try:
-                _, resultado = future.result()
-
-                links_resultado = resultado.get('links', [])
-                if resultado.get('success'):
-                    links_para_persistir[codigo_regional] = links_resultado
-
-                resultados[codigo_regional] = {
-                    'success': bool(resultado.get('success')),
-                    'message': resultado.get('message'),
-                    'status': resultado.get('status'),
-                    'total_atualizados': resultado.get('total_atualizados', 0),
-                    'total_criados': resultado.get('total_criados', 0),
-                    'total_links': len(links_resultado or []),
-                    'source': resultado.get('source'),
-                }
-            except Exception as exc:
-                app_obj.logger.exception(
-                    'Erro ao sincronizar links da regional %s',
-                    codigo_regional,
-                )
-                resultados[codigo_regional] = {
-                    'success': False,
-                    'message': f'Erro ao sincronizar regional: {exc}',
-                    'total_atualizados': 0,
-                    'total_criados': 0,
-                    'source': None,
-                }
+                client.logout()
+            except Exception:
+                app_obj.logger.warning("Falha ao encerrar sessao reutilizada do FortiManager", exc_info=True)
             finally:
-                concluidas += 1
-                if callable(progress_callback):
-                    progress_callback(concluidas, total_regionais, codigo_regional, resultados.get(codigo_regional, {}))
+                client.session.close()
 
     regionais_alteradas = _persistir_links_internet_exibicao_lote(links_para_persistir)
     return {
@@ -2996,6 +3024,8 @@ def _load_regional_interfaces(
     adom=None,
     fortimanager_devices=None,
     auth_timeout=None,
+    fortimanager_client=None,
+    include_configuration=True,
 ) -> dict:
     resolved = _get_gerenciador_fortigate_regional(
         codigo_regional,
@@ -3015,34 +3045,60 @@ def _load_regional_interfaces(
         }
 
     interfaces = []
+    if not include_configuration:
+        for link in _obter_links_internet_exibicao(regional_info):
+            interface_name = str(
+                link.get("interface_monitorada") or link.get("nome") or ""
+            ).strip()
+            if not interface_name:
+                continue
+            provider = link.get("provedor") or link.get("alias") or ""
+            interfaces.append({
+                "name": interface_name,
+                "interface": interface_name,
+                "alias": provider,
+                "description": provider,
+                "ip": link.get("ip") or "",
+                "type": link.get("tipo") or "physical",
+                "role": "wan",
+                "status": link.get("status") or "unknown",
+                "addressing_mode": link.get("addressing_mode") or "",
+            })
     source = "fortimanager"
     proxy_error = None
 
     if device_info and device_info.get("name"):
-        try:
-            with FortiManagerClient() as fm:
-                interfaces_result = fm.list_device_interfaces(adom, device_info.get("name"))
-            interfaces_data = interfaces_result.get("result", [])
-            interfaces = interfaces_data[0].get("data", []) if interfaces_data else []
-            if interfaces:
-                source = "fortimanager"
-            else:
+        if include_configuration or not interfaces:
+            try:
+                if fortimanager_client is not None:
+                    interfaces_result = fortimanager_client.list_device_interfaces(adom, device_info.get("name"))
+                else:
+                    with FortiManagerClient() as fm:
+                        interfaces_result = fm.list_device_interfaces(adom, device_info.get("name"))
+                interfaces_data = interfaces_result.get("result", [])
+                interfaces = interfaces_data[0].get("data", []) if interfaces_data else []
+                if interfaces:
+                    source = "fortimanager"
+                else:
+                    current_app.logger.warning(
+                        "FortiManager não retornou interfaces para %s em %s; usando fallback direto no FortiGate",
+                        device_info.get("name"),
+                        adom,
+                    )
+            except Exception as exc:
+                proxy_error = str(exc)
                 current_app.logger.warning(
-                    "FortiManager não retornou interfaces para %s em %s; usando fallback direto no FortiGate",
-                    device_info.get("name"),
-                    adom,
+                    "Erro ao obter interfaces via FortiManager para %s: %s. Usando fallback direto no FortiGate",
+                    codigo_regional,
+                    exc,
                 )
-        except Exception as exc:
-            proxy_error = str(exc)
-            current_app.logger.warning(
-                "Erro ao obter interfaces via FortiManager para %s: %s. Usando fallback direto no FortiGate",
-                codigo_regional,
-                exc,
-            )
 
         try:
-            with FortiManagerClient() as fm:
-                monitor_interfaces = fm.proxy_monitor_interfaces(adom, device_info.get("name"))
+            if fortimanager_client is not None:
+                monitor_interfaces = fortimanager_client.proxy_monitor_interfaces(adom, device_info.get("name"))
+            else:
+                with FortiManagerClient() as fm:
+                    monitor_interfaces = fm.proxy_monitor_interfaces(adom, device_info.get("name"))
             if monitor_interfaces:
                 if interfaces:
                     for interface in interfaces:
@@ -3516,6 +3572,8 @@ def _coletar_links_regional(
     fortimanager_devices=None,
     include_sdwan=True,
     auth_timeout=None,
+    fortimanager_client=None,
+    include_configuration=True,
 ) -> dict:
     links_existentes = [dict(link) for link in (regional_info.get("links") or [])]
     links_canonicos_existentes = [dict(link) for link in _selecionar_links_internet_canonicos(links_existentes)]
@@ -3526,6 +3584,8 @@ def _coletar_links_regional(
         adom=adom,
         fortimanager_devices=fortimanager_devices,
         auth_timeout=auth_timeout,
+        fortimanager_client=fortimanager_client,
+        include_configuration=include_configuration,
     )
 
     if not interfaces_result.get("success"):
@@ -3562,8 +3622,11 @@ def _coletar_links_regional(
             device_name = device_info.get("name")
             device_adom = interfaces_result.get("adom") or resolved.get("adom") or adom
             if device_name and device_adom:
-                with FortiManagerClient() as fm:
-                    sdwan_result = fm.proxy_sdwan_members_with_sla(device_adom, device_name)
+                if fortimanager_client is not None:
+                    sdwan_result = fortimanager_client.proxy_sdwan_members_with_sla(device_adom, device_name)
+                else:
+                    with FortiManagerClient() as fm:
+                        sdwan_result = fm.proxy_sdwan_members_with_sla(device_adom, device_name)
             if sdwan_result.get("success"):
                 for member in sdwan_result.get("membros", []):
                     _registrar_sdwan_member(sdwan_members_map, member)
@@ -3854,8 +3917,11 @@ def mapa_checklist_preview():
 
 _MAPA_CACHE_TTL_SECONDS = int(os.environ.get("MAPA_MONITORAMENTO_TTL_SECONDS", "300"))
 _MAPA_CACHE_FILE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
+_MAPA_REFRESH_LOCK_FILE = PROJECT_ROOT / "output" / ".mapa_monitoramento_refresh.lock"
+_MAPA_REFRESH_LOCK_STALE_SECONDS = int(os.environ.get("MAPA_REFRESH_LOCK_STALE_SECONDS", "900"))
 _mapa_cache_refresh_lock = Lock()
 _mapa_cache_refresh_em_andamento = False
+_mapa_cache_refresh_token = None
 
 _MAPA_REGIONAL_ESTADOS = {
     "REG_BAHIA": "BA",
@@ -4046,23 +4112,63 @@ def _mapa_cache_esta_fresco(idade):
 
 
 def _mapa_marcar_refresh_iniciado():
-    global _mapa_cache_refresh_em_andamento
+    global _mapa_cache_refresh_em_andamento, _mapa_cache_refresh_token
     with _mapa_cache_refresh_lock:
         if _mapa_cache_refresh_em_andamento:
             return False
+        token = uuid4().hex
+        _MAPA_REFRESH_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(
+                _MAPA_REFRESH_LOCK_FILE,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            )
+        except FileExistsError:
+            try:
+                idade_lock = time.time() - _MAPA_REFRESH_LOCK_FILE.stat().st_mtime
+                if idade_lock <= _MAPA_REFRESH_LOCK_STALE_SECONDS:
+                    return False
+                _MAPA_REFRESH_LOCK_FILE.unlink()
+                descriptor = os.open(
+                    _MAPA_REFRESH_LOCK_FILE,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                )
+            except (FileExistsError, FileNotFoundError, OSError):
+                return False
+        try:
+            os.write(descriptor, token.encode("ascii"))
+        finally:
+            os.close(descriptor)
         _mapa_cache_refresh_em_andamento = True
+        _mapa_cache_refresh_token = token
         return True
 
 
 def _mapa_marcar_refresh_finalizado():
-    global _mapa_cache_refresh_em_andamento
+    global _mapa_cache_refresh_em_andamento, _mapa_cache_refresh_token
     with _mapa_cache_refresh_lock:
+        token = _mapa_cache_refresh_token
         _mapa_cache_refresh_em_andamento = False
+        _mapa_cache_refresh_token = None
+        if token:
+            try:
+                if _MAPA_REFRESH_LOCK_FILE.read_text(encoding="ascii").strip() == token:
+                    _MAPA_REFRESH_LOCK_FILE.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                current_app.logger.warning("Falha ao liberar lock do refresh do mapa", exc_info=True)
 
 
 def _mapa_refresh_esta_em_andamento():
     with _mapa_cache_refresh_lock:
-        return _mapa_cache_refresh_em_andamento
+        if _mapa_cache_refresh_em_andamento:
+            return True
+    try:
+        idade_lock = time.time() - _MAPA_REFRESH_LOCK_FILE.stat().st_mtime
+        return idade_lock <= _MAPA_REFRESH_LOCK_STALE_SECONDS
+    except OSError:
+        return False
 
 
 def _mapa_atualizar_fontes_operacionais():
@@ -4070,7 +4176,9 @@ def _mapa_atualizar_fontes_operacionais():
     resultados = {}
 
     try:
-        resultados["links"] = _executar_sincronizacao_links_todas_regionais()
+        resultados["links"] = _executar_sincronizacao_links_todas_regionais(
+            include_configuration=False,
+        )
     except Exception as exc:
         current_app.logger.exception("Falha ao atualizar links para o estado operacional: %s", exc)
         resultados["links"] = {"success": False, "message": str(exc)}
@@ -4109,8 +4217,13 @@ def _mapa_atualizar_fontes_operacionais():
 
     try:
         coletor_firewalls = getattr(listar_firewalls, "__wrapped__", listar_firewalls)
-        with app.test_request_context("/firewalls?refresh=1"):
-            firewall_snapshot = coletor_firewalls(return_data=True)
+        firewall_snapshot = _carregar_cache_dashboard("firewalls", ttl_seconds=3600)
+        if not firewall_snapshot:
+            with app.test_request_context("/firewalls?refresh=1"):
+                firewall_snapshot = coletor_firewalls(
+                    return_data=True,
+                    force_refresh=True,
+                )
         if not isinstance(firewall_snapshot, dict):
             raise RuntimeError("Coletor de firewalls nao retornou um snapshot valido.")
         resultados["firewalls"] = {
@@ -5131,11 +5244,8 @@ def api_notifications():
         )
     )
     notifications = sort_notifications(notifications)
-    cached_map, cache_age = _mapa_carregar_cache()
-    refresh_started = False
-    if stale_groups or not cached_map or not _mapa_cache_esta_fresco(cache_age):
-        refresh_started = _mapa_iniciar_refresh_background()
-    refresh_in_progress = refresh_started or _mapa_refresh_esta_em_andamento()
+    _cached_map, cache_age = _mapa_carregar_cache()
+    refresh_in_progress = _mapa_refresh_esta_em_andamento()
     notifications, unread_count = decorate_with_read_state(current_user.get_id(), notifications)
     return jsonify({
         "success": True,
@@ -8089,7 +8199,7 @@ def _invalidar_cache_dashboard(nome):
 
 @app.route('/firewalls')
 @login_required
-def listar_firewalls(return_data=False):
+def listar_firewalls(return_data=False, force_refresh=False):
     """Página de listagem de firewalls (FortiGates) com status de licenças"""
     try:
         def _formatar_ultima_verificacao_firewall(valor):
@@ -8129,7 +8239,7 @@ def listar_firewalls(return_data=False):
                 )
             return firewalls_por_regional
 
-        force_refresh = return_data or request.args.get("refresh") in {"1", "true", "yes", "on"}
+        force_refresh = bool(force_refresh) or request.args.get("refresh") in {"1", "true", "yes", "on"}
         if not force_refresh:
             firewalls_operacionais = _fresh_operational_records("firewalls")
             cached = None
@@ -8782,7 +8892,10 @@ def atualizar_cache_seguranca_dashboard():
     """Atualiza Firewalls/licencas e admins sem depender de uma sessao web."""
     resultados = {}
     with app.test_request_context("/dashboard-security-refresh"):
-        resultados["firewalls"] = listar_firewalls.__wrapped__(return_data=True)
+        resultados["firewalls"] = listar_firewalls.__wrapped__(
+            return_data=True,
+            force_refresh=True,
+        )
         resultados["admins"] = listar_admin_logins.__wrapped__(return_data=True)
     return resultados
 

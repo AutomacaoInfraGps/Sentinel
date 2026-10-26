@@ -304,7 +304,11 @@ def consultar_inventario_regional(
     if not codigo_regional:
         return {
             "mode": "index",
+            "source": "sentinel_inventory",
+            "authoritative": True,
+            "complete": True,
             "total": len(regionals),
+            "returned": len(regionals),
             "maintenance": {
                 "available": maintenance["available"],
                 "total": maintenance["total"],

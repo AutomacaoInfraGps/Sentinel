@@ -5,6 +5,15 @@ from fortimanager_client import FortiManagerClient, FortiManagerClientError
 
 
 class FortiManagerAdminsTests(unittest.TestCase):
+    def test_context_manager_closes_http_session(self):
+        client = FortiManagerClient(host="fortimanager.local", api_key="test")
+        client.session.close = Mock()
+
+        with client:
+            pass
+
+        client.session.close.assert_called_once_with()
+
     def test_reads_vpn_comments_from_device_database(self):
         client = FortiManagerClient(host="fortimanager.local", api_key="test")
         client._request = Mock(return_value={
