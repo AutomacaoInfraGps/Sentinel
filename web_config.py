@@ -114,6 +114,7 @@ from notification_center import (
     snapshot_is_fresh,
     sort_notifications,
 )
+from services.firewall_releases import ReleaseCatalog, assess as assess_firewall_release, format_firmware
 from services.unifi_models import normalizar_modelo_ap
 from services.map_wifi_overlay import overlay_wifi_networks
 from services.alertad_notifications import load_alertad_notifications
@@ -8054,6 +8055,9 @@ def _invalidar_cache_dashboard(nome):
         current_app.logger.warning("Falha ao invalidar cache %s do dashboard: %s", nome, exc)
 
 
+_fortios_catalog = ReleaseCatalog(Path(PROJECT_ROOT) / 'instance' / 'fortios_releases' / 'catalog.json')
+
+
 @app.route('/firewalls')
 @login_required
 def listar_firewalls(return_data=False, force_refresh=False):
@@ -8081,8 +8085,14 @@ def listar_firewalls(return_data=False, force_refresh=False):
                 }
 
         def _preparar_datas_firewalls(firewalls_por_regional):
+            catalog, stale = _fortios_catalog.get() if not return_data else (None, True)
             for firewalls in (firewalls_por_regional or {}).values():
                 for firewall in firewalls or []:
+                    firewall["firmware_display"] = format_firmware(firewall.get("firmware"))
+                    if not return_data:
+                        firewall["firmware_update"] = assess_firewall_release(
+                            catalog, firewall.get("model"), firewall.get("firmware"), stale
+                        )
                     firewall["ultima_verificacao_formatada"] = _formatar_ultima_verificacao_firewall(
                         firewall.get("ultima_verificacao")
                     )
