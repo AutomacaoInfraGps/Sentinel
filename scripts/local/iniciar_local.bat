@@ -1,6 +1,7 @@
 @echo off
 cd /d "%~dp0..\.."
-set "VENV_DIR=venv313"
+set "VENV_DIR=venv314"
+if not exist "%VENV_DIR%\Scripts\python.exe" set "VENV_DIR=venv313"
 if not exist "%VENV_DIR%\Scripts\python.exe" set "VENV_DIR=venv"
 call "%VENV_DIR%\Scripts\activate.bat"
 echo [Sentinel] Python em uso:

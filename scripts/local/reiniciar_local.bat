@@ -12,7 +12,8 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":5000" ^| find "LISTENING"') do
 timeout /t 2 /nobreak >nul
 
 echo [Sentinel Local] Iniciando servidor...
-set "VENV_DIR=venv313"
+set "VENV_DIR=venv314"
+if not exist "%VENV_DIR%\Scripts\python.exe" set "VENV_DIR=venv313"
 if not exist "%VENV_DIR%\Scripts\python.exe" set "VENV_DIR=venv"
 call "%VENV_DIR%\Scripts\activate.bat"
 echo [Sentinel Local] Python em uso:
