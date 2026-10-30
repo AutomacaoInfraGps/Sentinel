@@ -82,14 +82,27 @@ class VerificadorServidoresV2:
         }
         
         try:
+            tipo = str(servidor.get("tipo", "idrac")).strip().lower()
+            inicio = datetime.now()
+
+            if tipo == "vm":
+                porta = int(servidor.get("porta") or 443)
+                timeout = float(servidor.get("timeout", 20))
+                with socket.create_connection((servidor["ip"], porta), timeout=timeout):
+                    pass
+
+                fim = datetime.now()
+                resultado["tempo_resposta"] = round((fim - inicio).total_seconds(), 2)
+                resultado["status"] = "online"
+                return resultado
+
             # Monta URL baseada no tipo
-            if servidor.get("tipo") == "ilo":
+            if tipo == "ilo":
                 url = f"https://{servidor['ip']}/json/login_session"
             else:  # idrac
                 url = f"https://{servidor['ip']}/redfish/v1/"
             
             # Faz a requisição
-            inicio = datetime.now()
             response = requests.get(
                 url,
                 timeout=(5, servidor.get("timeout", 20)),
@@ -106,10 +119,12 @@ class VerificadorServidoresV2:
                 resultado["status"] = "warning"
                 resultado["erro"] = f"HTTP {response.status_code}"
                 
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout, socket.timeout, TimeoutError):
             resultado["erro"] = "Timeout"
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, ConnectionRefusedError):
             resultado["erro"] = "Conexão recusada"
+        except OSError as e:
+            resultado["erro"] = f"Falha de conexão: {e}"
         except Exception as e:
             resultado["erro"] = str(e)
         
