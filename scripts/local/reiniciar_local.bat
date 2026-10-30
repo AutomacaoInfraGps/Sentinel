@@ -12,7 +12,11 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":5000" ^| find "LISTENING"') do
 timeout /t 2 /nobreak >nul
 
 echo [Sentinel Local] Iniciando servidor...
-call venv\Scripts\activate.bat
+set "VENV_DIR=venv313"
+if not exist "%VENV_DIR%\Scripts\python.exe" set "VENV_DIR=venv"
+call "%VENV_DIR%\Scripts\activate.bat"
+echo [Sentinel Local] Python em uso:
+python --version
 start "Sentinel Local" cmd /k "python run_web_service.py"
 
 :: Aguarda subir
