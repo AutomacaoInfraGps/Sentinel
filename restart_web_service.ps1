@@ -24,6 +24,7 @@ if ($PublicBase) {
 exit $LASTEXITCODE
 
 $pythonExe = @(
+    (Join-Path $projectDir ".venv31410\Scripts\python.exe"),
     (Join-Path $projectDir ".venv\Scripts\python.exe"),
     (Join-Path $projectDir "venv\Scripts\python.exe")
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -36,7 +37,7 @@ if ($PublicBase) {
 }
 
 if (-not $pythonExe) {
-    throw "Python do ambiente virtual nao encontrado em .venv ou venv."
+    throw "Python do ambiente virtual nao encontrado em .venv31410, .venv ou venv."
 }
 
 function Get-WebMonitorProcess {
