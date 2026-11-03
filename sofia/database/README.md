@@ -20,11 +20,18 @@ rede Docker privada.
 - `audit_events`: trilha append-only para eventos de seguranca e autorizacao;
 - `llm_interactions`: apenas metadados, intencao normalizada e resultado. Prompt
   e resposta completos nao sao armazenados;
+- `sofia_chat_history`: memoria curta do agente, separada por `conversation_id`.
+  Esta tabela armazena o texto das interacoes para permitir continuidade entre
+  mensagens e, por isso, deve ter retencao limitada e acesso restrito;
 - `schema_migrations`: versao aplicada.
 
 O usuario `sofia_runtime` nao possui `DELETE`. Ele pode atualizar somente os
 snapshots por meio da funcao `sync_alert_snapshots`; ele nao pode alterar a
 auditoria nem escrever diretamente na tabela de snapshots.
+
+A unica excecao de exclusao e `sofia_chat_history`, necessaria para limpar a
+memoria de uma sessao. O runtime nao recebe `CREATE` no schema: a tabela de
+memoria e criada previamente pela migracao `005_chat_memory.sql`.
 
 A funcao aceita no maximo 100 alertas, valida os campos, calcula SHA-256 dentro
 do PostgreSQL e desativa snapshots ausentes na leitura atual. O JSON recebido

@@ -14,6 +14,7 @@ MIGRATION = (
 SYNC_MIGRATION = MIGRATION.with_name("002_alert_snapshot_sync.sql")
 READ_MIGRATION = MIGRATION.with_name("003_alert_read_api.sql")
 MAP_ALIGNMENT_MIGRATION = MIGRATION.with_name("004_map_alert_alignment.sql")
+CHAT_MEMORY_MIGRATION = MIGRATION.with_name("005_chat_memory.sql")
 
 
 class SofiaDatabaseSchemaTests(unittest.TestCase):
@@ -94,6 +95,21 @@ class SofiaDatabaseSchemaTests(unittest.TestCase):
         self.assertIn("revoke select, insert, delete on sofia.alert_snapshots", sql)
         self.assertIn("revoke update on sofia.alert_snapshots", sql)
         self.assertIn("revoke update ( severity, title, regional, device", sql)
+
+    def test_chat_memory_is_precreated_with_narrow_runtime_access(self) -> None:
+        sql = " ".join(CHAT_MEMORY_MIGRATION.read_text(encoding="utf-8").lower().split())
+        self.assertIn("create table if not exists sofia.sofia_chat_history", sql)
+        self.assertIn("session_id text not null", sql)
+        self.assertIn("message jsonb not null", sql)
+        self.assertIn(
+            "grant select, insert, delete on sofia.sofia_chat_history to sofia_runtime",
+            sql,
+        )
+        self.assertIn(
+            "grant usage, select on sequence sofia.sofia_chat_history_id_seq to sofia_runtime",
+            sql,
+        )
+        self.assertNotIn("grant create on schema sofia", sql)
 
 
 if __name__ == "__main__":
