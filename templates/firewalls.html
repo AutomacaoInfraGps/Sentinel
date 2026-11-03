@@ -4,6 +4,15 @@
 
 {% block content %}
 <style>
+    .firmware-indicator { position:relative;display:inline-flex;cursor:help; }
+    .firmware-symbol { display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;box-sizing:border-box;padding:0;border-radius:50%;font-family:Arial,"Segoe UI Symbol",sans-serif;font-size:13px;font-weight:900;line-height:1;text-align:center; }
+    .firmware-balloon { display:none;position:absolute;left:0;bottom:calc(100% + 8px);padding:12px 14px;width:310px;max-width:70vw;background:#fff;color:#000;border:1px solid #0A4A63;border-radius:8px;font-size:13px;font-weight:400;line-height:1.7;box-shadow:0 4px 14px #0003;z-index:1080; }
+    .firmware-balloon::after { content:'';position:absolute;left:5px;top:100%;width:9px;height:9px;background:#fff;border-right:1px solid #0A4A63;border-bottom:1px solid #0A4A63;transform:translateY(-4px) rotate(45deg); }
+    .firmware-balloon::before { content:'';position:absolute;left:0;right:0;top:100%;height:10px; }
+    .firmware-balloon a { color:#0056b3;text-decoration:underline; }
+    .firmware-indicator:hover .firmware-balloon,.firmware-indicator:focus-within .firmware-balloon { display:block; }
+    .firmware-indicator:focus-visible { outline:2px solid #087b9d;outline-offset:3px;border-radius:50%; }
+
     .firewall-card-regional {
         background: linear-gradient(135deg, #012E40, #0A4A63, #0F6C8C);
         border: none;
@@ -477,8 +486,24 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-12">
-                            <small class="text-muted">Versão da Firmware:</small>
-                            <p class="mb-0 fw-semibold" style="font-size:0.88rem;">{{ firewall.firmware or 'N/A' }}</p>
+                            <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted">Versão da Firmware:</small>
+                                {% if firewall.firmware_update %}
+                                {% set update = firewall.firmware_update %}
+                                {% set unavailable = update.state in ['unknown', 'absent'] or update.stale %}
+                                <span class="firmware-indicator" tabindex="0" role="group" aria-label="{{ update.label }}">
+                                    <span class="firmware-symbol {{ 'bg-secondary text-white' if unavailable else 'bg-danger text-white' if update.state == 'update' and update.update_kind == 'same_major' else 'bg-warning text-dark' if update.state == 'update' else 'bg-success text-white' }}" aria-hidden="true">{{ '✘' if unavailable else '!' if update.state == 'update' else '✔' }}</span>
+                                    <span class="firmware-balloon">
+                                        <strong class="d-block">{% if update.state == 'update' %}Atualização disponível: {{ update.available_version }}{% elif update.state == 'current' %}Sem atualizações disponíveis{% else %}{{ update.label }}{% endif %}</strong>
+                                        {% if update.state == 'absent' %}<span class="d-block">Linha não encontrada no catálogo público.</span>{% elif update.state == 'unknown' %}<span class="d-block">Não foi possível confirmar a compatibilidade.</span>{% endif %}
+                                        <span class="d-block">Verifique mais informações nas <a href="{{ update.url }}" target="_blank" rel="noopener noreferrer">Release Notes</a>.</span>
+                                        <span class="d-block">Verificado em: {{ update.checked_at_display }}</span>
+                                        {% if update.stale %}<span class="d-block text-warning">Consulta desatualizada.</span>{% endif %}
+                                    </span>
+                                </span>
+                                {% endif %}
+                            </div>
+                            <p class="mb-0 fw-semibold" style="font-size:0.88rem;">{{ firewall.firmware_display or firewall.firmware or 'N/A' }}</p>
                         </div>
                     </div>
 
