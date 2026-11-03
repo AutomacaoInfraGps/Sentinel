@@ -1,0 +1,9 @@
+{
+  "zabbix_url": "",
+  "grafana_url": "",
+  "browser_channel": "msedge",
+  "verify_tls": true,
+  "allow_http": false,
+  "timeout_seconds": 40,
+  "viewport": {"width": 1920, "height": 1080}
+}
