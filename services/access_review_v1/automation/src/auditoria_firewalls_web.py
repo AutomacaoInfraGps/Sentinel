@@ -180,7 +180,7 @@ def discover_devices(page):
           const items=[...document.querySelectorAll('*')].filter(valid);
           const marker=[...document.querySelectorAll('*')].find(e => {
             const r=e.getBoundingClientRect(), t=(e.innerText||'').trim();
-            return r.width>0 && r.height>0 && r.x>=240 && r.x<=500 && /^NAO_INTEGRADOS(?:\s*\(\d+\))?$/i.test(t);
+            return r.width>0 && r.height>0 && r.x>=240 && r.x<=500 && /^NAO_INTEGRADOS(?:\\s*\\(\\d+\\))?$/i.test(t);
           });
           let scroller=null;
           const anchor=items[0] || marker;

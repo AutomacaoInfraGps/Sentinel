@@ -142,7 +142,7 @@ def extract_tables(page) -> list[dict[str, object]]:
             payload = table.evaluate(
                 """
                 table => {
-                  const clean = value => (value || '').replace(/\s+/g, ' ').trim();
+                  const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
                   const headers = [...table.querySelectorAll('thead th')].map(cell => clean(cell.innerText));
                   const rows = [...table.querySelectorAll('tbody tr')].map(row =>
                     [...row.querySelectorAll('td')].map(cell => clean(cell.innerText))
