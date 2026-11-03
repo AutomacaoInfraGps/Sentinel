@@ -16,8 +16,11 @@ READ_MIGRATION = MIGRATION.with_name("003_alert_read_api.sql")
 MAP_ALIGNMENT_MIGRATION = MIGRATION.with_name("004_map_alert_alignment.sql")
 CHAT_MEMORY_MIGRATION = MIGRATION.with_name("005_chat_memory.sql")
 ISOLATED_MEMORY_MIGRATION = MIGRATION.with_name("006_isolated_chat_memory.sql")
+MEMORY_SEARCH_PATH_MIGRATION = MIGRATION.with_name(
+    "007_configure_memory_search_path.sql"
+)
 MEMORY_CLEANUP_MIGRATION = MIGRATION.with_name(
-    "007_revoke_shared_memory_create.sql"
+    "008_revoke_shared_memory_create.sql"
 )
 
 
@@ -129,6 +132,20 @@ class SofiaDatabaseSchemaTests(unittest.TestCase):
         self.assertNotIn("grant create on schema sofia to sofia_runtime", sql)
         self.assertIn("values (6, 'isolated n8n chat memory schema')", sql)
 
+        search_path_sql = " ".join(
+            MEMORY_SEARCH_PATH_MIGRATION.read_text(encoding="utf-8")
+            .lower()
+            .split()
+        )
+        self.assertIn(
+            "alter role sofia_memory in database sofia set search_path = sofia_memory, pg_catalog",
+            search_path_sql,
+        )
+        self.assertIn(
+            "values (7, 'configure isolated memory search path')",
+            search_path_sql,
+        )
+
         cleanup_sql = " ".join(
             MEMORY_CLEANUP_MIGRATION.read_text(encoding="utf-8")
             .lower()
@@ -139,7 +156,7 @@ class SofiaDatabaseSchemaTests(unittest.TestCase):
             cleanup_sql,
         )
         self.assertIn(
-            "values (7, 'revoke shared schema create from runtime')",
+            "values (8, 'revoke shared schema create from runtime')",
             cleanup_sql,
         )
 

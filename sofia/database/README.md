@@ -39,8 +39,9 @@ deve usar a credencial `sofia_memory`. Essa conta recebe `CREATE` somente no
 schema isolado `sofia_memory`, pois o no executa `CREATE TABLE IF NOT EXISTS`
 ao inicializar. Ela nao recebe `USAGE` no schema operacional `sofia`. O nome da
 tabela no workflow deve ser fixo e nunca pode vir do prompt ou de `$fromAI`.
-Apos validar a nova credencial no workflow, aplique
-`007_revoke_shared_memory_create.sql` para retirar o grant temporario de
+Aplique `007_configure_memory_search_path.sql` antes de configurar a nova
+credencial no workflow. Apos validar a memoria, aplique
+`008_revoke_shared_memory_create.sql` para retirar o grant temporario de
 `sofia_runtime` sem interromper o chat durante a troca.
 
 A funcao aceita no maximo 100 alertas, valida os campos, calcula SHA-256 dentro
@@ -80,8 +81,8 @@ Docker secret separado e na credencial PostgreSQL criptografada do n8n.
 Depois, conectado ao banco `sofia` como administrador, aplique os arquivos de
 `migrations/` em ordem. Cada migracao usa `ON_ERROR_STOP` e transacao; qualquer
 erro cancela a alteracao inteira. Na atualizacao de uma instalacao existente,
-aplique a `006`, troque e teste a credencial de memoria no n8n e somente entao
-aplique a `007`.
+aplique a `006` e a `007`, troque e teste a credencial de memoria no n8n e
+somente entao aplique a `008`.
 
 Antes de aplicar a migracao `006`, crie `sofia_memory` e defina sua senha de
 forma interativa. No n8n, crie uma credencial PostgreSQL exclusiva com banco

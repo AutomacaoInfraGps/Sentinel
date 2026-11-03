@@ -6,7 +6,7 @@ BEGIN;
 REVOKE CREATE ON SCHEMA sofia FROM sofia_runtime;
 
 INSERT INTO sofia.schema_migrations (version, description)
-VALUES (7, 'revoke shared schema create from runtime')
+VALUES (8, 'revoke shared schema create from runtime')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
