@@ -53,7 +53,11 @@ cookie e `credential_ref` nunca sao projetados para essa API.
 ## Memoria e fatos autoritativos no workflow
 
 O webhook recebe `conversation_id`, `allowed_regionals`, `sentinel_facts` e
-`sentinel_scope_token`. No n8n:
+`sentinel_scope_token`. O `conversation_id` enviado ao n8n nao e o UUID bruto
+do navegador: o Sentinel o transforma em uma chave HMAC opaca, vinculada ao
+usuario autenticado e ao conjunto atual de regionais autorizadas. Uma mudanca
+de usuario ou de escopo produz outra memoria e impede o reaproveitamento de
+contexto fora da autorizacao vigente. No n8n:
 
 1. Use `conversation_id` como Session Key exclusiva do no de memoria do agente.
 2. Nunca use uma chave fixa ou compartilhada entre usuarios.

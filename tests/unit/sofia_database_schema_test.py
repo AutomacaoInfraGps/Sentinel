@@ -15,6 +15,10 @@ SYNC_MIGRATION = MIGRATION.with_name("002_alert_snapshot_sync.sql")
 READ_MIGRATION = MIGRATION.with_name("003_alert_read_api.sql")
 MAP_ALIGNMENT_MIGRATION = MIGRATION.with_name("004_map_alert_alignment.sql")
 CHAT_MEMORY_MIGRATION = MIGRATION.with_name("005_chat_memory.sql")
+ISOLATED_MEMORY_MIGRATION = MIGRATION.with_name("006_isolated_chat_memory.sql")
+MEMORY_CLEANUP_MIGRATION = MIGRATION.with_name(
+    "007_revoke_shared_memory_create.sql"
+)
 
 
 class SofiaDatabaseSchemaTests(unittest.TestCase):
@@ -110,6 +114,34 @@ class SofiaDatabaseSchemaTests(unittest.TestCase):
             sql,
         )
         self.assertNotIn("grant create on schema sofia", sql)
+
+    def test_chat_memory_create_is_isolated_from_operational_schema(self) -> None:
+        sql = " ".join(
+            ISOLATED_MEMORY_MIGRATION.read_text(encoding="utf-8")
+            .lower()
+            .split()
+        )
+        self.assertIn("create schema if not exists sofia_memory", sql)
+        self.assertIn(
+            "grant usage, create on schema sofia_memory to sofia_memory",
+            sql,
+        )
+        self.assertNotIn("grant create on schema sofia to sofia_runtime", sql)
+        self.assertIn("values (6, 'isolated n8n chat memory schema')", sql)
+
+        cleanup_sql = " ".join(
+            MEMORY_CLEANUP_MIGRATION.read_text(encoding="utf-8")
+            .lower()
+            .split()
+        )
+        self.assertIn(
+            "revoke create on schema sofia from sofia_runtime",
+            cleanup_sql,
+        )
+        self.assertIn(
+            "values (7, 'revoke shared schema create from runtime')",
+            cleanup_sql,
+        )
 
 
 if __name__ == "__main__":
