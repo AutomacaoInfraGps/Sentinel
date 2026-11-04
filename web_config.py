@@ -162,6 +162,12 @@ if sofia_env is None:
     app.config["SOFIA_ENABLED"] = bool(sofia_config.get("enabled", False))
 else:
     app.config["SOFIA_ENABLED"] = sofia_env.strip().lower() in {"1", "true", "yes", "on"}
+creator_users_env = os.environ.get("SENTINEL_SOFIA_CREATOR_USERS")
+app.config["SOFIA_CREATOR_USERS"] = (
+    creator_users_env
+    if creator_users_env is not None
+    else sofia_config.get("creator_users", ())
+)
 
 
 @app.context_processor

@@ -14,6 +14,7 @@ from .memory_scope import SofiaMemoryScopeError, derive_memory_session_id
 from .permissions import usuario_pode_executar
 from .scope_token import SofiaScopeError, issue_regional_scope_token
 from .tools_sentinel import codigos_regionais
+from .user_context import build_user_context
 from regional_access import access_scope, effective_user_groups
 
 
@@ -133,6 +134,10 @@ def chat():
             allowed_regionals=scope["allowed"],
             scope_token=scope_token,
             conversation_id=memory_session_id,
+            user_context=build_user_context(
+                current_user,
+                current_app.config.get("SOFIA_CREATOR_USERS", ()),
+            ),
         )
         audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
