@@ -11,6 +11,10 @@ output/*
 !templates/**/*.html
 *.png
 !static/sofia/media/sofia-portrait-transparent.png
+!static/sofia/media/sofia-thinking-crossed-hd-a.png
+!static/sofia/media/sofia-thinking-crossed-hd-b.png
+!static/sofia/media/sofia-responding-hd-a.png
+!static/sofia/media/sofia-responding-hd-b.png
 !static/branding/sofia_chat_avatar.png
 !static/branding/sofia_chat_header.png
 !static/branding/sentinel_regionais_logo.png

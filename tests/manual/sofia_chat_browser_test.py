@@ -54,6 +54,7 @@ def main():
             assert page.locator("#sofiaAvatarMount img").evaluate("img => img.naturalWidth === 937 && img.naturalHeight === 1678")
             assert page.locator("#sofiaAvatarMount").get_attribute("title") is None
             def check_theme(light):
+                page.wait_for_function("theme => document.documentElement.dataset.sentinelTheme === theme", arg="light" if light else "dark")
                 assert page.locator(".sofia-dedicated-chat").evaluate("""(el, light) => {
                     const rgb = getComputedStyle(el).backgroundColor.match(/\\d+/g).map(Number);
                     return light ? rgb.slice(0, 3).every(c => c > 200) : rgb.slice(0, 3).every(c => c < 60);
@@ -146,7 +147,7 @@ def main():
             assert page.locator("#sofiaWidget").get_attribute("aria-busy") == "true"
             pending_routes.pop().fulfill(content_type="application/json", body='{"reply":"Consulta de teste concluida"}')
             page.get_by_text("Consulta de teste concluida", exact=True).wait_for()
-            assert page.locator("#sofiaPhase").inner_text() == "Em espera"
+            page.wait_for_function("document.getElementById('sofiaPhase').textContent === 'Em espera'")
             assert page.locator("#sofiaRoundTrip").inner_text().endswith(" s")
             assert page.locator("#sofiaAttach").is_enabled()
             page.locator("#sofiaLogFile").set_input_files({"name": "teste.log", "mimeType": "text/plain", "buffer": b"INFO: teste local"})
@@ -209,7 +210,7 @@ def main():
             page.locator("#sofiaAvatarMount").press("Escape")
             assert page.locator("#sofiaAvatarVideo").is_visible()
             page.locator("#sofiaAvatarVideo").wait_for(state="hidden")
-            assert page.locator("#sofiaAvatarMount img").evaluate("img => getComputedStyle(img).opacity === '1'")
+            assert page.locator("#sofiaAvatarMount").evaluate("mount => !mount.querySelector('canvas').hidden || getComputedStyle(mount.querySelector('img')).opacity === '1'")
             page.locator("#sofiaAvatarMount").click()
             page.wait_for_function("!document.getElementById('sofiaAvatarVideo').paused")
             page.emulate_media(reduced_motion="reduce")
@@ -259,7 +260,11 @@ if __name__ == "__main__":
         def local_preview():
             login_user(ChatUser())
             if request.path == "/api/sofia/chat":
+                import time
+                time.sleep(1.5)
                 return jsonify(reply="Esta e uma resposta simulada da previa local. No Sentinel, a conversa utiliza a integracao existente com a SofIA.")
+            if request.path == "/api/sofia/chat/cancel":
+                return jsonify(cancelled=True, message="Consulta de demonstracao interrompida.")
 
         preview.run(host="127.0.0.1", port=args.port, use_reloader=False)
     else:

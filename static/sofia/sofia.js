@@ -108,6 +108,7 @@
         textNode.textContent = "";
         const typingRun = String((Number(item.dataset.typingRun) || 0) + 1);
         item.dataset.typingRun = typingRun;
+        widget.dispatchEvent(new CustomEvent("sofia:speech", {detail: {active: true, message: item}}));
 
         let position = 0;
         const interval = 22;
@@ -127,6 +128,7 @@
             item.dataset.typing = "false";
             item.dataset.typed = "true";
             renderMessageText(textNode, fullText);
+            widget.dispatchEvent(new CustomEvent("sofia:speech", {detail: {active: false, message: item}}));
         };
         typeNext();
     }

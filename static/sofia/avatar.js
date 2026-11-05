@@ -5,6 +5,7 @@
     if (!video) return;
 
     const mount = video.parentElement;
+    const widget = document.getElementById("sofiaWidget");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const hoverPointer = window.matchMedia("(hover: hover) and (pointer: fine)");
     let wantsPlayback = false;
@@ -25,6 +26,7 @@
         video.pause();
         returningToPortrait = true;
         mount.classList.remove("is-video-visible");
+        mount.dispatchEvent(new CustomEvent("sofia:avatar-video"));
         window.clearTimeout(hideTimer);
         hideTimer = window.setTimeout(function () {
             if (!returningToPortrait) return;
@@ -35,7 +37,7 @@
     }
 
     async function startPlayback() {
-        if (failed || document.hidden) return;
+        if (failed || document.hidden || widget?.getAttribute("aria-busy") === "true") return;
         wantsPlayback = true;
         const attempt = ++playAttempt;
         window.clearTimeout(hideTimer);
@@ -99,7 +101,13 @@
         } else if (event.key === "Escape") stopPlayback();
     });
     video.addEventListener("playing", function () {
-        if (wantsPlayback && !returningToPortrait) mount.classList.add("is-video-visible");
+        if (wantsPlayback && !returningToPortrait) {
+            mount.classList.add("is-video-visible");
+            mount.dispatchEvent(new CustomEvent("sofia:avatar-video"));
+        }
+    });
+    widget?.addEventListener("sofia:request", function (event) {
+        if (event.detail.state === "pending" || event.detail.state === "cancelling") stopPlayback();
     });
     video.addEventListener("play", updateControls);
     video.addEventListener("pause", updateControls);

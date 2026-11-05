@@ -34,6 +34,9 @@
     }
 
     input.addEventListener("input", updateCount);
+    widget.addEventListener("sofia:avatar-state", function (event) {
+        if (phase.textContent !== event.detail.label) phase.textContent = event.detail.label;
+    });
     widget.addEventListener("sofia:request", function (event) {
         const state = event.detail.state;
         const busy = state === "pending" || state === "cancelling";
@@ -69,6 +72,9 @@
                 events.replaceChildren();
                 addEvent("Nova conversa");
             }
+        }
+        if (state === "success" && document.getElementById("sofiaAvatarMount")?.dataset.avatarState === "responding") {
+            phase.textContent = "Respondendo";
         }
         updateCount();
     });

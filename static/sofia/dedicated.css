@@ -83,6 +83,35 @@
 .sofia-avatar-mount.is-video-visible .sofia-avatar-video { opacity: 1; }
 .sofia-avatar-mount.is-video-visible .sofia-avatar-portrait { opacity: 0; }
 .sofia-avatar-video[hidden] { display: none; }
+.sofia-avatar-animation { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sofia-avatar-animation[hidden] { display: none; }
+.sofia-avatar-mount[data-avatar-state="idle"] .sofia-avatar-animation { transform-origin: 50% 92%; animation: sofiaIdleBreath 4s ease-in-out infinite; }
+@keyframes sofiaIdleBreath { 50% { transform: translateY(-1px); } }
+.sofia-avatar-mount.has-avatar-animation .sofia-avatar-portrait { opacity: 0; }
+.sofia-animation-toggle { flex-shrink: 0; width: 28px; height: 26px; padding: 0; border: 1px solid #52708366; border-radius: 5px; background: transparent; color: inherit; }
+.sofia-animation-toggle:hover:not(:disabled) { background: #2e91af26; }
+.sofia-animation-toggle:disabled { opacity: .4; cursor: default; }
+.sofia-thought-bubble {
+    position: absolute; z-index: 2; top: .5%; left: 52%; max-width: 45%;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 9px 12px; border: 1px solid #3ba2bd; border-radius: 20px;
+    background: #142c39ed; color: #bceefa; box-shadow: 0 4px 18px #07151b33;
+    font: 11px Consolas, monospace; pointer-events: none;
+    animation: sofiaThoughtRise 220ms ease-out;
+    animation-play-state: var(--sofia-motion-play, running);
+}
+.sofia-thought-bubble[hidden] { display: none; }
+.sofia-thought-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sofia-thought-bubble::before, .sofia-thought-bubble::after { content: ""; position: absolute; border: 1px solid #3ba2bd; border-radius: 50%; background: inherit; }
+.sofia-thought-bubble::before { width: 8px; height: 8px; left: 14px; bottom: -12px; }
+.sofia-thought-bubble::after { width: 4px; height: 4px; left: 7px; bottom: -19px; }
+.sofia-thought-dots { display: flex; flex-shrink: 0; gap: 3px; }
+.sofia-thought-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: sofiaThoughtPulse 1.2s ease-in-out infinite; animation-play-state: var(--sofia-motion-play, running); }
+.sofia-thought-dots i:nth-child(2) { animation-delay: 150ms; }
+.sofia-thought-dots i:nth-child(3) { animation-delay: 300ms; }
+.sofia-avatar-mount:not(.has-avatar-animation) :is(.sofia-thought-bubble, .sofia-thought-dots i) { animation: none; }
+@keyframes sofiaThoughtRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sofiaThoughtPulse { 50% { opacity: .35; } }
 .sofia-telemetry { padding: 14px 16px 16px; border-top: 1px solid #20303b; font-family: Consolas, monospace; }
 .sofia-telemetry dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 14px; }
 .sofia-telemetry dt { color: #728c9d; font-size: 10px; font-weight: 400; margin-bottom: 5px; }
@@ -178,6 +207,7 @@ html:not([data-sentinel-theme="dark"]) .sofia-page-heading { background: linear-
 html:not([data-sentinel-theme="dark"]) .sofia-page-heading h1 { color: #06465b; }
 html:not([data-sentinel-theme="dark"]) :is(.sofia-heading-subtitle, .sofia-terminal-heading, .sofia-terminal-state, .sofia-telemetry dt, .sofia-terminal-events, #sofiaConversationState, .sofia-character-count) { color: var(--sofia-muted); }
 html:not([data-sentinel-theme="dark"]) .sofia-access-badge { color: #176b50; }
+html:not([data-sentinel-theme="dark"]) .sofia-thought-bubble { background: #f4fcffed; color: #12617a; border-color: #65afc5; box-shadow: 0 4px 18px #1b607017; }
 html:not([data-sentinel-theme="dark"]) .sofia-new-chat { background: #fff; color: #12506b; border-color: var(--sofia-line); }
 html:not([data-sentinel-theme="dark"]) .sofia-new-chat:hover { background: #e0f0f7; border-color: #528aa1; }
 html:not([data-sentinel-theme="dark"]) .sofia-telemetry { border-color: var(--sofia-line); }
@@ -224,6 +254,11 @@ html:not([data-sentinel-theme="dark"]) .sofia-log-dialog p { color: #80510a; }
     .sofia-avatar-stage { grid-template-columns: 98px minmax(0, 1fr); grid-template-rows: 32px minmax(0, 1fr); column-gap: 12px; }
     .sofia-terminal-heading { grid-column: 1 / -1; padding: 7px 8px; }
     .sofia-avatar-mount { grid-column: 1; height: 148px; width: 83.25px; }
+    .sofia-thought-bubble { left: 65%; top: 0; max-width: 30%; padding: 5px; gap: 0; }
+    .sofia-thought-label { display: none; }
+    .sofia-thought-dots i { width: 3px; height: 3px; }
+    .sofia-thought-bubble::before { width: 5px; height: 5px; left: 5px; bottom: -8px; }
+    .sofia-thought-bubble::after { width: 3px; height: 3px; left: 1px; bottom: -13px; }
     .sofia-telemetry { grid-column: 2; grid-row: 2; padding: 12px 8px 0 0; border: 0; }
     .sofia-telemetry dl { gap: 7px; margin-bottom: 10px; }
     .sofia-telemetry dd { font-size: 10px; }
@@ -239,6 +274,8 @@ html:not([data-sentinel-theme="dark"]) .sofia-log-dialog p { color: #80510a; }
     .sofia-dedicated-chat .sofia-composer textarea { min-height: 50px; }
 }
 @media (prefers-reduced-motion: reduce) {
+    .sofia-thought-bubble, .sofia-thought-dots i { animation: none !important; }
+    .sofia-avatar-animation { animation: none !important; }
     .sofia-avatar-portrait, .sofia-avatar-video { transition: none; }
     .sofia-workspace[aria-busy="true"] .sofia-heading-identity img { animation: none; }
 }

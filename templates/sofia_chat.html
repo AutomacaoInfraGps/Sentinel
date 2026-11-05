@@ -3,7 +3,7 @@
 {% block title %}SofIA - Sentinel{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='sofia/dedicated.css', v='20261105-themes-2') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='sofia/dedicated.css', v='20261105-animation-crossed-3') }}">
 {% endblock %}
 
 {% block content %}
@@ -24,11 +24,20 @@
         <aside class="sofia-avatar-stage" aria-label="SofIA, assistente do Sentinel">
             <header class="sofia-terminal-heading">
                 <span><i class="bi bi-terminal" aria-hidden="true"></i> TERMINAL DA ANALISTA</span>
-                <span class="sofia-terminal-state" id="sofiaPhase">Em espera</span>
+                <span class="sofia-terminal-state" id="sofiaPhase" role="status">Em espera</span>
+                <button type="button" class="sofia-animation-toggle" id="sofiaAnimationToggle" aria-pressed="true" aria-label="Pausar animações do avatar"><i class="bi bi-pause" aria-hidden="true"></i></button>
             </header>
             <div class="sofia-avatar-mount" id="sofiaAvatarMount" tabindex="0" role="group" aria-label="Avatar da SofIA. Ativar para reproduzir o v&#237;deo com &#225;udio.">
                 <img class="sofia-avatar-portrait" src="{{ url_for('static', filename='sofia/media/sofia-portrait-transparent.png') }}" alt="SofIA de corpo inteiro" width="937" height="1678">
+                <canvas class="sofia-avatar-animation" id="sofiaAvatarAnimation" width="720" height="1280" data-frames='{{ {
+                    "idle": url_for("static", filename="sofia/media/sofia-portrait-transparent.png"),
+                    "thinkingA": url_for("static", filename="sofia/media/sofia-thinking-crossed-hd-a.png"),
+                    "thinkingB": url_for("static", filename="sofia/media/sofia-thinking-crossed-hd-b.png"),
+                    "respondingA": url_for("static", filename="sofia/media/sofia-responding-hd-a.png"),
+                    "respondingB": url_for("static", filename="sofia/media/sofia-responding-hd-b.png")
+                } | tojson }}' aria-hidden="true" hidden></canvas>
                 <video class="sofia-avatar-video" id="sofiaAvatarVideo" data-webm="{{ url_for('static', filename='sofia/media/sofia-hologram-transparent.webm') }}" poster="{{ url_for('static', filename='sofia/media/sofia-portrait-transparent.png') }}" preload="none" playsinline aria-label="V&#237;deo da SofIA com &#225;udio" hidden></video>
+                <div class="sofia-thought-bubble" id="sofiaThoughtBubble" aria-hidden="true" hidden><span class="sofia-thought-label">Consultando</span><span class="sofia-thought-dots"><i></i><i></i><i></i></span></div>
             </div>
             <div class="sofia-telemetry" aria-label="Telemetria da conversa">
                 <dl>
@@ -80,6 +89,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='sofia/avatar.js', v='20261105-no-tooltip') }}"></script>
-<script src="{{ url_for('static', filename='sofia/terminal.js', v='20261105-stop-1') }}"></script>
+<script src="{{ url_for('static', filename='sofia/avatar.js', v='20261105-animation-1') }}"></script>
+<script src="{{ url_for('static', filename='sofia/avatar-animation.js', v='20261105-animation-crossed-3') }}"></script>
+<script src="{{ url_for('static', filename='sofia/terminal.js', v='20261105-animation-crossed-3') }}"></script>
 {% endblock %}
