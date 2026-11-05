@@ -52,12 +52,37 @@ def main():
             assert page.locator("#sofiaLauncher").count() == 0
             assert page.locator("#sofiaAvatarMount img").evaluate("img => img.complete && img.naturalWidth > 0")
             assert page.locator("#sofiaAvatarMount img").evaluate("img => img.naturalWidth === 937 && img.naturalHeight === 1678")
+            assert page.locator("#sofiaAvatarMount").get_attribute("title") is None
+            def check_theme(light):
+                assert page.locator(".sofia-dedicated-chat").evaluate("""(el, light) => {
+                    const rgb = getComputedStyle(el).backgroundColor.match(/\\d+/g).map(Number);
+                    return light ? rgb.slice(0, 3).every(c => c > 200) : rgb.slice(0, 3).every(c => c < 60);
+                }""", light)
+                assert page.locator("#sofiaInput").evaluate("""(el, light) => {
+                    const rgb = getComputedStyle(el).color.match(/\\d+/g).map(Number);
+                    return light ? rgb.slice(0, 3).every(c => c < 150) : rgb.slice(0, 3).every(c => c > 180);
+                }""", light)
+            page.locator('[data-theme-choice="light"]').click()
+            check_theme(True)
+            page.screenshot(path=str(screenshots / "sofia-light.png"), full_page=True)
+            page.locator('[data-theme-choice="dark"]').click()
+            check_theme(False)
+            page.screenshot(path=str(screenshots / "sofia-dark.png"), full_page=True)
+            page.locator('[data-theme-choice="system"]').click()
+            page.emulate_media(color_scheme="light")
+            check_theme(True)
+            page.emulate_media(color_scheme="dark")
+            check_theme(False)
+            page.locator('[data-theme-choice="light"]').click()
+            page.emulate_media(color_scheme="light")
             assert page.locator("#sofiaAvatarMount button").count() == 0
             assert page.locator("#sofiaAvatarVideo").get_attribute("src") is None
             assert page.locator("#sofiaVideoToggle").count() == 0
             page.locator("#sofiaAvatarMount").focus()
             page.keyboard.press("Enter")
             page.wait_for_function("document.getElementById('sofiaAvatarVideo').currentTime > 0.3")
+            assert page.locator("#sofiaAvatarMount").get_attribute("title") is None
+            assert "Pausar" in page.locator("#sofiaAvatarMount").get_attribute("aria-label")
             assert page.locator("#sofiaAvatarMount").evaluate("""mount => {
                 const img = mount.querySelector('img').getBoundingClientRect();
                 const video = mount.querySelector('video').getBoundingClientRect();

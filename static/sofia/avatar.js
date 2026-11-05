@@ -16,7 +16,7 @@
     function updateControls() {
         const label = video.paused ? "Reproduzir video com audio"
             : video.muted ? "Ativar audio" : "Pausar video";
-        mount.title = label;
+        mount.setAttribute("aria-label", "Avatar da SofIA. " + label + ".");
     }
 
     function stopPlayback() {

@@ -3,7 +3,7 @@
 {% block title %}SofIA - Sentinel{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='sofia/dedicated.css', v='20261105-transparent') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='sofia/dedicated.css', v='20261105-themes-2') }}">
 {% endblock %}
 
 {% block content %}
@@ -26,7 +26,7 @@
                 <span><i class="bi bi-terminal" aria-hidden="true"></i> TERMINAL DA ANALISTA</span>
                 <span class="sofia-terminal-state" id="sofiaPhase">Em espera</span>
             </header>
-            <div class="sofia-avatar-mount" id="sofiaAvatarMount" tabindex="0" role="group" aria-label="Avatar da SofIA. Ativar para reproduzir o v&#237;deo com &#225;udio." title="Reproduzir v&#237;deo com &#225;udio">
+            <div class="sofia-avatar-mount" id="sofiaAvatarMount" tabindex="0" role="group" aria-label="Avatar da SofIA. Ativar para reproduzir o v&#237;deo com &#225;udio.">
                 <img class="sofia-avatar-portrait" src="{{ url_for('static', filename='sofia/media/sofia-portrait-transparent.png') }}" alt="SofIA de corpo inteiro" width="937" height="1678">
                 <video class="sofia-avatar-video" id="sofiaAvatarVideo" data-webm="{{ url_for('static', filename='sofia/media/sofia-hologram-transparent.webm') }}" poster="{{ url_for('static', filename='sofia/media/sofia-portrait-transparent.png') }}" preload="none" playsinline aria-label="V&#237;deo da SofIA com &#225;udio" hidden></video>
             </div>
@@ -80,6 +80,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='sofia/avatar.js', v='20261105-transparent') }}"></script>
+<script src="{{ url_for('static', filename='sofia/avatar.js', v='20261105-no-tooltip') }}"></script>
 <script src="{{ url_for('static', filename='sofia/terminal.js', v='20261105-stop-1') }}"></script>
 {% endblock %}
