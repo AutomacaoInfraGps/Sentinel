@@ -16,7 +16,13 @@ param(
             $env:USERNAME
         }
     ),
-    [string]$PythonPath = (Join-Path $PSScriptRoot ".venv\Scripts\python.exe"),
+    [string]$PythonPath = $(
+        @(
+            (Join-Path $PSScriptRoot ".venv31410\Scripts\python.exe"),
+            (Join-Path $PSScriptRoot ".venv\Scripts\python.exe"),
+            (Join-Path $PSScriptRoot "venv\Scripts\python.exe")
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    ),
     [string]$RunnerPath = (Join-Path $PSScriptRoot "run_web_service.py"),
     [string]$StarterPath = (Join-Path $PSScriptRoot "start_web_background.ps1"),
     [string]$MonitorPath = (Join-Path $PSScriptRoot "monitor_web_background.ps1")

@@ -1,7 +1,11 @@
 $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pythonExe = Join-Path $projectDir ".venv\Scripts\python.exe"
+$pythonExe = @(
+    (Join-Path $projectDir ".venv31410\Scripts\python.exe"),
+    (Join-Path $projectDir ".venv\Scripts\python.exe"),
+    (Join-Path $projectDir "venv\Scripts\python.exe")
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
 $runner = Join-Path $projectDir "run_web_service.py"
 $logDir = Join-Path $projectDir "logs"
 $stdoutLog = Join-Path $logDir "web_task_stdout.log"
@@ -11,8 +15,8 @@ $env:PYTHONIOENCODING = "utf-8"
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
-if (-not (Test-Path $pythonExe)) {
-    throw "Python não encontrado em $pythonExe"
+if (-not $pythonExe) {
+    throw "Python não encontrado em .venv31410, .venv ou venv."
 }
 
 if (-not (Test-Path $runner)) {

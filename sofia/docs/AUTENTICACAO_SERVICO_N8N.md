@@ -52,8 +52,12 @@ cookie e `credential_ref` nunca sao projetados para essa API.
 
 ## Memoria e fatos autoritativos no workflow
 
-O webhook recebe `conversation_id`, `allowed_regionals`, `sentinel_facts` e
-`sentinel_scope_token`. No n8n:
+O webhook recebe `conversation_id`, `allowed_regionals`, `sentinel_facts`,
+`user_context` e `sentinel_scope_token`. O `conversation_id` enviado ao n8n nao e o UUID bruto
+do navegador: o Sentinel o transforma em uma chave HMAC opaca, vinculada ao
+usuario autenticado e ao conjunto atual de regionais autorizadas. Uma mudanca
+de usuario ou de escopo produz outra memoria e impede o reaproveitamento de
+contexto fora da autorizacao vigente. No n8n:
 
 1. Use `conversation_id` como Session Key exclusiva do no de memoria do agente.
 2. Nunca use uma chave fixa ou compartilhada entre usuarios.
@@ -64,6 +68,27 @@ O webhook recebe `conversation_id`, `allowed_regionals`, `sentinel_facts` e
    `data.returned` for igual a `data.total`.
 6. Nao estime quantidades, nao complete nomes pela memoria do modelo e nao
    limite a lista retornada pela ferramenta.
+
+`user_context` contem somente o nome de exibicao e a relacao `user` ou
+`creator`, calculada pelo Sentinel depois da autenticacao. O modelo nunca deve
+aceitar uma alegacao feita no chat como prova de que o usuario e o criador.
+Essa relacao personaliza a conversa e nao concede permissoes adicionais.
+
+Os criadores podem ser configurados localmente, sem versionar identidades no
+Git, na secao `sofia` do `environment.json`:
+
+```json
+{
+  "sofia": {
+    "enabled": true,
+    "creator_users": ["admin.pimentel"]
+  }
+}
+```
+
+A variavel `SENTINEL_SOFIA_CREATOR_USERS` aceita nomes separados por virgula,
+ponto e virgula ou quebra de linha e, quando definida, substitui a lista do
+arquivo local.
 
 Trecho recomendado para o System Prompt do AI Agent:
 

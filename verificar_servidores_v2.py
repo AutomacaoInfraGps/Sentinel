@@ -3,6 +3,7 @@ Verificador de Servidores - Versão 2.0
 Estrutura hierárquica: Regional → Servidores (iDRAC/ILO)
 """
 
+import argparse
 import requests
 import json
 import urllib3
@@ -81,14 +82,27 @@ class VerificadorServidoresV2:
         }
         
         try:
+            tipo = str(servidor.get("tipo", "idrac")).strip().lower()
+            inicio = datetime.now()
+
+            if tipo == "vm":
+                porta = int(servidor.get("porta") or 443)
+                timeout = float(servidor.get("timeout", 20))
+                with socket.create_connection((servidor["ip"], porta), timeout=timeout):
+                    pass
+
+                fim = datetime.now()
+                resultado["tempo_resposta"] = round((fim - inicio).total_seconds(), 2)
+                resultado["status"] = "online"
+                return resultado
+
             # Monta URL baseada no tipo
-            if servidor.get("tipo") == "ilo":
+            if tipo == "ilo":
                 url = f"https://{servidor['ip']}/json/login_session"
             else:  # idrac
                 url = f"https://{servidor['ip']}/redfish/v1/"
             
             # Faz a requisição
-            inicio = datetime.now()
             response = requests.get(
                 url,
                 timeout=(5, servidor.get("timeout", 20)),
@@ -105,10 +119,12 @@ class VerificadorServidoresV2:
                 resultado["status"] = "warning"
                 resultado["erro"] = f"HTTP {response.status_code}"
                 
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout, socket.timeout, TimeoutError):
             resultado["erro"] = "Timeout"
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, ConnectionRefusedError):
             resultado["erro"] = "Conexão recusada"
+        except OSError as e:
+            resultado["erro"] = f"Falha de conexão: {e}"
         except Exception as e:
             resultado["erro"] = str(e)
         
@@ -605,14 +621,32 @@ class VerificadorServidoresV2:
         print(f"[WEB] Página HTML gerada: {arquivo}")
 
 
-def main():
+def build_parser():
+    parser = argparse.ArgumentParser(description="Verificador de servidores regionais")
+    parser.add_argument(
+        "--modo",
+        choices=("interativo", "rapido"),
+        default="interativo",
+        help="Executa o menu manual ou uma verificacao completa sem interacao.",
+    )
+    return parser
+
+
+def main(argv=None):
     """Função principal"""
-    
+
+    args = build_parser().parse_args(argv)
     verificador = VerificadorServidoresV2()
     
     print("[SERVER] Verificador de Servidores - Versão 2.0")
     print("Estrutura hierárquica: Regional → Servidores")
     print("=" * 50)
+
+    if args.modo == "rapido":
+        verificador.verificar_todas_regionais()
+        verificador.salvar_resultados()
+        verificador.gerar_html_status()
+        return 0
     
     # Menu
     while True:
@@ -673,6 +707,8 @@ def main():
         else:
             print("[ERROR] Opção inválida")
 
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

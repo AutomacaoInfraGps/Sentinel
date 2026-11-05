@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $pythonExe = @(
+    (Join-Path $projectDir ".venv31410\Scripts\python.exe"),
     (Join-Path $projectDir ".venv\Scripts\python.exe"),
     (Join-Path $projectDir "venv\Scripts\python.exe")
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1

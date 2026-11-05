@@ -14,6 +14,14 @@ MIGRATION = (
 SYNC_MIGRATION = MIGRATION.with_name("002_alert_snapshot_sync.sql")
 READ_MIGRATION = MIGRATION.with_name("003_alert_read_api.sql")
 MAP_ALIGNMENT_MIGRATION = MIGRATION.with_name("004_map_alert_alignment.sql")
+CHAT_MEMORY_MIGRATION = MIGRATION.with_name("005_chat_memory.sql")
+ISOLATED_MEMORY_MIGRATION = MIGRATION.with_name("006_isolated_chat_memory.sql")
+MEMORY_SEARCH_PATH_MIGRATION = MIGRATION.with_name(
+    "007_configure_memory_search_path.sql"
+)
+MEMORY_CLEANUP_MIGRATION = MIGRATION.with_name(
+    "008_revoke_shared_memory_create.sql"
+)
 
 
 class SofiaDatabaseSchemaTests(unittest.TestCase):
@@ -94,6 +102,63 @@ class SofiaDatabaseSchemaTests(unittest.TestCase):
         self.assertIn("revoke select, insert, delete on sofia.alert_snapshots", sql)
         self.assertIn("revoke update on sofia.alert_snapshots", sql)
         self.assertIn("revoke update ( severity, title, regional, device", sql)
+
+    def test_chat_memory_is_precreated_with_narrow_runtime_access(self) -> None:
+        sql = " ".join(CHAT_MEMORY_MIGRATION.read_text(encoding="utf-8").lower().split())
+        self.assertIn("create table if not exists sofia.sofia_chat_history", sql)
+        self.assertIn("session_id text not null", sql)
+        self.assertIn("message jsonb not null", sql)
+        self.assertIn(
+            "grant select, insert, delete on sofia.sofia_chat_history to sofia_runtime",
+            sql,
+        )
+        self.assertIn(
+            "grant usage, select on sequence sofia.sofia_chat_history_id_seq to sofia_runtime",
+            sql,
+        )
+        self.assertNotIn("grant create on schema sofia", sql)
+
+    def test_chat_memory_create_is_isolated_from_operational_schema(self) -> None:
+        sql = " ".join(
+            ISOLATED_MEMORY_MIGRATION.read_text(encoding="utf-8")
+            .lower()
+            .split()
+        )
+        self.assertIn("create schema if not exists sofia_memory", sql)
+        self.assertIn(
+            "grant usage, create on schema sofia_memory to sofia_memory",
+            sql,
+        )
+        self.assertNotIn("grant create on schema sofia to sofia_runtime", sql)
+        self.assertIn("values (6, 'isolated n8n chat memory schema')", sql)
+
+        search_path_sql = " ".join(
+            MEMORY_SEARCH_PATH_MIGRATION.read_text(encoding="utf-8")
+            .lower()
+            .split()
+        )
+        self.assertIn(
+            "alter role sofia_memory in database sofia set search_path = sofia_memory, pg_catalog",
+            search_path_sql,
+        )
+        self.assertIn(
+            "values (7, 'configure isolated memory search path')",
+            search_path_sql,
+        )
+
+        cleanup_sql = " ".join(
+            MEMORY_CLEANUP_MIGRATION.read_text(encoding="utf-8")
+            .lower()
+            .split()
+        )
+        self.assertIn(
+            "revoke create on schema sofia from sofia_runtime",
+            cleanup_sql,
+        )
+        self.assertIn(
+            "values (8, 'revoke shared schema create from runtime')",
+            cleanup_sql,
+        )
 
 
 if __name__ == "__main__":

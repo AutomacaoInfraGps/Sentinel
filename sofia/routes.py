@@ -3,16 +3,18 @@
 from collections import defaultdict, deque
 from threading import Lock
 import time
-import re
+import uuid
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user, login_required
 
 from .audit import registrar_evento_sofia
 from .n8n_client import SofiaN8nError, consultar_sofia
+from .memory_scope import SofiaMemoryScopeError, derive_memory_session_id
 from .permissions import usuario_pode_executar
 from .scope_token import SofiaScopeError, issue_regional_scope_token
 from .tools_sentinel import codigos_regionais
+from .user_context import build_user_context
 from regional_access import access_scope, effective_user_groups
 
 
@@ -56,7 +58,7 @@ def require_authenticated_api_user():
 @sofia_bp.post("/api/sofia/chat")
 @login_required
 def chat():
-    username = getattr(current_user, "username", current_user.get_id())
+    username = getattr(current_user, "username", None) or current_user.get_id()
     remote_address = request.remote_addr
 
     if request.headers.get("X-Sentinel-Request") != "sofia-chat":
@@ -89,8 +91,9 @@ def chat():
     if len(message) > MAX_MESSAGE_LENGTH:
         return _json_response({"error": f"A mensagem deve ter até {MAX_MESSAGE_LENGTH} caracteres."}, 413)
 
-    conversation_id = str(payload.get("conversation_id") or "").strip()
-    if not re.fullmatch(r"[a-f0-9-]{36}", conversation_id, flags=re.IGNORECASE):
+    try:
+        conversation_id = str(uuid.UUID(str(payload.get("conversation_id") or "")))
+    except (ValueError, TypeError, AttributeError):
         return _json_response({"error": "Identificador da conversa inválido."}, 400)
 
     if not _rate_limit_allows(username):
@@ -121,11 +124,20 @@ def chat():
         )
         scope = access_scope(groups, codigos_regionais())
         scope_token = issue_regional_scope_token(scope["allowed"])
+        memory_session_id = derive_memory_session_id(
+            username,
+            conversation_id,
+            scope["allowed"],
+        )
         reply = consultar_sofia(
             mensagem=message,
             allowed_regionals=scope["allowed"],
             scope_token=scope_token,
-            conversation_id=conversation_id,
+            conversation_id=memory_session_id,
+            user_context=build_user_context(
+                current_user,
+                current_app.config.get("SOFIA_CREATOR_USERS", ()),
+            ),
         )
         audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
@@ -136,7 +148,7 @@ def chat():
             detalhe=audit_detail,
         )
         return _json_response({"reply": reply})
-    except (SofiaN8nError, SofiaScopeError) as exc:
+    except (SofiaMemoryScopeError, SofiaN8nError, SofiaScopeError) as exc:
         current_app.logger.exception("Falha no webhook privado da SofIA")
         registrar_evento_sofia(
             usuario=username,
