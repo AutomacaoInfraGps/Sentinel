@@ -115,6 +115,16 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
         self.assertIn("Atualizar\n", template)
         self.assertNotIn("Atualizar Forti", template)
 
+    def test_firmware_indicator_uses_green_red_and_gray_failure(self):
+        template = (web_config.PROJECT_ROOT / "templates" / "firewalls.html").read_text(encoding="utf-8")
+        indicator = template.split('<span class="firmware-symbol ', 1)[1].split("</span>", 1)[0]
+
+        self.assertIn("'bg-secondary text-white' if unavailable", indicator)
+        self.assertIn("'bg-danger text-white' if update.state == 'update'", indicator)
+        self.assertIn("{{ 'X' if unavailable else '!' if update.state == 'update' else '✔' }}", indicator)
+        self.assertNotIn("bg-warning", indicator)
+        self.assertNotIn("update.update_kind", indicator)
+
     def test_license_summary_and_filter_flags_use_same_sixty_day_rule(self):
         firewalls = {
             "REG_A": [

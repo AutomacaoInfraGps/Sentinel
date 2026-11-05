@@ -59,9 +59,27 @@ class ReleaseTests(unittest.TestCase):
                 module._public_url(url)
 
     def test_partial_newer_line_prevents_current_claim(self):
-        self.data['lines'].append('8.0')
-        self.data['unverified_lines'] = ['8.0']
+        self.data['unverified_lines'] = ['7.8']
         self.assertEqual(module.assess(self.data, 'FG-60F', '7.6.8')['state'], 'unknown')
+
+    def test_update_rule_stays_within_installed_major_family(self):
+        current = self.release('7.0.0')
+        next_version = self.release('7.1.0')
+        next_family = self.release('8.0.0')
+
+        cases = [
+            ([current, next_version], 'update', '7.1.0'),
+            ([current, next_version, next_family], 'update', '7.1.0'),
+            ([current, next_family], 'current', None),
+            ([current], 'current', None),
+        ]
+        for releases, state, available in cases:
+            with self.subTest(releases=[release['version'] for release in releases]):
+                snapshot = {'checked_at': self.data['checked_at'],
+                            'lines': ['7.0', '7.1', '8.0'], 'releases': releases}
+                result = module.assess(snapshot, 'FG-60F', '7.0.0')
+                self.assertEqual(result['state'], state)
+                self.assertEqual(result.get('available_version'), available)
 
     def test_relative_page_url_is_normalized(self):
         from unittest.mock import Mock

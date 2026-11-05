@@ -110,7 +110,8 @@ def assess(snapshot, hardware, firmware, stale=False):
             result.update(state='absent', label='Linha ausente do catálogo',
                           message=f'A linha {line} não foi encontrada na documentação pública consultada da Fortinet.')
         else:
-            compatible = [r for r in snapshot['releases'] if identity in r['models'] and version(r['version']) > installed]
+            compatible = [r for r in snapshot['releases'] if identity in r['models']
+                          and version(r['version'])[0] == installed[0] and version(r['version']) > installed]
             patches = [r for r in compatible if version(r['version'])[:2] == installed[:2]]
             others = [r for r in compatible if version(r['version'])[:2] != installed[:2]]
             target = max(patches or others, key=lambda r: version(r['version']), default=None)
@@ -122,7 +123,8 @@ def assess(snapshot, hardware, firmware, stale=False):
                 if patches and others:
                     result['message'] += ' Outra linha compatível: ' + max(others, key=lambda r: version(r['version']))['version'] + '.'
                 result['message'] += ' Verifique as restrições e o caminho de upgrade nas Release Notes.'
-            elif not any(tuple(map(int, x.split('.'))) >= installed[:2] for x in snapshot.get('unverified_lines', [])) and any(identity in r['models'] and version(r['version'])[:2] == installed[:2] for r in snapshot['releases']):
+            elif not any(x.startswith(f'{installed[0]}.') and tuple(map(int, x.split('.'))) >= installed[:2]
+                         for x in snapshot.get('unverified_lines', [])) and any(identity in r['models'] and version(r['version'])[:2] == installed[:2] for r in snapshot['releases']):
                 result.update(state='current', label='Sem versão superior no catálogo',
                               message='Nenhuma versão superior compatível foi encontrada no catálogo consultado.')
     if snapshot.get('unverified_lines'):

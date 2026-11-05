@@ -10,7 +10,7 @@ O catálogo fica em `instance/fortios_releases/catalog.json`, já abrangido pela
 
 ## Indicadores
 
-- Atualização disponível: modelo exato consta na lista suportada de uma versão superior. Prioriza patch da linha atual e informa outra linha compatível quando encontrada.
+- Atualização disponível: modelo exato consta na lista suportada de uma versão superior da mesma família principal (por exemplo, `7.x`). Prioriza patch da linha atual e informa outra linha compatível da família quando encontrada; uma `8.x` isolada não alerta um equipamento `7.x`.
 - Linha ausente do catálogo: a linha não consta no índice público consultado. Não representa declaração de fim de suporte.
 - Sem versão superior no catálogo: não foi encontrada versão superior compatível e não há lacuna de leitura em linhas iguais ou superiores.
 - Verificação indisponível: catálogo, modelo, versão ou compatibilidade não puderam ser confirmados.
