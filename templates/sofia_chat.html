@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}SofIA - Sentinel{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='sofia/dedicated.css', v='20261105-transparent') }}">
+{% endblock %}
+
+{% block content %}
+<section class="sofia-workspace" id="sofiaWidget" data-mode="dedicated" data-endpoint="{{ url_for('sofia.chat') }}" data-cancel-endpoint="{{ url_for('sofia.cancel_chat') }}" data-user="{{ current_user.get_id() }}" aria-labelledby="sofiaPageTitle">
+    <header class="sofia-page-heading">
+        <div class="sofia-heading-identity">
+            <img src="{{ url_for('static', filename='branding/sofia_chat_avatar.png') }}" alt="" width="48" height="48">
+            <div><h1 id="sofiaPageTitle">SofIA</h1><span class="sofia-heading-subtitle">Sentinel / Console de an&#225;lise</span></div>
+        </div>
+        <span class="sofia-access-badge"><i class="bi bi-shield-check" aria-hidden="true"></i> Somente leitura</span>
+        <button type="button" class="sofia-new-chat" id="sofiaClear" title="Iniciar nova conversa" aria-label="Iniciar nova conversa">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+            <span>Nova conversa</span>
+        </button>
+    </header>
+
+    <div class="sofia-dedicated-layout">
+        <aside class="sofia-avatar-stage" aria-label="SofIA, assistente do Sentinel">
+            <header class="sofia-terminal-heading">
+                <span><i class="bi bi-terminal" aria-hidden="true"></i> TERMINAL DA ANALISTA</span>
+                <span class="sofia-terminal-state" id="sofiaPhase">Em espera</span>
+            </header>
+            <div class="sofia-avatar-mount" id="sofiaAvatarMount" tabindex="0" role="group" aria-label="Avatar da SofIA. Ativar para reproduzir o v&#237;deo com &#225;udio." title="Reproduzir v&#237;deo com &#225;udio">
+                <img class="sofia-avatar-portrait" src="{{ url_for('static', filename='sofia/media/sofia-portrait-transparent.png') }}" alt="SofIA de corpo inteiro" width="937" height="1678">
+                <video class="sofia-avatar-video" id="sofiaAvatarVideo" data-webm="{{ url_for('static', filename='sofia/media/sofia-hologram-transparent.webm') }}" poster="{{ url_for('static', filename='sofia/media/sofia-portrait-transparent.png') }}" preload="none" playsinline aria-label="V&#237;deo da SofIA com &#225;udio" hidden></video>
+            </div>
+            <div class="sofia-telemetry" aria-label="Telemetria da conversa">
+                <dl>
+                    <div><dt>SESS&#195;O</dt><dd><span class="sofia-session-dot" aria-hidden="true"></span> Autenticada</dd></div>
+                    <div><dt>&#218;LTIMA RESPOSTA</dt><dd id="sofiaRoundTrip">--</dd></div>
+                </dl>
+                <ol class="sofia-terminal-events" id="sofiaTerminalEvents" aria-label="Eventos da consulta"><li>Aguardando sua mensagem</li></ol>
+            </div>
+        </aside>
+
+        <section class="sofia-dedicated-chat" id="sofiaPanel" aria-label="Conversa com a SofIA">
+            <header class="sofia-conversation-heading"><span><i class="bi bi-chat-left-text" aria-hidden="true"></i> Conversa</span><span id="sofiaConversationState" role="status">Em espera</span></header>
+            <div class="sofia-messages" id="sofiaMessages" role="log" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="Hist&#243;rico da conversa">
+                <div class="sofia-message sofia-message-assistant">
+                    <span class="sofia-message-author">SofIA</span>
+                    <p>Ol&#225;, {{ current_user.display_name }}! Como posso ajudar hoje?</p>
+                </div>
+            </div>
+            <div class="sofia-prompt-area">
+                <div class="sofia-quick-actions" aria-label="A&#231;&#245;es r&#225;pidas">
+                    <button type="button" data-sofia-prompt="Qual &#233; o resumo dos alertas ativos no momento?" title="Preparar consulta de alertas"><i class="bi bi-activity" aria-hidden="true"></i> /alertas</button>
+                    <button type="button" data-sofia-prompt="Quais regionais est&#227;o com alertas ativos?" title="Preparar consulta de regionais afetadas"><i class="bi bi-diagram-3" aria-hidden="true"></i> /regionais</button>
+                    <button type="button" data-sofia-prompt="Quais alertas de switches temos no momento?" title="Preparar consulta de alertas de switches"><i class="bi bi-hdd-network" aria-hidden="true"></i> /switches</button>
+                    <span tabindex="0" title="Indispon&#237;vel: opera&#231;&#245;es de escrita no AD ainda n&#227;o est&#227;o habilitadas"><button type="button" disabled><i class="bi bi-lock" aria-hidden="true"></i> /reset_senha</button></span>
+                </div>
+                <form class="sofia-composer" id="sofiaForm">
+                    <label for="sofiaInput" class="visually-hidden">Mensagem para SofIA</label>
+                    <textarea id="sofiaInput" name="message" rows="2" maxlength="1000" placeholder="Mensagem para a SofIA..." autocomplete="off" required></textarea>
+                    <div class="sofia-composer-tools">
+                        <button type="button" class="sofia-attach" id="sofiaAttach" title="Selecionar trecho de log" aria-label="Anexar trecho de log"><i class="bi bi-paperclip" aria-hidden="true"></i></button>
+                        <span class="sofia-character-count" id="sofiaCharacterCount">0 / 1000</span>
+                        <button type="button" class="sofia-stop" id="sofiaStop" aria-label="Parar consulta" title="Parar consulta" hidden>Parar</button>
+            <button type="submit" class="sofia-send" id="sofiaSend" aria-label="Enviar mensagem" title="Enviar mensagem"><i class="bi bi-arrow-up" aria-hidden="true"></i></button>
+                    </div>
+                </form>
+                <input type="file" id="sofiaLogFile" accept=".txt,.log,.json" hidden>
+            </div>
+            <div class="sofia-status" id="sofiaStatus" role="status"></div>
+        </section>
+    </div>
+</section>
+<dialog class="sofia-log-dialog" id="sofiaLogDialog" aria-labelledby="sofiaLogTitle">
+    <header><h2 id="sofiaLogTitle">Selecionar trecho do log</h2><button type="button" id="sofiaLogClose" title="Fechar" aria-label="Fechar sele&#231;&#227;o de log"><i class="bi bi-x-lg" aria-hidden="true"></i></button></header>
+    <label for="sofiaLogPreview" id="sofiaLogName">Log</label>
+    <textarea id="sofiaLogPreview" spellcheck="false" aria-describedby="sofiaLogNotice"></textarea>
+    <p id="sofiaLogNotice" role="status">Revise o conte&#250;do e remova credenciais ou dados sens&#237;veis antes de enviar.</p>
+    <footer><button type="button" id="sofiaLogUse">Adicionar &#224; mensagem</button></footer>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='sofia/avatar.js', v='20261105-transparent') }}"></script>
+<script src="{{ url_for('static', filename='sofia/terminal.js', v='20261105-stop-1') }}"></script>
+{% endblock %}

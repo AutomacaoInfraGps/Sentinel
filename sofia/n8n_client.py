@@ -50,6 +50,7 @@ def consultar_sofia(
     scope_token,
     conversation_id=None,
     user_context=None,
+    request_id=None,
 ):
     regionals = sorted({
         str(regional).strip()
@@ -66,6 +67,7 @@ def consultar_sofia(
             _configured_url(),
             headers={TOKEN_HEADER: _configured_token()},
             json={
+                **({"request_id": request_id} if request_id else {}),
                 "message": str(mensagem or "")[:1000],
                 "allowed_regionals": regionals,
                 "sentinel_facts": {

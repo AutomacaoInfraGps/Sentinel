@@ -320,6 +320,7 @@ _SELF_SERVICE_UNSAFE_ENDPOINTS = {
     "api_notifications_seen",
     "api_notifications_clear",
     "sofia.chat",
+    "sofia.cancel_chat",
 }
 
 _REGIONAL_OPERATION_ENDPOINTS = {
@@ -2061,9 +2062,9 @@ def _coletar_links_multiregional():
     links_por_regional = {}
     links = []
 
-    gerenciador_regionais.recarregar_regionais()
-    for codigo_regional in gerenciador_regionais.listar_regionais():
-        regional_info = gerenciador_regionais.obter_regional(codigo_regional)
+    cadastro = gerenciador_regionais.recarregar_regionais()
+    regionais_snapshot = dict(cadastro.get("regionais") or {})
+    for codigo_regional, regional_info in regionais_snapshot.items():
         if not regional_info:
             continue
 
@@ -8062,16 +8063,20 @@ def listar_links():
                 resumo_links={}
             )
 
+        allowed_regionals = _current_access_scope().get("allowed") or set()
+
+        def link_permitido(link, regional=None):
+            codigo = link.get('codigo_regional') or link.get('regional') or regional
+            return normalize_regional_code(codigo) in allowed_regionals
+
         links_permitidos = [
             link for link in resultado.get('links', [])
-            if _current_user_can_access_regional(link.get('codigo_regional') or link.get('regional'))
+            if link_permitido(link)
         ]
         links_por_regional = {
             regional: links
             for regional, links in resultado.get('links_por_regional', {}).items()
-            if links and _current_user_can_access_regional(
-                links[0].get('codigo_regional') or links[0].get('regional') or regional
-            )
+            if links and link_permitido(links[0], regional)
         }
         resumo_links = {
             'total_regionais': len(links_por_regional),
@@ -8085,7 +8090,11 @@ def listar_links():
             'links_internet.html',
             links=links_permitidos,
             links_por_regional=links_por_regional,
-            sd_wan_por_regional=_filter_regional_dict_for_current_user(resultado.get('sd_wan_por_regional', {})),
+            sd_wan_por_regional={
+                codigo: valor
+                for codigo, valor in resultado.get('sd_wan_por_regional', {}).items()
+                if normalize_regional_code(codigo) in allowed_regionals
+            },
             resumo_links=resumo_links
         )
 

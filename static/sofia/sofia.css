@@ -308,6 +308,22 @@
 }
 .sofia-send:hover { background: #0a4a63; }
 .sofia-send:disabled { cursor: not-allowed; opacity: 0.55; }
+.sofia-stop {
+    flex-shrink: 0;
+    align-self: flex-end;
+    min-height: 36px;
+    padding: 6px 10px;
+    border: 1px solid #eb9191;
+    border-radius: 6px;
+    background: #702b35;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+}
+.sofia-stop[hidden] { display: none; }
+.sofia-stop:hover { background: #8b3542; }
+.sofia-stop:disabled { cursor: wait; opacity: 0.55; }
+.sofia-stop:focus-visible { outline: 2px solid #eb9191; outline-offset: 3px; }
 
 .sofia-status {
     min-height: 22px;

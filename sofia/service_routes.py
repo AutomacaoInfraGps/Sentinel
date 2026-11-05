@@ -8,6 +8,9 @@ from .service_auth import authenticate_service_request
 from .map_alerts import load_map_alert_snapshot
 from .scope_token import SofiaScopeError, read_regional_scope_token
 from .tools_sentinel import consultar_inventario_regional
+from . import chat_requests
+from .execution_control import configured_workflow, execution_id, stop_execution
+from .n8n_client import SofiaN8nError
 
 
 sofia_service_bp = Blueprint("sofia_service", __name__)
@@ -40,6 +43,34 @@ SERVICE_CAPABILITIES = (
 @sofia_service_bp.before_request
 def require_service_identity():
     return authenticate_service_request()
+
+
+@sofia_service_bp.post("/api/internal/sofia/v1/executions/register")
+def register_chat_execution():
+    """Bind a trusted n8n execution to a request already owned by a user."""
+    payload = request.get_json(silent=True) if request.is_json else None
+    try:
+        request_id = chat_requests.request_uuid(payload["request_id"])
+        identifier = execution_id(payload["execution_id"])
+        workflow = str(payload["workflow_id"])
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return jsonify(error="Identificadores invalidos."), 400
+    try:
+        if workflow != configured_workflow():
+            return jsonify(error="Workflow nao autorizado."), 403
+        if not chat_requests.register_execution(request_id, identifier):
+            return jsonify(error="Consulta nao encontrada ou ja vinculada."), 409
+        record = chat_requests.get(request_id)
+        cancelled = bool(record and record["cancelled"])
+        if record and record["cancel_requested"] and not cancelled:
+            cancelled = stop_execution(identifier)
+            if cancelled:
+                chat_requests.confirm_cancelled(request_id)
+        response = jsonify(registered=True, cancelled=cancelled)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except SofiaN8nError:
+        return jsonify(error="Controle de execucoes indisponivel."), 503
 
 
 @sofia_service_bp.get("/api/internal/sofia/v1/health")
