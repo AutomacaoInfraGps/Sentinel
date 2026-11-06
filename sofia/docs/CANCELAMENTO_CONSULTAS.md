@@ -1,6 +1,6 @@
 # Parar uma consulta da SofIA
 
-O botao **Parar** aparece enquanto ha uma consulta em andamento, na pagina
+O botao com icone quadrado de stop (nome acessivel **Parar consulta**) aparece enquanto ha uma consulta em andamento, na pagina
 dedicada e no widget. Ele interrompe a espera no navegador, descarta respostas
 atrasadas e solicita ao Sentinel a parada da execucao correspondente.
 O navegador nunca recebe a chave administrativa da API do n8n.
@@ -93,6 +93,30 @@ e as variaveis. Nenhuma dessas mudancas foi aplicada automaticamente no Celeno
 ou no Rigel durante o desenvolvimento local.
 
 ## 3. Validacao real
+
+Antes de testar, diagnostique no Rigel, sem expor a chave:
+
+```powershell
+.\.venv31410\Scripts\python.exe -m sofia.execution_control
+```
+
+O resultado deve indicar `workflow_configured`, `api_key_configured` e
+`configuration_valid` como verdadeiros. Isso verifica o ambiente deste comando;
+nao comprova o ambiente herdado pelo processo web ja iniciado.
+A chave da API e diferente do token Header Auth do webhook e da chave HMAC.
+
+Com o ID de uma execucao da SofIA, pode-se testar apenas a leitura da API:
+
+```powershell
+.\.venv31410\Scripts\python.exe -m sofia.execution_control --execution-id 12345
+```
+
+Substitua 12345 pelo ID real. Este comando nao para execucoes, nao mostra
+credenciais nem dados de conversa. Espera-se HTTP 200 e `workflow_matches: true`.
+HTTP 401/403 exige revisar a chave e os acessos; 404 exige revisar a URL,
+existencia do registro e endpoints da versao instalada. Nao confundir essas
+falhas com cancelamento confirmado. O log do backend registra o motivo de uma
+falha de parada com mensagens controladas, sem corpo da resposta ou chave.
 
 1. Envie uma pergunta que leve alguns segundos para responder.
 2. Durante a consulta, clique em **Parar**.

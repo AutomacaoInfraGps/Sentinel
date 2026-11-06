@@ -8,7 +8,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 from sofia import chat_requests
-from sofia.execution_control import stop_execution
+from sofia.execution_control import cancellation_diagnostics, stop_execution
 from sofia.n8n_client import SofiaN8nError
 from sofia.service_auth import build_signature
 from sofia.service_routes import sofia_service_bp
@@ -182,6 +182,37 @@ class SofiaCancellationTests(unittest.TestCase):
             with self.assertRaises(SofiaN8nError):
                 stop_execution("42")
         get.assert_not_called()
+
+    @patch("sofia.execution_control.requests.post")
+    @patch("sofia.execution_control.requests.get")
+    def test_diagnostics_never_stops_or_exposes_credentials(self, get, post):
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "workflowId": "sofia-workflow", "status": "running", "data": {"secret": "do-not-print"},
+        })
+        result = cancellation_diagnostics("42")
+        self.assertTrue(result["workflow_matches"])
+        self.assertEqual(result["execution_status"], "running")
+        self.assertNotIn("test-key-", json.dumps(result))
+        self.assertNotIn("do-not-print", json.dumps(result))
+        self.assertFalse(get.call_args.kwargs["allow_redirects"])
+        post.assert_not_called()
+
+    @patch("sofia.execution_control.requests.get")
+    def test_diagnostics_reports_missing_key_without_network(self, get):
+        with patch.dict(os.environ, {"SENTINEL_SOFIA_N8N_API_KEY": ""}):
+            result = cancellation_diagnostics("42")
+        self.assertFalse(result["api_key_configured"])
+        self.assertFalse(result["configuration_valid"])
+        get.assert_not_called()
+
+    @patch("sofia.execution_control.requests.post")
+    @patch("sofia.execution_control.requests.get")
+    def test_diagnostics_reports_authentication_failure_without_response_body(self, get, post):
+        get.return_value = Mock(status_code=401, text="private details")
+        result = cancellation_diagnostics("42")
+        self.assertEqual(result["http_status"], 401)
+        self.assertNotIn("private details", json.dumps(result))
+        post.assert_not_called()
 
     @patch("sofia.execution_control.requests.post")
     @patch("sofia.execution_control.requests.get")

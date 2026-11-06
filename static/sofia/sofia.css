@@ -309,9 +309,13 @@
 .sofia-send:hover { background: #0a4a63; }
 .sofia-send:disabled { cursor: not-allowed; opacity: 0.55; }
 .sofia-stop {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
     align-self: flex-end;
     min-height: 36px;
+    min-width: 36px;
     padding: 6px 10px;
     border: 1px solid #eb9191;
     border-radius: 6px;

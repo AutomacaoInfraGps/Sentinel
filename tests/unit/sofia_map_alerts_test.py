@@ -5,9 +5,38 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sofia.map_alerts import load_map_alert_snapshot
+from regional_access import normalize_regional_code
 
 
 class SofiaMapAlertsTest(unittest.TestCase):
+    def test_export_matches_permission_codes_without_changing_alert_identity(self):
+        codes = [
+            "REG_REGIONAL BELO HORIZONTE", "REG_TLSV POA",
+            "REG_TRADE&TALENTOS", " REG_CAMPINAS--02 ",
+            "REG_GLOBAL_SEGURANÇA", "REG_GALAXIA",
+        ]
+        payload = {"regionais": [
+            {"codigo": code, "alertas": [{"tipo": "aps", "quantidade": 1,
+                "severidade": "medio", "descricao": "aps offline"}]}
+            for code in codes
+        ]}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = Path(temp_dir) / "map.json"
+            cache.write_text(json.dumps(payload), encoding="utf-8")
+            snapshot = load_map_alert_snapshot(cache)
+            repeated = load_map_alert_snapshot(cache)
+        self.assertEqual(
+            {a["regional"] for a in snapshot["alerts"]},
+            {normalize_regional_code(code) for code in codes},
+        )
+        self.assertEqual(snapshot["summary"]["total"], len(codes))
+        self.assertEqual(snapshot["alerts"], repeated["alerts"])
+        # The source ID must still use the original map code: deployment must
+        # not create a new identity for every historical alert.
+        from sofia.map_alerts import _alert_id
+        expected = {_alert_id(r["codigo"].strip(), r["alertas"][0]) for r in payload["regionais"]}
+        self.assertEqual({a["id"] for a in snapshot["alerts"]}, expected)
+
     def test_ignores_alerts_from_regional_in_maintenance(self):
         payload = {
             "cache_atualizado_em": "2026-10-19T14:00:00-03:00",

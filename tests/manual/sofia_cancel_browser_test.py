@@ -55,6 +55,9 @@ def main():
                 page.locator("#sofiaInput").fill("Consulta para cancelar")
                 page.locator("#sofiaSend").click()
                 page.locator("#sofiaStop").wait_for(state="visible")
+                assert page.locator("#sofiaStop").inner_text().strip() == ""
+                assert page.locator("#sofiaStop svg rect").count() == 1
+                assert page.locator("#sofiaStop").get_attribute("aria-label") == "Parar consulta"
                 request_id = page.evaluate("window.sentRequest.request_id")
                 assert page.locator("#sofiaInput").is_disabled()
                 page.evaluate("() => { window.oldResolve = window.resolveChat; }")

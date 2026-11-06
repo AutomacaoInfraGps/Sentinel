@@ -8,7 +8,7 @@
     <script src="{{ url_for('static', filename='security.js') }}"></script>
     <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='branding/sentinel_favicon.png') }}">
     {% if sofia_enabled %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css', v='20261105-stop-1') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css', v='20261106-stop-icon-1') }}">
     {% endif %}
     {% if current_user.is_authenticated %}
         <link rel="stylesheet" href="{{ url_for('static', filename='notifications/notifications.css') }}">

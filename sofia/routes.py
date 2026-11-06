@@ -248,7 +248,8 @@ def cancel_chat():
             chat_requests.confirm_cancelled(request_id)
         else:
             message = "Espera interrompida. O cancelamento no n8n ainda nao foi confirmado."
-    except SofiaN8nError:
+    except SofiaN8nError as exc:
+        current_app.logger.warning("Cancelamento da SofIA nao confirmado: %s", exc)
         message = "Espera interrompida. Nao foi possivel confirmar a parada no n8n."
     registrar_evento_sofia(usuario=owner, status="cancelado" if cancelled else "cancelamento_pendente",
         tamanho_mensagem=0, endereco_remoto=request.remote_addr, acao="chat:cancel", detalhe=message)
