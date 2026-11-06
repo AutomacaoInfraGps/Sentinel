@@ -152,6 +152,7 @@ def chat():
             return _json_response({"error": "Identificador da consulta ja utilizado."}, 409)
         if not should_start:
             return _json_response({"cancelled": True, "reply": "Consulta cancelada."})
+        time_context = chat_requests.query_time_context(username, memory_session_id)
         reply = consultar_sofia(
             mensagem=message,
             allowed_regionals=scope["allowed"],
@@ -162,9 +163,11 @@ def chat():
                 current_user,
                 current_app.config.get("SOFIA_CREATOR_USERS", ()),
             ),
+            query_context=time_context,
         )
         if (chat_requests.get(request_id) or {}).get("cancel_requested"):
             return _json_response({"cancelled": True, "reply": "Resposta descartada apos a solicitacao de parada."})
+        chat_requests.record_answered_message(username, memory_session_id, time_context["query_started_at"])
         audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
             usuario=username,

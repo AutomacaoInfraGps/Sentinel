@@ -67,6 +67,22 @@ class SofiaN8nClientTest(unittest.TestCase):
         self.assertFalse(request.kwargs["allow_redirects"])
 
     @patch("sofia.n8n_client.requests.post")
+    def test_sends_only_server_supplied_time_context_fields(self, post):
+        post.return_value = Mock(status_code=200, json=lambda: {"reply": "Historico consultado."})
+        consultar_sofia(
+            mensagem="Houve alerta desde a ultima pergunta?", allowed_regionals={"REG_PARA"},
+            scope_token="signed-scope-token", query_context={
+                "query_started_at": "2026-11-06T14:00:00+00:00",
+                "previous_answered_message_started_at": "2026-11-06T13:30:00+00:00",
+                "extra": "must-not-forward",
+            },
+        )
+        self.assertEqual(post.call_args.kwargs["json"]["query_context"], {
+            "query_started_at": "2026-11-06T14:00:00+00:00",
+            "previous_answered_message_started_at": "2026-11-06T13:30:00+00:00",
+        })
+
+    @patch("sofia.n8n_client.requests.post")
     def test_rejects_unrecognized_relationship_values(self, post):
         post.return_value = Mock(status_code=200, json=lambda: {"reply": "Ola."})
 

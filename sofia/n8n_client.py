@@ -51,6 +51,7 @@ def consultar_sofia(
     conversation_id=None,
     user_context=None,
     request_id=None,
+    query_context=None,
 ):
     regionals = sorted({
         str(regional).strip()
@@ -86,6 +87,10 @@ def consultar_sofia(
                         else "user"
                     ),
                 },
+                **({"query_context": {
+                    "query_started_at": query_context["query_started_at"],
+                    "previous_answered_message_started_at": query_context.get("previous_answered_message_started_at"),
+                }} if query_context else {}),
             },
             timeout=(5, 180),
             allow_redirects=False,

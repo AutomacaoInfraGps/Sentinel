@@ -6,9 +6,16 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+from flask import Flask
+
 from sofia.service_auth import build_signature
 from sofia.scope_token import issue_regional_scope_token
-from web_config import app
+from sofia.service_routes import sofia_service_bp
+
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "isolated-service-auth-test-key"
+app.register_blueprint(sofia_service_bp)
 
 
 class SofiaServiceAuthenticationTest(unittest.TestCase):
@@ -129,6 +136,11 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
                         "method": "POST",
                         "path": "/api/internal/sofia/v1/regionals/query",
                     },
+                    {
+                        "id": "inventory.read",
+                        "method": "POST",
+                        "path": "/api/internal/sofia/v1/inventory/query",
+                    },
                 ],
             },
         )
@@ -229,6 +241,49 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
         self.assertEqual(payload["summary"]["high"], 2)
         self.assertEqual(payload["alerts"][0]["quantity"], 2)
         self.assertFalse(payload["truncated"])
+
+    def test_stale_or_truncated_snapshot_cannot_be_used_to_infer_recoveries(self):
+        for fresh, count in [(False, 0), (True, 101)]:
+            with self.subTest(fresh=fresh, count=count):
+                snapshot = {"fresh": fresh, "updated_at": "2026-11-06T10:00:00-03:00",
+                            "alerts": [{} for _ in range(count)]}
+                with patch("sofia.service_routes.load_map_alert_snapshot", return_value=snapshot):
+                    response = self.client.get(self.ALERTS_PATH, headers=self._headers(
+                        path=self.ALERTS_PATH, nonce=f"invalid-snapshot-{fresh}-{count}-nonce",
+                    ))
+                self.assertEqual(response.status_code, 503)
+                self.assertFalse(response.json["success"])
+                self.assertNotIn("alerts", response.json)
+
+    def test_operational_inventory_uses_signed_scope_not_client_regionals(self):
+        path = "/api/internal/sofia/v1/inventory/query"
+        with app.app_context():
+            token = issue_regional_scope_token({"REG_ABC"})
+        with patch("sofia.service_routes.query_operational_inventory", return_value={"records": []}) as query:
+            result = self._signed_post(path, {"sentinel_scope_token": token,
+                "allowed_regionals": ["REG_FORA"], "resource": "licenses"}, "inventory-scoped-nonce-01")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(query.call_args.kwargs["allowed_regionals"], {"REG_ABC"})
+        self.assertEqual(query.call_args.kwargs["resource"], "licenses")
+        with patch("sofia.service_routes.query_operational_inventory") as query:
+            denied = self._signed_post(path, {"sentinel_scope_token": "invalid", "resource": "licenses"}, "inventory-denied-nonce-02")
+        self.assertEqual(denied.status_code, 403)
+        query.assert_not_called()
+
+    def test_operational_inventory_does_not_expose_internal_exception_details(self):
+        path = "/api/internal/sofia/v1/inventory/query"
+        with app.app_context():
+            token = issue_regional_scope_token({"REG_ABC"})
+        for index, (error, expected) in enumerate([
+            (PermissionError("private-name"), 404),
+            (OSError("private-file-path"), 503),
+            (ValueError("private-diagnostic"), 400),
+        ]):
+            with patch("sofia.service_routes.query_operational_inventory", side_effect=error):
+                result = self._signed_post(path, {"sentinel_scope_token": token, "resource": "licenses"},
+                                          f"inventory-error-nonce-{index}-03")
+            self.assertEqual(result.status_code, expected)
+            self.assertNotIn("private-", result.get_data(as_text=True))
 
     def test_wrong_signature_is_rejected(self):
         response = self.client.get(
