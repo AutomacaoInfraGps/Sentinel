@@ -354,7 +354,7 @@
                     throw new Error(errorMessage ? `${errorMessage} ${failure}` : failure);
                 }
                 if (typeof data.cancelled !== "boolean" || !message) throw new Error(failure);
-                return {cancelled: data.cancelled, message};
+                return {cancelled: data.cancelled, message: data.cancelled ? "Consulta cancelada." : message};
             })(), deadline]);
             if (activeRequest !== request) return;
             activeRequest = null;

@@ -25,7 +25,7 @@ def main():
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.route("**/test/api_notifications*", lambda r: r.fulfill(content_type="application/json", body='{}'))
-            cancellation = {"cancelled": True, "message": "Consulta cancelada no n8n."}
+            cancellation = {"cancelled": True, "message": "Consulta cancelada."}
             cancels = []
 
             def stop(route):
@@ -82,7 +82,7 @@ def main():
                 page.locator("#sofiaStop").wait_for(state="hidden")
                 assert page.locator("#sofiaStatus").inner_text() == cancellation["message"]
                 assert "is-error" in page.locator("#sofiaStatus").get_attribute("class")
-                cancellation.update(cancelled=True, message="Consulta cancelada no n8n.")
+                cancellation.update(cancelled=True, message="Consulta cancelada.")
             assert not errors, errors
             browser.close()
         print("Cancellation browser checks passed (dedicated and floating chat).")

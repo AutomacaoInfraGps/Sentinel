@@ -151,7 +151,7 @@ def chat():
         except ValueError:
             return _json_response({"error": "Identificador da consulta ja utilizado."}, 409)
         if not should_start:
-            return _json_response({"cancelled": True, "reply": "Consulta interrompida antes do envio ao n8n."})
+            return _json_response({"cancelled": True, "reply": "Consulta cancelada."})
         reply = consultar_sofia(
             mensagem=message,
             allowed_regionals=scope["allowed"],
@@ -234,7 +234,7 @@ def cancel_chat():
     if record is None:
         return _json_response({"error": "Consulta nao encontrada."}, 404)
     cancelled = bool(record["cancelled"] or not record["started"])
-    message = "Consulta interrompida antes do envio ao n8n." if not record["started"] else "Consulta cancelada no n8n."
+    message = "Consulta cancelada."
     try:
         # Registration happens immediately after the webhook, before the LLM.
         deadline = time.monotonic() + 3
