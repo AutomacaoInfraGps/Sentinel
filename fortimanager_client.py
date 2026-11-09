@@ -128,6 +128,10 @@ class FortiManagerClient:
     def list_devices(self, adom="root"):
         return self._request("get", f"/dvmdb/adom/{adom}/device")
 
+    def list_firmware_versions(self):
+        """Lista releases FortiGate conhecidas pelo FortiGuard/FortiManager."""
+        return self._request("exec", "/um/image/version/list", {"flags": 1, "product": "FGT"})
+
     def list_device_interfaces(self, adom, device_name):
         return self._request("get", f"/pm/config/device/{device_name}/global/system/interface", {})
 

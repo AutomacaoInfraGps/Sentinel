@@ -95,7 +95,19 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
                     "platform_str": "FortiGate-60F",
                     "sn": "SERIAL-BAHIA",
                     "status": "online",
+                    "os_version": "7.4.13",
                 }],
+            }],
+        }
+        client.list_firmware_versions.return_value = {
+            "result": [{
+                "data": {
+                    "status": "success",
+                    "version_list": [{
+                        "platform": "FortiGate-60F",
+                        "versions": [{"type": "GA", "version": "7.6.8-b3744"}],
+                    }],
+                },
             }],
         }
         client.proxy_monitor_license.return_value = {
@@ -107,7 +119,10 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(result["total_firewalls"], 1)
-        self.assertEqual(result["firewalls_por_regional"]["REG_BAHIA"][0]["nome"], "FGT_REGBAHIA")
+        firewall = result["firewalls_por_regional"]["REG_BAHIA"][0]
+        self.assertEqual(firewall["nome"], "FGT_REGBAHIA")
+        self.assertEqual(firewall["firmware_update"]["state"], "update")
+        self.assertEqual(firewall["firmware_update"]["available_version"], "7.6.8")
         save_cache.assert_called_once()
 
     def test_refresh_button_uses_short_label(self):
