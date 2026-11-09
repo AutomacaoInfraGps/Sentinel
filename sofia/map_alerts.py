@@ -7,6 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config import PROJECT_ROOT
+from regional_access import normalize_regional_code
 
 
 MAP_ALERT_CACHE = PROJECT_ROOT / "output" / "mapa_monitoramento_cache.json"
@@ -66,6 +67,7 @@ def load_map_alert_snapshot(path=None, now=None):
         if regional.get("em_manutencao"):
             continue
         regional_code = str(regional.get("codigo") or regional.get("nome") or "Sem regional").strip()
+        canonical_regional = normalize_regional_code(regional_code)
         # This is the map snapshot time, not the time when a device last changed.
         occurred_at = _brasilia_iso(updated_at)
         for alert in regional.get("alertas") or []:
@@ -85,7 +87,7 @@ def load_map_alert_snapshot(path=None, now=None):
                     "severity": severity,
                     "title": description[:1].upper() + description[1:],
                     "message": f"{quantity} ocorrencia(s) no mapa: {description}.",
-                    "regional": regional_code,
+                    "regional": canonical_regional,
                     "device": None,
                     "quantity": quantity,
                     "persistent": False,

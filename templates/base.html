@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="{{ url_for('static', filename='theme/theme.js', v='20261105-1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="{{ url_for('static', filename='security.js') }}"></script>
     <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='branding/sentinel_favicon.png') }}">
     {% if sofia_enabled %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css', v='20261016-3') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='sofia/sofia.css', v='20261106-stop-icon-1') }}">
     {% endif %}
     {% if current_user.is_authenticated %}
         <link rel="stylesheet" href="{{ url_for('static', filename='notifications/notifications.css') }}">
@@ -841,6 +842,7 @@
     </style>
     
     {% block extra_css %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme/theme.css', v='20261105-4') }}">
 </head>
 {% set infrastructure_endpoints = [
     'servidores', 'replicacao_ad', 'antenas_unifi', 'listar_vms',
@@ -848,7 +850,7 @@
     'listar_admin_logins', 'validade_certificados',
     'cadastro_emails_contatos', 'relatorios_infra'
 ] %}
-<body class="{{ 'infra-screen' if request.endpoint in infrastructure_endpoints else '' }}">
+<body class="{{ 'infra-screen' if request.endpoint in infrastructure_endpoints else '' }}{% if request.endpoint == 'sofia.page' %} sofia-screen{% endif %}">
     <!-- Novo Menu Lateral e Navbar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -983,6 +985,15 @@
                 </ul>
             </li>
             
+            {% if sofia_enabled and current_user.is_authenticated %}
+            <li class="sidebar-item">
+                <a href="{{ url_for('sofia.page') }}" class="sidebar-link{% if request.endpoint == 'sofia.page' %} active{% endif %}" {% if request.endpoint == 'sofia.page' %}aria-current="page"{% endif %}>
+                    <i class="bi bi-chat-dots me-2"></i>
+                    <span>SofIA</span>
+                </a>
+            </li>
+            {% endif %}
+
             {# Aba de configurações ocultada — senhas expostas, substituída por environment.json #}
             {# <li class="sidebar-item">
                 <a href="{{ url_for('configuracoes') }}" class="sidebar-link">
@@ -1065,6 +1076,7 @@
         </ul>
 
         <div class="sidebar-footer">
+            {% include 'components/theme_picker.html' %}
             <a href="{{ url_for('index') }}" class="sidebar-footer-brand" aria-label="Grupo GPS">
                 <svg viewBox="0 0 360 90" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                     <text x="0" y="63" font-size="34" font-weight="500" fill="#C9E6F0" font-family="Segoe UI, Arial, sans-serif">GRUPO</text>
@@ -1147,7 +1159,7 @@
         {% include 'components/notification_bell.html' %}
     {% endif %}
 
-    {% if sofia_enabled and current_user.is_authenticated %}
+    {% if sofia_enabled and current_user.is_authenticated and request.endpoint != 'sofia.page' %}
         {% include 'components/sofia_chat.html' %}
     {% endif %}
 
@@ -1161,7 +1173,7 @@
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% if sofia_enabled and current_user.is_authenticated %}
-        <script src="{{ url_for('static', filename='sofia/sofia.js', v='20261016-3') }}"></script>
+        <script src="{{ url_for('static', filename='sofia/sofia.js', v='20261109-message-format-1') }}"></script>
     {% endif %}
     {% if current_user.is_authenticated %}
         <script src="{{ url_for('static', filename='notifications/notifications.js') }}"></script>

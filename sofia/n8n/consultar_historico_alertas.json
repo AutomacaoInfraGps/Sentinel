@@ -1,0 +1,103 @@
+{
+  "name": "SofIA Tool - Consultar Historico de Alertas",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "allowed_regionals",
+              "type": "array"
+            },
+            {
+              "name": "start_at"
+            },
+            {
+              "name": "end_at"
+            },
+            {
+              "name": "regional"
+            },
+            {
+              "name": "event_type"
+            },
+            {
+              "name": "limit",
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "id": "history-input",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT sofia.get_alert_history(\n    $1::jsonb,\n    CASE WHEN $2::text ~ '(Z|[+-][0-9]{2}:[0-9]{2})$' THEN $2::timestamptz ELSE NULL END,\n    CASE WHEN $3::text ~ '(Z|[+-][0-9]{2}:[0-9]{2})$' THEN $3::timestamptz ELSE NULL END,\n    nullif($4::text, ''), nullif($5::text, ''), $6::integer\n) AS context;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json.allowed_regionals ?? []), $json.start_at, $json.end_at, $json.regional ?? '', $json.event_type ?? '', $json.limit ?? 20] }}"
+        }
+      },
+      "id": "history-read",
+      "name": "Consultar historico autorizado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify($json.context) }}",
+        "options": {}
+      },
+      "id": "history-context",
+      "name": "Preparar historico",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        560,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Consultar historico autorizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar historico autorizado": {
+      "main": [
+        [
+          {
+            "node": "Preparar historico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  }
+}

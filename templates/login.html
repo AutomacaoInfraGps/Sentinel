@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="{{ url_for('static', filename='theme/theme.js', v='20261105-1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#073b4c">
     <script src="{{ url_for('static', filename='security.js') }}"></script>
@@ -264,6 +265,7 @@
             .login-panel { padding-top: 30px; padding-bottom: 30px; }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme/theme.css', v='20261105-4') }}">
 </head>
 <body>
     <main class="login-shell">
@@ -323,6 +325,7 @@
                 </form>
 
                 <div class="login-foot"><i class="bi bi-lock-fill"></i><span>Autenticação centralizada Grupo GPS</span></div>
+                {% include 'components/theme_picker.html' %}
             </div>
         </section>
     </main>

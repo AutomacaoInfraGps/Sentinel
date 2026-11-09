@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="{{ url_for('static', filename='theme/theme.js', v='20261105-1') }}"></script>
     <title>Status das Interfaces WAN - Infraestrutura Regional</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
@@ -149,9 +150,11 @@
             height: 1rem;
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme/theme.css', v='20261105-4') }}">
 </head>
-<body>
+<body class="wan-screen">
     <div class="container">
+        {% include 'components/theme_picker.html' %}
         <div class="header">
             <i class="bi bi-router-fill text-primary" style="font-size: 3rem;"></i>
             <h1>Status das Interfaces WAN</h1>

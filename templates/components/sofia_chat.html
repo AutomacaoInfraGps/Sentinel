@@ -1,4 +1,4 @@
-<div class="sofia-widget" id="sofiaWidget" data-endpoint="{{ url_for('sofia.chat') }}" data-user="{{ current_user.get_id() }}">
+<div class="sofia-widget" id="sofiaWidget" data-endpoint="{{ url_for('sofia.chat') }}" data-cancel-endpoint="{{ url_for('sofia.cancel_chat') }}" data-user="{{ current_user.get_id() }}">
     <section class="sofia-panel" id="sofiaPanel" role="dialog" aria-modal="false" aria-labelledby="sofiaTitle" hidden>
         <header class="sofia-header">
             <div class="sofia-identity">
@@ -28,11 +28,12 @@
         <form class="sofia-composer" id="sofiaForm">
             <label for="sofiaInput" class="visually-hidden">Mensagem para SofIA</label>
             <textarea id="sofiaInput" name="message" rows="1" maxlength="1000" placeholder="Pergunte à SofIA..." autocomplete="off" required></textarea>
+            <button type="button" class="sofia-stop" id="sofiaStop" aria-label="Parar consulta" title="Parar consulta" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg></button>
             <button type="submit" class="sofia-send" id="sofiaSend" aria-label="Enviar mensagem" title="Enviar">
                 <i class="bi bi-send-fill" aria-hidden="true"></i>
             </button>
         </form>
-        <div class="sofia-status" id="sofiaStatus" role="status"></div>
+        <div class="sofia-status visually-hidden" id="sofiaStatus" role="status"></div>
     </section>
 
     <button type="button" class="sofia-greeting" id="sofiaGreeting" aria-controls="sofiaPanel">

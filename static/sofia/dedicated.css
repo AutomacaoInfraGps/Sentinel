@@ -1,0 +1,281 @@
+.sofia-screen { background: #0a0e13; color: #dae5ec; }
+.sofia-screen .content-wrapper { background: #0a0e13; }
+.sofia-screen .content-wrapper > .container { padding: 20px 28px; }
+.sofia-screen .footer { background: #0a0e13; color: #748693; border-color: #202b34; }
+.sofia-workspace {
+    --sofia-blue: #12506b;
+    --sofia-glow-blue: #43d7fa;
+    --sofia-border: #263642;
+    --sofia-light-blue: #13232e;
+    width: 100%;
+    min-width: 0;
+    letter-spacing: 0;
+    color: #dae5ec;
+}
+.sofia-page-heading {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 70px 18px 0;
+    background: linear-gradient(110deg, #10232e44, transparent 65%);
+}
+.sofia-heading-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sofia-heading-identity img { width: 48px; height: 48px; object-fit: contain; flex: 0 0 48px; transition: filter 250ms ease; }
+.sofia-page-heading h1 { margin: 0; font-size: 26px; color: #edf8fc; }
+.sofia-heading-subtitle { display: block; margin-top: 3px; color: #94a8b5; font-size: 12px; }
+.sofia-access-badge { display: inline-flex; align-items: center; gap: 7px; color: #83d9bd; font: 11px Consolas, monospace; }
+.sofia-new-chat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 14px;
+    margin-left: auto;
+    border: 1px solid #344754;
+    border-radius: 6px;
+    background: #16212b;
+    color: #dcecf6;
+    flex-shrink: 0;
+}
+.sofia-new-chat:disabled { opacity: .5; cursor: wait; }
+.sofia-new-chat:hover { background: #20333e; border-color: #4d849b; }
+.sofia-workspace button:focus-visible, .sofia-avatar-mount:focus-visible { outline: 2px solid #43d7fa; outline-offset: 3px; }
+.sofia-dedicated-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 34%) minmax(0, 1fr);
+    gap: 24px;
+    height: calc(100dvh - 138px);
+    min-height: 520px;
+    max-height: 1100px;
+}
+.sofia-avatar-stage {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+}
+.sofia-terminal-heading {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 14px 12px;
+    font: 11px Consolas, monospace;
+    color: #98adbc;
+}
+.sofia-terminal-heading > span:first-child { display: inline-flex; align-items: center; gap: 7px; }
+.sofia-terminal-state { color: #8bb5c4; font-size: 10px; text-align: right; }
+.sofia-avatar-mount {
+    position: relative;
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    aspect-ratio: 9 / 16;
+    min-height: 0;
+    align-self: center;
+    justify-self: center;
+    overflow: hidden;
+    cursor: pointer;
+}
+.sofia-avatar-portrait, .sofia-avatar-video { position: absolute; inset: 0; width: 100%; height: 100%; object-position: center; transition: opacity 420ms ease; }
+.sofia-avatar-portrait { object-fit: contain; opacity: 1; }
+.sofia-avatar-video { object-fit: contain; opacity: 0; }
+.sofia-avatar-mount.is-video-visible .sofia-avatar-video { opacity: 1; }
+.sofia-avatar-mount.is-video-visible .sofia-avatar-portrait { opacity: 0; }
+.sofia-avatar-video[hidden] { display: none; }
+.sofia-avatar-animation { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sofia-avatar-animation[hidden] { display: none; }
+.sofia-avatar-mount[data-avatar-state="idle"] .sofia-avatar-animation { transform-origin: 50% 92%; animation: sofiaIdleBreath 4s ease-in-out infinite; }
+@keyframes sofiaIdleBreath { 50% { transform: translateY(-1px); } }
+.sofia-avatar-mount.has-avatar-animation .sofia-avatar-portrait { opacity: 0; }
+.sofia-animation-toggle { flex-shrink: 0; width: 28px; height: 26px; padding: 0; border: 1px solid #52708366; border-radius: 5px; background: transparent; color: inherit; }
+.sofia-animation-toggle:hover:not(:disabled) { background: #2e91af26; }
+.sofia-animation-toggle:disabled { opacity: .4; cursor: default; }
+.sofia-thought-bubble {
+    position: absolute; z-index: 2; top: .5%; left: 52%; max-width: 45%;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 9px 12px; border: 1px solid #3ba2bd; border-radius: 20px;
+    background: #142c39ed; color: #bceefa; box-shadow: 0 4px 18px #07151b33;
+    font: 11px Consolas, monospace; pointer-events: none;
+    animation: sofiaThoughtRise 220ms ease-out;
+    animation-play-state: var(--sofia-motion-play, running);
+}
+.sofia-thought-bubble[hidden] { display: none; }
+.sofia-thought-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sofia-thought-bubble::before, .sofia-thought-bubble::after { content: ""; position: absolute; border: 1px solid #3ba2bd; border-radius: 50%; background: inherit; }
+.sofia-thought-bubble::before { width: 8px; height: 8px; left: 14px; bottom: -12px; }
+.sofia-thought-bubble::after { width: 4px; height: 4px; left: 7px; bottom: -19px; }
+.sofia-thought-dots { display: flex; flex-shrink: 0; gap: 3px; }
+.sofia-thought-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: sofiaThoughtPulse 1.2s ease-in-out infinite; animation-play-state: var(--sofia-motion-play, running); }
+.sofia-thought-dots i:nth-child(2) { animation-delay: 150ms; }
+.sofia-thought-dots i:nth-child(3) { animation-delay: 300ms; }
+.sofia-avatar-mount:not(.has-avatar-animation) :is(.sofia-thought-bubble, .sofia-thought-dots i) { animation: none; }
+@keyframes sofiaThoughtRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sofiaThoughtPulse { 50% { opacity: .35; } }
+.sofia-telemetry { padding: 14px 16px 16px; border-top: 1px solid #20303b; font-family: Consolas, monospace; }
+.sofia-telemetry dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 14px; }
+.sofia-telemetry dt { color: #728c9d; font-size: 10px; font-weight: 400; margin-bottom: 5px; }
+.sofia-telemetry dd { color: #b3d7db; font-size: 12px; margin: 0; }
+.sofia-session-dot { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: #67d8ad; vertical-align: middle; }
+.sofia-terminal-events { list-style: none; margin: 0; padding: 0; color: #718d9e; font-size: 10px; line-height: 1.9; }
+.sofia-terminal-events li { overflow-wrap: anywhere; }
+.sofia-terminal-events li::before { content: "> "; color: #42cbe7; }
+.sofia-dedicated-chat {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #10171f;
+    border-left: 1px solid #253440;
+}
+.sofia-conversation-heading {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 24px; color: #b8cbd7; font-size: 12px;
+    background: #15212b88; backdrop-filter: blur(12px);
+}
+.sofia-conversation-heading > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+#sofiaConversationState { color: #7e99ab; font: 11px Consolas, monospace; }
+.sofia-dedicated-chat .sofia-messages { flex: 1; min-height: 0; padding: 24px; background: transparent; scrollbar-color: #34505e #10171f; }
+.sofia-dedicated-chat .sofia-message { max-width: min(92%, 760px); padding: 12px 16px; margin-bottom: 20px; border-radius: 8px; }
+.sofia-dedicated-chat .sofia-message-assistant {
+    color: #d7eaf2; border: 1px solid #31849b66; border-left: 2px solid #3acded;
+    background: #122b38a6; backdrop-filter: blur(12px); box-shadow: 0 2px 12px #00000018;
+}
+.sofia-dedicated-chat .sofia-message-user { color: #eff8fc; background: #15415b; border: 1px solid #2c5970; border-radius: 14px 14px 4px 14px; box-shadow: none; }
+.sofia-dedicated-chat .sofia-message p { font-size: 14px; line-height: 1.65; }
+.sofia-dedicated-chat .sofia-message-author { font-size: 11px; margin-bottom: 6px; color: #58d6ef; }
+.sofia-dedicated-chat .sofia-message-user .sofia-message-author { color: #b5d6e6; }
+.sofia-message-body { min-width: 0; }
+.sofia-message-body > p + p { margin-top: 10px; }
+.sofia-message-body pre { max-width: 100%; overflow-x: auto; margin: 12px 0 3px; padding: 14px; border: 1px solid #2c4857; border-radius: 6px; background: #080f16; color: #a8e4d4; white-space: pre; scrollbar-color: #34505e #080f16; }
+.sofia-message-body pre code { font: 12px/1.65 Consolas, "Courier New", monospace; color: inherit; }
+.sofia-code-language { display: block; margin-bottom: 7px; font: 10px Consolas, monospace; color: #7e9cab; }
+.sofia-prompt-area { padding: 0 22px 14px; }
+.sofia-quick-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.sofia-quick-actions button {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px;
+    border: 1px solid #2a3e4c; border-radius: 4px; background: transparent;
+    font: 11px Consolas, monospace; color: #9db7c6;
+}
+.sofia-quick-actions button:hover:not(:disabled) { background: #19303d; border-color: #42859c; color: #d2eef6; }
+.sofia-quick-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.sofia-dedicated-chat .sofia-composer {
+    display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+    padding: 12px; background: #19242f; border: 1px solid #3b596c; border-radius: 8px;
+    box-shadow: 0 0 0 1px #1f344355;
+}
+.sofia-dedicated-chat .sofia-composer:focus-within { border-color: #44bad8; box-shadow: 0 0 0 2px #2ea8c91f; }
+.sofia-dedicated-chat .sofia-composer textarea {
+    min-height: 64px; max-height: 112px; padding: 4px 6px; border: 0; background: transparent; color: #e0edf6; box-shadow: none; outline: none; font-size: 14px;
+}
+.sofia-dedicated-chat .sofia-composer textarea::placeholder { color: #7f96a7; }
+.sofia-composer-tools { display: flex; align-items: center; gap: 10px; }
+.sofia-attach { width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; color: #9cb5c5; font-size: 19px; }
+.sofia-attach:hover { background: #2a3d4b; color: #e2f7ff; }
+.sofia-attach:disabled { opacity: .4; }
+.sofia-character-count { margin-left: auto; color: #708a9d; font: 10px Consolas, monospace; }
+.sofia-dedicated-chat .sofia-send { width: 36px; height: 36px; border-radius: 6px; background: #37c8ec; color: #071a23; font-size: 21px; }
+.sofia-dedicated-chat .sofia-send:hover { background: #8feaff; }
+.sofia-dedicated-chat .sofia-status { background: transparent; color: #91aab9; padding: 0 22px 12px; }
+.sofia-dedicated-chat .sofia-status.is-error { color: #ffad96; }
+.sofia-workspace[aria-busy="true"] .sofia-heading-identity img { filter: drop-shadow(0 0 9px #41d8ffb3); animation: sofiaThinking 1.8s ease-in-out infinite; }
+.sofia-workspace[aria-busy="true"] .sofia-terminal-state { color: #f3cc85; }
+@keyframes sofiaThinking { 50% { filter: drop-shadow(0 0 18px #41d8ffc9); } }
+.sofia-log-dialog { width: min(720px, calc(100% - 28px)); max-height: 85dvh; padding: 22px; border: 1px solid #365062; border-radius: 8px; background: #111c25; color: #d7eaf2; }
+.sofia-log-dialog::backdrop { background: #000a; backdrop-filter: blur(4px); }
+.sofia-log-dialog header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+.sofia-log-dialog h2 { margin: 0; font-size: 18px; }
+.sofia-log-dialog header button { border: 0; background: transparent; color: #afcbd9; }
+.sofia-log-dialog label { font: 12px Consolas, monospace; overflow-wrap: anywhere; }
+.sofia-log-dialog textarea { display: block; width: 100%; height: 260px; max-height: 40dvh; margin-top: 8px; padding: 12px; border: 1px solid #304a5c; background: #080f16; color: #b2dfd5; font: 12px/1.6 Consolas, monospace; resize: vertical; }
+.sofia-log-dialog p { font-size: 12px; color: #d8b882; margin-top: 10px; }
+.sofia-log-dialog footer { display: flex; justify-content: flex-end; }
+.sofia-log-dialog footer button { border: 1px solid #3c95b0; border-radius: 4px; padding: 8px 14px; color: #d9f5ff; background: #16435a; }
+/* Follow the global resolved theme, including automatic OS preference. */
+html:not([data-sentinel-theme="dark"]) .sofia-screen {
+    --sofia-canvas: #edf4f7;
+    --sofia-text: #173e50;
+    --sofia-muted: #506b7a;
+    --sofia-line: #bdd1dc;
+    background: var(--sofia-canvas);
+    color: var(--sofia-text);
+}
+html:not([data-sentinel-theme="dark"]) .sofia-screen :is(.content-wrapper, .footer) { background: var(--sofia-canvas); color: var(--sofia-muted); border-color: var(--sofia-line); }
+html:not([data-sentinel-theme="dark"]) .sofia-workspace { --sofia-border: #bdd1dc; --sofia-light-blue: #e5f6ff; color: var(--sofia-text); }
+html:not([data-sentinel-theme="dark"]) .sofia-page-heading { background: linear-gradient(110deg, #d5eaf366, transparent 65%); }
+html:not([data-sentinel-theme="dark"]) .sofia-page-heading h1 { color: #06465b; }
+html:not([data-sentinel-theme="dark"]) :is(.sofia-heading-subtitle, .sofia-terminal-heading, .sofia-terminal-state, .sofia-telemetry dt, .sofia-terminal-events, #sofiaConversationState, .sofia-character-count) { color: var(--sofia-muted); }
+html:not([data-sentinel-theme="dark"]) .sofia-access-badge { color: #176b50; }
+html:not([data-sentinel-theme="dark"]) .sofia-thought-bubble { background: #f4fcffed; color: #12617a; border-color: #65afc5; box-shadow: 0 4px 18px #1b607017; }
+html:not([data-sentinel-theme="dark"]) .sofia-new-chat { background: #fff; color: #12506b; border-color: var(--sofia-line); }
+html:not([data-sentinel-theme="dark"]) .sofia-new-chat:hover { background: #e0f0f7; border-color: #528aa1; }
+html:not([data-sentinel-theme="dark"]) .sofia-telemetry { border-color: var(--sofia-line); }
+html:not([data-sentinel-theme="dark"]) .sofia-telemetry dd { color: #245664; }
+html:not([data-sentinel-theme="dark"]) .sofia-session-dot { background: #16805a; }
+html:not([data-sentinel-theme="dark"]) .sofia-terminal-events li::before { color: #007f9d; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat { background: #f5f8fa; border-color: var(--sofia-line); }
+html:not([data-sentinel-theme="dark"]) .sofia-conversation-heading { background: #e3eef4b3; color: #315b70; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-messages { scrollbar-color: #8daaba #f5f8fa; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-message-assistant { background: #e5f6ffe0; color: #173e50; border-color: #94cfe0; border-left-color: #009ec4; box-shadow: 0 2px 12px #1e56600a; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-message-assistant .sofia-message-author { color: #006c88; }
+html:not([data-sentinel-theme="dark"]) .sofia-message-body pre { background: #edf4f7; color: #194d49; border-color: #b4cdd8; scrollbar-color: #8daaba #edf4f7; }
+html:not([data-sentinel-theme="dark"]) .sofia-code-language { color: #506b7a; }
+html:not([data-sentinel-theme="dark"]) .sofia-quick-actions button { color: #315d70; border-color: var(--sofia-line); }
+html:not([data-sentinel-theme="dark"]) .sofia-quick-actions button:hover:not(:disabled) { background: #e0f0f7; color: #06465b; border-color: #528aa1; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-composer { background: #fff; border-color: #a8c3d2; box-shadow: 0 0 0 1px #c9dce633; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-composer:focus-within { border-color: #008aac; box-shadow: 0 0 0 2px #008aac1f; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-composer textarea { color: #173e50; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-composer textarea::placeholder { color: #5d7684; }
+html:not([data-sentinel-theme="dark"]) .sofia-attach { color: #315d70; }
+html:not([data-sentinel-theme="dark"]) .sofia-attach:hover { background: #e0f0f7; color: #06465b; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-send { background: #075975; color: #fff; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-send:hover { background: #06465b; }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-status { color: var(--sofia-muted); }
+html:not([data-sentinel-theme="dark"]) .sofia-dedicated-chat .sofia-status.is-error { color: #a83628; }
+html:not([data-sentinel-theme="dark"]) .sofia-workspace[aria-busy="true"] .sofia-terminal-state { color: #8b580c; }
+html:not([data-sentinel-theme="dark"]) .sofia-log-dialog { background: #fff; color: #173e50; border-color: #a8c3d2; }
+html:not([data-sentinel-theme="dark"]) .sofia-log-dialog header button { color: #315d70; }
+html:not([data-sentinel-theme="dark"]) .sofia-log-dialog textarea { background: #f0f6f8; color: #194d49; border-color: #b4cdd8; }
+html:not([data-sentinel-theme="dark"]) .sofia-log-dialog p { color: #80510a; }
+@media (max-width: 1100px) {
+    .sofia-dedicated-layout { grid-template-columns: minmax(240px, 32%) minmax(0, 1fr); gap: 16px; }
+    .sofia-access-badge { display: none; }
+    .sofia-terminal-heading { padding-right: 6px; padding-left: 6px; font-size: 10px; }
+}
+@media (max-width: 767.98px) {
+    .sofia-screen .content-wrapper > .container { padding: 12px; }
+    .sofia-page-heading { padding-right: 0; padding-bottom: 14px; gap: 12px; }
+    .sofia-page-heading h1 { font-size: 23px; }
+    .sofia-heading-subtitle { font-size: 10px; }
+    .sofia-new-chat { width: 40px; padding: 0; }
+    .sofia-new-chat span { display: none; }
+    .sofia-dedicated-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 180px minmax(0, 1fr); height: calc(100dvh - 160px); min-height: 560px; gap: 12px; }
+    .sofia-avatar-stage { grid-template-columns: 98px minmax(0, 1fr); grid-template-rows: 32px minmax(0, 1fr); column-gap: 12px; }
+    .sofia-terminal-heading { grid-column: 1 / -1; padding: 7px 8px; }
+    .sofia-avatar-mount { grid-column: 1; height: 148px; width: 83.25px; }
+    .sofia-thought-bubble { left: 65%; top: 0; max-width: 30%; padding: 5px; gap: 0; }
+    .sofia-thought-label { display: none; }
+    .sofia-thought-dots i { width: 3px; height: 3px; }
+    .sofia-thought-bubble::before { width: 5px; height: 5px; left: 5px; bottom: -8px; }
+    .sofia-thought-bubble::after { width: 3px; height: 3px; left: 1px; bottom: -13px; }
+    .sofia-telemetry { grid-column: 2; grid-row: 2; padding: 12px 8px 0 0; border: 0; }
+    .sofia-telemetry dl { gap: 7px; margin-bottom: 10px; }
+    .sofia-telemetry dd { font-size: 10px; }
+    .sofia-telemetry dt { font-size: 9px; }
+    .sofia-terminal-events { font-size: 9px; }
+    .sofia-terminal-events li:first-child:not(:last-child) { display: none; }
+    .sofia-conversation-heading { padding: 12px; }
+    .sofia-dedicated-chat .sofia-messages { padding: 14px 12px; }
+    .sofia-dedicated-chat .sofia-message { max-width: 96%; padding: 10px 12px; }
+    .sofia-prompt-area { padding: 0 10px 10px; }
+    .sofia-quick-actions { gap: 5px; margin-bottom: 8px; }
+    .sofia-quick-actions button { font-size: 10px; padding: 5px 6px; }
+    .sofia-dedicated-chat .sofia-composer textarea { min-height: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .sofia-thought-bubble, .sofia-thought-dots i { animation: none !important; }
+    .sofia-avatar-animation { animation: none !important; }
+    .sofia-avatar-portrait, .sofia-avatar-video { transition: none; }
+    .sofia-workspace[aria-busy="true"] .sofia-heading-identity img { animation: none; }
+}

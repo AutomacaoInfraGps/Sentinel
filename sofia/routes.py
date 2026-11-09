@@ -5,7 +5,7 @@ from threading import Lock
 import time
 import uuid
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, abort, current_app, jsonify, make_response, render_template, request
 from flask_login import current_user, login_required
 
 from .audit import registrar_evento_sofia
@@ -15,6 +15,8 @@ from .permissions import usuario_pode_executar
 from .scope_token import SofiaScopeError, issue_regional_scope_token
 from .tools_sentinel import codigos_regionais
 from .user_context import build_user_context
+from . import chat_requests
+from .execution_control import stop_execution
 from regional_access import access_scope, effective_user_groups
 
 
@@ -53,6 +55,16 @@ def require_authenticated_api_user():
         return _json_response({"error": "Recurso não encontrado."}, 404)
     if not current_user.is_authenticated:
         return _json_response({"error": "Autenticação necessária."}, 401)
+
+
+@sofia_bp.get("/sofia")
+@login_required
+def page():
+    if not usuario_pode_executar(current_user, "chat:basic"):
+        abort(403)
+    response = make_response(render_template("sofia_chat.html"))
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @sofia_bp.post("/api/sofia/chat")
@@ -96,6 +108,11 @@ def chat():
     except (ValueError, TypeError, AttributeError):
         return _json_response({"error": "Identificador da conversa inválido."}, 400)
 
+    try:
+        request_id = chat_requests.request_uuid(payload.get("request_id") or uuid.uuid4())
+    except (ValueError, TypeError, AttributeError):
+        return _json_response({"error": "Identificador da consulta invalido."}, 400)
+
     if not _rate_limit_allows(username):
         registrar_evento_sofia(
             usuario=username,
@@ -129,16 +146,28 @@ def chat():
             conversation_id,
             scope["allowed"],
         )
+        try:
+            should_start = chat_requests.begin(request_id, username)
+        except ValueError:
+            return _json_response({"error": "Identificador da consulta ja utilizado."}, 409)
+        if not should_start:
+            return _json_response({"cancelled": True, "reply": "Consulta cancelada."})
+        time_context = chat_requests.query_time_context(username, memory_session_id)
         reply = consultar_sofia(
             mensagem=message,
             allowed_regionals=scope["allowed"],
             scope_token=scope_token,
             conversation_id=memory_session_id,
+            request_id=request_id,
             user_context=build_user_context(
                 current_user,
                 current_app.config.get("SOFIA_CREATOR_USERS", ()),
             ),
+            query_context=time_context,
         )
+        if (chat_requests.get(request_id) or {}).get("cancel_requested"):
+            return _json_response({"cancelled": True, "reply": "Resposta descartada apos a solicitacao de parada."})
+        chat_requests.record_answered_message(username, memory_session_id, time_context["query_started_at"])
         audit_detail = "Resposta da SofIA via n8n"
         registrar_evento_sofia(
             usuario=username,
@@ -147,6 +176,7 @@ def chat():
             endereco_remoto=remote_address,
             detalhe=audit_detail,
         )
+
         return _json_response({"reply": reply})
     except (SofiaMemoryScopeError, SofiaN8nError, SofiaScopeError) as exc:
         current_app.logger.exception("Falha no webhook privado da SofIA")
@@ -185,3 +215,45 @@ def chat():
             },
             500,
         )
+
+@sofia_bp.post("/api/sofia/chat/cancel")
+@login_required
+def cancel_chat():
+    if request.headers.get("X-Sentinel-Request") != "sofia-chat":
+        return _json_response({"error": "Requisicao invalida."}, 403)
+    if request.headers.get("Sec-Fetch-Site", "same-origin") not in {"same-origin", "none"}:
+        return _json_response({"error": "Origem nao permitida."}, 403)
+    if not usuario_pode_executar(current_user, "chat:basic"):
+        return _json_response({"error": "Acesso nao permitido."}, 403)
+    payload = request.get_json(silent=True) if request.is_json else None
+    try:
+        request_id = chat_requests.request_uuid(payload["request_id"])
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return _json_response({"error": "Identificador da consulta invalido."}, 400)
+    owner = getattr(current_user, "username", None) or current_user.get_id()
+    if not _rate_limit_allows("cancel:" + str(owner)):
+        return _json_response({"error": "Muitas solicitacoes de parada. Aguarde um minuto."}, 429)
+    record = chat_requests.cancel(request_id, owner)
+    if record is None:
+        return _json_response({"error": "Consulta nao encontrada."}, 404)
+    cancelled = bool(record["cancelled"] or not record["started"])
+    message = "Consulta cancelada."
+    try:
+        # Registration happens immediately after the webhook, before the LLM.
+        deadline = time.monotonic() + 3
+        while not cancelled and not record["execution_id"] and time.monotonic() < deadline:
+            time.sleep(0.1)
+            record = chat_requests.get(request_id) or record
+            cancelled = bool(record["cancelled"])
+        if not cancelled and record["execution_id"]:
+            cancelled = stop_execution(record["execution_id"])
+        if cancelled:
+            chat_requests.confirm_cancelled(request_id)
+        else:
+            message = "Espera interrompida. O cancelamento no n8n ainda nao foi confirmado."
+    except SofiaN8nError as exc:
+        current_app.logger.warning("Cancelamento da SofIA nao confirmado: %s", exc)
+        message = "Espera interrompida. Nao foi possivel confirmar a parada no n8n."
+    registrar_evento_sofia(usuario=owner, status="cancelado" if cancelled else "cancelamento_pendente",
+        tamanho_mensagem=0, endereco_remoto=request.remote_addr, acao="chat:cancel", detalhe=message)
+    return _json_response({"cancelled": cancelled, "message": message})
