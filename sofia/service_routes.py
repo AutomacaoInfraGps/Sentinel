@@ -10,6 +10,7 @@ from .map_alerts import load_map_alert_snapshot
 from .scope_token import SofiaScopeError, read_regional_scope_token
 from .tools_sentinel import consultar_inventario_regional
 from .operational_inventory import OperationalSnapshotError, query_operational_inventory
+from .query_response import execute_plan
 from . import chat_requests
 from .execution_control import configured_workflow, execution_id, stop_execution
 from .n8n_client import SofiaN8nError
@@ -19,6 +20,11 @@ sofia_service_bp = Blueprint("sofia_service", __name__)
 MAX_SERVICE_ALERTS = 100
 
 SERVICE_CAPABILITIES = (
+    {
+        "id": "assistant.query.read",
+        "method": "POST",
+        "path": "/api/internal/sofia/v1/assistant/query",
+    },
     {
         "id": "service.health.read",
         "method": "GET",
@@ -222,5 +228,27 @@ def service_inventory_query():
     except (ValueError, TypeError):
         return jsonify(success=False, message="Consulta de inventario invalida."), 400
     response = jsonify(success=True, service="sentinel", mode="read-only", data=result)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@sofia_service_bp.post("/api/internal/sofia/v1/assistant/query")
+def service_assistant_query():
+    """Execute an explicit plan and render the authorized facts server-side."""
+    payload = request.get_json(silent=True) if request.is_json else None
+    if not isinstance(payload, dict):
+        return jsonify(success=False, message="JSON inválido."), 400
+    try:
+        allowed = read_regional_scope_token(payload.get("sentinel_scope_token"))
+        result = execute_plan(payload.get("plan"), allowed)
+    except SofiaScopeError:
+        return jsonify(success=False, message="Escopo regional inválido."), 403
+    except PermissionError:
+        return jsonify(success=False, message="Regional não encontrada."), 404
+    except (OSError, json.JSONDecodeError, OperationalSnapshotError):
+        return jsonify(success=False, message="Snapshot operacional indisponível."), 503
+    except (ValueError, TypeError):
+        return jsonify(success=False, message="Plano de consulta inválido."), 400
+    response = jsonify(success=True, mode="read-only", **result)
     response.headers["Cache-Control"] = "no-store"
     return response

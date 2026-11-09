@@ -11,6 +11,7 @@
     const storageKey = `sentinel.sofia.chat.${userKey}.v1`;
     const panelStorageKey = `sentinel.sofia.panel.${userKey}.v1`;
     const conversationStorageKey = `sentinel.sofia.conversation.${userKey}.v1`;
+    const pendingStorageKey = `sentinel.sofia.pending.${userKey}.v1`;
     const maxStoredMessages = 50;
     const panel = document.getElementById("sofiaPanel");
     const launcher = document.getElementById("sofiaLauncher");
@@ -51,6 +52,24 @@
     }
 
     let conversationId = loadConversationId();
+
+    function savePending(request) {
+        try {
+            window.sessionStorage.setItem(pendingStorageKey, JSON.stringify({
+                id: request.id, conversationId, createdAt: Date.now()
+            }));
+        } catch (error) {
+            // Polling still works when browser storage is unavailable.
+        }
+    }
+
+    function clearPending() {
+        try {
+            window.sessionStorage.removeItem(pendingStorageKey);
+        } catch (error) {
+            // Browser storage is optional.
+        }
+    }
 
     function renderInlineText(target, text) {
         target.replaceChildren();
@@ -324,10 +343,57 @@
         status.textContent = message;
     }
 
+    async function waitForReply(response, request) {
+        let data = await response.json();
+        let failures = 0;
+        while (response.status === 202) {
+            if (data.request_id !== request.id) throw new Error("Identificador de consulta inválido.");
+            if (performance.now() - request.started > 540000) {
+                throw new Error("O acompanhamento da consulta excedeu o tempo permitido.");
+            }
+            await new Promise(function (resolve, reject) {
+                const signal = request.controller.signal;
+                const abort = function () {
+                    window.clearTimeout(timer);
+                    reject(new DOMException("Consulta interrompida", "AbortError"));
+                };
+                const timer = window.setTimeout(function () {
+                    signal.removeEventListener("abort", abort);
+                    resolve();
+                }, 1200);
+                signal.addEventListener("abort", abort, {once: true});
+                if (signal.aborted) abort();
+            });
+            const controller = new AbortController();
+            const abort = function () { controller.abort(); };
+            request.controller.signal.addEventListener("abort", abort, {once: true});
+            const timer = window.setTimeout(abort, 15000);
+            try {
+                response = await fetch(`${endpoint}/requests/${encodeURIComponent(request.id)}?conversation_id=${encodeURIComponent(conversationId)}`, {
+                    credentials: "same-origin", signal: controller.signal,
+                    headers: {"X-Sentinel-Request": "sofia-chat"}
+                });
+                data = await response.json();
+                failures = 0;
+            } catch (error) {
+                if (request.controller.signal.aborted) throw error;
+                failures += 1;
+                if (failures >= 3) throw new Error("Não consegui acompanhar a consulta. Ela pode continuar em processamento.");
+                response = {status: 202};
+                data = {request_id: request.id};
+            } finally {
+                window.clearTimeout(timer);
+                request.controller.signal.removeEventListener("abort", abort);
+            }
+        }
+        return {response, data};
+    }
+
     stopButton.addEventListener("click", async function () {
         const request = activeRequest;
         if (!request || request.cancelling) return;
         request.cancelling = true;
+        clearPending();
         stopButton.disabled = true;
         request.controller.abort();
         removeWaitingMessage();
@@ -399,6 +465,7 @@
     clearButton.addEventListener("click", function () {
         try {
             window.sessionStorage.removeItem(storageKey);
+            clearPending();
             conversationId = createConversationId();
             window.sessionStorage.setItem(conversationStorageKey, conversationId);
         } catch (error) {
@@ -447,8 +514,8 @@
         setBusy(true);
         reportRequest("pending");
 
-        try {
-            const response = await fetch(endpoint, {
+        savePending(request);
+        followRequest(request, fetch(endpoint, {
                 method: "POST",
                 credentials: "same-origin",
                 signal: request.controller.signal,
@@ -459,13 +526,21 @@
                 body: JSON.stringify({
                     message: message,
                     conversation_id: conversationId,
-                    request_id: request.id
+                    request_id: request.id,
+                    async: true
                 })
-            });
+            }));
+    });
 
+    async function followRequest(request, initialResponse) {
+        try {
+            let response = await initialResponse;
             const contentType = response.headers.get("content-type") || "";
-            const data = contentType.includes("application/json") ? await response.json() : {};
+            const result = contentType.includes("application/json") ? await waitForReply(response, request) : {response, data: {}};
+            response = result.response;
+            const data = result.data;
             if (activeRequest !== request || request.cancelling) return;
+            clearPending();
             if (!response.ok) {
                 const requestError = new Error(data.error || "Não foi possível falar com a SofIA.");
                 requestError.assistantReply = data.reply ||
@@ -476,7 +551,7 @@
             activeRequest = null;
             setBusy(false);
             appendMessage("SofIA", data.reply, "assistant");
-            reportRequest("success", performance.now() - requestStarted);
+            reportRequest(data.cancelled ? "cancelled" : "success", performance.now() - request.started);
             input.focus();
         } catch (error) {
             if (activeRequest !== request || request.cancelling) return;
@@ -489,15 +564,41 @@
                 "assistant"
             );
             showError(error.message || "Erro de comunicação com a SofIA.");
-            reportRequest("error", performance.now() - requestStarted);
+            reportRequest("error", performance.now() - request.started);
             input.focus();
         }
-    });
+    }
+
+    function restorePending() {
+        let saved;
+        try {
+            saved = JSON.parse(window.sessionStorage.getItem(pendingStorageKey));
+        } catch (error) {
+            clearPending();
+            return;
+        }
+        if (!saved) return;
+        const age = Date.now() - saved.createdAt;
+        if (saved.conversationId !== conversationId || !/^[a-f0-9-]{36}$/i.test(saved.id || "") ||
+                !Number.isFinite(age) || age < 0 || age >= 540000) {
+            clearPending();
+            return;
+        }
+        const request = {id: saved.id, controller: new AbortController(),
+            cancelling: false, started: performance.now() - age};
+        activeRequest = request;
+        setBusy(true);
+        reportRequest("pending");
+        followRequest(request, Promise.resolve(new Response(JSON.stringify({request_id: request.id}), {
+            status: 202, headers: {"Content-Type": "application/json"}
+        })));
+    }
 
     restoreMessages();
     if (dedicated) {
         messages.scrollTop = messages.scrollHeight;
         messages.querySelectorAll(".sofia-message-assistant:not([data-typed='true'])").forEach(typeAssistantMessage);
     } else if (shouldRestorePanelOpen()) setOpen(true);
+    restorePending();
 })();
 

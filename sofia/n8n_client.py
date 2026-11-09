@@ -52,6 +52,7 @@ def consultar_sofia(
     user_context=None,
     request_id=None,
     query_context=None,
+    read_timeout=180,
 ):
     regionals = sorted({
         str(regional).strip()
@@ -92,7 +93,7 @@ def consultar_sofia(
                     "previous_answered_message_started_at": query_context.get("previous_answered_message_started_at"),
                 }} if query_context else {}),
             },
-            timeout=(5, 180),
+            timeout=(5, read_timeout),
             allow_redirects=False,
         )
     except requests.RequestException as exc:

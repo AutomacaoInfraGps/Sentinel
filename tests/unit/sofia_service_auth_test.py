@@ -117,6 +117,11 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
                 "api_version": "v1",
                 "capabilities": [
                     {
+                        "id": "assistant.query.read",
+                        "method": "POST",
+                        "path": "/api/internal/sofia/v1/assistant/query",
+                    },
+                    {
                         "id": "service.health.read",
                         "method": "GET",
                         "path": "/api/internal/sofia/v1/health",
@@ -254,6 +259,28 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 503)
                 self.assertFalse(response.json["success"])
                 self.assertNotIn("alerts", response.json)
+
+    def test_controlled_query_requires_signed_scope_and_hides_failures(self):
+        path = "/api/internal/sofia/v1/assistant/query"
+        with app.app_context():
+            token = issue_regional_scope_token({"REG_ABC"})
+        with patch("sofia.service_routes.execute_plan", return_value={"reply": "Total — 1."}) as query:
+            result = self._signed_post(path, {"sentinel_scope_token": token,
+                "allowed_regionals": ["REG_FORA"], "plan": {"mode": "query"}}, "controlled-scope-nonce-01")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(query.call_args.args[1], {"REG_ABC"})
+        with patch("sofia.service_routes.execute_plan") as query:
+            denied = self._signed_post(path, {"sentinel_scope_token": "invalid",
+                "plan": {}}, "controlled-denied-nonce-02")
+        self.assertEqual(denied.status_code, 403)
+        query.assert_not_called()
+        for index, (error, expected) in enumerate([(ValueError("SECRET"), 400),
+                (PermissionError("SECRET"), 404), (OSError("SECRET"), 503)]):
+            with patch("sofia.service_routes.execute_plan", side_effect=error):
+                result = self._signed_post(path, {"sentinel_scope_token": token,
+                    "plan": {}}, f"controlled-error-nonce-{index}-03")
+            self.assertEqual(result.status_code, expected)
+            self.assertNotIn("SECRET", result.get_data(as_text=True))
 
     def test_operational_inventory_uses_signed_scope_not_client_regionals(self):
         path = "/api/internal/sofia/v1/inventory/query"

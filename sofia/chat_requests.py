@@ -1,6 +1,6 @@
 """Short-lived, cross-process ownership registry for chat cancellation.
 
-Stores identifiers and lifecycle metadata only; never prompts or credentials.
+Stores lifecycle metadata and short-lived asynchronous replies; never prompts or credentials.
 """
 
 from contextlib import contextmanager
@@ -38,6 +38,12 @@ def _database():
                 execution_id TEXT, expires_at REAL NOT NULL
             )""")
             connection.execute("DELETE FROM chat_requests WHERE expires_at < ?", (time.time(),))
+            connection.execute("""CREATE TABLE IF NOT EXISTS chat_results (
+                request_id TEXT PRIMARY KEY, memory_session_id TEXT NOT NULL,
+                request_digest TEXT NOT NULL, state TEXT NOT NULL,
+                reply TEXT, created_at REAL NOT NULL, expires_at REAL NOT NULL
+            )""")
+            connection.execute("DELETE FROM chat_results WHERE expires_at < ?", (time.time(),))
             connection.execute("""CREATE TABLE IF NOT EXISTS chat_query_cursors (
                 owner TEXT NOT NULL, memory_session_id TEXT NOT NULL,
                 query_started_at REAL NOT NULL, expires_at REAL NOT NULL,
@@ -79,6 +85,31 @@ def get(request_id):
     with _database() as db:
         row = db.execute("SELECT * FROM chat_requests WHERE request_id = ?", (request_id,)).fetchone()
         return dict(row) if row else None
+
+
+def create_result(request_id, memory_session_id, request_digest):
+    with _database() as db:
+        db.execute("""INSERT INTO chat_results
+            (request_id, memory_session_id, request_digest, state, created_at, expires_at)
+            VALUES (?, ?, ?, 'running', ?, ?)""",
+            (request_id, memory_session_id, request_digest, time.time(), time.time() + TTL_SECONDS))
+
+
+def get_result(request_id):
+    with _database() as db:
+        row = db.execute("SELECT * FROM chat_results WHERE request_id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def finish_result(request_id, reply, *, failed=False):
+    """A stop or an expired reservation wins over a late model response."""
+    with _database() as db:
+        changed = db.execute("""UPDATE chat_results SET state = ?, reply = ?
+            WHERE request_id = ? AND state = 'running'
+            AND EXISTS (SELECT 1 FROM chat_requests
+                WHERE request_id = chat_results.request_id AND cancel_requested = 0)""",
+            ("error" if failed else "complete", reply, request_id)).rowcount
+        return bool(changed)
 
 
 def register_execution(request_id, execution_id):
