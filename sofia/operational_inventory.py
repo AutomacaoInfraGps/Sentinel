@@ -1,12 +1,13 @@
 """Scoped operational projections of the Sentinel snapshot, never arbitrary JSON access."""
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
 from pathlib import Path
+import re
 
 from regional_access import normalize_regional_code
-from .map_alerts import MAP_ALERT_CACHE, _parse_datetime
+from .map_alerts import BRASILIA_TZ, MAP_ALERT_CACHE, _parse_datetime
 
 
 RESOURCES = {
@@ -34,7 +35,7 @@ EXTRA_FIELDS = {
               "speed": ("velocidade", "speed"), "packet_loss_percent": ("packet_loss_percent",)},
     "vpns": {"tunnel": ("tunel", "nome"), "interface": ("interface",), "remote_ip": ("remote_ip", "gateway")},
     "aps": {"site": ("site",), "clients": ("clientes",), "mac": ("mac",)},
-    "wifi": {"ssid": ("ssid", "nome"), "band": ("banda", "band"), "clients": ("clientes",)},
+    "wifi": {"ssid": ("ssid", "rede", "nome"), "band": ("banda", "band"), "clients": ("clientes",)},
 }
 
 
@@ -68,13 +69,35 @@ def _status(value):
     return value if value in STATUSES else "unknown"
 
 
+def _expiry(value):
+    """Preserve date-only precision; convert Unix instants without guessing a date."""
+    value = str(value or "").strip()
+    if not value:
+        return None, None
+    try:
+        if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value):
+            stamp = float(value)
+            if stamp <= 0:
+                return None, None
+            moment = datetime.fromtimestamp(stamp, timezone.utc)
+        elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return date.fromisoformat(value).isoformat(), None
+        elif re.fullmatch(r"\d{2}/\d{2}/\d{4}", value):
+            return datetime.strptime(value, "%d/%m/%Y").date().isoformat(), None
+        else:
+            moment = _parse_datetime(value)
+            if moment is None:
+                return None, None
+        return moment.astimezone(timezone.utc).isoformat(), moment.astimezone(BRASILIA_TZ).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return None, None
+
+
 def _license(record, firewall, code, maintenance):
     unavailable = record.get("status_indisponivel") is True or _status(record.get("status")) in {"unavailable", "offline"}
     expired = record.get("notificacao_expirada") is True
     expiring = record.get("notificacao_critica") is True or record.get("alerta_vencimento") is True
-    expiry = _text(record, "expiracao", "data_expiracao", "expires_at")
-    if expiry and expiry.lower() in {"n/a", "na", "none", "null", "indisponivel", "-"}:
-        expiry = None
+    expiry, expiry_brasilia = _expiry(_text(record, "expiracao", "data_expiracao", "expires_at"))
     if unavailable:
         status = "unavailable"
     elif expired:
@@ -88,6 +111,7 @@ def _license(record, firewall, code, maintenance):
         "firewall_serial": _text(firewall, "serial"),
         "name": _text(record, "nome", "tipo_licenca", "tipo"),
         "status": status, "expires_at": expiry,
+        "expires_at_brasilia": expiry_brasilia,
         "days_remaining": None if unavailable or not expiry else _integer(record.get("dias_restantes")),
         "last_check": _text(firewall, "ultima_verificacao", "updated_at"),
         "in_maintenance": maintenance,
@@ -119,6 +143,8 @@ def query_operational_inventory(*, resource, allowed_regionals, regional=None,
         raise ValueError("Escopo regional invalido.")
     allowed = {normalize_regional_code(code) for code in allowed_regionals if isinstance(code, str) and code.strip()}
     selected = normalize_regional_code(regional) if regional else None
+    if selected and selected not in allowed and f"REG_{selected}" in allowed:
+        selected = f"REG_{selected}"
     if selected and selected not in allowed:
         raise PermissionError("Regional nao encontrada no escopo autorizado.")
     payload = json.loads(Path(path or MAP_ALERT_CACHE).read_text(encoding="utf-8"))

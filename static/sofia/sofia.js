@@ -52,11 +52,22 @@
 
     let conversationId = loadConversationId();
 
-    function renderMessageText(target, text) {
-        if (!dedicated) {
-            target.textContent = text;
-            return;
+    function renderInlineText(target, text) {
+        target.replaceChildren();
+        const markup = /`([^`\n]+)`|\*\*([^*\n]+)\*\*/g;
+        let position = 0;
+        let match;
+        while ((match = markup.exec(text)) !== null) {
+            target.appendChild(document.createTextNode(text.slice(position, match.index)));
+            const node = document.createElement(match[1] !== undefined ? "code" : "strong");
+            node.textContent = match[1] !== undefined ? match[1] : match[2];
+            target.appendChild(node);
+            position = markup.lastIndex;
         }
+        target.appendChild(document.createTextNode(text.slice(position)));
+    }
+
+    function renderMessageText(target, text) {
         target.replaceChildren();
         const fences = /```([a-zA-Z0-9_+-]*)[ \t]*\r?\n([\s\S]*?)(?:```|$)/g;
         let position = 0;
@@ -64,7 +75,7 @@
         function paragraph(value) {
             if (!value.trim()) return;
             const node = document.createElement("p");
-            node.textContent = value.trim();
+            renderInlineText(node, value.trim());
             target.appendChild(node);
         }
         while ((match = fences.exec(text)) !== null) {
@@ -245,8 +256,8 @@
         authorNode.className = "sofia-message-author";
         authorNode.textContent = author;
 
-        const textNode = document.createElement(dedicated ? "div" : "p");
-        if (dedicated) textNode.className = "sofia-message-body";
+        const textNode = document.createElement("div");
+        textNode.className = "sofia-message-body";
         renderMessageText(textNode, text);
 
         item.append(authorNode, textNode);
