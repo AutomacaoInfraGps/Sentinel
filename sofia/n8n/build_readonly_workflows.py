@@ -34,6 +34,8 @@ def plan_schema():
 
 
 def expression(code):
+    if "}}" in code:
+        raise ValueError("Fechamento de objeto deve ter espaço para preservar o delimitador do n8n.")
     return "={{ (() => {\n" + code + "\n})() }}"
 
 
@@ -75,8 +77,10 @@ def build_workflows(main_export, inventory_export):
     origin = f"{url.scheme}://{url.netloc}"
     memory_credentials = originals["Memória Principal V3"]["credentials"]
     schema = plan_schema()
-    validator = (ROOT / "validate_plan.js").read_text(encoding="utf-8").replace(
-        "SCHEMA_PLACEHOLDER", json.dumps(schema, ensure_ascii=False))
+    enums = {key: rule["enum"] for key, rule in schema["properties"].items() if "enum" in rule}
+    validator = ((ROOT / "validate_plan.js").read_text(encoding="utf-8")
+                 .replace("ENUMS_PLACEHOLDER", json.dumps(enums, ensure_ascii=False))
+                 .replace("FIELDS_PLACEHOLDER", json.dumps(list(FIELD_LABELS), ensure_ascii=False)))
     prompt = (ROOT / "plan_prompt.txt").read_text(encoding="utf-8")
     session_key = "$('Webhook').first().json.body.conversation_id + ':v4'"
 
@@ -109,7 +113,7 @@ def build_workflows(main_export, inventory_export):
     # JSON syntax is also JavaScript syntax; input and history are encoded as data.
     config = json.dumps({"model": originals["Ollama Operacional"]["parameters"]["model"],
         "stream": False, "think": False, "format": schema,
-        "options": {"num_ctx": 4096, "num_thread": 8, "num_predict": 384, "temperature": 0}}, ensure_ascii=False)
+        "options": {"num_ctx": 4096, "num_thread": 8, "num_predict": 384, "temperature": 0}}, ensure_ascii=False, indent=2)
     body = expression("const input = $('Webhook').first().json.body;\nconst config = " + config + ";\n" +
         "config.messages = [{role:'system',content:" + json.dumps(prompt, ensure_ascii=False) + "}," +
         "{role:'user',content:JSON.stringify({user_context:input.user_context," +
@@ -144,7 +148,7 @@ def build_workflows(main_export, inventory_export):
  INSERT INTO sofia_memory.sofia_chat_history(session_id,message)
  VALUES ($1,$2::jsonb),($1,$3::jsonb) RETURNING id
 ) SELECT count(*) AS saved FROM inserted;"""
-    values = "={{ [" + session_key + ", JSON.stringify({type:'human',data:{content:$('Webhook').first().json.body.message}}), " + \
+    values = "={{ [" + session_key + ", JSON.stringify({type:'human',data:{content:$('Webhook').first().json.body.message} }), " + \
         "JSON.stringify({type:'ai',data:{content:$json.reply},sofia_kind:$json.plan.mode," + \
         "sofia_query:$json.plan.mode==='query'?{...$json.plan,next_offset:$json.page.next_offset}:null})] }}"
     nodes.append(node("Guardar conversa", "n8n-nodes-base.postgres", {"operation": "executeQuery",
@@ -210,6 +214,13 @@ def main():
     for filename, workflow in zip(("sofia-main-controlled.json", "sofia-inventory-controlled.json"), candidates):
         (args.output / filename).write_text(json.dumps(workflow, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(args.output / filename)
+    validator_node = next(node for node in candidates[0]["nodes"] if node["name"] == "Validar plano")
+    validator_value = next(field["value"] for field in validator_node["parameters"]["assignments"]["assignments"]
+                           if field["name"] == "plan")
+    clipboard_file = args.output / "validar-plano-expression.txt"
+    # Literal whitespace outside {{ ... }} makes n8n convert an object to text.
+    clipboard_file.write_text(validator_value.removeprefix("=").strip(), encoding="utf-8")
+    print(clipboard_file)
 
 
 if __name__ == "__main__":

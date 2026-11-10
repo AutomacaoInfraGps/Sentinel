@@ -29,8 +29,7 @@ class SofiaQueryResponseTests(unittest.TestCase):
     def test_positive_maintenance_count_never_depends_on_detail_rows(self):
         result = self.query(resource="switches", status="maintenance", view="count")
         self.assertEqual(result["matched"], 1)
-        self.assertIn("— 1.", result["reply"])
-        self.assertIn("em manutenção 1", result["reply"])
+        self.assertEqual(result["reply"], "Encontrei 1 switch em manutenção nas regionais autorizadas.")
         self.assertNotIn("SECRET", result["reply"])
 
     def test_requested_fields_are_scoped_and_do_not_include_extra_identifiers(self):
@@ -40,6 +39,17 @@ class SofiaQueryResponseTests(unittest.TestCase):
         self.assertIn("192.0.2.2", result["reply"])
         self.assertNotIn("MAC", result["reply"])
         self.assertNotIn("FORBIDDEN", result["reply"])
+
+    def test_natural_count_and_empty_results_keep_the_filter(self):
+        result = self.query(status="offline", view="count")
+        self.assertEqual(result["reply"], "Encontrei 2 APs offline nas regionais autorizadas.")
+        empty = self.query(resource="switches", status="offline", view="count")
+        self.assertEqual(empty["reply"], "Não encontrei switches offline nas regionais autorizadas.")
+
+    def test_unfiltered_count_preserves_status_distribution(self):
+        result = self.query(view="count")
+        self.assertIn("Encontrei 2 APs nas regionais autorizadas.", result["reply"])
+        self.assertIn("Por estado, temos 2 offline.", result["reply"])
 
     def test_regional_alias_and_firmware(self):
         result = self.query(resource="firewalls", regional="Araras", fields=["model", "firmware"])

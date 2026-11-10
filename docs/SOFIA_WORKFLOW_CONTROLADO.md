@@ -82,6 +82,8 @@ Confira as credenciais dos nós Crypto e Postgres antes de publicar. O Postgres 
 
 ## Homologação no Sentinel
 
+O gerador separa as chaves de fechamento dos objetos JavaScript para respeitar o delimitador `}}` das expressões do n8n. A regressão verifica todos os parâmetros gerados. Também foi validada com `@n8n/tournament` 1.13.0, a versão declarada no n8n 2.41.4. [Interpretador do n8n](https://github.com/n8n-io/n8n/blob/n8n%402.41.4/packages/%40n8n/tournament/package.json)
+
 Faça consultas em uma conversa nova e confira os resultados nas telas correspondentes.
 
 1. Envie uma saudação. A execução deve passar pelo modelo e pela gravação de conversa.

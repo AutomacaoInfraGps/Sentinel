@@ -26,9 +26,10 @@ class CheckinRuntimeTests(unittest.TestCase):
         for batch, script, _, _ in JOBS:
             shutil.copyfile(ROOT / batch, self.directory / batch)
             (self.directory / script).write_text(
-                "import sys\nfrom pathlib import Path\n"
+                "import os\nimport sys\nfrom pathlib import Path\n"
                 "print('RUNTIME=' + sys.executable)\n"
                 "print('ARGUMENTS=' + ' '.join(sys.argv[1:]))\n"
+                "print('UNBUFFERED=' + os.environ.get('PYTHONUNBUFFERED', ''))\n"
                 "sys.exit(int(Path('exit_code.txt').read_text()))\n", encoding="utf-8")
         (self.directory / "exit_code.txt").write_text("0", encoding="ascii")
         venv.EnvBuilder(with_pip=False).create(self.directory / ".venv")
@@ -43,6 +44,7 @@ class CheckinRuntimeTests(unittest.TestCase):
                 output = (self.directory / "logs" / log).read_text(encoding="utf-8", errors="replace")
                 self.assertIn(str(self.directory / environment / "Scripts" / "python.exe"), output)
                 self.assertIn("ARGUMENTS=" + arguments, output)
+                self.assertIn("UNBUFFERED=1", output)
 
     def test_preferred_runtime_is_used_when_both_environments_exist(self):
         venv.EnvBuilder(with_pip=False).create(self.directory / ".venv31410")

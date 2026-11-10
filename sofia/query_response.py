@@ -11,6 +11,11 @@ RESOURCE_LABELS = {
     "links": "links", "vpns": "túneis VPN", "servers": "servidores", "aps": "APs",
     "switches": "switches", "wifi": "redes Wi-Fi", "regionals": "regionais autorizadas",
 }
+RESOURCE_SINGULAR_LABELS = {
+    "alerts": "registro de alerta", "firewalls": "firewall", "licenses": "licença",
+    "links": "link", "vpns": "túnel VPN", "servers": "servidor", "aps": "AP",
+    "switches": "switch", "wifi": "rede Wi-Fi", "regionals": "regional autorizada",
+}
 FIELD_LABELS = {
     "name": "Nome", "regional": "Regional", "ip": "IP", "model": "Modelo",
     "firmware": "Firmware", "serial": "Serial", "status": "Estado", "ssid": "SSID",
@@ -75,19 +80,29 @@ def render_inventory(result, query):
     """Counts always use the complete filtered summary, never the visible page."""
     resource = query["resource"]
     count = result["summary"]["records"]
-    lines = [f"Total de {RESOURCE_LABELS[resource]} no escopo consultado — {count}."]
-    if query["regional"]:
-        lines.append(f"Regional consultada — {_display(query['regional'])}.")
+    label = RESOURCE_SINGULAR_LABELS[resource] if count == 1 else RESOURCE_LABELS[resource]
+    scope = (f"na regional {_display(query['regional'])}" if query["regional"]
+             else "nas regionais autorizadas")
+    state = ""
     if query["status"]:
-        lines.append(f"Filtro de estado — {STATUS_LABELS.get(query['status'], _display(query['status']))}.")
+        status = query["status"]
+        description = STATUS_LABELS.get(status, _display(status))
+        state = " " + (description if status in {"online", "offline", "maintenance", "warning", "expiring"}
+                       else f"com status {description}")
+    lines = [f"Encontrei {count} {label}{state} {scope}." if count
+             else f"Não encontrei {label}{state} {scope}."]
+    if query["search"]:
+        lines.append(f"A busca considerou o termo “{_display(query['search'])}”.")
     if resource == "alerts":
-        lines.append(f"Ocorrências — {result['summary']['occurrences']}.")
+        lines.append(f"Esses registros somam {result['summary']['occurrences']} ocorrências.")
     if resource == "licenses":
-        lines.append(f"Firewalls distintos — {result['summary']['firewalls']}.")
+        lines.append(f"A consulta abrange {result['summary']['firewalls']} firewalls distintos.")
     states = result["summary"]["by_status"]
-    if query["view"] == "count" and states:
-        lines.append("Distribuição — " + ", ".join(
-            f"{STATUS_LABELS.get(status, status)} {quantity}" for status, quantity in sorted(states.items())
+    if query["view"] == "count" and states and not query["status"]:
+        lines.append("Por estado, temos " + ", ".join(
+            f"{quantity} " + (STATUS_LABELS[status] if status in {"online", "offline", "maintenance", "warning", "expiring"}
+                             else f"com status {STATUS_LABELS.get(status, status)}")
+            for status, quantity in sorted(states.items())
         ) + ".")
     fields = query["fields"] or DEFAULT_FIELDS.get(resource, ["name", "ip", "regional", "status"])
     displayed = 0
@@ -98,7 +113,7 @@ def render_inventory(result, query):
                 value = record.get(field)
                 if field == "status":
                     value = STATUS_LABELS.get(value, value)
-                parts.append(f"{FIELD_LABELS[field]} — {_display(value)}")
+                parts.append(_display(value) if field == "name" else f"{FIELD_LABELS[field]} — {_display(value)}")
             row = "- " + " | ".join(parts)
             # Reserve room for pagination and source warnings, including long names.
             if len("\n".join(lines)) + len(row) > MAX_RENDER_LENGTH - 700:

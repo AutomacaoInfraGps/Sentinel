@@ -1,5 +1,6 @@
 @echo off
 setlocal
+set "PYTHONUNBUFFERED=1"
 cd /d "%~dp0"
 
 if not exist "logs" mkdir "logs"

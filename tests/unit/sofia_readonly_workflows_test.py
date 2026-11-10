@@ -1,10 +1,13 @@
 import hashlib
 import json
+from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
-from sofia.n8n.build_readonly_workflows import build_workflows, plan_schema
+from sofia.n8n.build_readonly_workflows import build_workflows, expression, main as build_cli, plan_schema
 from sofia.service_auth import canonical_request
 
 
@@ -40,12 +43,27 @@ class SofiaReadonlyWorkflowTests(unittest.TestCase):
         self.main, self.inventory = build_workflows(*exports())
 
     def evaluate(self, value, data=None, inputs=None):
+        self.assertTrue(value.startswith("={{"))
+        self.assertTrue(value.endswith("}}"))
+        # Tournament splits on the first closing delimiter, including inside JS objects.
+        self.assertNotIn("}}", value[3:-2], "n8n would close this expression prematurely")
         runner = r"""
 const fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const lookup = () => ({first: () => ({json:input.inputs})});
 try {
-  const result = new Function('$json', '$', 'return (' + input.code.slice(3,-2) + ');')(input.data,lookup);
+  let result;
+  if (process.env.SOFIA_N8N_WORKFLOW_PATH) {
+    const {Expression} = require(process.env.SOFIA_N8N_WORKFLOW_PATH);
+    result = new Expression('America/Sao_Paulo').resolveSimpleParameterValue(input.code, {$json:input.data,$:lookup});
+  } else if (process.env.SOFIA_TOURNAMENT_PATH) {
+    const {Tournament} = require(process.env.SOFIA_TOURNAMENT_PATH);
+    const engine = new Tournament(error => {throw error;});
+    result = engine.execute(input.code.slice(1), {$json:input.data,$:lookup,JSON,Object,Array,Number,Error});
+  } else {
+    result = new Function('$json', '$', 'return (' + input.code.slice(3,-2) + ');')(input.data,lookup);
+  }
+  if (result === undefined) throw new Error('A expressão não retornou um valor válido.');
   process.stdout.write(JSON.stringify({result}));
 } catch (error) { process.stdout.write(JSON.stringify({error:error.message})); }
 """
@@ -99,6 +117,65 @@ try {
             self.assertIn("error", self.evaluate(code, response))
         self.assertIn("error", self.evaluate(code, {**valid, "done_reason": "length"}))
 
+    def test_social_plan_matches_the_completed_ollama_response(self):
+        plan = self.plan(mode="chat", resource="", status="", fields=[], view="count",
+                         reply="Bom dia! Tudo bem, obrigado por perguntar. Como posso ajudar hoje?")
+        response = {"done": True, "done_reason": "stop", "message": {"role": "assistant",
+                    "content": json.dumps(plan, ensure_ascii=False)}}
+        self.assertEqual(self.evaluate(self.field(self.main, "Validar plano", "plan"), response)["result"], plan)
+
+    def test_clipboard_export_returns_an_object_without_surrounding_text(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            main_file = directory / "main.json"
+            inventory_file = directory / "inventory.json"
+            main_export, inventory_export = exports()
+            main_file.write_text(json.dumps(main_export), encoding="utf-8")
+            inventory_file.write_text(json.dumps(inventory_export), encoding="utf-8")
+            with patch("sys.argv", ["build_readonly_workflows", "--main", str(main_file),
+                       "--inventory", str(inventory_file), "--output", str(directory)]), patch("builtins.print"):
+                build_cli()
+            text = (directory / "validar-plano-expression.txt").read_text(encoding="utf-8")
+            self.assertEqual(text, text.strip())
+            plan = self.plan(mode="chat", resource="", status="", reply="Bom dia!")
+            response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(plan)}}
+            result = self.evaluate("=" + text, response)["result"]
+            self.assertIsInstance(result, dict)
+            self.assertEqual(result, plan)
+
+    def test_unmentioned_regional_is_removed_but_explicit_and_previous_are_preserved(self):
+        expression_value = self.field(self.main, "Validar plano", "plan")
+        cases = [
+            ("Quantos APs temos offline?", "sul", None, ""),
+            ("Quantos APs temos offline em Araras?", "REG_ARARAS", None, "REG_ARARAS"),
+            ("E quais são?", "REG_ARARAS", {"regional": "REG_ARARAS"}, "REG_ARARAS"),
+        ]
+        for message, regional, previous, expected in cases:
+            with self.subTest(message=message):
+                response = {"done": True, "done_reason": "stop",
+                            "message": {"content": json.dumps(self.plan(regional=regional))}}
+                inputs = {"body": {"message": message}, "context": {"previous_query": previous}}
+                result = self.evaluate(expression_value, response, inputs)["result"]
+                self.assertEqual(result["regional"], expected)
+
+    def test_memory_parameters_preserve_messages_and_query_pagination(self):
+        storage = next(node for node in self.main["nodes"] if node["name"] == "Guardar conversa")
+        value = storage["parameters"]["options"]["queryReplacement"]
+        for mode in ("chat", "query"):
+            with self.subTest(mode=mode):
+                plan = self.plan(mode=mode)
+                data = {"reply": "Resposta com vírgula, aspas e acento.", "plan": plan,
+                        "page": {"next_offset": 20}}
+                inputs = {"body": {"conversation_id": "test-session", "message": "Bom dia!"}}
+                result = self.evaluate(value, data, inputs)["result"]
+                self.assertIsInstance(result, list)
+                self.assertEqual(result[0], "test-session:v4")
+                self.assertEqual(json.loads(result[1])["data"]["content"], "Bom dia!")
+                saved = json.loads(result[2])
+                self.assertEqual(saved["data"]["content"], data["reply"])
+                self.assertEqual(saved["sofia_kind"], mode)
+                self.assertEqual(saved["sofia_query"], {**plan, "next_offset": 20} if mode == "query" else None)
+
     def test_subworkflow_signs_exact_body_and_fixed_target(self):
         data = {"plan": self.plan(), "sentinel_scope_token": "synthetic-scope", "resource": "aps"}
         target = self.evaluate(self.field(self.inventory, "Edit Fields", "target"), data, data)["result"]
@@ -128,3 +205,19 @@ try {
             main, inventory = exports()
             main["pinData"] = {"Webhook": [{"token": "PRIVATE"}]}
             build_workflows(main, inventory)
+
+    def test_every_expression_has_only_its_final_closing_delimiter(self):
+        def walk(value):
+            if isinstance(value, dict):
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+            elif isinstance(value, str) and value.startswith("={{"):
+                self.assertNotIn("}}", value[3:-2], value[:100])
+
+        walk(self.main)
+        walk(self.inventory)
+        with self.assertRaises(ValueError):
+            expression("return {outer:{inner:1}};")
