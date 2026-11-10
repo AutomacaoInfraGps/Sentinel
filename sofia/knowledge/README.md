@@ -2,7 +2,7 @@
 
 Esta pasta organiza o conhecimento interno que a SofIA podera usar para responder melhor no futuro.
 
-No momento, estes arquivos sao documentacao estruturada. Eles ainda nao sao carregados automaticamente pelo `engine.py`.
+Estes arquivos são documentação estruturada. O motor histórico `engine.py` pode carregar textos por tema. O chat atual usa o fluxo controlado de Ollama e n8n e ainda precisa de integração de recuperação documental com permissões para consultar esta pasta como RAG.
 
 ## Objetivo
 

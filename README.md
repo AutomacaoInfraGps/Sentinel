@@ -9,6 +9,10 @@ da infraestrutura do Grupo GPS. Ele consolida regionais, servidores, VMs,
 links, VPNs, switches, firewalls, licencas, APs UniFi, certificados, relatorios
 e rotinas operacionais.
 
+## SofIA
+
+A arquitetura atual combina interpretação local no Ollama, orquestração no n8n e consultas autorizadas no Sentinel. O guia do módulo descreve os arquivos ativos, a implementação histórica e o processo de atualização. [Guia da SofIA](sofia/README.md)
+
 ## Execucao principal
 
 - `run_web_service.py`: inicia o Flask com Waitress na porta 5000.

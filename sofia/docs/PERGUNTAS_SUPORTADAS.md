@@ -1,5 +1,7 @@
 # Perguntas Suportadas pela SofIA
 
+> Referência histórica do MVP baseado em `engine.py`. O fluxo controlado atual usa Ollama, n8n e a API de inventário. As capacidades e os limites atuais estão no [guia do módulo](../README.md) e no [guia de implantação](../../docs/SOFIA_WORKFLOW_CONTROLADO.md). A lista abaixo descreve o motor anterior e precisa ser considerada nesse contexto.
+
 Este documento registra o que a SofIA entende hoje e o que esta planejado para as proximas fases.
 
 O objetivo e manter uma lista clara entre:

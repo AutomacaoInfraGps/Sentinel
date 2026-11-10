@@ -2,6 +2,49 @@
 
 A SofIA e a assistente virtual do Sentinel. O objetivo e ajudar o usuario logado a consultar informacoes do ambiente e, no futuro, orquestrar acoes controladas com seguranca, permissao e auditoria.
 
+## Arquitetura atual — revisão de 10/11/2026
+
+O chat autenticado chama o n8n por `routes.py` e `n8n_client.py`. O nó `Interpretar pedido` consulta o Ollama local para produzir um plano JSON ou uma resposta social. O nó `Validar plano` confere a estrutura e os filtros. As consultas passam pelo subworkflow e pelo endpoint `/api/internal/sofia/v1/assistant/query`.
+
+O Sentinel valida o plano e o escopo assinado, consulta o inventário e formata contagens e listas em `query_response.py`. A resposta operacional usa os dados da coleta. O modelo redige as respostas sociais. A memória curta fica no Postgres isolado, com sessões `:v4`.
+
+### Mapa de arquivos
+
+| Arquivo ou pasta | Uso no fluxo atual |
+| --- | --- |
+| `routes.py`, `n8n_client.py` | Chat autenticado e chamada ao webhook |
+| `chat_requests.py`, `execution_control.py` | Resultados assíncronos e cancelamento |
+| `user_context.py`, `memory_scope.py`, `scope_token.py` | Identidade e escopo da conversa e das consultas |
+| `permissions.py`, `service_auth.py`, `audit.py` | Autorização, autenticação de serviço e auditoria |
+| `service_routes.py`, `query_response.py` | API de consulta controlada, validação e redação operacional |
+| `operational_inventory.py`, `map_alerts.py`, `tools_sentinel.py` | Fontes e adaptadores de consulta, incluindo rotas anteriores |
+| `n8n/plan_prompt.txt` | Instruções do modelo usadas pelo gerador de workflow |
+| `n8n/validate_plan.js` | Fonte da expressão de validação instalada no n8n |
+| `n8n/build_readonly_workflows.py` | Geração dos candidatos privados de workflows |
+| `database/` | Migrações e verificações do Postgres |
+| `engine.py` | Motor histórico do MVP, ainda importado por testes. O chat atual chama `n8n_client.py` |
+| `knowledge/` | Documentos locais e material do MVP. A consulta RAG ainda precisa de integração ao fluxo controlado |
+
+### Código local, Git e n8n
+
+O VS Code exibe os arquivos desta cópia do repositório. Alterações locais precisam de revisão, commit e push para serem versionadas. O Rigel precisa receber a revisão e reiniciar o serviço para carregar mudanças Python.
+
+Editar `plan_prompt.txt` modifica a fonte usada na próxima geração. Para aplicar essas instruções no n8n, gere os candidatos, revise as diferenças e importe e publique a versão desejada. Editar uma expressão diretamente no editor do n8n salva a configuração no Celeno. Essa edição precisa ser reconciliada com o gerador local para ser reproduzível.
+
+Os candidatos ficam em `instance/sofia-workflows/`, ignorada pelo Git. Exports podem conter dados sensíveis e devem permanecer privados. Uma nova geração parte dos exports fornecidos e pode sobrescrever ajustes manuais quando importada. Use exports atuais e preserve um backup antes de atualizar.
+
+A redação de contagens e listas fica em `query_response.py`. Alterar essa redação exige implantar o código no Rigel. O prompt do modelo permanece responsável pela interpretação e pela conversa social.
+
+### Estado da revisão
+
+O usuário confirmou contagem e listagem de APs offline, consultas de switches e VPNs e totais de APs e servidores no fluxo controlado. A redação mais natural foi implementada e testada localmente e ainda depende de implantação no Rigel. A personalização de identidade requer nova homologação. Histórico de abertura e recuperação, RAG e replicação AD ainda precisam de adaptadores no fluxo controlado.
+
+O guia de implantação contém os comandos e a lista de verificações. [Workflow controlado](../docs/SOFIA_WORKFLOW_CONTROLADO.md)
+
+## Referência histórica do MVP
+
+As seções abaixo preservam o desenho anterior baseado em `engine.py`. Use o mapa acima para localizar a implementação atual e o guia de implantação para atualizar os workflows.
+
 ## Principio Principal
 
 A SofIA nao deve executar uma acao real apenas porque o usuario pediu.
