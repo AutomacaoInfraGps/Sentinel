@@ -12,6 +12,10 @@
     [...document.querySelectorAll("[data-celestial]")]
       .map(image => [normalizeCelestialName(image.dataset.celestial), image]),
   );
+  const deviceTextures = new Map(
+    [...document.querySelectorAll('[data-device-icon]')]
+      .map(image => [image.dataset.deviceIcon, image]),
+  );
   const celestialRenderCache = new Map();
   let galaxyBackgroundRender = null;
   const ui = {
@@ -59,39 +63,6 @@
   const isGalaxyRegional = regional => String(regional?.codigo || regional?.id || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() === "REG_GALAXIA";
 
-  function celestialTexture(node) {
-    if (node.tipo === "links") return celestialTextures.get("COMETA_LINK");
-    if (node.tipo === "firewalls") return celestialTextures.get(firewallCelestialKey(node.nome));
-    if (node.tipo === "servidores") return celestialTextures.get("ESTRELA");
-    if (node.tipo === "switches") return celestialTextures.get(switchCelestialKey(node.nome));
-    if (node.tipo === "vpns") return celestialTextures.get(vpnCelestialKey(node.nome));
-    if (node.tipo === "aps") return celestialTextures.get(apCelestialKey(node.nome));
-    if (node.tipo !== "redes_wifi") return null;
-    const name = normalizeCelestialName(node.nome);
-    if (["NEPTUNO", "NEPTUNE"].includes(name)) return celestialTextures.get("NETUNO");
-    return celestialTextures.get(name) || null;
-  }
-
-  function firewallCelestialKey(name) {
-    return stableVariantKey(name, [
-      "BURACO_NEGRO_ACREACAO",
-      "BURACO_NEGRO_RUBI",
-      "BURACO_NEGRO_LENTE",
-    ]);
-  }
-
-  function switchCelestialKey() {
-    return "ASTEROIDE_ROCHOSO";
-  }
-
-  function vpnCelestialKey() {
-    return "SATELITE_PAINEIS";
-  }
-
-  function apCelestialKey() {
-    return "NEBULOSA_ANEL";
-  }
-
   function stableNameHash(name) {
     const normalized = normalizeCelestialName(name);
     let hash = 2166136261;
@@ -100,24 +71,6 @@
       hash = Math.imul(hash, 16777619);
     }
     return hash >>> 0;
-  }
-
-  function stableVariantKey(name, variants) {
-    return variants[stableNameHash(name) % variants.length];
-  }
-
-  function stellarFilter(name) {
-    const key = normalizeCelestialName(name);
-    if (["BETELGEUSE", "MIRA", "SARGAS", "DIPHDA", "HAMAL"].includes(key)) {
-      return "sepia(.65) saturate(2.2) hue-rotate(325deg)";
-    }
-    if (["ARCTURO", "CAPELLA", "POLLUX", "ALDEBARAN", "GOMEISA"].includes(key)) {
-      return "sepia(.55) saturate(1.8) hue-rotate(350deg)";
-    }
-    if (["RIGEL", "SIRIUS", "BELLATRIX", "ALNITAK", "ALNILAN", "MINTAKA", "SAIPH", "VEGA"].includes(key)) {
-      return "saturate(1.35) hue-rotate(4deg) brightness(1.12)";
-    }
-    return "saturate(.8) brightness(1.04)";
   }
 
   function cachedCelestialTexture(image, key, width, height, filter = "none") {
@@ -401,9 +354,9 @@
     renderRanking(ui.connectionRank, connected, item => item.dispositivos.length);
     ui.categoryRank.innerHTML = Object.entries(categories).map(([key, item]) => `
       <div class="category-row" data-type="${key}" style="--category:${item.color}">
-        <i></i><span>${item.label}</span><b>${state.data.categorias[key] || 0}</b>
+        <img src="${deviceTextures.get(key).src}" alt=""><span>${item.label}</span><b>${state.data.categorias[key] || 0}</b>
       </div>`).join("");
-    ui.legend.innerHTML = Object.values(categories).map(item => `<span style="--category:${item.color}"><i></i>${item.singular}</span>`).join("");
+    ui.legend.innerHTML = Object.entries(categories).map(([key, item]) => `<span style="--category:${item.color}"><img src="${deviceTextures.get(key).src}" alt="">${item.singular}</span>`).join("");
     const stamp = state.data.source_updated_at ? new Date(state.data.source_updated_at) : new Date(state.data.generated_at);
     ui.sync.textContent = `TOPOLOGIA ATUALIZADA ${stamp.toLocaleString("pt-BR")}`;
   }
@@ -830,78 +783,24 @@
         ctx.fillStyle = node.kind === "regional" ? "#e9f8ff" : "#071725";
         ctx.strokeStyle = color; ctx.lineWidth = active ? 3 / state.camera.scale : 1.5 / state.camera.scale; ctx.fill(); ctx.stroke();
       }
-      const celestial = celestialTexture(node);
-      if (!node.isHub && celestial) {
-        const key = normalizeCelestialName(node.nome);
-        const isAndromeda = key === "ANDROMEDA";
-        const isSaturn = key === "SATURNO";
-        const isLink = node.tipo === "links";
-        const isFirewall = node.tipo === "firewalls";
-        const isStar = node.tipo === "servidores";
-        const isSwitch = node.tipo === "switches";
-        const isVpn = node.tipo === "vpns";
-        const isAp = node.tipo === "aps";
-        const firewallKey = isFirewall ? firewallCelestialKey(node.nome) : "";
-        const switchKey = isSwitch ? switchCelestialKey(node.nome) : "";
-        const vpnKey = isVpn ? vpnCelestialKey(node.nome) : "";
-        const apKey = isAp ? apCelestialKey(node.nome) : "";
-        const width = radius * (isAndromeda ? 4.4 : isSaturn ? 3.8 : isLink ? 4.8 : isFirewall ? 4.2 : isAp ? 3.8 : isStar ? 3.35 : isVpn ? 3.4 : isSwitch ? 2.9 : 2.7);
-        const height = radius * (isAndromeda ? 2.2 : isSaturn ? 2.55 : isLink ? 2.05 : isFirewall ? 3.2 : isAp ? 3.8 : isStar ? 3.35 : isVpn ? 3.4 : isSwitch ? 2.9 : 2.7);
-        labelRadius = Math.max(labelRadius, height / 2);
-        const detailThreshold = isStar ? .52 : isAp ? .48 : isFirewall ? .42 : isVpn ? .42 : isLink ? .38 : isSwitch ? .34 : 0;
-        const detailedCelestial = state.camera.scale >= detailThreshold || active || (focus && inFocus);
-
-        if (detailedCelestial) {
-          const cacheWidth = isAndromeda ? 256 : isSaturn ? 256 : isLink ? 224 : isFirewall ? 192 : isAp ? 160 : isVpn ? 160 : isStar ? 128 : isSwitch ? 144 : 192;
-          const cacheHeight = isAndromeda ? 128 : isSaturn ? 172 : isLink ? 76 : isFirewall ? 146 : isAp ? 160 : isVpn ? 160 : isStar ? 128 : isSwitch ? 144 : 192;
-          const filter = isStar ? stellarFilter(node.nome) : "none";
-          const textureKey = isStar ? `star:${filter}` : isLink ? "COMETA_LINK" : isFirewall ? firewallKey : isSwitch ? switchKey : isVpn ? vpnKey : isAp ? apKey : key;
-          const renderedTexture = cachedCelestialTexture(
-            celestial, textureKey, cacheWidth, cacheHeight, filter,
-          );
-
-          if (renderedTexture) {
-            ctx.save();
-            if (active) {
-              ctx.shadowColor = isFirewall ? "#ff4d68" : isStar ? color : "#69d9ff";
-              ctx.shadowBlur = 18 / state.camera.scale;
-            }
-            if (isLink) {
-              const parent = state.byId.get(node.parentId);
-              const direction = parent ? Math.atan2(node.y - parent.y, node.x - parent.x) : 0;
-              const sway = Math.sin(state.time * .0012 + stableNameHash(node.nome)) * .035;
-              ctx.translate(node.x, node.y);
-              ctx.rotate(direction + sway);
-              ctx.drawImage(renderedTexture, -width / 2, -height / 2, width, height);
-            } else if (isAp) {
-              const rotation = ((stableNameHash(node.nome) % 13) - 6) * .07;
-              ctx.translate(node.x, node.y);
-              ctx.rotate(rotation);
-              ctx.drawImage(renderedTexture, -width / 2, -height / 2, width, height);
-            } else {
-              ctx.drawImage(renderedTexture, node.x - width / 2, node.y - height / 2, width, height);
-            }
-            ctx.restore();
-          }
-        } else {
-          ctx.save();
-          ctx.globalAlpha = opacity * .78;
-          ctx.fillStyle = isLink || isFirewall || isSwitch || isVpn || isAp ? color : "#eaf8ff";
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, Math.max(3.2, radius * .28), 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-      } else if (!node.isHub && node.tipo === "redes_wifi") {
-        const texture = planetTexture(node.nome);
-        const size = radius * 2.7;
+      if (node.kind === "device") {
+        const image = deviceTextures.get(node.tipo);
+        const size = radius * 3.2;
         labelRadius = size / 2;
-        ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
-      } else if (!node.isHub && !earth && !["links", "firewalls", "servidores", "switches", "vpns", "aps"].includes(node.tipo)) {
-        ctx.fillStyle = node.kind === "regional" ? "#07517d" : color;
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.font = `${node.kind === "regional" ? 800 : 700} ${node.kind === "regional" ? 10 : 7}px Consolas, monospace`;
-        ctx.fillText(node.kind === "regional" ? (node.uf || node.codigo.replace("REG_", "").slice(0, 3)) : categories[node.tipo].mono, node.x, node.y + .5);
+        const texture = cachedCelestialTexture(image, `device:${node.tipo}`, 192, 192);
+        if (texture) {
+          ctx.drawImage(texture, node.x - size / 2, node.y - size / 2, size, size);
+        } else {
+          ctx.fillStyle = "#071725";
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2 / state.camera.scale;
+          roundedRect(node.x - size / 2, node.y - size / 2, size, size, 6);
+          ctx.fill(); ctx.stroke();
+          ctx.fillStyle = color;
+          ctx.font = "bold 12px Consolas, monospace";
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(categories[node.tipo].mono, node.x, node.y);
+        }
       }
 
       const showLabel = node.kind === "regional" || inFocus && focus || state.camera.scale > .58;

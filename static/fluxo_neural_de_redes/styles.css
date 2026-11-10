@@ -86,7 +86,9 @@ select:focus { border-color: var(--cyan); }
 .rank-bar { height: 4px; overflow: hidden; border-radius: 2px; background: rgba(255,255,255,.07); }
 .rank-bar i { display: block; height: 100%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
 .rank-value { color: var(--muted); font: 10px Consolas, monospace; text-align: right; }
-.category-row { display: grid; grid-template-columns: 9px minmax(0,1fr) auto; gap: 8px; align-items: center; min-height: 27px; color: var(--soft); font-size: 12px; cursor: pointer; }
+.category-row { display: grid; grid-template-columns: 26px minmax(0,1fr) auto; gap: 8px; align-items: center; min-height: 33px; color: var(--soft); font-size: 12px; cursor: pointer; }
+.category-row img { width: 26px; height: 26px; object-fit: contain; }
+.key img { width: 22px; height: 22px; object-fit: contain; }
 .category-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--category); box-shadow: 0 0 8px var(--category); }
 .category-row b { color: var(--muted); font: 10px Consolas, monospace; }
 .key { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }

@@ -13,6 +13,10 @@ e rotinas operacionais.
 
 A arquitetura atual combina interpretação local no Ollama, orquestração no n8n e consultas autorizadas no Sentinel. O guia do módulo descreve os arquivos ativos, a implementação histórica e o processo de atualização. [Guia da SofIA](sofia/README.md)
 
+## Fluxo neural de redes
+
+O mapa usa pictogramas SVG por categoria para identificar links, firewalls, switches, servidores, VPNs, APs UniFi e redes Wi-Fi. A legenda lateral usa as mesmas imagens. Os arquivos ficam em `static/fluxo_neural_de_redes/device-*.svg` e são carregados pelo template `templates/fluxo_neural_redes.html` para o canvas e a legenda.
+
 ## Execucao principal
 
 - `run_web_service.py`: inicia o Flask com Waitress na porta 5000.

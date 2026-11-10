@@ -5,28 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#06111c">
   <title>Sentinel | Fluxo Neural de Redes</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='fluxo_neural_de_redes/styles.css', v='20261015-3') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fluxo_neural_de_redes/styles.css', v='20261110-1') }}">
 </head>
 <body class="intro-active">
   <canvas id="network" aria-label="Fluxo neural das regionais do Sentinel"></canvas>
   <img id="galaxyBackground" src="{{ url_for('static', filename='fluxo_neural_de_redes/sentinel-galaxy-bg.png') }}" alt="" hidden>
   <img id="galaxyNodeTexture" src="{{ url_for('static', filename='fluxo_neural_de_redes/sentinel-galaxy-node.png', v='20261014-1') }}" alt="" hidden>
   <div id="celestialTextures" hidden>
-    <img data-celestial="ANDROMEDA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-andromeda.png', v='20261014-1') }}" alt="">
-    <img data-celestial="MARTE" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-marte.png', v='20261014-1') }}" alt="">
-    <img data-celestial="SATURNO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-saturno.png', v='20261014-1') }}" alt="">
-    <img data-celestial="JUPITER" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-jupiter.png', v='20261014-1') }}" alt="">
-    <img data-celestial="VENUS" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-venus.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NETUNO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-netuno.png', v='20261014-1') }}" alt="">
-    <img data-celestial="ESTRELA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-estrela.png', v='20261014-1') }}" alt="">
-    <img data-celestial="ASTEROIDE_ROCHOSO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-asteroide-rochoso.png', v='20261014-1') }}" alt="">
-    <img data-celestial="SATELITE_PAINEIS" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-satelite-paineis.png', v='20261014-1') }}" alt="">
-    <img data-celestial="NEBULOSA_ANEL" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-nebulosa-anel.png', v='20261014-1') }}" alt="">
     <img data-celestial="TERRA" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-terra.png', v='20261015-1') }}" alt="">
-    <img data-celestial="COMETA_LINK" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-cometa-link.png', v='20261015-1') }}" alt="">
-    <img data-celestial="BURACO_NEGRO_ACREACAO" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-buraco-negro-acreacao.png', v='20261015-1') }}" alt="">
-    <img data-celestial="BURACO_NEGRO_RUBI" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-buraco-negro-rubi.png', v='20261015-1') }}" alt="">
-    <img data-celestial="BURACO_NEGRO_LENTE" src="{{ url_for('static', filename='fluxo_neural_de_redes/celestial-buraco-negro-lente.png', v='20261015-1') }}" alt="">
+  </div>
+  <div id="deviceTextures" hidden>
+    <img data-device-icon="links" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-links.svg', v='20261110-1') }}" alt="">
+    <img data-device-icon="firewalls" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-firewalls.svg', v='20261110-1') }}" alt="">
+    <img data-device-icon="switches" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-switches.svg', v='20261110-1') }}" alt="">
+    <img data-device-icon="servidores" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-servidores.svg', v='20261110-1') }}" alt="">
+    <img data-device-icon="vpns" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-vpns.svg', v='20261110-1') }}" alt="">
+    <img data-device-icon="aps" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-aps.svg', v='20261110-1') }}" alt="">
+    <img data-device-icon="redes_wifi" src="{{ url_for('static', filename='fluxo_neural_de_redes/device-redes_wifi.svg', v='20261110-1') }}" alt="">
   </div>
   <img id="introLogo" src="{{ url_for('static', filename='branding/sentinel_x_men_head.png') }}" alt="" hidden>
 
@@ -101,6 +96,6 @@
   </section>
 
   <div id="toast" class="toast" role="status"></div>
-  <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js', v='20261019-1') }}"></script>
+  <script src="{{ url_for('static', filename='fluxo_neural_de_redes/app.js', v='20261110-1') }}"></script>
 </body>
 </html>
