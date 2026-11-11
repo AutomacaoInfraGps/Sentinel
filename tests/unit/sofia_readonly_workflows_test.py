@@ -127,6 +127,59 @@ try {
                     "content": json.dumps(plan, ensure_ascii=False)}}
         self.assertEqual(self.evaluate(self.field(self.main, "Validar plano", "plan"), response)["result"], plan)
 
+    def test_model_contract_requires_a_reply_for_conversation(self):
+        query, conversation = plan_schema()["anyOf"]
+        self.assertEqual(query["properties"]["mode"]["enum"], ["query"])
+        self.assertEqual(set(query["properties"]), {"mode", "query"})
+        self.assertNotIn("", query["properties"]["query"]["properties"]["resource"]["enum"])
+        self.assertEqual(conversation["properties"]["mode"]["enum"], ["chat", "clarify", "unsupported"])
+        self.assertEqual(conversation["properties"]["reply"]["minLength"], 1)
+        self.assertEqual(set(conversation["properties"]), {"mode", "reply"})
+
+    def test_compact_social_message_does_not_inherit_operational_fields(self):
+        wire = {"mode": "chat", "reply": "O servidor foi ao médico porque estava sem conexão!"}
+        response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(wire)}}
+        inputs = {"body": {"message": "SofIA, me conte uma piada"},
+                  "context": {"previous_query": self.plan(resource="servers", fields=["model", "serial"])}}
+        plan = self.evaluate(self.field(self.main, "Validar plano", "plan"), response, inputs)["result"]
+        self.assertEqual(plan["mode"], "chat")
+        self.assertEqual(plan["reply"], wire["reply"])
+        self.assertEqual(plan["resource"], "")
+        self.assertEqual(plan["fields"], [])
+        self.assertEqual(plan["status"], "")
+
+    def test_nested_query_is_normalized_without_relaxing_validation(self):
+        expected = self.plan()
+        query = {key: value for key, value in expected.items() if key not in {"mode", "reply"}}
+        wire = {"mode": "query", "query": query}
+        response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(wire)}}
+        code = self.field(self.main, "Validar plano", "plan")
+        self.assertEqual(self.evaluate(code, response)["result"], expected)
+        for invalid in [dict(wire, url="https://outside.test"),
+                        {"mode": "query", "query": dict(query, password="private")},
+                        {"mode": "query", "query": dict(query, mode="chat")},
+                        {"mode": "query", "query": dict(query, limit=1000)}]:
+            response["message"]["content"] = json.dumps(invalid)
+            self.assertIn("error", self.evaluate(code, response))
+
+    def test_empty_social_reply_from_reported_execution_is_rejected(self):
+        plan = {"fields": ["model"], "limit": 20, "mode": "chat", "offset": 0,
+                "regional": "", "reply": "", "resource": "", "search": "",
+                "status": "success", "view": "list"}
+        response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(plan)}}
+        self.assertIn("error", self.evaluate(self.field(self.main, "Validar plano", "plan"), response))
+
+    def test_social_follow_up_keeps_reply_through_memory(self):
+        plan = self.plan(mode="chat", resource="", status="", fields=[], reply="Que bom!", view="list")
+        response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(plan)}}
+        valid = self.evaluate(self.field(self.main, "Validar plano", "plan"), response)["result"]
+        reply = self.evaluate(self.field(self.main, "Resposta de conversa", "reply"), {"plan": valid})["result"]
+        storage = next(node for node in self.main["nodes"] if node["name"] == "Guardar conversa")
+        parameters = self.evaluate(storage["parameters"]["options"]["queryReplacement"],
+            {"reply": reply, "plan": valid}, {"body": {"conversation_id": "session", "message": "To bem"}})["result"]
+        self.assertEqual(json.loads(parameters[1])["data"]["content"], "To bem")
+        self.assertEqual(json.loads(parameters[2])["data"]["content"], "Que bom!")
+
     def test_clipboard_export_returns_an_object_without_surrounding_text(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)

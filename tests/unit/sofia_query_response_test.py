@@ -40,6 +40,33 @@ class SofiaQueryResponseTests(unittest.TestCase):
         self.assertNotIn("MAC", result["reply"])
         self.assertNotIn("FORBIDDEN", result["reply"])
 
+    def test_equipment_lists_identify_each_row_when_only_status_is_requested(self):
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload["regionais"][0]["servidores"] = [
+            {"nome": "Alhena", "status": "offline"},
+            {"nome": "Markeb", "status": "offline"},
+            {"nome": "Sadr", "status": "offline"},
+        ]
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+        for resource, names in [("servers", ["Alhena", "Markeb", "Sadr"]),
+                                ("aps", ["AP-01", "AP-02"]), ("switches", ["SW-01"])]:
+            with self.subTest(resource=resource):
+                result = self.query(resource=resource, fields=["status"])
+                rows = [line for line in result["reply"].splitlines() if line.startswith("- ")]
+                self.assertEqual(len(rows), len(names))
+                for row, name in zip(rows, names):
+                    self.assertTrue(row.startswith(f"- {name} | Estado — "))
+                self.assertNotIn("FORBIDDEN", result["reply"])
+
+    def test_name_already_requested_is_displayed_once_and_count_has_no_rows(self):
+        result = self.query(fields=["name", "status"])
+        self.assertEqual(result["reply"].count("AP-01"), 1)
+        self.assertNotIn("\n- ", self.query(view="count", fields=["status"])["reply"])
+
+    def test_regional_lists_keep_regional_identity(self):
+        result = self.query(resource="regionals", fields=["status"])
+        self.assertIn("Regional — REG_ARARAS", result["reply"])
+
     def test_natural_count_and_empty_results_keep_the_filter(self):
         result = self.query(status="offline", view="count")
         self.assertEqual(result["reply"], "Encontrei 2 APs offline nas regionais autorizadas.")

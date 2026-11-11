@@ -106,6 +106,9 @@ def render_inventory(result, query):
             for status, quantity in sorted(states.items())
         ) + ".")
     fields = query["fields"] or DEFAULT_FIELDS.get(resource, ["name", "ip", "regional", "status"])
+    identity_field = "regional" if resource == "regionals" else "name"
+    if identity_field not in fields:
+        fields = [identity_field, *fields]
     displayed = 0
     if query["view"] != "count":
         for record in result["records"]:

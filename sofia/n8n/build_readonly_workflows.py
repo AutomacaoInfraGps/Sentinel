@@ -29,8 +29,21 @@ def plan_schema():
         "limit": {"type": "integer", "minimum": 1, "maximum": 50},
         "offset": {"type": "integer", "minimum": 0, "maximum": 10000},
     }
-    return {"type": "object", "additionalProperties": False,
-            "properties": properties, "required": list(properties)}
+    query_properties = {key: value for key, value in properties.items() if key not in {"mode", "reply"}}
+    query_properties["resource"]["enum"] = list(RESOURCE_LABELS)
+    return {"anyOf": [
+        {"type": "object", "additionalProperties": False,
+         "properties": {
+             "mode": {"type": "string", "enum": ["query"]},
+             "query": {"type": "object", "additionalProperties": False,
+                       "properties": query_properties, "required": list(query_properties)},
+         }, "required": ["mode", "query"]},
+        {"type": "object", "additionalProperties": False,
+         "properties": {
+             "mode": {"type": "string", "enum": ["chat", "clarify", "unsupported"]},
+             "reply": {"type": "string", "minLength": 1, "maxLength": 500},
+         }, "required": ["mode", "reply"]},
+    ]}
 
 
 def expression(code):
@@ -77,7 +90,10 @@ def build_workflows(main_export, inventory_export):
     origin = f"{url.scheme}://{url.netloc}"
     memory_credentials = originals["Memória Principal V3"]["credentials"]
     schema = plan_schema()
-    enums = {key: rule["enum"] for key, rule in schema["properties"].items() if "enum" in rule}
+    query_schema = schema["anyOf"][0]["properties"]["query"]
+    enums = {key: rule["enum"] for key, rule in query_schema["properties"].items() if "enum" in rule}
+    enums["mode"] = ["query", "chat", "clarify", "unsupported"]
+    enums["resource"] = ["", *RESOURCE_LABELS]
     validator = ((ROOT / "validate_plan.js").read_text(encoding="utf-8")
                  .replace("ENUMS_PLACEHOLDER", json.dumps(enums, ensure_ascii=False))
                  .replace("FIELDS_PLACEHOLDER", json.dumps(list(FIELD_LABELS), ensure_ascii=False)))

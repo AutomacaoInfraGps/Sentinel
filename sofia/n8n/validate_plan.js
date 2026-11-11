@@ -2,12 +2,23 @@ const response = $json;
 if (response.done !== true || response.done_reason === 'length') {
     throw new Error('O modelo não concluiu um plano válido.');
 }
-const plan = JSON.parse(response.message.content);
+let plan = JSON.parse(response.message.content);
 const allowedValues = ENUMS_PLACEHOLDER;
 const allowedFields = FIELDS_PLACEHOLDER;
 const required = ['mode', 'reply', 'resource', 'regional', 'status', 'search', 'view', 'fields', 'limit', 'offset'];
 if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
     throw new Error('Plano inválido.');
+}
+if (Object.hasOwn(plan, 'query')) {
+    if (plan.mode !== 'query' || Object.keys(plan).some(key => !['mode', 'query'].includes(key)) ||
+            !plan.query || typeof plan.query !== 'object' || Array.isArray(plan.query) ||
+            Object.keys(plan.query).some(key => !required.includes(key) || ['mode', 'reply'].includes(key))) {
+        throw new Error('Consulta inválida.');
+    }
+    plan = {...plan.query, mode: 'query', reply: ''};
+} else if (plan.mode !== 'query' && Object.keys(plan).every(key => ['mode', 'reply'].includes(key))) {
+    plan = {resource: '', regional: '', status: '', search: '', view: 'list', fields: [],
+            limit: 20, offset: 0, ...plan};
 }
 for (const key of Object.keys(plan)) {
     if (!required.includes(key)) throw new Error('Campo de plano inválido.');

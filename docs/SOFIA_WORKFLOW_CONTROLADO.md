@@ -28,6 +28,8 @@ Para uma revisão apenas das instruções de identidade e conversa, o gerador ta
 
 A homologação de identidade deve incluir uma conversa nova com um criador configurado, um usuário comum e uma mensagem que declare uma identidade diferente. Confira o `user_context` autenticado no corpo enviado ao modelo e a resposta produzida em cada caso. Os testes automatizados verificam a transmissão desse contexto e a validade das expressões. O comportamento conversacional precisa de verificação com o Ollama em execução.
 
+O contrato JSON enviado ao Ollama possui dois formatos em `anyOf`. Consultas contêm `mode=query` e o objeto `query` com os parâmetros. Conversa, esclarecimento e domínio indisponível contêm somente `mode` e `reply` preenchido. O nó `Validar plano` converte os dois formatos para o plano interno usado pelas etapas seguintes e mantém compatibilidade com o formato completo anterior. Atualize juntos o Body de `Interpretar pedido` e a expressão `plan` de `Validar plano` antes de publicar. Teste uma consulta seguida de um pedido social e depois uma continuação operacional. Um plano social com resposta vazia deve ser rejeitado pela validação.
+
 Disponibilize esta revisão no Rigel pelo fluxo de versionamento usado no projeto. Depois execute em `C:\Automacao`.
 
 ```powershell
