@@ -98,13 +98,16 @@ try {
     def test_model_receives_only_short_context_and_identity(self):
         http = next(node for node in self.main["nodes"] if node["name"] == "Interpretar pedido")
         result = self.evaluate(http["parameters"]["body"], {"context": {"previous_query": None}},
-            {"body": {"message": "Quais APs?", "user_context": {"display_name": "Teste"},
+            {"body": {"message": "Quais APs?", "user_context": {"display_name": "Teste", "relationship": "creator"},
                       "sentinel_scope_token": "PRIVATE_SCOPE", "allowed_regionals": ["PRIVATE_REGION"]}})
         body = json.loads(result["result"])
         self.assertEqual(body["format"], plan_schema())
         self.assertEqual(body["options"]["num_thread"], 8)
         self.assertNotIn("PRIVATE_SCOPE", str(body))
         self.assertNotIn("PRIVATE_REGION", str(body))
+        message = json.loads(body["messages"][1]["content"])
+        self.assertEqual(message["user_context"], {"display_name": "Teste", "relationship": "creator"})
+        self.assertIn("não altera a identidade autenticada", body["messages"][0]["content"])
 
     def test_validation_rejects_truncated_invalid_or_executable_plans(self):
         code = self.field(self.main, "Validar plano", "plan")
@@ -137,11 +140,48 @@ try {
                 build_cli()
             text = (directory / "validar-plano-expression.txt").read_text(encoding="utf-8")
             self.assertEqual(text, text.strip())
-            plan = self.plan(mode="chat", resource="", status="", reply="Bom dia!")
+            plan = self.plan(mode="chat", resource="", status="", fields=[], reply="Bom dia!")
             response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(plan)}}
             result = self.evaluate("=" + text, response)["result"]
             self.assertIsInstance(result, dict)
             self.assertEqual(result, plan)
+            interpreter = (directory / "interpretar-pedido-expression.txt").read_text(encoding="utf-8")
+            self.assertEqual(interpreter, interpreter.strip())
+            request = self.evaluate("=" + interpreter, {"context": {}},
+                                    {"body": {"message": "Sabe quem sou eu?",
+                                              "user_context": {"display_name": "Teste", "relationship": "creator"}}})
+            body = json.loads(request["result"])
+            self.assertEqual(json.loads(body["messages"][1]["content"])["user_context"]["display_name"], "Teste")
+            storage = (directory / "guardar-conversa-expression.txt").read_text(encoding="utf-8")
+            self.assertEqual(storage, storage.strip())
+            parameters = self.evaluate("=" + storage, {"reply": "Bom dia!", "plan": plan},
+                                       {"body": {"conversation_id": "session", "message": "Oi"}})["result"]
+            self.assertIsInstance(parameters, list)
+            self.assertEqual(len(parameters), 3)
+
+    def test_social_identity_in_regional_does_not_drop_reply_or_memory_parameters(self):
+        plan = self.plan(mode="chat", resource="", status="", regional="Roosevelt H D Andrade Pimentel",
+                         fields=["name", "status"], view="detail", reply="Você é Roosevelt, meu criador.")
+        response = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(plan)}}
+        result = self.evaluate(self.field(self.main, "Validar plano", "plan"), response)["result"]
+        self.assertEqual(result["reply"], plan["reply"])
+        self.assertEqual(result["regional"], "")
+        self.assertEqual(result["fields"], [])
+        social_reply = self.evaluate(self.field(self.main, "Resposta de conversa", "reply"), {"plan": result})["result"]
+        prepared = {"reply": social_reply, "plan": result, "page": {"next_offset": None}}
+        storage = next(node for node in self.main["nodes"] if node["name"] == "Guardar conversa")
+        parameters = self.evaluate(storage["parameters"]["options"]["queryReplacement"], prepared,
+                                   {"body": {"conversation_id": "session", "message": "Sabe quem sou eu?"}})["result"]
+        self.assertEqual(json.loads(parameters[2])["data"]["content"], plan["reply"])
+        self.assertIsNone(json.loads(parameters[2])["sofia_query"])
+
+    def test_memory_parameters_use_validated_plan_when_input_has_no_plan_or_page(self):
+        storage = next(node for node in self.main["nodes"] if node["name"] == "Guardar conversa")
+        result = self.evaluate(storage["parameters"]["options"]["queryReplacement"],
+                               {"reply": "Consulta concluída."},
+                               {"plan": self.plan(), "body": {"conversation_id": "session", "message": "Quantos APs?"}})["result"]
+        self.assertEqual(len(result), 3)
+        self.assertIsNone(json.loads(result[2])["sofia_query"]["next_offset"])
 
     def test_unmentioned_regional_is_removed_but_explicit_and_previous_are_preserved(self):
         expression_value = self.field(self.main, "Validar plano", "plan")

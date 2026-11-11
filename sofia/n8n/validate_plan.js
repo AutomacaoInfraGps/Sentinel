@@ -41,7 +41,13 @@ if (plan.mode === 'query') {
     if (regional && !message.includes(' ' + regional + ' ') && regional !== previousRegional) {
         plan.regional = '';
     }
-} else if (plan.resource || plan.regional || plan.status || plan.search || !plan.reply.trim()) {
-    throw new Error('Resposta social ou esclarecimento inválido.');
+} else {
+    if (plan.resource || !plan.reply.trim()) {
+        throw new Error('Resposta social ou esclarecimento inválido.');
+    }
+    plan.regional = '';
+    plan.status = '';
+    plan.search = '';
+    plan.fields = [];
 }
 return plan;

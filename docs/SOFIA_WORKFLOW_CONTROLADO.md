@@ -24,6 +24,10 @@ Para gerar novamente na máquina de desenvolvimento, a partir da raiz do reposit
 
 ## Primeiro aplicar a revisão no Rigel
 
+Para uma revisão apenas das instruções de identidade e conversa, o gerador também escreve `instance/sofia-workflows/interpretar-pedido-expression.txt`. Copie seu conteúdo com `.Trim()` para o campo Body em modo Expression do nó `Interpretar pedido`, mantendo o formato Raw e o Content Type `application/json`. Salve e publique o workflow principal. O arquivo incorpora `plan_prompt.txt` e o contrato JSON do modelo. A troca desse campo aplica o prompt revisado ao workflow existente.
+
+A homologação de identidade deve incluir uma conversa nova com um criador configurado, um usuário comum e uma mensagem que declare uma identidade diferente. Confira o `user_context` autenticado no corpo enviado ao modelo e a resposta produzida em cada caso. Os testes automatizados verificam a transmissão desse contexto e a validade das expressões. O comportamento conversacional precisa de verificação com o Ollama em execução.
+
 Disponibilize esta revisão no Rigel pelo fluxo de versionamento usado no projeto. Depois execute em `C:\Automacao`.
 
 ```powershell

@@ -148,9 +148,12 @@ def build_workflows(main_export, inventory_export):
  INSERT INTO sofia_memory.sofia_chat_history(session_id,message)
  VALUES ($1,$2::jsonb),($1,$3::jsonb) RETURNING id
 ) SELECT count(*) AS saved FROM inserted;"""
-    values = "={{ [" + session_key + ", JSON.stringify({type:'human',data:{content:$('Webhook').first().json.body.message} }), " + \
-        "JSON.stringify({type:'ai',data:{content:$json.reply},sofia_kind:$json.plan.mode," + \
-        "sofia_query:$json.plan.mode==='query'?{...$json.plan,next_offset:$json.page.next_offset}:null})] }}"
+    values = expression("const input = $('Webhook').first().json.body;\n"
+        "const plan = $json.plan ?? $('Validar plano').first().json.plan;\n"
+        "const human = {type: 'human', data: {content: input.message} };\n"
+        "const answer = {type: 'ai', data: {content: $json.reply}, sofia_kind: plan.mode,\n"
+        "  sofia_query: plan.mode === 'query' ? {...plan, next_offset: $json.page?.next_offset ?? null} : null};\n"
+        "return [input.conversation_id + ':v4', JSON.stringify(human), JSON.stringify(answer)];")
     nodes.append(node("Guardar conversa", "n8n-nodes-base.postgres", {"operation": "executeQuery",
         "query": store_sql, "options": {"queryReplacement": values}}, [3080, 0], 2.6, memory_credentials))
     nodes.append(set_node("Entregar resposta", [assignment("reply", "={{ $('Preparar resposta').first().json.reply }}")], [3300, 0]))
@@ -221,6 +224,14 @@ def main():
     # Literal whitespace outside {{ ... }} makes n8n convert an object to text.
     clipboard_file.write_text(validator_value.removeprefix("=").strip(), encoding="utf-8")
     print(clipboard_file)
+    interpreter = next(node for node in candidates[0]["nodes"] if node["name"] == "Interpretar pedido")
+    interpreter_file = args.output / "interpretar-pedido-expression.txt"
+    interpreter_file.write_text(interpreter["parameters"]["body"].removeprefix("=").strip(), encoding="utf-8")
+    print(interpreter_file)
+    storage = next(node for node in candidates[0]["nodes"] if node["name"] == "Guardar conversa")
+    storage_file = args.output / "guardar-conversa-expression.txt"
+    storage_file.write_text(storage["parameters"]["options"]["queryReplacement"].removeprefix("=").strip(), encoding="utf-8")
+    print(storage_file)
 
 
 if __name__ == "__main__":
