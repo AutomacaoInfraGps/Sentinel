@@ -70,6 +70,45 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
         self.assertEqual(result["total_firewalls"], 1)
         self.assertIn("inventario", result["message"])
 
+    @patch.object(web_config, "_filter_regional_dict_for_current_user", side_effect=lambda data: data)
+    @patch.object(web_config.gerenciador_switches, "obter_hosts_em_manutencao_direta", return_value=[])
+    @patch.object(web_config, "_carregar_cache_dashboard")
+    @patch.object(web_config, "FortiManagerClient")
+    def test_failed_refresh_marks_cached_firmware_stale_for_page_and_background(
+        self, client_class, load_cache, _maintenance_hosts, _filter_regionals,
+    ):
+        assessment = {
+            "state": "current", "stale": False,
+            "checked_at_display": "01/01/2020 - 00:00",
+        }
+        self.cached_snapshot["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"] = assessment
+        load_cache.return_value = self.cached_snapshot
+        client_class.side_effect = FortiManagerClientError("conexao indisponivel")
+        collector = getattr(web_config.listar_firewalls, "__wrapped__", web_config.listar_firewalls)
+
+        for return_data in [True, False]:
+            with self.subTest(return_data=return_data):
+                with web_config.app.test_request_context("/firewalls?refresh=1"):
+                    with patch.object(web_config, "render_template", side_effect=lambda name, **values: values):
+                        result = collector(return_data=return_data)
+                update = result["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"]
+                self.assertTrue(update["stale"])
+                self.assertEqual(update["checked_at_display"], "01/01/2020 - 00:00")
+                self.assertFalse(assessment["stale"])
+
+    @patch.object(web_config, "_carregar_cache_dashboard")
+    @patch.object(web_config, "FortiManagerClient")
+    def test_empty_inventory_marks_cached_firmware_stale(self, client_class, load_cache):
+        self.cached_snapshot["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"] = {
+            "state": "update", "stale": False,
+        }
+        load_cache.return_value = self.cached_snapshot
+        client_class.return_value.list_devices.return_value = {"result": [{"data": []}]}
+
+        result = self._collect()
+
+        self.assertTrue(result["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"]["stale"])
+
     @patch.object(web_config, "_salvar_cache_dashboard")
     @patch.object(web_config.gerenciador_switches, "obter_hosts_em_manutencao_direta", return_value=[])
     @patch.object(web_config.gerenciador_regionais, "obter_regional", return_value={"nome": "Bahia"})
@@ -95,7 +134,19 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
                     "platform_str": "FortiGate-60F",
                     "sn": "SERIAL-BAHIA",
                     "status": "online",
+                    "os_version": "7.4.13",
                 }],
+            }],
+        }
+        client.list_firmware_versions.return_value = {
+            "result": [{
+                "data": {
+                    "status": "success",
+                    "version_list": [{
+                        "platform": "FortiGate-60F",
+                        "versions": [{"type": "GA", "version": "7.6.8-b3744"}],
+                    }],
+                },
             }],
         }
         client.proxy_monitor_license.return_value = {
@@ -107,13 +158,26 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(result["total_firewalls"], 1)
-        self.assertEqual(result["firewalls_por_regional"]["REG_BAHIA"][0]["nome"], "FGT_REGBAHIA")
+        firewall = result["firewalls_por_regional"]["REG_BAHIA"][0]
+        self.assertEqual(firewall["nome"], "FGT_REGBAHIA")
+        self.assertEqual(firewall["firmware_update"]["state"], "update")
+        self.assertEqual(firewall["firmware_update"]["available_version"], "7.6.8")
         save_cache.assert_called_once()
 
     def test_refresh_button_uses_short_label(self):
         template = (web_config.PROJECT_ROOT / "templates" / "firewalls.html").read_text(encoding="utf-8")
         self.assertIn("Atualizar\n", template)
         self.assertNotIn("Atualizar Forti", template)
+
+    def test_firmware_indicator_uses_green_red_and_gray_failure(self):
+        template = (web_config.PROJECT_ROOT / "templates" / "firewalls.html").read_text(encoding="utf-8")
+        indicator = template.split('<span class="firmware-symbol ', 1)[1].split("</span>", 1)[0]
+
+        self.assertIn("'bg-secondary text-white' if unavailable", indicator)
+        self.assertIn("'bg-danger text-white' if update.state == 'update'", indicator)
+        self.assertIn("{{ 'X' if unavailable else '!' if update.state == 'update' else '✔' }}", indicator)
+        self.assertNotIn("bg-warning", indicator)
+        self.assertNotIn("update.update_kind", indicator)
 
     def test_license_summary_and_filter_flags_use_same_sixty_day_rule(self):
         firewalls = {

@@ -29,6 +29,16 @@ class FortiManagerAdminsTests(unittest.TestCase):
 
         self.assertEqual(comments, {"T001_PR_01": "REG_PARANA"})
 
+    def test_lists_fortigate_firmware_versions_without_triggering_upgrade(self):
+        client = FortiManagerClient(host="fortimanager.local", api_key="test")
+        client._request = Mock(return_value={"result": []})
+
+        client.list_firmware_versions()
+
+        client._request.assert_called_once_with(
+            "exec", "/um/image/version/list", {"flags": 1, "product": "FGT"}
+        )
+
     def _client_with_payload(self, payload):
         client = FortiManagerClient(host="fortimanager.local", api_key="test")
         response = Mock()

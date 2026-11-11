@@ -19,6 +19,7 @@ import platform
 import unicodedata
 import zipfile
 from io import BytesIO
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -115,7 +116,7 @@ from notification_center import (
     snapshot_is_fresh,
     sort_notifications,
 )
-from services.firewall_releases import ReleaseCatalog, assess as assess_firewall_release, format_firmware
+from services.firewall_releases import catalog_from_fortimanager, assess as assess_firewall_release, format_firmware
 from services.unifi_models import normalizar_modelo_ap
 from services.map_wifi_overlay import overlay_wifi_networks
 from services.alertad_notifications import load_alertad_notifications
@@ -8213,9 +8214,6 @@ def _invalidar_cache_dashboard(nome):
         current_app.logger.warning("Falha ao invalidar cache %s do dashboard: %s", nome, exc)
 
 
-_fortios_catalog = ReleaseCatalog(Path(PROJECT_ROOT) / 'instance' / 'fortios_releases' / 'catalog.json')
-
-
 @app.route('/firewalls')
 @login_required
 def listar_firewalls(return_data=False, force_refresh=False):
@@ -8243,13 +8241,12 @@ def listar_firewalls(return_data=False, force_refresh=False):
                 }
 
         def _preparar_datas_firewalls(firewalls_por_regional):
-            catalog, stale = _fortios_catalog.get() if not return_data else (None, True)
             for firewalls in (firewalls_por_regional or {}).values():
                 for firewall in firewalls or []:
                     firewall["firmware_display"] = format_firmware(firewall.get("firmware"))
-                    if not return_data:
+                    if not return_data and not firewall.get("firmware_update"):
                         firewall["firmware_update"] = assess_firewall_release(
-                            catalog, firewall.get("model"), firewall.get("firmware"), stale
+                            None, firewall.get("model"), firewall.get("firmware")
                         )
                     firewall["ultima_verificacao_formatada"] = _formatar_ultima_verificacao_firewall(
                         firewall.get("ultima_verificacao")
@@ -8308,11 +8305,17 @@ def listar_firewalls(return_data=False, force_refresh=False):
             if not firewalls_anteriores:
                 return None
 
-            snapshot_anterior = dict(cache_firewalls_anterior)
+            snapshot_anterior = deepcopy(cache_firewalls_anterior)
+            firewalls_anteriores = snapshot_anterior["firewalls_por_regional"]
+            for firewalls in firewalls_anteriores.values():
+                for firewall in firewalls:
+                    if firewall.get("firmware_update"):
+                        firewall["firmware_update"]["stale"] = True
             snapshot_anterior.update({
                 "success": False,
                 "message": mensagem,
                 "usando_cache": True,
+                "firewalls_por_regional": firewalls_anteriores,
             })
             if return_data:
                 return snapshot_anterior
@@ -8361,6 +8364,12 @@ def listar_firewalls(return_data=False, force_refresh=False):
             current_app.logger.info("[FIREWALL] Total de devices = %s", len(devices_data))
             if not devices_data:
                 raise FortiManagerClientError("FortiManager retornou o inventario de firewalls vazio")
+
+            try:
+                firmware_catalog = catalog_from_fortimanager(fm_client.list_firmware_versions())
+            except Exception as exc:
+                firmware_catalog = None
+                current_app.logger.warning("Catálogo de firmware do FortiManager indisponível: %s", exc)
             
             # Mapear regionais para facilitar busca
             regionais_map = {}
@@ -8403,6 +8412,9 @@ def listar_firewalls(return_data=False, force_refresh=False):
                             'model': device_model,
                             'serial': device_serial,
                             'firmware': device_firmware,
+                            'firmware_update': assess_firewall_release(
+                                firmware_catalog, device_model, device_firmware
+                            ),
                             'licencas': [],
                             'licencas_criticas': 0,
                             'licencas_expiradas': 0,

@@ -492,7 +492,7 @@
                                 {% set update = firewall.firmware_update %}
                                 {% set unavailable = update.state in ['unknown', 'absent'] or update.stale %}
                                 <span class="firmware-indicator" tabindex="0" role="group" aria-label="{{ update.label }}">
-                                    <span class="firmware-symbol {{ 'bg-secondary text-white' if unavailable else 'bg-danger text-white' if update.state == 'update' and update.update_kind == 'same_major' else 'bg-warning text-dark' if update.state == 'update' else 'bg-success text-white' }}" aria-hidden="true">{{ '✘' if unavailable else '!' if update.state == 'update' else '✔' }}</span>
+                                    <span class="firmware-symbol {{ 'bg-secondary text-white' if unavailable else 'bg-danger text-white' if update.state == 'update' else 'bg-success text-white' }}" aria-hidden="true">{{ 'X' if unavailable else '!' if update.state == 'update' else '✔' }}</span>
                                     <span class="firmware-balloon">
                                         <strong class="d-block">{% if update.state == 'update' %}Atualização disponível: {{ update.available_version }}{% elif update.state == 'current' %}Sem atualizações disponíveis{% else %}{{ update.label }}{% endif %}</strong>
                                         {% if update.state == 'absent' %}<span class="d-block">Linha não encontrada no catálogo público.</span>{% elif update.state == 'unknown' %}<span class="d-block">Não foi possível confirmar a compatibilidade.</span>{% endif %}
