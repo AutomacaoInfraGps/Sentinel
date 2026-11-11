@@ -19,6 +19,7 @@ import platform
 import unicodedata
 import zipfile
 from io import BytesIO
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -8304,11 +8305,17 @@ def listar_firewalls(return_data=False, force_refresh=False):
             if not firewalls_anteriores:
                 return None
 
-            snapshot_anterior = dict(cache_firewalls_anterior)
+            snapshot_anterior = deepcopy(cache_firewalls_anterior)
+            firewalls_anteriores = snapshot_anterior["firewalls_por_regional"]
+            for firewalls in firewalls_anteriores.values():
+                for firewall in firewalls:
+                    if firewall.get("firmware_update"):
+                        firewall["firmware_update"]["stale"] = True
             snapshot_anterior.update({
                 "success": False,
                 "message": mensagem,
                 "usando_cache": True,
+                "firewalls_por_regional": firewalls_anteriores,
             })
             if return_data:
                 return snapshot_anterior

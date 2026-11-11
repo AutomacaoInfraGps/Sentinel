@@ -68,8 +68,12 @@ def assess(catalog, hardware, firmware, checked_at=None):
     if not catalog or not installed or not identity or identity not in catalog:
         return result
 
-    compatible = [release for release in catalog[identity]
-                  if release[0] == installed[0] and release > installed]
+    family_releases = [release for release in catalog[identity]
+                       if release[0] == installed[0]]
+    if not family_releases:
+        return result
+
+    compatible = [release for release in family_releases if release > installed]
     if compatible:
         target = max(compatible)
         target_text = ".".join(map(str, target))

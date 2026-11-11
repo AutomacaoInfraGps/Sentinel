@@ -10,6 +10,8 @@ O Sentinel consulta `/um/image/version/list` uma vez durante a coleta dos firewa
 - `✔` verde: o modelo está na última versão GA conhecida da família instalada. Uma `8.x` isolada não alerta um equipamento `7.x`.
 - `X` cinza: FortiManager, modelo, firmware ou compatibilidade não puderam ser confirmados.
 
+A confirmação exige versões GA válidas para o modelo na família principal instalada. Catálogos vazios ou contendo somente outra família deixam a verificação indisponível. Se a atualização do inventário falhar, as avaliações recuperadas do snapshot ficam desatualizadas e exibem `X`, preservando a data da última consulta.
+
 O balão aponta para as Release Notes diretas da versão encontrada. A disponibilidade não confirma recomendação operacional nem caminho direto de upgrade.
 
 ## Testes isolados

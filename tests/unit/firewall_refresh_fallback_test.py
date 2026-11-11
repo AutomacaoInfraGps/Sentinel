@@ -70,6 +70,45 @@ class FirewallRefreshFallbackTest(unittest.TestCase):
         self.assertEqual(result["total_firewalls"], 1)
         self.assertIn("inventario", result["message"])
 
+    @patch.object(web_config, "_filter_regional_dict_for_current_user", side_effect=lambda data: data)
+    @patch.object(web_config.gerenciador_switches, "obter_hosts_em_manutencao_direta", return_value=[])
+    @patch.object(web_config, "_carregar_cache_dashboard")
+    @patch.object(web_config, "FortiManagerClient")
+    def test_failed_refresh_marks_cached_firmware_stale_for_page_and_background(
+        self, client_class, load_cache, _maintenance_hosts, _filter_regionals,
+    ):
+        assessment = {
+            "state": "current", "stale": False,
+            "checked_at_display": "01/01/2020 - 00:00",
+        }
+        self.cached_snapshot["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"] = assessment
+        load_cache.return_value = self.cached_snapshot
+        client_class.side_effect = FortiManagerClientError("conexao indisponivel")
+        collector = getattr(web_config.listar_firewalls, "__wrapped__", web_config.listar_firewalls)
+
+        for return_data in [True, False]:
+            with self.subTest(return_data=return_data):
+                with web_config.app.test_request_context("/firewalls?refresh=1"):
+                    with patch.object(web_config, "render_template", side_effect=lambda name, **values: values):
+                        result = collector(return_data=return_data)
+                update = result["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"]
+                self.assertTrue(update["stale"])
+                self.assertEqual(update["checked_at_display"], "01/01/2020 - 00:00")
+                self.assertFalse(assessment["stale"])
+
+    @patch.object(web_config, "_carregar_cache_dashboard")
+    @patch.object(web_config, "FortiManagerClient")
+    def test_empty_inventory_marks_cached_firmware_stale(self, client_class, load_cache):
+        self.cached_snapshot["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"] = {
+            "state": "update", "stale": False,
+        }
+        load_cache.return_value = self.cached_snapshot
+        client_class.return_value.list_devices.return_value = {"result": [{"data": []}]}
+
+        result = self._collect()
+
+        self.assertTrue(result["firewalls_por_regional"]["REG_BAHIA"][0]["firmware_update"]["stale"])
+
     @patch.object(web_config, "_salvar_cache_dashboard")
     @patch.object(web_config.gerenciador_switches, "obter_hosts_em_manutencao_direta", return_value=[])
     @patch.object(web_config.gerenciador_regionais, "obter_regional", return_value={"nome": "Bahia"})

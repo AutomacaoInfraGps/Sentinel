@@ -63,6 +63,22 @@ class ReleaseTests(unittest.TestCase):
     def test_formats_build_for_display(self):
         self.assertEqual(module.format_firmware("v7.4.13, build2933"), "v7.4.13, Build 2933")
 
+    def test_model_without_usable_ga_releases_is_unknown(self):
+        for versions in [[], [{"type": "SPECIAL", "version": "7.4.14"}],
+                         [{"type": "GA", "version": "invalid"}]]:
+            with self.subTest(versions=versions):
+                payload = self.payload()
+                payload["result"][0]["data"]["version_list"][0]["versions"] = versions
+                catalog = module.catalog_from_fortimanager(payload)
+                self.assertEqual(
+                    module.assess(catalog, "FortiGate-60F", "7.4.13")["state"],
+                    "unknown",
+                )
+
+    def test_other_major_family_alone_does_not_confirm_current_firmware(self):
+        result = module.assess({"FG-60F": [(8, 0, 2)]}, "FortiGate-60F", "7.4.13")
+        self.assertEqual(result["state"], "unknown")
+
 
 if __name__ == "__main__":
     unittest.main()
