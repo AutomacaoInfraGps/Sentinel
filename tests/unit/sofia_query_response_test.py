@@ -76,7 +76,20 @@ class SofiaQueryResponseTests(unittest.TestCase):
         self.path.write_text(json.dumps(payload), encoding="utf-8")
         result = self.query(fields=["name", "ip"])
         self.assertIn("IP — não informado", result["reply"])
-        self.assertIn("Fonte desatualizada", result["reply"])
+        self.assertIn("Última atualização — 01/11/2026 às 09:00:00 (horário de Brasília).", result["reply"])
+        self.assertNotIn("Fonte desatualizada", result["reply"])
+
+    def test_last_update_without_timezone_uses_brasilia(self):
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload["cache_atualizado_em"] = "2026-11-01T08:43:36.274863"
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertIn("01/11/2026 às 08:43:36", self.query()["reply"])
+
+    def test_missing_last_update_is_not_replaced_with_current_time(self):
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload["cache_atualizado_em"] = "invalid"
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertIn("Horário da última atualização não informado.", self.query()["reply"])
 
     def test_unknown_resource_and_arbitrary_fields_fail_closed(self):
         for change in ({"resource": "ad_users"}, {"fields": ["senha"]}, {"url": "http://invalid"},

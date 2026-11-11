@@ -48,6 +48,16 @@ class MapRefreshLockTest(unittest.TestCase):
 
         web_config._mapa_marcar_refresh_finalizado()
 
+    def test_sofia_uses_shared_background_refresh_and_lock(self):
+        refresh = web_config.app.extensions["sofia_refresh_snapshot"]
+        with patch.object(web_config, "_start_background_job") as start_job:
+            self.assertTrue(refresh())
+            self.assertFalse(refresh())
+        start_job.assert_called_once_with(
+            web_config._mapa_atualizar_cache_background, name="mapa-monitoramento-refresh",
+        )
+        web_config._mapa_marcar_refresh_finalizado()
+
 
 if __name__ == "__main__":
     unittest.main()

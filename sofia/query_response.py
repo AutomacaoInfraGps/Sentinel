@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from regional_access import normalize_regional_code
 from .operational_inventory import query_operational_inventory
+from .map_alerts import BRASILIA_TZ, _parse_datetime
 
 
 RESOURCE_LABELS = {
@@ -128,7 +129,12 @@ def render_inventory(result, query):
     if result["data_gaps"]:
         lines.append(f"Há {len(result['data_gaps'])} lacunas de coleta. A contagem cobre somente os dados disponíveis.")
     if not result["fresh"]:
-        lines.append(f"Fonte desatualizada — última coleta {_display(result['updated_at'])}.")
+        updated = _parse_datetime(result["updated_at"])
+        if updated:
+            local_time = updated.astimezone(BRASILIA_TZ).strftime("%d/%m/%Y às %H:%M:%S")
+            lines.append(f"Última atualização — {local_time} (horário de Brasília).")
+        else:
+            lines.append("Horário da última atualização não informado.")
     return "\n".join(lines), displayed
 
 

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 import json
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from .service_auth import authenticate_service_request
 from .map_alerts import load_map_alert_snapshot
@@ -18,6 +18,17 @@ from .n8n_client import SofiaN8nError
 
 sofia_service_bp = Blueprint("sofia_service", __name__)
 MAX_SERVICE_ALERTS = 100
+
+
+def _refresh_stale_snapshot(result):
+    if result.get("fresh") is not False:
+        return
+    refresh = current_app.extensions.get("sofia_refresh_snapshot")
+    if refresh:
+        try:
+            refresh()
+        except Exception:
+            current_app.logger.exception("Falha ao iniciar atualização do snapshot pela SofIA")
 
 SERVICE_CAPABILITIES = (
     {
@@ -227,6 +238,7 @@ def service_inventory_query():
         return jsonify(success=False, message="Snapshot operacional indisponivel."), 503
     except (ValueError, TypeError):
         return jsonify(success=False, message="Consulta de inventario invalida."), 400
+    _refresh_stale_snapshot(result)
     response = jsonify(success=True, service="sentinel", mode="read-only", data=result)
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -249,6 +261,7 @@ def service_assistant_query():
         return jsonify(success=False, message="Snapshot operacional indisponível."), 503
     except (ValueError, TypeError):
         return jsonify(success=False, message="Plano de consulta inválido."), 400
+    _refresh_stale_snapshot(result)
     response = jsonify(success=True, mode="read-only", **result)
     response.headers["Cache-Control"] = "no-store"
     return response

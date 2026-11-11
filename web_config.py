@@ -4272,6 +4272,9 @@ def _mapa_iniciar_refresh_background():
     return True
 
 
+app.extensions["sofia_refresh_snapshot"] = _mapa_iniciar_refresh_background
+
+
 def _mapa_normalizar_token(valor):
     texto = unicodedata.normalize("NFKD", str(valor or ""))
     texto = "".join(ch for ch in texto if not unicodedata.combining(ch))

@@ -312,6 +312,49 @@ class SofiaServiceAuthenticationTest(unittest.TestCase):
             self.assertEqual(result.status_code, expected)
             self.assertNotIn("private-", result.get_data(as_text=True))
 
+    def test_inventory_and_assistant_only_refresh_stale_authorized_results(self):
+        with app.app_context():
+            token = issue_regional_scope_token({"REG_ABC"})
+        routes = [
+            ("inventory", "query_operational_inventory", {"resource": "aps"}),
+            ("assistant", "execute_plan", {"plan": {"mode": "query"}}),
+        ]
+        for route, method, body in routes:
+            for fresh in [True, False]:
+                with self.subTest(route=route, fresh=fresh):
+                    snapshot = {"fresh": fresh, "reply": "Resultado da coleta anterior."}
+                    with patch(f"sofia.service_routes.{method}", return_value=snapshot):
+                        with patch.dict(app.extensions, {"sofia_refresh_snapshot": unittest.mock.Mock()}):
+                            refresh = app.extensions["sofia_refresh_snapshot"]
+                            response = self._signed_post(
+                                f"/api/internal/sofia/v1/{route}/query",
+                                {"sentinel_scope_token": token, **body},
+                                f"refresh-{route}-{fresh}-nonce-01",
+                            )
+                            self.assertEqual(response.status_code, 200)
+                            self.assertEqual(refresh.call_count, int(not fresh))
+                            denied = self._signed_post(
+                                f"/api/internal/sofia/v1/{route}/query",
+                                {"sentinel_scope_token": "invalid", **body},
+                                f"refresh-denied-{route}-{fresh}-nonce-02",
+                            )
+                            self.assertEqual(denied.status_code, 403)
+                            self.assertEqual(refresh.call_count, int(not fresh))
+
+    def test_refresh_start_failure_preserves_stale_response(self):
+        with app.app_context():
+            token = issue_regional_scope_token({"REG_ABC"})
+        refresh = unittest.mock.Mock(side_effect=RuntimeError("refresh failed"))
+        with patch.dict(app.extensions, {"sofia_refresh_snapshot": refresh}):
+            with patch("sofia.service_routes.execute_plan", return_value={"fresh": False, "reply": "Última atualização"}):
+                with self.assertLogs(app.logger, level="ERROR"):
+                    response = self._signed_post(
+                        "/api/internal/sofia/v1/assistant/query",
+                        {"sentinel_scope_token": token, "plan": {}}, "refresh-failed-start-nonce-01",
+                    )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.get_json()["fresh"])
+
     def test_wrong_signature_is_rejected(self):
         response = self.client.get(
             self.PATH,
