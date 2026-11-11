@@ -55,13 +55,27 @@ class SofiaQueryResponseTests(unittest.TestCase):
                 rows = [line for line in result["reply"].splitlines() if line.startswith("- ")]
                 self.assertEqual(len(rows), len(names))
                 for row, name in zip(rows, names):
-                    self.assertTrue(row.startswith(f"- {name} | Estado — "))
+                    self.assertTrue(row.startswith(f"- {name} | Regional — REG_ARARAS | Estado — "))
                 self.assertNotIn("FORBIDDEN", result["reply"])
 
     def test_name_already_requested_is_displayed_once_and_count_has_no_rows(self):
         result = self.query(fields=["name", "status"])
         self.assertEqual(result["reply"].count("AP-01"), 1)
+        self.assertEqual(result["reply"].count("Regional — REG_ARARAS"), 2)
         self.assertNotIn("\n- ", self.query(view="count", fields=["status"])["reply"])
+
+    def test_vpn_default_page_includes_all_thirteen_results_with_regionals(self):
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload["regionais"][0]["vpns"] = [
+            {"nome": f"VPN-{index:02}", "status": "offline"} for index in range(13)
+        ]
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+        result = self.query(resource="vpns", status="offline", fields=["status"])
+        self.assertEqual(result["matched"], 13)
+        self.assertEqual(result["displayed"], 13)
+        self.assertIsNone(result["next_offset"])
+        self.assertEqual(result["reply"].count("Regional — REG_ARARAS"), 13)
+        self.assertNotIn("Lista parcial", result["reply"])
 
     def test_regional_lists_keep_regional_identity(self):
         result = self.query(resource="regionals", fields=["status"])
