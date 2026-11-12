@@ -1685,6 +1685,48 @@
             });
         }
 
+        function alertSummaryText(alerta, regional) {
+            const description = String(alerta.descricao || '');
+            if (alerta.tipo !== 'firewalls' || !description.toLowerCase().includes('licencas a vencer')) {
+                return `${description}: ${alerta.quantidade}`;
+            }
+            const licenses = (regional.firewalls || [])
+                .filter((firewall) => firewall.status === 'warning'
+                    && !['offline', 'inativo', 'maintenance'].includes(firewall.status_disponibilidade))
+                .flatMap((firewall) => firewall.licencas || [])
+                .filter((license) => license && (license.notificacao_critica || license.notificacao_expirada)
+                    && !license.status_indisponivel
+                    && !['offline', 'unavailable'].includes(String(license.status || '').toLowerCase()));
+            const dated = licenses.filter((license) => {
+                const expiry = license.expiracao || license.data_expiracao || license.expires_at;
+                const expiryText = String(expiry || '').trim();
+                const timestamp = /^\d+(?:\.\d+)?$/.test(expiryText)
+                    ? Number(expiryText) * 1000 : Date.parse(expiryText);
+                const days = license.dias_restantes;
+                return timestamp > 0 && Number.isFinite(new Date(timestamp).getTime())
+                    && (typeof days === 'number' || (typeof days === 'string' && days.trim() !== ''))
+                    && Number.isInteger(Number(days));
+            });
+            if (!dated.length) return 'Prazo da licença indisponível';
+            const nearest = dated.reduce((first, license) =>
+                Number(license.dias_restantes) < Number(first.dias_restantes) ? license : first);
+            const days = Number(nearest.dias_restantes);
+            const multiple = licenses.length > 1;
+            let text;
+            if (days < 0) {
+                text = `vencida há ${Math.abs(days)} ${days === -1 ? 'dia' : 'dias'}`;
+            } else if (nearest.notificacao_expirada) {
+                text = 'vencida';
+            } else if (days === 0) {
+                text = 'vence hoje';
+            } else {
+                const duration = `${days} ${days === 1 ? 'dia' : 'dias'}`;
+                text = multiple ? `${duration} para vencer` : `vence em ${duration}`;
+            }
+            const summary = multiple ? `Menor prazo: ${text}` : `Licença ${text}`;
+            return dated.length < licenses.length ? `${summary} (dados parciais)` : summary;
+        }
+
         function tooltipDetail(regional) {
             if (regional.em_manutencao) {
                 const maintenance = (regional.manutencoes || [])[0] || {};
@@ -1693,7 +1735,7 @@
             const alerts = sortAlertsBySeverity(regionalAlerts(regional));
             if (!alerts.length) return '';
             const visible = alerts.slice(0, 2);
-            const summary = visible.map((a) => `${a.descricao}: ${a.quantidade}`).join(' | ');
+            const summary = visible.map((a) => alertSummaryText(a, regional)).join(' | ');
             return alerts.length > 2 ? `${summary}...` : summary;
         }
 
@@ -1848,7 +1890,7 @@
                     const chipClass = ['alto', 'medio', 'atencao', 'warning'].includes(alerta.severidade)
                         ? (alerta.severidade === 'warning' ? 'atencao' : alerta.severidade)
                         : '';
-                    return `<span class="chip ${chipClass}">${alerta.descricao}: ${alerta.quantidade}</span>`;
+                    return `<span class="chip ${chipClass}">${escapeMapHtml(alertSummaryText(alerta, regional))}</span>`;
                 })
                 .join('');
         }
