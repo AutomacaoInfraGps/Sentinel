@@ -3,6 +3,7 @@ if (response.done !== true || response.done_reason === 'length') {
     throw new Error('O modelo não concluiu um plano válido.');
 }
 let plan = JSON.parse(response.message.content);
+const contextMode = plan?.context_mode ?? null;
 const allowedValues = ENUMS_PLACEHOLDER;
 const allowedFields = FIELDS_PLACEHOLDER;
 const required = ['mode', 'reply', 'resource', 'regional', 'status', 'search', 'view', 'fields', 'limit', 'offset'];
@@ -10,7 +11,8 @@ if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
     throw new Error('Plano inválido.');
 }
 if (Object.hasOwn(plan, 'query')) {
-    if (plan.mode !== 'query' || Object.keys(plan).some(key => !['mode', 'query'].includes(key)) ||
+    if (plan.mode !== 'query' || Object.keys(plan).some(key => !['context_mode', 'mode', 'query'].includes(key)) ||
+            (contextMode !== null && !['new', 'continue'].includes(contextMode)) ||
             !plan.query || typeof plan.query !== 'object' || Array.isArray(plan.query) ||
             Object.keys(plan.query).some(key => !required.includes(key) || ['mode', 'reply'].includes(key))) {
         throw new Error('Consulta inválida.');
@@ -49,8 +51,29 @@ if (plan.mode === 'query') {
     const regional = normalize(plan.regional);
     const message = ' ' + normalize(input.message) + ' ';
     const previousRegional = normalize(context?.previous_query?.regional);
-    if (regional && !message.includes(' ' + regional + ' ') && regional !== previousRegional) {
+    if (regional && !message.includes(' ' + regional + ' ') &&
+            (contextMode === 'new' || regional !== previousRegional)) {
         plan.regional = '';
+    }
+    const regionalCodes = Array.isArray(input.allowed_regionals)
+        ? input.allowed_regionals.filter(code => typeof code === 'string') : [];
+    const aliases = regionalCodes.map(code => ({code, alias: normalize(code)}));
+    const mentioned = aliases.filter(item => item.alias && message.includes(' ' + item.alias + ' '));
+    if (mentioned.length === 1) {
+        plan.regional = mentioned[0].code;
+    }
+    const search = normalize(plan.search);
+    const previousSearch = normalize(context?.previous_query?.search);
+    if (contextMode === 'new' && search && search === previousSearch && !message.includes(search)) {
+        plan.search = '';
+    }
+    const searchIsRegional = search && aliases.some(item => item.alias === search);
+    if (searchIsRegional && (normalize(plan.regional) === search || !message.includes(' ' + search + ' '))) {
+        plan.search = '';
+    }
+    if (/\b(?:todas|todos)(?: as| os)? regionais\b/.test(message)) {
+        plan.regional = '';
+        if (searchIsRegional) plan.search = '';
     }
 } else {
     if (plan.resource || !plan.reply.trim()) {

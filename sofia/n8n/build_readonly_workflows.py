@@ -20,11 +20,14 @@ def plan_schema():
     properties = {
         "mode": {"type": "string", "enum": ["query", "chat", "clarify", "unsupported"]},
         "reply": {"type": "string", "maxLength": 500},
-        "resource": {"type": "string", "enum": ["", *RESOURCE_LABELS]},
-        "regional": {"type": "string", "maxLength": 120},
+        "resource": {"type": "string", "enum": ["", *RESOURCE_LABELS],
+                     "description": "alerts consulta eventos e alertas; os demais recursos consultam inventário e características dos itens."},
+        "regional": {"type": "string", "maxLength": 120,
+                     "description": "Nome da regional mencionada ou retomada no pedido; vazio para todo o escopo."},
         "status": {"type": "string", "enum": ["", *STATUS_LABELS]},
         "search": {"type": "string", "maxLength": 120},
-        "view": {"type": "string", "enum": ["count", "list", "detail"]},
+        "view": {"type": "string", "enum": ["count", "list", "detail"],
+                 "description": "count conta itens; list e detail retornam atributos, incluindo dias restantes e vencimento."},
         "fields": {"type": "array", "maxItems": 8, "items": {"type": "string", "enum": list(FIELD_LABELS)}},
         "limit": {"type": "integer", "minimum": 1, "maximum": 50},
         "offset": {"type": "integer", "minimum": 0, "maximum": 10000},
@@ -34,14 +37,18 @@ def plan_schema():
     return {"anyOf": [
         {"type": "object", "additionalProperties": False,
          "properties": {
-             "mode": {"type": "string", "enum": ["query"]},
+             "mode": {"type": "string", "enum": ["query"],
+                      "description": "Consultar dados do Sentinel, inclusive atributos e continuações; a resposta factual será obtida pelo servidor."},
+             "context_mode": {"type": "string", "enum": ["new", "continue"],
+                              "description": "new para um pedido independente; continue para modificar ou detalhar a última consulta."},
              "query": {"type": "object", "additionalProperties": False,
                        "properties": query_properties, "required": list(query_properties)},
-         }, "required": ["mode", "query"]},
+         }, "required": ["context_mode", "mode", "query"]},
         {"type": "object", "additionalProperties": False,
          "properties": {
              "mode": {"type": "string", "enum": ["chat", "clarify", "unsupported"]},
-             "reply": {"type": "string", "minLength": 1, "maxLength": 500},
+             "reply": {"type": "string", "minLength": 1, "maxLength": 500,
+                       "description": "Conversa ou explicação de limitação. Dados operacionais exigem mode=query; nenhum valor operacional pode ser deduzido do histórico."},
          }, "required": ["mode", "reply"]},
     ]}
 
@@ -121,7 +128,7 @@ def build_workflows(main_export, inventory_export):
  'recent_messages', COALESCE((SELECT jsonb_agg(jsonb_build_object(
    'role', message->>'type', 'text', left(message->'data'->>'content',240)) ORDER BY id)
    FROM (SELECT id,message FROM sofia_memory.sofia_chat_history WHERE session_id=$1
-     AND (message->>'type'='human' OR message->>'sofia_kind' IN ('chat','clarify','unsupported'))
+     AND message->>'type' IN ('human','ai')
      ORDER BY id DESC LIMIT 4) recent),'[]'::jsonb)) AS context;"""
     nodes.append(node("Ler contexto curto", "n8n-nodes-base.postgres", {
         "operation": "executeQuery", "query": memory_sql,
@@ -131,9 +138,16 @@ def build_workflows(main_export, inventory_export):
         "stream": False, "think": False, "format": schema,
         "options": {"num_ctx": 4096, "num_thread": 8, "num_predict": 384, "temperature": 0}}, ensure_ascii=False, indent=2)
     body = expression("const input = $('Webhook').first().json.body;\nconst config = " + config + ";\n" +
+        "const context = $json.context ?? {};\n" +
+        "const history = Array.isArray(context.recent_messages) ? context.recent_messages : [];\n" +
         "config.messages = [{role:'system',content:" + json.dumps(prompt, ensure_ascii=False) + "}," +
-        "{role:'user',content:JSON.stringify({user_context:input.user_context," +
-        "context:$json.context,message:input.message})}];\nreturn JSON.stringify(config);")
+        "{role:'system',content:JSON.stringify({user_context:input.user_context," +
+        "previous_query:context.previous_query ?? null})}];\n" +
+        "for (const turn of history.slice(-4)) {\n" +
+        "  if (!['human', 'ai'].includes(turn.role) || typeof turn.text !== 'string' || !turn.text.trim()) continue;\n" +
+        "  config.messages.push({role:turn.role === 'human' ? 'user' : 'assistant',content:turn.text.slice(0,240)});\n" +
+        "}\n" +
+        "config.messages.push({role:'user',content:input.message});\nreturn JSON.stringify(config);")
     nodes.append(node("Interpretar pedido", "n8n-nodes-base.httpRequest", {
         "method": "POST", "url": "http://ollama:11434/api/chat", "sendBody": True,
         "contentType": "raw", "rawContentType": "application/json", "body": body,
@@ -248,6 +262,10 @@ def main():
     storage_file = args.output / "guardar-conversa-expression.txt"
     storage_file.write_text(storage["parameters"]["options"]["queryReplacement"].removeprefix("=").strip(), encoding="utf-8")
     print(storage_file)
+    memory = next(node for node in candidates[0]["nodes"] if node["name"] == "Ler contexto curto")
+    memory_file = args.output / "ler-contexto-curto-query.sql"
+    memory_file.write_text(memory["parameters"]["query"], encoding="utf-8")
+    print(memory_file)
 
 
 if __name__ == "__main__":

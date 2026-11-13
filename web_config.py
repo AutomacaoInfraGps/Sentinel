@@ -8123,6 +8123,14 @@ def _salvar_cache_dashboard(nome, dados):
         )
     except Exception as exc:
         current_app.logger.warning("Falha ao salvar cache %s do dashboard: %s", nome, exc)
+        return
+
+    if nome == "firewalls":
+        try:
+            from services.operational_postgres import enqueue_firewall_snapshot
+            enqueue_firewall_snapshot(dados, current_app.logger)
+        except Exception:
+            current_app.logger.warning("Persistencia PostgreSQL paralela indisponivel; cache original preservado.")
 
 
 def _carregar_cache_dashboard(nome, ttl_seconds=None):

@@ -60,6 +60,19 @@ class SofiaOperationalInventoryTests(unittest.TestCase):
                 self.assertNotIn("FORBIDDEN_", rendered)
                 self.assertTrue(result["fresh"])
 
+    def test_alert_filters_require_snapshot_severity(self):
+        for status in ("inactive", "offline", "maintenance", "expired"):
+            with self.subTest(status=status), self.assertRaisesRegex(ValueError, "severidade"):
+                self.query("alerts", status=status)
+        self.assertEqual(self.query("alerts", status="attention")["available"], 1)
+        self.assertEqual(self.query("alerts", status="high")["available"], 0)
+        self.assertEqual(self.query("alerts")["available"], 1)
+
+    def test_equipment_inactive_status_remains_supported(self):
+        self.payload["regionais"][0]["redes_wifi"][0]["status"] = "inactive"
+        self.save()
+        self.assertEqual(self.query("wifi", status="inactive")["available"], 1)
+
     def test_scopes_cannot_be_bypassed_by_search_or_regional(self):
         with self.assertRaises(PermissionError):
             self.query("licenses", regional="REG_FORA")

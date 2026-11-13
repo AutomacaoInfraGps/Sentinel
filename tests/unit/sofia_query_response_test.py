@@ -99,6 +99,33 @@ class SofiaQueryResponseTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.query(regional="FORA")
 
+    def test_specific_license_attribute_is_scoped_to_the_requested_regional(self):
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload["regionais"].extend([
+            {"codigo": "REG_NUTRICAR", "firewalls": [{
+                "nome": "FW-NUTRICAR", "licencas": [{"nome": "forticare",
+                    "expiracao": "2026-11-15T00:00:00+00:00", "dias_restantes": 6,
+                    "alerta_vencimento": True}],
+            }]},
+            {"codigo": "REG_OUTRA", "firewalls": [{
+                "nome": "FW-OUTRA", "licencas": [{"nome": "forticare",
+                    "expiracao": "2026-11-30T00:00:00+00:00", "dias_restantes": 21}],
+            }]},
+        ])
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+        plan = {"mode": "query", "resource": "licenses", "regional": "Nutricar",
+                "view": "list", "fields": ["days_remaining", "expires_at", "firewall"]}
+        result = execute_plan(plan, {"REG_NUTRICAR", "REG_OUTRA"}, path=self.path,
+                              now=datetime(2026, 11, 9, 12, 1, tzinfo=timezone.utc))
+        self.assertEqual(result["matched"], 1)
+        self.assertIn("Dias restantes — 6", result["reply"])
+        self.assertIn("FW-NUTRICAR", result["reply"])
+        self.assertIn("A consulta abrange 1 firewall distinto.", result["reply"])
+        self.assertNotIn("FW-OUTRA", result["reply"])
+        self.assertNotIn("Por estado", result["reply"])
+        with self.assertRaises(PermissionError):
+            execute_plan(plan, {"REG_OUTRA"}, path=self.path)
+
     def test_pagination_count_stays_total_and_next_offset_is_correct(self):
         first = self.query(limit=1)
         self.assertEqual(first["matched"], 2)

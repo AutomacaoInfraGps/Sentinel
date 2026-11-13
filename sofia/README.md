@@ -2,6 +2,16 @@
 
 A SofIA e a assistente virtual do Sentinel. O objetivo e ajudar o usuario logado a consultar informacoes do ambiente e, no futuro, orquestrar acoes controladas com seguranca, permissao e auditoria.
 
+## Direcao alinhada em 12/11/2026
+
+O objetivo acordado e retomar um **AI Agent local com memoria, ferramentas autorizadas e RAG**, sem acesso externo durante a operacao. A comunicacao interna necessaria com Ollama, memoria e Sentinel permanece controlada. O servidor atual e temporario e nao define o limite de capacidade pretendido. Mudancas dessa arquitetura precisam de alinhamento explicito. Consulte [Arquitetura alvo da SofIA](../docs/SOFIA_ARQUITETURA_ALVO.md) antes de preparar novas alteracoes.
+
+As secoes seguintes descrevem a implementacao existente e o historico, nao uma publicacao dessa retomada. O gerador atual de planos JSON nao implementa a arquitetura alvo. RAG continua no escopo aprovado e ainda precisa ser integrado e homologado.
+
+O gerador separado `n8n/build_agent_workflow.py` prepara uma copia desativada com AI Agent, memoria e ferramentas, sem sobrescrever o workflow atual. Consulte [Homologacao do agente local](../docs/SOFIA_AGENTE_LOCAL_HOMOLOGACAO.md) antes de importar ou executar o candidato. A recuperacao RAG ainda nao esta conectada.
+
+O usuario autorizou depois a troca do workflow atual, preservando ID, webhook, pagina e permissoes. O modo explicito `--update-existing --expected-id` prepara essa atualizacao e um backup local, sem publicar automaticamente. Consulte [Atualizacao do agente local](../docs/SOFIA_AGENTE_LOCAL_ATUALIZACAO.md). Nao e necessario criar uma pagina nova para essa estrategia.
+
 ## Arquitetura atual — revisão de 10/11/2026
 
 O chat autenticado chama o n8n por `routes.py` e `n8n_client.py`. O nó `Interpretar pedido` consulta o Ollama local para produzir um plano JSON ou uma resposta social. O nó `Validar plano` confere a estrutura e os filtros. As consultas passam pelo subworkflow e pelo endpoint `/api/internal/sofia/v1/assistant/query`.

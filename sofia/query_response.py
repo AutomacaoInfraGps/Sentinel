@@ -97,7 +97,9 @@ def render_inventory(result, query):
     if resource == "alerts":
         lines.append(f"Esses registros somam {result['summary']['occurrences']} ocorrências.")
     if resource == "licenses":
-        lines.append(f"A consulta abrange {result['summary']['firewalls']} firewalls distintos.")
+        firewalls = result["summary"]["firewalls"]
+        firewall_label = "firewall distinto" if firewalls == 1 else "firewalls distintos"
+        lines.append(f"A consulta abrange {firewalls} {firewall_label}.")
     states = result["summary"]["by_status"]
     if query["view"] == "count" and states and not query["status"]:
         lines.append("Por estado, temos " + ", ".join(

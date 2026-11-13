@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 from regional_access import normalize_regional_code
-from .map_alerts import BRASILIA_TZ, MAP_ALERT_CACHE, _parse_datetime
+from .map_alerts import BRASILIA_TZ, MAP_ALERT_CACHE, SEVERITY_MAP, _parse_datetime
 
 
 RESOURCES = {
@@ -130,6 +130,8 @@ def query_operational_inventory(*, resource, allowed_regionals, regional=None,
     status = str(status or "").strip().lower() or None
     if status and status not in STATUSES:
         raise ValueError("Filtro de status nao permitido.")
+    if resource == "alerts" and status and status not in {*SEVERITY_MAP.values(), "unknown"}:
+        raise ValueError("Filtro de alertas deve usar uma severidade disponivel no mapa.")
     if isinstance(limit, bool) or isinstance(offset, bool) or not isinstance(limit, int) or not isinstance(offset, int):
         raise ValueError("Limite e deslocamento devem ser inteiros.")
     if not 1 <= limit <= 50 or not 0 <= offset <= 10000:
@@ -184,7 +186,7 @@ def query_operational_inventory(*, resource, allowed_regionals, regional=None,
                 quantity = _integer(record.get("quantidade"))
                 if quantity is None or quantity < 1:
                     continue
-                severity = {"critico": "critical", "alto": "high", "medio": "medium", "atencao": "attention"}.get(record.get("severidade"), "unknown")
+                severity = SEVERITY_MAP.get(record.get("severidade"), "unknown")
                 items = [{"regional": code, "name": _text(record, "descricao", "tipo"),
                           "category": _text(record, "tipo"), "quantity": quantity, "status": severity}]
             else:
