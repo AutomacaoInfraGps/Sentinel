@@ -67,10 +67,15 @@ essa verificacao. VDOM global e campo ausente sao resultados distintos.
 Diagnostico real confirmou ausencia da linha de VDOM na resposta nao interativa,
 apesar de serial/hostname presentes. Ainda nao esta comprovada a causa.
 Opcao `--filtered-vdom` executa SOMENTE
-`get system status | grep "Current virtual domain"` na mesma conexao configurada.
+`get system status | grep domain` na mesma conexao configurada.
 Serve para testar resposta reduzida sem modificar console/paginacao/VDOM do
 equipamento. O diagnostico inclui tamanho e deteccao de marcador --More--,
 sem exportar a resposta bruta. Validar antes de mudar novamente o coletor.
+O filtro sem aspas foi confirmado pelo operador na sessao interativa: root e
+configuracao disable. A primeira variante filtrada automatica nao trouxe VDOM
+(74 bytes), mas seu conteudo nao foi exportado e o motivo ainda nao foi provado.
+O diagnostico agora tambem classifica mensagens de erro CLI e Return code
+numerico sem exportar texto livre. Nenhum VDOM e preenchido por essa classificacao.
 Referencia do filtro CLI: https://docs.fortinet.com/document/fortigate/7.0.8/administration-guide/416169/vm-license
 
 No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes

@@ -54,15 +54,20 @@ def query_context(ssh, credentials, *, filtered_vdom=False):
                     username=credentials['username'], password=credentials['password'],
                     timeout=10, auth_timeout=10, banner_timeout=10,
                     look_for_keys=False, allow_agent=False)
-        command = ('get system status | grep "Current virtual domain"'
+        command = ('get system status | grep domain'
                    if filtered_vdom else 'get system status')
         _, stdout, _ = ssh.exec_command(command, timeout=10)
         raw = stdout.read(65537)
         if len(raw) > 65536:
             raise ValueError('Resposta excede o limite do diagnostico.')
         output = raw.decode(errors='replace')
+        codes = re.findall(r'\bReturn code\s+(-?\d{1,9})\b', output, re.IGNORECASE)
         return {**diagnose_output(output), 'consulta_filtrada_vdom': filtered_vdom,
                 'bytes_recebidos': len(raw),
+                'erro_cli_detectado': bool(re.search(
+                    r'command fail|command parse error|unknown action|permission denied|access denied',
+                    output, re.IGNORECASE)),
+                'codigo_retorno_cli': int(codes[0]) if len(codes) == 1 else None,
                 'marcador_paginacao_detectado': bool(re.search(r'--\s*more\s*--', output, re.IGNORECASE))}
     finally:
         ssh.close()

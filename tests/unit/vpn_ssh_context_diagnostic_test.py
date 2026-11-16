@@ -60,16 +60,31 @@ class VPNContextDiagnosticTest(unittest.TestCase):
     def test_filtered_query_is_fixed_and_reads_only_the_vdom_line(self):
         ssh = MagicMock()
         stream = MagicMock()
-        stream.read.return_value = b'Current virtual domain: root\r\n'
+        stream.read.return_value = (b'Current virtual domain: root\r\n'
+                                    b'Virtual domain configuration: disable\r\n')
         ssh.exec_command.return_value = (None, stream, None)
         result = query_context(ssh, {'host': '192.0.2.1', 'username': 'u', 'password': 'SECRET'},
                                filtered_vdom=True)
         ssh.exec_command.assert_called_once_with(
-            'get system status | grep "Current virtual domain"', timeout=10)
+            'get system status | grep domain', timeout=10)
         self.assertEqual(result['vdom'], 'root')
         self.assertTrue(result['consulta_filtrada_vdom'])
         self.assertFalse(result['marcador_paginacao_detectado'])
+        self.assertFalse(result['erro_cli_detectado'])
+        self.assertEqual(result['configuracao_vdom'], 'disable')
         ssh.close.assert_called_once()
+
+    def test_cli_failure_is_not_reported_as_success_and_does_not_export_text(self):
+        ssh = MagicMock()
+        stream = MagicMock()
+        stream.read.return_value = b'PRIVATE\rCommand fail. Return code -61\r'
+        ssh.exec_command.return_value = (None, stream, None)
+        result = query_context(ssh, {'host': '192.0.2.1', 'username': 'u', 'password': 'SECRET'},
+                               filtered_vdom=True)
+        self.assertTrue(result['erro_cli_detectado'])
+        self.assertEqual(result['codigo_retorno_cli'], -61)
+        self.assertIsNone(result['vdom'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
 
     def test_pagination_is_reported_without_exporting_raw_output(self):
         ssh = MagicMock()
