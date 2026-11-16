@@ -19,7 +19,7 @@ import unicodedata
 import time
 import tempfile
 from threading import Lock
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from pathlib import Path
 from utils_paths import get_file_path
@@ -124,7 +124,7 @@ class GerenciadorSwitches:
             print(f"⚠️ Erro ao carregar cache de status dos switches: {e}")
         return {}
 
-    def _salvar_status_cache(self, cache):
+    def _salvar_status_cache(self, cache, *, full_inventory=False):
         descriptor = None
         temporary_file = None
         try:
@@ -147,6 +147,7 @@ class GerenciadorSwitches:
                 json.dump(cache_para_salvar, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
+            published_at = datetime.now(timezone.utc)
             os.replace(temporary_file, self.status_cache_file)
         except Exception as e:
             print(f"⚠️ Erro ao salvar cache de status dos switches: {e}")
@@ -157,6 +158,18 @@ class GerenciadorSwitches:
                     temporary_file.unlink(missing_ok=True)
             except OSError:
                 pass
+            return
+
+        try:
+            import logging
+            from services.operational_switch_postgres import publish_switch_cache
+            publish_switch_cache(cache_para_salvar, self.status_cache_file, published_at,
+                                 full_inventory, logging.getLogger(__name__))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                'PostgreSQL paralelo de switches indisponivel. Cache original preservado.'
+            )
 
     def _status_cache_entry(self, switch_info):
         return {
@@ -1135,7 +1148,7 @@ class GerenciadorSwitches:
                 switch["host"]: self._status_cache_entry(switch)
                 for switch in switches_novos
                 if switch.get("host")
-            })
+            }, full_inventory=True)
             print(f"✅ Carregados {len(self.switches)} switches de {len(self.regionais)} regionais (via API)")
             return True
 
