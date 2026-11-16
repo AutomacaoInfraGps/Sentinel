@@ -67,6 +67,17 @@ def _write_atomic(payload, path):
             os.unlink(temporary_name)
 
 
+def _publish_vpn_shadow(records, path):
+    try:
+        import logging
+        from services.operational_vpn_postgres import publish_vpn_records
+        publish_vpn_records(records, path, logging.getLogger(__name__))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            'PostgreSQL paralelo de VPNs indisponivel. Cache original preservado.')
+
+
 def publish_map_snapshot(map_data, source="mapa", path=None, collected_at=None):
     state_path = Path(path or STATE_FILE)
     now = collected_at or _now_iso()
@@ -123,7 +134,8 @@ def publish_map_snapshot(map_data, source="mapa", path=None, collected_at=None):
             "summary": deepcopy((map_data or {}).get("resumo") or {}),
         }
         _write_atomic(payload, state_path)
-        return payload
+    _publish_vpn_shadow(groups['vpns']['records'], state_path)
+    return payload
 
 
 def publish_group_records(group, records, source="manual", path=None, collected_at=None):
@@ -158,7 +170,10 @@ def publish_group_records(group, records, source="manual", path=None, collected_
         }
         state.update({"version": 1, "updated_at": now, "source": source})
         _write_atomic(state, state_path)
-        return deepcopy(groups[group])
+        result = deepcopy(groups[group])
+    if group == 'vpns':
+        _publish_vpn_shadow(result['records'], state_path)
+    return result
 
 
 def records_for(group, regional=None, path=None):
