@@ -1,7 +1,7 @@
 # VPNs: auditoria antes da modelagem
 
 Firewalls/licencas, servidores e switches ja tiveram persistencia paralela
-validada pelo operador. A etapa VPN comeca SEM migracao SQL, importacao ou flag.
+validada pelo operador. A etapa VPN comecou por auditoria sem SQL ou flag.
 
 ## Lacunas encontradas na auditoria inicial
 
@@ -102,6 +102,75 @@ https://docs.fortinet.com/document/fortigate/7.4.0/sd-wan-new-features/449965/fo
 
 Nao altera configuracao do FortiGate, nao exige PTY e nao altera dados antigos.
 Pendencia: homologar novamente os 166 registros antes da modelagem SQL.
+
+## Carga inicial preparada, ainda nao aplicada no Rigel
+
+Operador confirmou 166 registros completos no estado operacional: 153 online,
+13 offline, serial/hostname/VDOM/coleta com fuso em todos, origem do VDOM
+vdom_desabilitado e nenhuma identidade composta repetida. A publicacao do mapa
+mostrada na mesma auditoria ainda nao tinha VDOM. Nao importar do mapa.
+
+Arquivos preparados:
+
+- `scripts/database/sql/006_vpn_catalog.sql`: tabela operacional.vpns, owner
+  sentinel_owner, leitor SELECT, coletor SELECT/INSERT, sem UPDATE/DELETE.
+- `scripts/database/import_vpn_catalog.py`: simulacao por padrao; operacao SQL
+  somente no Rigel, via conexao DPAPI existente; --apply exige --expected-digest.
+
+A identidade e (firewall_serial, vdom, tunel), exata, sem casefold ou aproximacao.
+O serial e do HUB consultado. Nao cria FK para o firewall da regional remota.
+codigo_regional so recebe correspondencia exata ao catalogo. SEM_REGIONAL ou
+codigo nao encontrado fica NULL com estado explicito, sem acesso global.
+
+Esta primeira carga aceita APENAS fortigate_ssh com serial e VDOM completos.
+Fallback FortiManager sem serial e bloqueado em vez de fundido por nome.
+Modelar a correlacao verificada do fallback antes de habilitar escrita automatica.
+Isso nao altera nem desliga o fallback das telas atuais.
+
+O importador usa somente groups.vpns.records do estado operacional e o catalogo
+regional. Aceita grupo publicado por vpn_manual ou mapa somente se TODOS os
+registros tiverem metadados SSH completos. Snapshot derivado incompleto bloqueia
+toda a carga. Nenhum item incompleto e descartado silenciosamente.
+
+coletado_em exige ISO com fuso e e convertido para UTC. A hora legada fica em
+coluna separada, sem inferir data a partir da publicacao do mapa ou do relogio.
+Interface N/A vira NULL. Comentarios, campos arbitrarios e credenciais nao sao
+armazenados no SQL nem impressos. Hashes dos dois arquivos brutos e projecao
+tipada compoem digest_carga; nao publicar nem commitar os JSONs reais.
+
+Procedimento incremental de implantacao:
+
+1. Commit/push e pull dos arquivos preparados. Nao reiniciar: ainda nao ha hook.
+2. Rodar apenas a simulacao:
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    C:\Automacao\scripts\database\import_vpn_catalog.py
+```
+
+3. Rever contagens, origens e digest. Se a fonte viva for sobrescrita por um
+   publicador antigo e perder VDOM, corrigir/recarregar esse publicador pelo
+   procedimento habitual; nao preencher o JSON manualmente.
+4. Novo backup custom do banco e verificacao pg_restore --list antes de 006.
+   Isso nao equivale a teste real de restauracao.
+5. Congelar copias PROTEGIDAS de sentinel_operational_state.json e
+   estrutura_regionais.json no E:, fora do Git, com ACL de administracao/operador.
+   O estado completo pode conter outros grupos e dados pessoais; nao compartilhar.
+6. Simular novamente usando --source e --regionals nas copias congeladas.
+7. Aplicar SOMENTE 006 como sentinel_admin, com psql -X/ON_ERROR_STOP=1.
+8. Usar os mesmos dois arquivos com --check-database. Confirmar tabela vazia e
+   todos os codigos do catalogo ja existentes no banco.
+9. Usar --apply --expected-digest com o digest da copia congelada revisada.
+   Uma transacao verifica identidade SQL, bloqueia regionais antes de vpns,
+   exige tabela vazia, insere todos e valida contagens antes do commit.
+10. Conferir contagens por status/vinculo como sentinel_api. Nao repetir bootstrap.
+
+Sem sincronizacao automatica de VPNs nesta etapa, sem mudanca de leitores,
+agendamentos ou AD, sem integracao SQL nova na SofIA. Leitor tecnico nao e
+autorizacao de usuario: futuras consultas precisam aplicar escopo AD no backend.
+As permissoes desta migracao nao incluem UPDATE porque o lock da tabela filha
+e ROW EXCLUSIVE; exclusao entre cargas e coordenada pelo lock de regionais.
+Testes locais usam cursores simulados; a migracao ainda exige homologacao PG real.
 
 No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes
 e acrescenta device efetivamente selecionado. Nao afirma que root e o contexto
