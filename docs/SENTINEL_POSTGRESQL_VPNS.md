@@ -54,6 +54,16 @@ nao prova que a resposta SSH automatica tinha CR/ANSI. Validar nova coleta real.
 O valor root confirmado manualmente nao foi fixado no caminho SSH nem aplicado
 retroativamente aos registros antigos.
 
+Segunda homologacao confirmou hostname nos 166 registros mas ainda sem VDOM.
+Antes de outras alteracoes, executar `scripts/database/check_vpn_ssh_context.py`
+no Rigel, mesma conta Windows do coletor. O diagnostico resolve somente os tres
+campos de conexao selecionados via mecanismo DPAPI existente, consulta uma vez
+`get system status` sem PTY e classifica o VDOM retornado. Nao consulta VPNs,
+nao grava SQL/cache, nao exporta resposta bruta, hostname, serial ou credenciais.
+Usa known_hosts existente com RejectPolicy: chave desconhecida/divergente causa
+falha, sem aceitacao automatica. Confirmar chave por canal confiavel, nao reduzir
+essa verificacao. VDOM global e campo ausente sao resultados distintos.
+
 No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes
 e acrescenta device efetivamente selecionado. Nao afirma que root e o contexto
 da sessao SSH e nao inventa serial para o equipamento consultado via proxy.
