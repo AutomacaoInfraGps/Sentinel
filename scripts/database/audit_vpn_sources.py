@@ -15,7 +15,7 @@ FILES = {
 }
 FIELDS = ('tunel', 'nome', 'device', 'firewall_serial', 'vdom', 'regional',
           'interface', 'status', 'ultima_verificacao', 'coletado_em',
-          'vpn_source', 'device_namespace')
+          'vpn_source', 'device_namespace', 'vdom_origem')
 
 
 def _text(value):
@@ -46,6 +46,7 @@ def time_kind(value):
 def audit_records(records, publication=None, regional_codes=()):
     present, times, collected_times, statuses = Counter(), Counter(), Counter(), Counter()
     sources = Counter()
+    vdom_origins = Counter()
     tunnels, identities = Counter(), Counter()
     invalid = unbound = complete = 0
     for record in records:
@@ -59,6 +60,9 @@ def audit_records(records, publication=None, regional_codes=()):
         source = _text(record.get('vpn_source'))
         sources[source if source in ('fortigate_ssh', 'fortimanager_proxy')
                 else 'outro_ou_ausente'] += 1
+        origin = _text(record.get('vdom_origem'))
+        vdom_origins[origin if origin in ('resposta_equipamento', 'vdom_desabilitado',
+                                         'consulta_fortimanager') else 'outro_ou_ausente'] += 1
         status = _text(record.get('status')).lower()
         # Never echo arbitrary status strings or other source values.
         statuses[status if status in ('online', 'offline', 'up', 'down', 'warning',
@@ -79,6 +83,7 @@ def audit_records(records, publication=None, regional_codes=()):
         'campos_presentes': dict(present), 'horarios_observacao': dict(times),
         'horarios_coleta': dict(collected_times),
         'por_fonte_coleta': dict(sources),
+        'por_origem_vdom': dict(vdom_origins),
         'por_status': dict(statuses), 'sem_vinculo_exato_ao_catalogo': unbound,
         'nomes_de_tunel_repetidos': sum(n > 1 for n in tunnels.values()),
         'identidade_dispositivo_vdom_tunel_completa': complete,

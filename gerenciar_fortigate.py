@@ -22,7 +22,7 @@ def _parse_vpn_system_context(output):
     fields = {}
     for line in text.splitlines():
         label, separator, value = line.partition(':')
-        if separator and value.strip():
+        if separator:
             fields.setdefault(label.strip().casefold(), set()).add(value.strip())
     context = {}
     for label, key in (("Serial-Number", "firewall_serial"),
@@ -33,6 +33,13 @@ def _parse_vpn_system_context(output):
             if (len(value) <= 240 and re.fullmatch(r'[A-Za-z0-9_.-]+', value)
                     and value.casefold() not in {'global', 'n/a', 'unknown'}):
                 context[key] = value
+    if 'vdom' in context:
+        context['vdom_origem'] = 'resposta_equipamento'
+    elif ('current virtual domain' not in fields
+          and fields.get('virtual domain configuration') == {'disable'}
+          and context.get('firewall_serial')):
+        context['vdom'] = 'root'
+        context['vdom_origem'] = 'vdom_desabilitado'
     return context
 
 
@@ -203,6 +210,7 @@ class GerenciadorFortigate:
                 "device": device_name,
                 "device_namespace": f"fortimanager:{fm_cfg['host']}:{adom}",
                 "vdom": vdom,
+                "vdom_origem": "consulta_fortimanager",
                 "vpn_source": "fortimanager_proxy",
                 "coletado_em": collected_at,
             }
@@ -721,7 +729,15 @@ class GerenciadorFortigate:
             context = {}
             try:
                 _, context_stdout, _ = ssh.exec_command("get system status", timeout=10)
-                context = _parse_vpn_system_context(context_stdout.read().decode(errors="ignore"))
+                context_output = context_stdout.read().decode(errors="ignore")
+                context = _parse_vpn_system_context(context_output)
+                if 'vdom' not in context:
+                    try:
+                        _, vdom_stdout, _ = ssh.exec_command('get system status | grep domain', timeout=10)
+                        context_output += '\n' + vdom_stdout.read().decode(errors="ignore")
+                        context = _parse_vpn_system_context(context_output)
+                    except Exception:
+                        pass
             except Exception:
                 print("Aviso: contexto de dispositivo/VDOM das VPNs indisponivel.")
 

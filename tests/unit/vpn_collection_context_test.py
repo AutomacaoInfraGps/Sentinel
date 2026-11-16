@@ -104,12 +104,46 @@ class VPNCollectionContextTest(unittest.TestCase):
             with self.subTest(newline=repr(newline)):
                 text = newline.join(lines)
                 self.assertEqual(parse(text), {'firewall_serial': 'FGT_TEST',
-                                              'device': 'HUB_TEST', 'vdom': 'root'})
+                                              'device': 'HUB_TEST', 'vdom': 'root',
+                                              'vdom_origem': 'resposta_equipamento'})
                 self.assertEqual(parse('\x1b[32m' + text + '\x1b[0m'), parse(text))
 
     def test_vdom_disabled_alone_does_not_imply_root(self):
         parse = self.namespace['_parse_vpn_system_context']
         self.assertEqual(parse('Virtual domain configuration: disable\r'), {})
+
+    def test_root_resolution_requires_disabled_mode_and_verified_serial(self):
+        parse = self.namespace['_parse_vpn_system_context']
+        raw = 'Serial-Number: FGT_TEST\rVirtual domain configuration: disable'
+        self.assertEqual(parse(raw)['vdom'], 'root')
+        self.assertEqual(parse(raw)['vdom_origem'], 'vdom_desabilitado')
+        for extra in ('\rCurrent virtual domain: global', '\rCurrent virtual domain: ',
+                      '\rCurrent virtual domain: root\rCurrent virtual domain: other',
+                      '\rVirtual domain configuration: multiple'):
+            self.assertNotIn('vdom', parse(raw + extra))
+        self.assertNotIn('vdom', parse(raw.replace('disable', 'multiple')))
+        self.assertNotIn('vdom', parse('Serial-Number: FGT_TEST'))
+
+    def test_optional_filtered_context_resolves_disabled_mode_without_state_changes(self):
+        self.outputs['get system status'] = b'Serial-Number: FGT_TEST\rHostname: HUB'
+        self.outputs['get system status | grep domain'] = b'Virtual domain configuration: disable'
+        result = self.collect()
+        self.assertTrue(result['success'])
+        for vpn in result['vpns']:
+            self.assertEqual(vpn['vdom'], 'root')
+            self.assertEqual(vpn['vdom_origem'], 'vdom_desabilitado')
+        self.assertIn('get system status | grep domain',
+                      [call.args[0] for call in self.ssh.exec_command.call_args_list])
+
+    def test_filtered_failure_preserves_verified_fields_and_vpn_collection(self):
+        self.outputs['get system status'] = b'Serial-Number: FGT_TEST'
+        self.outputs['get system status | grep domain'] = RuntimeError('PRIVATE')
+        result = self.collect()
+        self.assertTrue(result['success'])
+        for vpn in result['vpns']:
+            self.assertEqual(vpn['firewall_serial'], 'FGT_TEST')
+            self.assertNotIn('vdom', vpn)
+            self.assertNotIn('PRIVATE', str(vpn))
 
     def test_summary_failure_still_closes_connection(self):
         self.outputs['get vpn ipsec tunnel summary'] = RuntimeError('failure')

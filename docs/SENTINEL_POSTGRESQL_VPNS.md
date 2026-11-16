@@ -78,6 +78,31 @@ O diagnostico agora tambem classifica mensagens de erro CLI e Return code
 numerico sem exportar texto livre. Nenhum VDOM e preenchido por essa classificacao.
 Referencia do filtro CLI: https://docs.fortinet.com/document/fortigate/7.0.8/administration-guide/416169/vm-license
 
+## Resolucao do modo sem VDOMs, apos diagnostico real
+
+O filtro automatico confirmou `Virtual domain configuration: disable`, sem
+linha Current virtual domain e sem erro CLI detectado. O operador confirmou
+root no terminal do mesmo hub. Isso permite uma regra de resolucao documentada,
+nao um valor padrao para qualquer resposta incompleta:
+
+- Priorizar Current virtual domain valido e nao conflitante.
+- Se esse campo estiver totalmente AUSENTE, houver serial identificado e a
+  configuracao for exclusivamente disable, resolver root com
+  `vdom_origem=vdom_desabilitado`.
+- Campo vazio, global, invalido/conflitante, modo multiple/ausente ou modos
+  conflitantes nao autorizam essa resolucao.
+- Se necessario, consultar uma vez `get system status | grep domain`, somente
+  leitura na mesma sessao, unindo os campos antes de verificar conflitos.
+- Falha dessa consulta opcional preserva a coleta e os metadados ja obtidos.
+- Resposta explicita usa origem resposta_equipamento; fallback FM usa
+  consulta_fortimanager. Auditoria mostra por_origem_vdom.
+
+Referencia Fortinet para root em modo desabilitado:
+https://docs.fortinet.com/document/fortigate/7.4.0/sd-wan-new-features/449965/fortiswitch-devices-can-be-imported-from-a-csv-file-fmg-7-4-2
+
+Nao altera configuracao do FortiGate, nao exige PTY e nao altera dados antigos.
+Pendencia: homologar novamente os 166 registros antes da modelagem SQL.
+
 No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes
 e acrescenta device efetivamente selecionado. Nao afirma que root e o contexto
 da sessao SSH e nao inventa serial para o equipamento consultado via proxy.
