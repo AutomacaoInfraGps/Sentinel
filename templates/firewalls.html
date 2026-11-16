@@ -461,6 +461,9 @@
                             {%- if firewall.ip %}<span class="fw-device-ip">&#183; {{ firewall.ip }}</span>{%- endif %}
                         </div>
                     </div>
+                    {%- if firewall.licencas_vencimento_critico %}
+                    <span class="badge bg-danger mt-1">Licença crítica</span>
+                    {%- endif %}
                     {%- if firewall.status_disponibilidade == 'online' %}
                     <span class="badge bg-success mt-1">Online</span>
                     {%- elif firewall.status_disponibilidade == 'offline' %}
@@ -513,11 +516,11 @@
                     <div class="mb-0">
                         <div class="list-group list-group-sm">
                             {% for licenca in forticare_licenses %}
-                            <div class="list-group-item {% if licenca.status_indisponivel %}license-unknown{% elif licenca.notificacao_expirada %}license-expired{% elif licenca.alerta_vencimento and licenca.dias_restantes <= 30 %}license-critical{% elif licenca.alerta_vencimento %}license-warning{% else %}license-ok{% endif %} py-2">
+                            <div class="list-group-item {% if licenca.status_indisponivel %}license-unknown{% elif licenca.notificacao_expirada %}license-expired{% elif not licenca.prazo_conhecido %}license-unknown{% elif licenca.vencimento_critico or (licenca.alerta_vencimento and licenca.dias_restantes <= 30) %}license-critical{% elif licenca.alerta_vencimento %}license-warning{% else %}license-ok{% endif %} py-2">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <small class="fw-semibold">{{ 'FortiGuard' if licenca.nome == 'fortiguard' else 'FortiCare' }}</small>
-                                        <small class="text-muted ms-2">Status: <span class="badge bg-{{ 'danger' if licenca.status == 'offline' else 'secondary' if licenca.notificacao_expirada else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
+                                        <small class="text-muted ms-2">Status: <span class="badge bg-{{ 'danger' if licenca.status == 'offline' or licenca.vencimento_critico else 'warning text-dark' if licenca.notificacao_critica else 'success' }}">
                             {%- if licenca.status == 'offline' %}Offline
                             {%- elif licenca.status in ('valid', 'licensed') %}Válida
                             {%- elif licenca.status == 'registered' %}Registrada
@@ -527,9 +530,10 @@
                             {%- else %}{{ licenca.status|title }}{%- endif %}
                         </span></small>
                                     </div>
-                                    <span class="badge bg-{{ 'danger' if licenca.status_indisponivel else 'secondary' if licenca.notificacao_expirada else 'warning text-dark' if licenca.alerta_vencimento else 'success' }}">
+                                    <span class="badge bg-{{ 'danger' if licenca.vencimento_critico else 'secondary' if licenca.status_indisponivel or not licenca.prazo_conhecido else 'warning text-dark' if licenca.alerta_vencimento else 'success' }}">
                                         {%- if licenca.status_indisponivel %}Indisponível
                                         {%- elif licenca.notificacao_expirada %}Expirada
+                                        {%- elif not licenca.prazo_conhecido %}Não informado
                                         {%- else %}{{ licenca.dias_restantes }} dias{%- endif %}
                                     </span>
                                 </div>

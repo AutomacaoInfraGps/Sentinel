@@ -39,6 +39,7 @@ from core.environment_loader import (
 )
 from core.secret_store import JsonSecretStore, SecretStoreError
 from flask import Flask, render_template, jsonify, request, redirect, url_for, current_app, make_response, send_file, send_from_directory, session, flash, has_app_context, has_request_context, Response
+from services.firewall_licenses import license_alert_flags
 from flask_login import LoginManager, login_required, current_user
 from regional_access import (
     approve_group_mapping,
@@ -4557,6 +4558,21 @@ def _mapa_recalcular_regionais(regionais):
             _mapa_adicionar_alerta(regional, grupo, offline, severidade_offline, f"{grupo} offline")
             _mapa_adicionar_alerta(regional, grupo, warning, "atencao", f"{grupo} em atenção")
 
+        for firewall in regional["firewalls"]:
+            licenses = [lic for lic in firewall.get("licencas", []) if isinstance(lic, dict)]
+            for lic in licenses:
+                lic.update(license_alert_flags(lic, _FIREWALL_ALERTA_DIAS))
+            firewall["licencas_vencimento_critico"] = sum(lic["vencimento_critico"] for lic in licenses)
+            if (firewall.get("status_disponibilidade") not in {"offline", "inativo", "maintenance"}
+                    and firewall.get("status") not in {"offline", "inativo", "maintenance"}
+                    and any(lic["vencimento_critico"] or lic["alerta_vencimento"] for lic in licenses)):
+                firewall["status"] = "warning"
+        fw_critical = sum(
+            1 for item in regional["firewalls"]
+            if item.get("licencas_vencimento_critico")
+            and item.get("status") not in {"offline", "inativo", "maintenance"}
+            and item.get("status_disponibilidade") not in {"offline", "inativo", "maintenance"}
+        )
         fw_offline = sum(
             1 for item in regional["firewalls"]
             if item.get("status") == "offline"
@@ -4564,7 +4580,8 @@ def _mapa_recalcular_regionais(regionais):
         )
         fw_warning = sum(
             1 for item in regional["firewalls"]
-            if item.get("status") == "warning" and item.get("status_disponibilidade") not in {"offline", "inativo"}
+            if item.get("status") == "warning" and not item.get("licencas_vencimento_critico")
+            and item.get("status_disponibilidade") not in {"offline", "inativo", "maintenance"}
         )
         fw_inativo = sum(
             1 for item in regional["firewalls"]
@@ -4576,7 +4593,7 @@ def _mapa_recalcular_regionais(regionais):
             if item.get("status") == "maintenance"
             or item.get("status_disponibilidade") == "maintenance"
         )
-        fw_alerta = fw_offline + fw_warning
+        fw_alerta = fw_offline + fw_critical + fw_warning
         fw_ok = len(regional["firewalls"]) - fw_alerta - fw_inativo - fw_maintenance
         adm_alerta = sum(1 for item in regional["admins"] if item.get("status") != "online")
         adm_ok = len(regional["admins"]) - adm_alerta
@@ -4584,6 +4601,7 @@ def _mapa_recalcular_regionais(regionais):
         regional["totais"]["firewalls_alerta"] = fw_alerta
         regional["totais"]["firewalls_expirados"] = fw_offline
         regional["totais"]["firewalls_warning"] = fw_warning
+        regional["totais"]["firewalls_criticos"] = fw_critical
         regional["totais"]["firewalls_inativo"] = fw_inativo
         regional["totais"]["firewalls_maintenance"] = fw_maintenance
         regional["totais"]["admins_ok"] = adm_ok
@@ -4595,6 +4613,7 @@ def _mapa_recalcular_regionais(regionais):
         resumo["admins_ok"] += adm_ok
         resumo["admins_alerta"] += adm_alerta
         _mapa_adicionar_alerta(regional, "firewalls", fw_offline, "critico", "firewall offline")
+        _mapa_adicionar_alerta(regional, "firewalls", fw_critical, "critico", "licencas a vencer")
         _mapa_adicionar_alerta(regional, "firewalls", fw_warning, "atencao", "licencas a vencer")
         _mapa_adicionar_alerta(regional, "admins", adm_alerta, "atencao", "admins com alerta")
 
@@ -5472,11 +5491,8 @@ def _obter_regionais_com_firewall_a_vencer():
         total_alertas = 0
         for firewall in firewalls or []:
             for licenca in firewall.get("licencas") or []:
-                if licenca.get("notificacao_expirada"):
-                    total_alertas += 1
-                elif licenca.get("notificacao_critica"):
-                    total_alertas += 1
-                elif isinstance(licenca.get("dias_restantes"), (int, float)) and 0 < licenca["dias_restantes"] <= _FIREWALL_ALERTA_DIAS:
+                flags = license_alert_flags(licenca, _FIREWALL_ALERTA_DIAS)
+                if flags["vencimento_critico"] or flags["alerta_vencimento"]:
                     total_alertas += 1
 
         if total_alertas > 0:
@@ -6267,7 +6283,7 @@ def _normalizar_licenca_firewall(license_key, license_info):
             dias_rest = 0
 
     lic_status = license_info.get('status', 'unknown')
-    return {
+    result = {
         'nome': license_key,
         'tipo': license_key,
         'status': lic_status,
@@ -6277,6 +6293,8 @@ def _normalizar_licenca_firewall(license_key, license_info):
         'notificacao_critica': 0 < dias_rest <= _FIREWALL_ALERTA_DIAS and lic_status not in ('expired', 'no_license'),
         'notificacao_expirada': lic_status in ('expired', 'no_license'),
     }
+    result.update(license_alert_flags(result, _FIREWALL_ALERTA_DIAS))
+    return result
 
 
 def _texto_firewall_device(device_data, *keys):
@@ -6571,29 +6589,17 @@ def _recalcular_totais_firewalls(firewalls_por_regional):
             for lic in licencas:
                 if not isinstance(lic, dict):
                     continue
-                status_licenca = str(lic.get("status") or "").strip().lower()
-                indisponivel = status_licenca in _LICENCA_STATUS_INDISPONIVEL
-                expirada = not indisponivel and (
-                    bool(lic.get("notificacao_expirada"))
-                    or status_licenca in {"expired", "no_license"}
-                )
-                dias_restantes = lic.get("dias_restantes")
-                a_vencer = (
-                    not indisponivel
-                    and not expirada
-                    and isinstance(dias_restantes, (int, float))
-                    and 0 < dias_restantes <= _FIREWALL_ALERTA_DIAS
-                )
-                lic["status_indisponivel"] = indisponivel
-                lic["alerta_vencimento"] = a_vencer
-                lic["notificacao_expirada"] = expirada
-                if a_vencer:
+                lic.update(license_alert_flags(lic, _FIREWALL_ALERTA_DIAS))
+                if lic["alerta_vencimento"]:
                     criticas += 1
-                if expirada:
+                if lic["notificacao_expirada"]:
                     tem_expirada = True
 
             firewall["licencas_expiradas"] = 1 if tem_expirada else 0
             firewall["licencas_criticas"] = criticas
+            firewall["licencas_vencimento_critico"] = sum(
+                bool(lic.get("vencimento_critico")) for lic in licencas if isinstance(lic, dict)
+            )
 
             if tem_expirada:
                 total_expirados += 1
