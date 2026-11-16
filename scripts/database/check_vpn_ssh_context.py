@@ -1,4 +1,4 @@
-"""Operator diagnostic: one read-only SSH context query, no SQL or cache writes."""
+"""Operator diagnostic: one read-only SSH query, no SQL or cache writes."""
 
 import argparse
 import json
@@ -48,24 +48,31 @@ def diagnose_output(output):
     }
 
 
-def query_context(ssh, credentials):
+def query_context(ssh, credentials, *, filtered_vdom=False):
     try:
         ssh.connect(hostname=credentials['host'], port=2222,
                     username=credentials['username'], password=credentials['password'],
                     timeout=10, auth_timeout=10, banner_timeout=10,
                     look_for_keys=False, allow_agent=False)
-        _, stdout, _ = ssh.exec_command('get system status', timeout=10)
+        command = ('get system status | grep "Current virtual domain"'
+                   if filtered_vdom else 'get system status')
+        _, stdout, _ = ssh.exec_command(command, timeout=10)
         raw = stdout.read(65537)
         if len(raw) > 65536:
             raise ValueError('Resposta excede o limite do diagnostico.')
-        return diagnose_output(raw.decode(errors='replace'))
+        output = raw.decode(errors='replace')
+        return {**diagnose_output(output), 'consulta_filtrada_vdom': filtered_vdom,
+                'bytes_recebidos': len(raw),
+                'marcador_paginacao_detectado': bool(re.search(r'--\s*more\s*--', output, re.IGNORECASE))}
     finally:
         ssh.close()
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args(argv)
+    parser.add_argument('--filtered-vdom', action='store_true',
+                        help='Consulta somente a linha de VDOM via grep no FortiGate.')
+    args = parser.parse_args(argv)
     if os.environ.get('COMPUTERNAME', '').upper() != 'RIGEL':
         parser.error('Execute somente no Rigel, na conta Windows do coletor.')
     try:
@@ -89,7 +96,7 @@ def main(argv=None):
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
-        report = query_context(ssh, credentials)
+        report = query_context(ssh, credentials, filtered_vdom=args.filtered_vdom)
         print(json.dumps(report, indent=2, ensure_ascii=True))
         return 0
     except Exception:

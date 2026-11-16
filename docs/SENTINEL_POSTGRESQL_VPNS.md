@@ -64,6 +64,15 @@ Usa known_hosts existente com RejectPolicy: chave desconhecida/divergente causa
 falha, sem aceitacao automatica. Confirmar chave por canal confiavel, nao reduzir
 essa verificacao. VDOM global e campo ausente sao resultados distintos.
 
+Diagnostico real confirmou ausencia da linha de VDOM na resposta nao interativa,
+apesar de serial/hostname presentes. Ainda nao esta comprovada a causa.
+Opcao `--filtered-vdom` executa SOMENTE
+`get system status | grep "Current virtual domain"` na mesma conexao configurada.
+Serve para testar resposta reduzida sem modificar console/paginacao/VDOM do
+equipamento. O diagnostico inclui tamanho e deteccao de marcador --More--,
+sem exportar a resposta bruta. Validar antes de mudar novamente o coletor.
+Referencia do filtro CLI: https://docs.fortinet.com/document/fortigate/7.0.8/administration-guide/416169/vm-license
+
 No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes
 e acrescenta device efetivamente selecionado. Nao afirma que root e o contexto
 da sessao SSH e nao inventa serial para o equipamento consultado via proxy.
