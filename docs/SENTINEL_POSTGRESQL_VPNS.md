@@ -46,6 +46,14 @@ Current virtual domain. Valores ausentes, ambiguos, invalidos ou contexto global
 nao recebem identidade ficticia. Falha dessa consulta nao impede a coleta de
 VPNs; o SSH e fechado tambem quando ocorre falha.
 
+Homologacao inicial: operador confirmou 166 registros SSH com serial e coleta
+UTC, mas sem hostname/VDOM no JSON. O terminal manual informou hostname e VDOM
+root explicitos. Parser agora aceita LF, CRLF, CR e sequencias ANSI CSI, mantendo
+recusa de campos conflitantes/global. Isso corrige uma limitacao de formato;
+nao prova que a resposta SSH automatica tinha CR/ANSI. Validar nova coleta real.
+O valor root confirmado manualmente nao foi fixado no caminho SSH nem aplicado
+retroativamente aos registros antigos.
+
 No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes
 e acrescenta device efetivamente selecionado. Nao afirma que root e o contexto
 da sessao SSH e nao inventa serial para o equipamento consultado via proxy.

@@ -17,14 +17,19 @@ from core.environment_loader import EnvironmentConfigError, load_environment_fil
 
 def _parse_vpn_system_context(output):
     """Accept only unambiguous identity fields from the same SSH session."""
+    # SSH output may use CR-only lines or terminal control sequences.
+    text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', str(output or ''))
+    fields = {}
+    for line in text.splitlines():
+        label, separator, value = line.partition(':')
+        if separator and value.strip():
+            fields.setdefault(label.strip().casefold(), set()).add(value.strip())
     context = {}
     for label, key in (("Serial-Number", "firewall_serial"),
                        ("Hostname", "device"), ("Current virtual domain", "vdom")):
-        values = re.findall(r'^\s*' + re.escape(label) + r':\s*([^\r\n]+)',
-                            str(output or ''), flags=re.MULTILINE | re.IGNORECASE)
-        values = {value.strip() for value in values if value.strip()}
+        values = fields.get(label.casefold(), set())
         if len(values) == 1:
-            value = values.pop()
+            value = next(iter(values))
             if (len(value) <= 240 and re.fullmatch(r'[A-Za-z0-9_.-]+', value)
                     and value.casefold() not in {'global', 'n/a', 'unknown'}):
                 context[key] = value

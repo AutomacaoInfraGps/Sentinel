@@ -95,6 +95,22 @@ class VPNCollectionContextTest(unittest.TestCase):
         self.assertNotIn('vdom', parse('Current virtual domain: root\nCurrent virtual domain: other\n'))
         self.assertEqual(parse('Permission denied\nPassword: PRIVATE\n'), {})
 
+    def test_system_context_accepts_cli_line_endings_and_terminal_colors(self):
+        parse = self.namespace['_parse_vpn_system_context']
+        lines = ['Version: FortiGate-100F v7.4.13', 'Serial-Number: FGT_TEST',
+                 'Hostname: HUB_TEST', 'Current virtual domain: root',
+                 'Virtual domain configuration: disable', 'Current HA mode: standalone']
+        for newline in ('\n', '\r\n', '\r', '\r\r\n'):
+            with self.subTest(newline=repr(newline)):
+                text = newline.join(lines)
+                self.assertEqual(parse(text), {'firewall_serial': 'FGT_TEST',
+                                              'device': 'HUB_TEST', 'vdom': 'root'})
+                self.assertEqual(parse('\x1b[32m' + text + '\x1b[0m'), parse(text))
+
+    def test_vdom_disabled_alone_does_not_imply_root(self):
+        parse = self.namespace['_parse_vpn_system_context']
+        self.assertEqual(parse('Virtual domain configuration: disable\r'), {})
+
     def test_summary_failure_still_closes_connection(self):
         self.outputs['get vpn ipsec tunnel summary'] = RuntimeError('failure')
         self.assertFalse(self.collect()['success'])
