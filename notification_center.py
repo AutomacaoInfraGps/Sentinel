@@ -8,6 +8,7 @@ from threading import Lock
 from urllib.parse import quote, urlencode
 
 from config import PROJECT_ROOT
+from services.firewall_licenses import license_alert_flags
 
 
 NOTIFICATION_STATE_FILE = PROJECT_ROOT / "output" / "notification_user_state.json"
@@ -72,12 +73,66 @@ def _notification_url(group, target, name, regional):
 
 
 def sort_notifications(notifications):
-    """Ordena pendências persistentes antes dos demais eventos recentes."""
+    """Prioriza vencimentos, depois pendencias persistentes e eventos recentes."""
     ordered = list(notifications or [])
-    priority = {"vpn_orphan": 0, "admin_baseline": 1}
+    priority = {"firewall_license_critical": -2, "firewall_license_expiring": -1,
+                "vpn_orphan": 0, "admin_baseline": 1}
     ordered.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
-    ordered.sort(key=lambda item: priority.get(item.get("type"), 2))
+    ordered.sort(key=lambda item: (
+        priority.get(item.get("type"), 2),
+        item.get("days_remaining") if item.get("type") in {
+            "firewall_license_critical", "firewall_license_expiring"
+        } and type(item.get("days_remaining")) in (int, float) else 0,
+    ))
     return ordered
+
+
+def _firewall_license_notification(item):
+    """One actionable deadline per already-scoped firewall, never a new data fetch."""
+    candidates = []
+    for license in item.get("licencas") or []:
+        if not isinstance(license, dict):
+            continue
+        flags = license_alert_flags(license)
+        if flags["vencimento_critico"] or flags["alerta_vencimento"]:
+            candidates.append((license, flags))
+    if not candidates:
+        return None
+
+    def urgency(candidate):
+        license, flags = candidate
+        days = license.get("dias_restantes") if flags["prazo_conhecido"] else None
+        return (not flags["vencimento_critico"], days if days is not None else 0)
+
+    license, flags = min(candidates, key=urgency)
+    days = license.get("dias_restantes") if flags["prazo_conhecido"] else None
+    if days is not None and float(days).is_integer():
+        days = int(days)
+    name = _device_name(item)
+    product = str(license.get("nome") or license.get("tipo") or "Licença")[:240]
+    if flags["notificacao_expirada"]:
+        title = "Licença de firewall vencida"
+        deadline = (f"venceu há {abs(days)} {'dia' if days == -1 else 'dias'}"
+                    if days is not None and days < 0 else "está vencida")
+    elif days == 0:
+        title = "Licença de firewall vence hoje"
+        deadline = "vence hoje (0 dias restantes)"
+    else:
+        title = "Licença de firewall próxima do vencimento"
+        deadline = f"vence em {days} {'dia' if days == 1 else 'dias'}"
+    regional = str(item.get("regional") or "Sem regional").strip()
+    notification_type = "firewall_license_critical" if flags["vencimento_critico"] else "firewall_license_expiring"
+    kind = f"license|{product}|{notification_type}|{days}"
+    return {
+        "id": _notification_id("firewalls", item, kind),
+        "type": notification_type, "severity": "critical" if flags["vencimento_critico"] else "important",
+        "icon": "bi-calendar-exclamation", "title": title,
+        "message": f"{name}: {product} {deadline}.",
+        "regional": regional, "device": name, "days_remaining": days,
+        "persistent": False,
+        "occurred_at": item.get("changed_at") or item.get("ultima_verificacao") or item.get("updated_at"),
+        "url": _notification_url("firewalls", "/firewalls", name, regional),
+    }
 
 
 def build_switch_update_notifications(jobs, now=None, max_age=None):
@@ -166,6 +221,13 @@ def build_notifications(records_by_group, orphan_vpn_names=None):
             raw_status = item.get("status_disponibilidade") or item.get("status")
             if group == "firewalls":
                 availability = str(item.get("status_disponibilidade") or "").strip().lower()
+                blocked = {"offline", "down", "error", "erro", "maintenance", "manutencao",
+                           "manutenção", "inactive", "inativo"}
+                if availability not in blocked and str(item.get("status") or "").strip().lower() not in blocked:
+                    license_notification = _firewall_license_notification(item)
+                    if license_notification:
+                        notifications.append(license_notification)
+                        continue
                 if availability not in {
                     "offline",
                     "down",
