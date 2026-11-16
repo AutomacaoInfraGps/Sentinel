@@ -764,9 +764,14 @@ def _publicar_switches_atualizados(manager):
 
 
 def _run_switches_job(job_id, mode='all', regional=None, host=None):
-    manager = GerenciadorSwitches()
+    # Background threads do not inherit Flask's application context.
+    with app.app_context():
+        _execute_switches_job(job_id, mode=mode, regional=regional, host=host)
 
+
+def _execute_switches_job(job_id, mode='all', regional=None, host=None):
     try:
+        manager = GerenciadorSwitches()
         if mode == 'reload':
             _update_background_job(
                 job_id,
