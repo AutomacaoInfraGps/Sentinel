@@ -185,6 +185,16 @@ class GerenciadorRegionais:
                 except OSError:
                     pass
 
+        try:
+            import logging
+            from services.operational_server_postgres import enqueue_server_snapshot
+            enqueue_server_snapshot(payload, self.arquivo_regionais, logging.getLogger(__name__))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PostgreSQL paralelo de servidores indisponivel. Arquivo original preservado."
+            )
+
     def _normalizar_servidor(self, servidor: Dict, existente: Optional[Dict] = None) -> Dict:
         dados = dict(existente or {})
         dados.update(servidor)
