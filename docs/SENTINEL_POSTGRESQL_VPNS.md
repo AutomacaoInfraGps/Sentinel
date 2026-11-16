@@ -3,7 +3,7 @@
 Firewalls/licencas, servidores e switches ja tiveram persistencia paralela
 validada pelo operador. A etapa VPN comeca SEM migracao SQL, importacao ou flag.
 
-## Lacunas encontradas no codigo
+## Lacunas encontradas na auditoria inicial
 
 - GerenciadorFortigate.obter_vpn_ipsec usa o resumo SSH do hub. Cada registro
   contem tunel, comentario, interface, status e ultima_verificacao HH:MM:SS.
@@ -37,11 +37,53 @@ coletor. A cobertura precisa ser corrigida na origem, com metadados verificados,
 antes da carga inicial. Contagens de vinculo exato sao diagnostico de dados,
 nao uma decisao de autorizacao de usuarios.
 
+## Preparacao do coletor implementada, pendente de homologacao no Rigel
+
+Nao altera tabela, agendamento, consultas existentes de VPN, filtros AD ou telas.
+No SSH, acrescenta uma consulta somente leitura `get system status`, na mesma
+sessao, com timeout de 10 segundos. Projeta somente Serial-Number, Hostname e
+Current virtual domain. Valores ausentes, ambiguos, invalidos ou contexto global
+nao recebem identidade ficticia. Falha dessa consulta nao impede a coleta de
+VPNs; o SSH e fechado tambem quando ocorre falha.
+
+No FortiManager, preserva o VDOM root ja utilizado pelas duas chamadas existentes
+e acrescenta device efetivamente selecionado. Nao afirma que root e o contexto
+da sessao SSH e nao inventa serial para o equipamento consultado via proxy.
+
+Cada registro novo recebe `vpn_source`, `device_namespace` e `coletado_em` ISO
+com UTC. Dispositivo/serial/VDOM sao incluidos quando conhecidos. O namespace
+separa endpoint SSH de instancia FortiManager/ADOM; nao e identidade definitiva
+para unificar as fontes. Troca de membro HA, renomeacao e correlacao por serial
+precisam ser consideradas na futura modelagem, nao fundidas pelo nome do tunel.
+
+`coletado_em` representa o instante local de recebimento do resultado da consulta,
+nao o horario fornecido pelo equipamento nem o inicio de uma indisponibilidade.
+O campo legado ultima_verificacao continua HH:MM:SS para preservar a tela.
+A auditoria mostra `horarios_coleta` e `por_fonte_coleta` separadamente.
+O horario de publicacao do grupo pode continuar sem fuso e nao substitui coleta.
+
+Referencia do formato dos campos de contexto:
+https://docs.fortinet.com/document/fortigate/7.6.1/administration-guide/576344/adding-vdoms-with-fortigate-v-series
+
+Depois de commit/push e pull no Rigel:
+
+1. Reiniciar pelo `restart_web_service.ps1` e confirmar healthz HTTP 200.
+2. Executar uma atualizacao real de VPN na tela existente e aguardar conclusao.
+   Abrir uma tela com cache fresco nao garante nova consulta.
+3. Rodar novamente `audit_vpn_sources.py`. Esperar `horarios_coleta.com_fuso`
+   nos registros novos. Conferir dispositivo/VDOM e fonte efetivamente usada.
+4. A consolidacao do mapa pode ocorrer depois; os dois arquivos nao precisam
+   ser instantaneamente iguais. Registros antigos nao sao preenchidos retroativamente.
+
+Os testes de transporte simulado executam os metodos de producao isolados por
+AST, sem importar credenciais reais: contexto SSH, falha opcional de contexto,
+fechamento na falha, VDOM do fallback e preservacao no preparo operacional.
+Nao houve consulta aos equipamentos ou gravacao no banco no ambiente local.
+
 ## Proximas etapas, ainda nao executadas
 
 1. Conferir a auditoria real, inclusive duplicidades e horarios.
-2. Preservar contexto verificado de dispositivo, VDOM, origem e instante de
-   coleta nos registros, distinguindo consulta direta e fallback.
+2. Homologar os metadados novos em coleta real, distinguindo SSH e fallback.
 3. Validar nova publicacao sem mudar agendamento, filtros AD ou leitores atuais.
 4. Preparar tabela e importador tipado, backup, simulacao e carga congelada.
 5. Habilitar persistencia paralela somente apos homologacao manual.

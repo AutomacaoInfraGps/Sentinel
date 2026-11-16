@@ -15,6 +15,17 @@ class VPNSourcesAuditTest(unittest.TestCase):
         self.assertNotIn('PRIVATE', json.dumps(report))
         self.assertEqual(report['identidade_dispositivo_vdom_tunel_completa'], 1)
 
+    def test_collection_time_and_source_remain_distinct_from_display_time(self):
+        report = audit_records([{'ultima_verificacao': '15:00:00',
+                                 'coletado_em': '2026-11-16T18:00:00+00:00',
+                                 'vpn_source': 'fortigate_ssh'},
+                                {'vpn_source': 'PRIVATE_SOURCE'}])
+        self.assertEqual(report['horarios_coleta'], {'com_fuso': 1, 'ausente': 1})
+        self.assertEqual(report['por_fonte_coleta'],
+                         {'fortigate_ssh': 1, 'outro_ou_ausente': 1})
+        self.assertEqual(report['horarios_observacao']['somente_hora_sem_data'], 1)
+        self.assertNotIn('PRIVATE', json.dumps(report))
+
     def test_time_only_is_not_assigned_today(self):
         self.assertEqual(time_kind('23:59:59'), 'somente_hora_sem_data')
         self.assertEqual(time_kind('25:00:00'), 'invalido')

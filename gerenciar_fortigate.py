@@ -10,9 +10,25 @@ import os
 from pathlib import Path
 import paramiko
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from fortimanager_client import FortiManagerClient
 from core.environment_loader import EnvironmentConfigError, load_environment_file
+
+
+def _parse_vpn_system_context(output):
+    """Accept only unambiguous identity fields from the same SSH session."""
+    context = {}
+    for label, key in (("Serial-Number", "firewall_serial"),
+                       ("Hostname", "device"), ("Current virtual domain", "vdom")):
+        values = re.findall(r'^\s*' + re.escape(label) + r':\s*([^\r\n]+)',
+                            str(output or ''), flags=re.MULTILINE | re.IGNORECASE)
+        values = {value.strip() for value in values if value.strip()}
+        if len(values) == 1:
+            value = values.pop()
+            if (len(value) <= 240 and re.fullmatch(r'[A-Za-z0-9_.-]+', value)
+                    and value.casefold() not in {'global', 'n/a', 'unknown'}):
+                context[key] = value
+    return context
 
 
 def _parse_vpn_phase1_comments(output):
@@ -170,17 +186,28 @@ class GerenciadorFortigate:
                         "source": "fortimanager",
                     }
 
-                configured = client.get_vpn_phase1_interfaces(device_name)
-                monitor = client.proxy_monitor_vpn_ipsec(adom, device_name)
+                # Preserve the existing root requests; record their actual scope.
+                vdom = "root"
+                configured = client.get_vpn_phase1_interfaces(device_name, vdom=vdom)
+                monitor = client.proxy_monitor_vpn_ipsec(adom, device_name, vdom=vdom)
+                collected_at = datetime.now(timezone.utc).isoformat()
 
             active_names = self._nomes_vpn_ativas(monitor.get("results"))
             now = datetime.now().strftime("%H:%M:%S")
+            context = {
+                "device": device_name,
+                "device_namespace": f"fortimanager:{fm_cfg['host']}:{adom}",
+                "vdom": vdom,
+                "vpn_source": "fortimanager_proxy",
+                "coletado_em": collected_at,
+            }
             vpns = []
             for tunnel in configured:
                 name = str(tunnel.get("name") or "").strip()
                 if not name:
                     continue
                 vpns.append({
+                    **context,
                     "tunel": name,
                     "comentario": str(tunnel.get("comments") or "").strip(),
                     "interface": "N/A",
@@ -196,6 +223,8 @@ class GerenciadorFortigate:
                 "inativos": sum(1 for vpn in vpns if vpn["status"] == "down"),
                 "source": "fortimanager_proxy",
                 "device": device_name,
+                "vdom": vdom,
+                "coletado_em": collected_at,
             }
         except Exception as exc:
             return {
@@ -671,6 +700,7 @@ class GerenciadorFortigate:
             return {"success": False, "message": str(e)}
 
     def obter_vpn_ipsec(self):
+        ssh = None
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -683,11 +713,25 @@ class GerenciadorFortigate:
                 timeout=10
             )
 
+            context = {}
+            try:
+                _, context_stdout, _ = ssh.exec_command("get system status", timeout=10)
+                context = _parse_vpn_system_context(context_stdout.read().decode(errors="ignore"))
+            except Exception:
+                print("Aviso: contexto de dispositivo/VDOM das VPNs indisponivel.")
+
+            context.update({
+                "device_namespace": f"fortigate_ssh:{self.host}",
+                "vpn_source": "fortigate_ssh",
+            })
             stdin, stdout, stderr = ssh.exec_command(
                 "get vpn ipsec tunnel summary"
             )
 
             output = stdout.read().decode(errors="ignore")
+            collected_at = datetime.now(timezone.utc).isoformat()
+            context["coletado_em"] = collected_at
+            verified_at = datetime.now().strftime("%H:%M:%S")
 
             comments_by_tunnel = {}
             try:
@@ -701,7 +745,6 @@ class GerenciadorFortigate:
                 comments_by_tunnel.update(manager_comments)
             except Exception as comments_error:
                 print(f"Aviso: nao foi possivel obter comentarios das VPNs no FortiManager: {comments_error}")
-            ssh.close()
 
             vpns = []
 
@@ -723,11 +766,12 @@ class GerenciadorFortigate:
                 status = "up" if total > 0 and up == total else "down"
 
                 vpns.append({
+                    **context,
                     "tunel": name,
                     "comentario": comments_by_tunnel.get(name, ""),
                     "interface": "N/A",
                     "status": status,
-                    "ultima_verificacao": datetime.now().strftime("%H:%M:%S")
+                    "ultima_verificacao": verified_at
                 })
 
             return {
@@ -735,7 +779,9 @@ class GerenciadorFortigate:
                 "vpns": vpns,
                 "total": len(vpns),
                 "ativos": sum(1 for v in vpns if v["status"] == "up"),
-                "inativos": sum(1 for v in vpns if v["status"] == "down")
+                "inativos": sum(1 for v in vpns if v["status"] == "down"),
+                "source": "fortigate_ssh",
+                "coletado_em": collected_at,
             }
 
         except Exception as e:
@@ -743,6 +789,12 @@ class GerenciadorFortigate:
                 "success": False,
                 "message": f"Erro SSH Fortigate: {str(e)}"
             }
+        finally:
+            if ssh is not None:
+                try:
+                    ssh.close()
+                except Exception:
+                    pass
 
     def testar_link(self, interface_name, ip_link=None):
         """Testa a conectividade de um link específico através do Fortigate"""
