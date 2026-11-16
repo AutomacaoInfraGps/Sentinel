@@ -1,4 +1,4 @@
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
 from datetime import datetime, timezone
 import io
@@ -83,12 +83,50 @@ class ServerCatalogTest(unittest.TestCase):
         write_catalog(conn, catalog)
         calls = cursor.execute.call_args_list
         statements = [call.args[0] for call in calls]
-        self.assertTrue(any("LOCK TABLE operacional.regionais, operacional.servidores" in sql for sql in statements))
+        self.assertIn("LOCK TABLE operacional.regionais IN SHARE ROW EXCLUSIVE MODE", statements)
+        self.assertIn("LOCK TABLE operacional.servidores IN ROW EXCLUSIVE MODE", statements)
         self.assertFalse(any("operacional.firewalls" in sql or "operacional.licencas_firewall" in sql for sql in statements))
         self.assertFalse(any("DELETE" in sql or "TRUNCATE" in sql for sql in statements))
         self.assertTrue(any("COALESCE(operacional.regionais.nome" in sql for sql in statements))
         self.assertNotIn("PRIVATE", repr(calls))
         conn.commit.assert_not_called()
+
+    def test_server_lock_compatible_with_insert_only_role(self):
+        conn, cursor = connection([("sentinel", "sentinel_collector", 5433), (0,), (1,), (2,)])
+
+        def enforce_grants(sql, *parameters):
+            if sql.startswith("LOCK TABLE operacional.servidores") and "IN ROW EXCLUSIVE MODE" not in sql:
+                raise PermissionError("PRIVATE_DRIVER_MESSAGE")
+
+        cursor.execute.side_effect = enforce_grants
+        write_catalog(conn, build())
+
+    def test_cli_driver_error_reports_phase_and_sqlstate_without_values(self):
+        class DriverFailure(Exception):
+            sqlstate = "42501"
+
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.json"
+            source.write_text(json.dumps(payload()), encoding="utf-8")
+            catalog = build_catalog(source.read_bytes(), "America/Sao_Paulo")
+            conn, cursor = connection([("sentinel", "sentinel_collector", 5433)])
+            conn.__enter__.return_value = conn
+
+            def fail_lock(sql, *parameters):
+                if sql.startswith("LOCK TABLE"):
+                    raise DriverFailure("PRIVATE_PASSWORD")
+
+            cursor.execute.side_effect = fail_lock
+            output = io.StringIO()
+            with patch.dict("os.environ", {"COMPUTERNAME": "RIGEL"}), \
+                    patch("services.operational_postgres.connect_collector", return_value=conn), \
+                    redirect_stderr(output):
+                result = main(["--source", str(source), "--source-timezone", "America/Sao_Paulo",
+                               "--apply", "--expected-sha256", catalog.digest])
+            self.assertEqual(result, 1)
+            self.assertIn("bloqueio_tabelas", output.getvalue())
+            self.assertIn("42501", output.getvalue())
+            self.assertNotIn("PRIVATE", output.getvalue())
 
     def test_existing_servers_and_wrong_instance_fail_before_inserts(self):
         for results in ([('sentinel', 'sentinel_collector', 5433), (1,)],

@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.database.import_firewall_cache import ImportErrorSafe, _observation, _unique_keys
+from scripts.database.import_firewall_cache import (
+    DatabaseProgress, ImportErrorSafe, _database_error, _observation, _unique_keys,
+)
 
 
 @dataclass(frozen=True)
@@ -115,26 +117,36 @@ def inspect_catalog(connection):
                 "tabela_servidores_vazia": servers == 0}
 
 
-def write_catalog(connection, catalog):
+def write_catalog(connection, catalog, *, progress=None):
     """Caller owns commit/rollback. Refuse a populated server table."""
+    progress = progress or DatabaseProgress()
     with connection.cursor() as cursor:
+        progress.phase = "configuracao_transacao"
         cursor.execute("SET LOCAL lock_timeout = '5s'")
         cursor.execute("SET LOCAL statement_timeout = '30s'")
+        progress.phase = "validacao_destino"
         _identity(cursor)
-        cursor.execute("LOCK TABLE operacional.regionais, operacional.servidores "
-                       "IN SHARE ROW EXCLUSIVE MODE")
+        progress.phase = "bloqueio_tabelas"
+        # All catalog importers serialize on regionais, where collector has UPDATE.
+        # INSERT on servidores permits ROW EXCLUSIVE, not SHARE ROW EXCLUSIVE.
+        cursor.execute("LOCK TABLE operacional.regionais IN SHARE ROW EXCLUSIVE MODE")
+        cursor.execute("LOCK TABLE operacional.servidores IN ROW EXCLUSIVE MODE")
+        progress.phase = "contagem_inicial"
         cursor.execute("SELECT count(*) FROM operacional.servidores")
         if cursor.fetchone() != (0,):
             raise ImportErrorSafe("Servidores ja cadastrados. Nao repetir esta carga inicial.")
         for code, name in catalog.regionals:
+            progress.phase = "insercao_regionais"
             cursor.execute("""INSERT INTO operacional.regionais(codigo,nome) VALUES (%s,%s)
                 ON CONFLICT(codigo) DO UPDATE
                 SET nome=COALESCE(operacional.regionais.nome, EXCLUDED.nome)""", (code, name))
         for server in catalog.servers:
+            progress.phase = "insercao_servidores"
             cursor.execute("""INSERT INTO operacional.servidores
                 (codigo_regional,id_origem,nome,tipo,ip,modelo,funcao,sistema_operacional,
                  status,ativo,ultima_verificacao,tempo_resposta,arquivo_origem_sha256)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", (*server, catalog.digest))
+        progress.phase = "contagem_final"
         cursor.execute("SELECT count(*) FROM operacional.servidores")
         if cursor.fetchone() != (len(catalog.servers),):
             raise ImportErrorSafe("Contagem de servidores divergente. Reverta a transacao.")
@@ -153,6 +165,7 @@ def main(argv=None):
     mode.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-sha256")
     args = parser.parse_args(argv)
+    progress = DatabaseProgress(phase="leitura_origem")
     try:
         catalog = build_catalog(args.source.read_bytes(), args.source_timezone)
         result = {"modo": "simulacao_sem_conexao_ao_banco", **catalog.summary()}
@@ -162,19 +175,22 @@ def main(argv=None):
             if args.apply and args.expected_sha256 != catalog.digest:
                 raise ImportErrorSafe("Gravacao exige o hash exato da simulacao revisada.")
             from services.operational_postgres import connect_collector
+            progress.phase = "conexao"
             with connect_collector(read_only=not args.apply) as connection:
                 if args.apply:
-                    write_catalog(connection, catalog)
+                    write_catalog(connection, catalog, progress=progress)
                     result["modo"] = "carga_inicial_servidores_confirmada"
                 else:
+                    progress.phase = "conferencia_somente_leitura"
                     result["banco"] = inspect_catalog(connection)
                     result["modo"] = "conferencia_somente_leitura"
+                progress.phase = "finalizacao_transacao"
         print(json.dumps(result, indent=2, ensure_ascii=True))
         return 0
     except ImportErrorSafe as exc:
         print(str(exc), file=sys.stderr)
-    except Exception:
-        print("Falha no cadastro. Confira o banco antes de repetir uma gravacao. Detalhes omitidos.", file=sys.stderr)
+    except Exception as exc:
+        print(str(_database_error(progress.phase, exc)), file=sys.stderr)
     return 1
 
 

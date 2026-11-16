@@ -66,6 +66,23 @@ Nenhuma dessas etapas foi executada no PostgreSQL real pela implementacao local.
 O operador deve informar cada resultado antes de avancar; nao aplicar tudo em
 um bloco unico. Falha durante commit exige conferir antes de repetir.
 
+## Correcao do bloqueio na primeira tentativa
+
+O operador informou COMMIT da migracao 002 e conferencia com 49 regionais e zero
+servidores; a primeira gravacao retornou erro generico. A revisao identificou
+um defeito: SHARE ROW EXCLUSIVE em servidores exige mais que SELECT/INSERT.
+O erro especifico dessa execucao nao foi capturado, portanto conferir contagens
+antes de repetir. Nao conceder UPDATE, MAINTAIN, DELETE ou TRUNCATE para contornar.
+
+O importador corrigido serializa suas execucoes pelo SHARE ROW EXCLUSIVE em
+regionais (onde o coletor ja tem UPDATE) e usa ROW EXCLUSIVE em servidores,
+compativel com INSERT. Outros escritores de servidores ainda nao existem nesta
+etapa; a futura sincronizacao devera coordenar sua escrita pelo mesmo protocolo.
+O bloqueio de servidores isoladamente nao exclui escritores externos que ignorem
+esse protocolo. Falhas SQL agora informam etapa/tipo/SQLSTATE, nunca valores.
+Nao repetir 002 nem alterar grants. A sintaxe/permissoes foram conferidas na
+[documentacao PostgreSQL 18 de LOCK](https://www.postgresql.org/docs/18/sql-lock.html).
+
 ## Depois da primeira carga
 
 A sincronizacao automatica de servidores NAO esta implementada aqui. Examinar
