@@ -80,6 +80,17 @@ class ApSourcesAuditTests(unittest.TestCase):
         self.assertEqual(audit_unifi(payload, {})['regional_por_regras_unifi_sem_aproximacao'],
                          {'destino_alias_ausente': 2})
 
+    def test_confirmed_map_aliases_cover_both_sites_without_geographic_guess(self):
+        payload = self.payload()
+        payload['sites'] = [{'id': 'caxias', 'nome': 'V041_CAXIAS_DO_SUL'},
+                            {'id': 'sulzer', 'nome': 'V006_SULZER_TRIUNFO'}]
+        payload['aps'] = [dict(payload['aps'][0], site=site['nome'])
+                          for site, count in ((payload['sites'][0], 6), (payload['sites'][1], 4))
+                          for _ in range(count)]
+        result = audit_unifi(payload, {'REG_CAXIAS': {}, 'REG_SULZER': {}})
+        self.assertEqual(result['regional_por_regras_unifi_sem_aproximacao'], {'alias_explicito': 10})
+        self.assertEqual(result['sites_por_regras_unifi_sem_aproximacao'], {'alias_explicito': 2})
+
     def test_unknown_status_is_redacted_and_invalid_records_counted(self):
         payload = self.payload()
         payload['aps'][0]['status'] = 'SECRET_MARKER'

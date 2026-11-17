@@ -21,6 +21,15 @@ class UnifiSiteMatchingTests(unittest.TestCase):
         self.assertEqual(resolve_unifi_site_for_catalog({}, 'V021_SANTO_ANDRE'),
                          (None, 'destino_alias_ausente'))
 
+    def test_sites_confirmed_in_production_map_use_explicit_aliases(self):
+        regionals = {'REG_CAXIAS': {'descricao': 'Rio Grande do Sul'},
+                     'REG_SULZER': {'descricao': 'Rio Grande do Sul'},
+                     'REG_OTHER': {'descricao': 'Rio Grande do Sul'}}
+        for site, code in (('V041_CAXIAS_DO_SUL', 'REG_CAXIAS'),
+                           ('V006_SULZER_TRIUNFO', 'REG_SULZER')):
+            self.assertEqual(resolve_unifi_site_for_catalog(regionals, site), (code, 'alias_explicito'))
+            self.assertEqual(resolve_unifi_site_for_catalog({}, site), (None, 'destino_alias_ausente'))
+
     def test_explicit_unassigned_site_stays_unassigned(self):
         self.assertEqual(resolve_unifi_site_for_catalog({'REG_TAGG': {}}, 'TAGG'),
                          (None, 'alias_sem_regional'))
@@ -79,8 +88,10 @@ class UnifiSiteMatchingTests(unittest.TestCase):
             old_site = namespace['_mapa_normalizar_token'](
                 re.sub(r'^V\d+_', '', namespace['_mapa_normalizar_token'](value)))
             self.assertEqual(old_site, normalize_unifi_site(value))
-        regionals = {'REG_ABC': {}, 'REG_BAHIA': {}, 'REG_TLSV_POA': {}}
-        for value in ('V021_SANTO_ANDRE', 'V021_BAHIA', 'TLSV_PORTO_ALEGRE', 'TAGG', 'unknown'):
+        regionals = {'REG_ABC': {}, 'REG_BAHIA': {}, 'REG_TLSV_POA': {},
+                     'REG_CAXIAS': {}, 'REG_SULZER': {}}
+        for value in ('V021_SANTO_ANDRE', 'V021_BAHIA', 'TLSV_PORTO_ALEGRE', 'TAGG', 'unknown',
+                      'V041_CAXIAS_DO_SUL', 'V006_SULZER_TRIUNFO'):
             self.assertEqual(namespace['_mapa_encontrar_regional_unifi'](regionals, value),
                              resolve_unifi_site_for_catalog(regionals, value)[0])
 

@@ -42,6 +42,14 @@ normalizada de codigo/nome pode resolver o site, com motivo especifico
 `identidade_unica_com_alias_desatualizado`. Isso nao altera os aliases do mapa,
 as telas, o catalogo regional ou as permissoes AD. Nunca criar uma regional ou
 escolher outra apenas pela cidade, por prefixo parcial ou pelo IP do AP.
+
+### Vinculos confirmados no mapa de producao
+
+Em 2026-11-17, a conferencia somente de leitura do mapa do Rigel identificou
+6 APs de `V041_CAXIAS_DO_SUL` em `REG_CAXIAS` e 4 APs de
+`V006_SULZER_TRIUNFO` em `REG_SULZER`. Os aliases explicitos
+`CAXIAS_DO_SUL` e `SULZER_TRIUNFO` preservam esses relacionamentos ja usados
+no Sentinel, sem inferir vinculos pela descricao comum Rio Grande do Sul.
 - Cobertura de IP, modelos, firmware, status e coleta explicita por AP.
 - Chaves JSON repetidas e estruturas invalidas rejeitadas.
 
