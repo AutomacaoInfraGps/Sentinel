@@ -69,3 +69,72 @@ antes de qualquer importacao. Nao usar nome ou IP como identidade do AP.
 Revisar o resumo real antes de preparar migracao SQL. Nesta etapa nao existe
 nova tabela de APs, carga inicial ou sincronizacao automatica. Os leitores,
 agendamentos e controles de acesso do Sentinel permanecem inalterados.
+
+## Carga inicial preparada (migracao 010)
+
+`scripts/database/import_ap_catalog.py` usa a lista nativa de APs e sites,
+nao o mapa derivado. A simulacao e o padrao e nao conecta ao banco, controladora
+ou cofre. O comando abaixo exige tzdata no mesmo ambiente Python:
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    'C:\Automacao\scripts\database\import_ap_catalog.py' `
+    --source-timezone America/Sao_Paulo
+```
+
+### Modelo
+
+- `operacional.controladoras_unifi`: namespace estavel
+  `sentinel_unifi_principal`, endpoint como atributo, publicacao global e
+  hashes dos dois arquivos de origem. Nao guarda credenciais.
+- `operacional.sites_unifi`: chave controladora + ID nativo, nome do site,
+  codigo regional opcional e motivo explicito do vinculo. Preserva sites
+  sem APs, inclusive os sem correspondencia regional.
+- `operacional.aps_unifi`: chave controladora + MAC normalizado, referencia
+  composta ao site, nome, IP, modelo, firmware, status, clientes, uptime e
+  coleta individual quando realmente informada. Uma mudanca futura de site
+  nao deve criar outro AP. Nome e IP nunca sao usados como identidade.
+
+O namespace identifica a instancia configurada no Sentinel, nao o IP, que pode
+mudar. Uma segunda controladora exige configuracao e revisao proprias antes
+de qualquer importacao; nao juntar inventarios por MAC global.
+
+O timestamp global do JSON e convertido com o fuso explicitamente escolhido,
+mas fica apenas em `publicacao_fonte_em`. Nao preenche `coletado_em` dos APs,
+nao prova coleta bem-sucedida em todos os sites e nao permite inferir ausencia.
+Na origem atual, os 216 APs permanecem com `coletado_em` nulo. Campos brutos
+como redes Wi-Fi, VAPs, senhas, tokens e interferencias nao entram na carga.
+
+### Garantias e sequencia de homologacao
+
+1. Revisar a simulacao de producao, sem banco.
+2. Fazer backup custom-format do banco e conferir o catalogo com pg_restore.
+3. Congelar, em pasta com ACL restrita, os dois arquivos: `data/unifi.json`
+   e `estrutura_regionais.json`. Simular novamente com `--source` e
+   `--regionals` apontando para as copias; guardar o digest dessa simulacao.
+4. Aplicar somente `scripts/database/sql/010_ap_catalog.sql` como
+   sentinel_admin, confirmando COMMIT. Ela valida sentinel, porta 5433 e
+   diretorio E:/Sentinel/PostgreSQL/data; cria tabelas com sentinel_owner.
+5. Rodar `--check-database` nas mesmas copias. Exige as tres tabelas vazias
+   e nenhum codigo regional do catalogo ausente no PostgreSQL para a carga.
+6. Somente apos revisar, executar `--apply --expected-digest` com o digest
+   exato da copia congelada. Os arquivos, o fuso e as linhas normalizadas
+   (inclusive os vinculos resolvidos) participam do digest.
+7. Conferir contagens de controladoras/sites/APs, status e vinculos pelo
+   sentinel_api. A carga e inicial, nao pode ser repetida em tabelas ocupadas.
+
+O escritor valida identidade SQL, bloqueia as tabelas na ordem regionais,
+controladoras, sites, APs e usa valores parametrizados, na mesma transacao.
+Qualquer divergencia de contagem ou erro cancela toda a carga pelo contexto
+transacional. Recusa JSON duplicado, MAC invalido/duplicado na controladora,
+site desconhecido/ambiguo e valores invalidos; nao descarta APs silenciosamente.
+Regional nao identificada fica nula, sem emprestar a permissao de outra regional.
+
+A migracao concede SELECT ao sentinel_reader e SELECT/INSERT ao coletor,
+sem UPDATE, DELETE ou CREATE adicionais. Nao habilita tarefa, flag, sincronizacao
+ou nova leitura das telas. A futura consulta pela SofIA precisa filtrar os
+sites/APs pelo escopo regional autenticado no backend; sentinel_api e uma conta
+tecnica de leitura, nao implementa por si so as permissoes AD de cada pessoa.
+
+Teste local usa mocks de conexao SQL; aplicar e homologar em PostgreSQL real
+somente seguindo a sequencia acima. Redes Wi-Fi continuam fora desta carga.
