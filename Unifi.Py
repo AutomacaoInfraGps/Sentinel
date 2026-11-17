@@ -7,6 +7,7 @@ from datetime import datetime
 # Importa as configurações dinâmicas
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
+from services.unifi_ap_collection import confirmed_device_response, ap_collection_evidence
 from services.unifi_models import nome_modelo_unifi
 from services.unifi_networks import (
     extract_unifi_items,
@@ -160,7 +161,7 @@ for site in sites:
 
     try:
         resp = session.get(devices_url)
-        devices = resp.json().get("data", [])
+        devices, collected_at = confirmed_device_response(resp)
         aps = [
             d for d in devices
             if d.get("type") == "uap" and not deve_ocultar_ap_teste(d, site_desc)
@@ -173,6 +174,8 @@ for site in sites:
         site_data = {
             "id": site_id,
             "nome": site_desc,
+            "coletado_em": collected_at,
+            "coleta_aps_confirmada": True,
             "total_aps": len(aps),
             "redes_wifi": redes_wifi,
         }
@@ -206,7 +209,8 @@ for site in sites:
                 "status": status_ap,
                 "clientes": ap.get("num_sta", 0),
                 "uptime": ap.get("uptime", 0),
-                "site": site_desc
+                "site": site_desc,
+                **ap_collection_evidence(ap, site_id, collected_at),
             })
 
             # ===== HTML DA LINHA (sempre gerado, independente de rádio) =====

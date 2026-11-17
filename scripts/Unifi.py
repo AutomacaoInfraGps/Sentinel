@@ -7,6 +7,7 @@ from datetime import datetime
 # Importa as configurações dinâmicas
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
+from services.unifi_ap_collection import confirmed_device_response, ap_collection_evidence
 
 # === CONFIGURAÇÕES ===
 controller_host = UNIFI_CONFIG["host"]
@@ -84,7 +85,7 @@ for site in sites:
 
     try:
         resp = session.get(devices_url)
-        devices = resp.json().get("data", [])
+        devices, collected_at = confirmed_device_response(resp)
         aps = [d for d in devices if d.get("type") == "uap"]
         if not aps:
             continue
@@ -93,6 +94,8 @@ for site in sites:
         site_data = {
             "id": site_id,
             "nome": site_desc,
+            "coletado_em": collected_at,
+            "coleta_aps_confirmada": True,
             "total_aps": len(aps)
         }
         sites_data.append(site_data)
@@ -121,7 +124,8 @@ for site in sites:
                 "status": status.lower(),
                 "clientes": ap.get("num_sta", 0),
                 "uptime": ap.get("uptime", 0),
-                "site": site_desc
+                "site": site_desc,
+                **ap_collection_evidence(ap, site_id, collected_at),
             }
             all_aps.append(ap_data)
             

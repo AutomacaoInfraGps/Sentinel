@@ -7,6 +7,7 @@ Armazena dados em formato JSON para fácil acesso pela interface web
 import json
 import os
 import tempfile
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -45,6 +46,15 @@ def save_data(component, data):
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)
     
+    if component == 'unifi':
+        try:
+            from services.operational_ap_postgres import publish_ap_catalog
+            publish_ap_catalog(data, file_path, logging.getLogger(__name__))
+        except Exception:
+            logging.getLogger(__name__).warning(
+                'PostgreSQL paralelo de APs indisponivel. Arquivo original preservado.'
+            )
+
     return True
 
 def load_data(component):
