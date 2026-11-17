@@ -53,26 +53,38 @@ def validate_connection(password, connect):
         raise _database_error("conexao", exc) from None
 
 
-def configure(password, *, store, connect):
-    if store.contains(COLLECTOR_REFERENCE):
+def configure(password, *, store, connect, replace_existing=False):
+    exists = store.contains(COLLECTOR_REFERENCE)
+    if exists and not replace_existing:
         raise ImportErrorSafe("A referencia do coletor ja existe. Nenhuma credencial foi substituida.")
+    if replace_existing and not exists:
+        raise ImportErrorSafe("A referencia do coletor nao existe. Use o modo de cadastro inicial.")
+    if replace_existing:
+        store.get(COLLECTOR_REFERENCE)
     validate_connection(password, connect)
     store.put(COLLECTOR_REFERENCE, password)
     if store.get(COLLECTOR_REFERENCE) != password:
         raise ImportErrorSafe("A leitura de retorno do cofre nao confirmou a credencial. Pare antes de habilitar a integracao.")
-    return {
-        "modo": "credencial_collector_protegida",
+    result = {
+        "modo": "credencial_collector_atualizada" if replace_existing else "credencial_collector_protegida",
         "protecao": "windows-dpapi-current-user",
         "conta_windows": "GALAXIA\\admin.pimentel",
         "referencia": COLLECTOR_REFERENCE,
         "conexao_validada": True,
         "leitura_dpapi_validada": True,
-        "sincronizacao_habilitada": False,
     }
+    if not replace_existing:
+        result["sincronizacao_habilitada"] = False
+    return result
 
 
 def main(argv=None):
-    argparse.ArgumentParser(description=__doc__).parse_args(argv)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--replace-existing", action="store_true",
+        help="Substitui somente a referencia existente do coletor apos validar a nova senha no banco.",
+    )
+    args = parser.parse_args(argv)
     try:
         verify_windows_identity()
         if sys.stdin.isatty():
@@ -82,11 +94,14 @@ def main(argv=None):
         except ImportError:
             raise ImportErrorSafe("Driver psycopg ausente neste Python. Use o ambiente de migracao.") from None
         store = JsonSecretStore()
-        if store.contains(COLLECTOR_REFERENCE):
+        if store.contains(COLLECTOR_REFERENCE) and not args.replace_existing:
             raise ImportErrorSafe("A referencia do coletor ja existe. Nenhuma credencial foi substituida.")
         password = _read_password(from_stdin=True)
         try:
-            result = configure(password, store=store, connect=psycopg.connect)
+            result = configure(
+                password, store=store, connect=psycopg.connect,
+                replace_existing=args.replace_existing,
+            )
         finally:
             password = None
         print(json.dumps(result, indent=2, ensure_ascii=True))

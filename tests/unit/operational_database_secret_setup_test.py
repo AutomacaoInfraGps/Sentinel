@@ -88,6 +88,52 @@ class OperationalDatabaseSecretSetupTests(unittest.TestCase):
         self.assertEqual(store.writes, [])
         self.assertNotIn("SECRET_BOUND_VALUE", str(caught.exception))
 
+    def test_explicit_replacement_preserves_other_credentials(self):
+        store = FakeStore()
+        store.entries[COLLECTOR_REFERENCE] = "OLD_SECRET"
+
+        def connect(**kwargs):
+            self.assertEqual(store.get(COLLECTOR_REFERENCE), "OLD_SECRET")
+            self.assertEqual(kwargs["password"], "New$Secret")
+            return FakeConnection()
+
+        result = configure("New$Secret", store=store, connect=connect, replace_existing=True)
+        self.assertEqual(store.writes, [COLLECTOR_REFERENCE])
+        self.assertEqual(store.get(COLLECTOR_REFERENCE), "New$Secret")
+        self.assertEqual(store.get("unrelated/credential"), "EXISTING_SECRET")
+        self.assertEqual(result["modo"], "credencial_collector_atualizada")
+        self.assertNotIn("sincronizacao_habilitada", result)
+        self.assertNotIn("New$Secret", json.dumps(result))
+
+    def test_replacement_failed_login_keeps_old_credential(self):
+        store = FakeStore()
+        store.entries[COLLECTOR_REFERENCE] = "OLD_SECRET"
+
+        def connect(**kwargs):
+            raise RuntimeError("password authentication failed PRIVATE_VALUE")
+
+        with self.assertRaises(ImportErrorSafe) as caught:
+            configure("PRIVATE_VALUE", store=store, connect=connect, replace_existing=True)
+        self.assertEqual(store.get(COLLECTOR_REFERENCE), "OLD_SECRET")
+        self.assertEqual(store.writes, [])
+        self.assertNotIn("PRIVATE_VALUE", str(caught.exception))
+
+    def test_replacement_requires_existing_reference(self):
+        store = FakeStore()
+        with self.assertRaises(ImportErrorSafe):
+            configure("SECRET", store=store, connect=lambda **kw: self.fail("Must not connect"), replace_existing=True)
+        self.assertEqual(store.writes, [])
+
+    def test_cli_explicit_replacement(self):
+        store = FakeStore()
+        store.entries[COLLECTOR_REFERENCE] = "OLD_SECRET"
+        fake_driver = SimpleNamespace(connect=lambda **kwargs: FakeConnection())
+        with patch("scripts.database.configure_collector_secret.verify_windows_identity"), patch("sys.stdin.isatty", return_value=False), patch("scripts.database.configure_collector_secret.JsonSecretStore", return_value=store), patch("scripts.database.configure_collector_secret._read_password", return_value="PRIVATE_PASSWORD"), patch.dict("sys.modules", {"psycopg": fake_driver}), redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(main(["--replace-existing"]), 0)
+        self.assertEqual(store.get(COLLECTOR_REFERENCE), "PRIVATE_PASSWORD")
+        self.assertNotIn("PRIVATE_PASSWORD", output.getvalue())
+        self.assertEqual(json.loads(output.getvalue())["modo"], "credencial_collector_atualizada")
+
     def test_wrong_destination_does_not_write(self):
         for identity in (("sentinel_admin", "sentinel", 5433), ("sentinel_collector", "aegis", 5432)):
             store = FakeStore()
