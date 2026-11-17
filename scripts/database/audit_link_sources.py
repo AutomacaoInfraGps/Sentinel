@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 FIELDS = ('id', 'nome', 'interface_monitorada', 'fortigate_host', 'firewall_serial',
           'vdom', 'origem_sync', 'modo_verificacao', 'status', 'ultima_verificacao',
-          'coletado_em', 'provedor', 'ip', 'sdwan_member_id', 'packet_loss_percent')
+          'coletado_em', 'coleta_status_origem', 'provedor', 'ip', 'sdwan_member_id', 'packet_loss_percent')
 SOURCES = {'fortigate', 'fortimanager', 'fortimanager_config+proxy_monitor',
            'fortimanager_proxy_monitor', 'fallback_local'}
 STATUSES = {'online', 'offline', 'unknown', 'warning', 'inativo', 'maintenance',
@@ -59,13 +59,14 @@ def audit_records(scoped_records, codes):
     fields, times, collected, sources, statuses, modes, ips = (Counter() for _ in range(7))
     ids, interfaces, endpoint_interfaces = Counter(), Counter(), Counter()
     id_scopes = defaultdict(set)
-    invalid = unbound = records = 0
+    invalid = unbound = records = confirmed = 0
     for scope, item in scoped_records:
         records += 1
         if not isinstance(item, dict):
             invalid += 1
             continue
         unbound += scope not in codes
+        confirmed += item.get('coleta_status_confirmada') is True
         for key in FIELDS:
             fields[key] += bool(_value(item.get(key)))
         for counter, key, allowed in ((sources, 'origem_sync', SOURCES),
@@ -88,6 +89,7 @@ def audit_records(scoped_records, codes):
             endpoint_interfaces[(scope, endpoint, interface)] += 1
     return {
         'registros': records, 'registros_invalidos': invalid,
+        'registros_com_coleta_confirmada': confirmed,
         'sem_vinculo_exato_ao_catalogo': unbound,
         'campos_presentes': dict(fields), 'por_origem_sync': dict(sources),
         'por_status': dict(statuses), 'por_modo_verificacao': dict(modes),
