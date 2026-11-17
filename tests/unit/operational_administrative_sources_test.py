@@ -154,6 +154,36 @@ class AdministrativeSourcesTest(unittest.TestCase):
         self.assertEqual(result['rotulos_sem_vinculo_unico'][0]['candidatos_regionais'], ['REG_ONE', 'REG_TWO'])
         self.assertFalse(result['vinculos_aprovados_pela_auditoria'])
 
+    def test_confirmed_sla_aliases_have_unique_candidates_without_person_data(self):
+        from services.sla_contact_matching import VERIFIED_ALIASES
+        regions = {code: {'nome': code} for code, _ in VERIFIED_ALIASES.values()}
+        regions['REG_GRSA_MACAE'] = {'nome': 'GRSA Macae'}
+        rows = [{'NOME_REGIONAL': label, 'NOME_REG_FORTI': report}
+                for label, (code, report) in VERIFIED_ALIASES.items()]
+        report = module.audit_contacts(rows, regions, unresolved=True)
+        self.assertEqual(report['candidatos_regionais_por_codigo_ou_nome_sem_aproximacao'], {'candidato_unico': 4})
+        self.assertEqual(report['por_regra_vinculo_regional'], {'alias_sla_verificado': 4})
+        self.assertEqual(report['rotulos_sem_vinculo_unico'], [])
+        self.assertFalse(report['vinculos_aprovados_pela_auditoria'])
+
+    def test_alias_report_mismatch_or_missing_target_remains_unresolved(self):
+        row = {'NOME_REGIONAL': 'V049_REGIONAL_MACAE01', 'NOME_REG_FORTI': 'REPORT DE SEGURANCA-FGT_GRSA_MACAE'}
+        report = module.audit_contacts([row], {'REG_MACAE': {}, 'REG_GRSA_MACAE': {}}, unresolved=True)
+        self.assertEqual(report['rotulos_sem_vinculo_unico'][0]['motivo'], 'rotulo_fortianalyzer_divergente_do_alias')
+        row['NOME_REG_FORTI'] = 'REPORT DE SEGURANCA-FTG_REGMACAE01'
+        report = module.audit_contacts([row], {'REG_GRSA_MACAE': {}}, unresolved=True)
+        self.assertEqual(report['rotulos_sem_vinculo_unico'][0]['motivo'], 'destino_alias_ausente')
+
+    def test_aliases_do_not_modify_general_unifi_rules(self):
+        from services.sla_contact_matching import resolve_sla_contact_regional
+        regions = {'REG_MACAE': {}, 'REG_GRSA_MACAE': {}}
+        code, reason, _ = resolve_sla_contact_regional(regions, 'V049_REGIONAL_MACAE01',
+                                                      'REPORT DE SEGURANCA-FTG_REGMACAE01')
+        self.assertEqual(code, 'REG_MACAE')
+        self.assertEqual(reason, 'alias_sla_verificado')
+        self.assertIsNone(resolve_sla_contact_regional(regions, 'V999_REGIONAL_MACAE01',
+                                                     'REPORT DE SEGURANCA-FTG_REGMACAE01')[0])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.database.audit_ap_sources import _read, _time_kind
+from services.sla_contact_matching import resolve_sla_contact_regional
 from unifi_site_matching import normalize_unifi_site
 
 ROLES = (('diretor', 'NOME_DIRETOR_1', 'EMAIL_DIRETOR'),
@@ -106,12 +107,8 @@ def audit_admins(cache, baseline, firewalls, regionals, *, unresolved=False):
 
 
 def audit_contacts(records, regionals, *, unresolved=False):
-    identities = defaultdict(set)
-    for code, entry in regionals.items():
-        for value in (code, entry.get('nome')):
-            if _text(value):
-                identities[normalize_unifi_site(value)].add(code)
     names, forti_names, links = Counter(), Counter(), Counter()
+    rules = Counter()
     details = []
     roles = {role: {'com_nome': 0, 'com_email': 0, 'nome_sem_email': 0, 'email_sem_nome': 0}
              for role, _, _ in ROLES}
@@ -121,11 +118,12 @@ def audit_contacts(records, regionals, *, unresolved=False):
             names[normalize_unifi_site(name)] += 1
         if forti:
             forti_names[forti.casefold()] += 1
-        matches = identities.get(normalize_unifi_site(name), set())
-        links['candidato_unico' if len(matches) == 1 else 'ambiguo' if matches else 'nao_encontrado'] += 1
-        if unresolved and len(matches) != 1:
+        code, reason, matches = resolve_sla_contact_regional(regionals, name, forti)
+        rules[reason] += 1
+        links['candidato_unico' if code else 'ambiguo' if matches else 'nao_encontrado'] += 1
+        if unresolved and code is None:
             details.append({'rotulo_regional_sla': name, 'rotulo_fortianalyzer': forti,
-                            'motivo': 'ambiguo' if matches else 'nao_encontrado',
+                            'motivo': reason,
                             'candidatos_regionais': sorted(matches)})
         for role, name_col, email_col in ROLES:
             has_name, has_email = _filled(record.get(name_col)), _filled(record.get(email_col))
@@ -137,6 +135,7 @@ def audit_contacts(records, regionals, *, unresolved=False):
             'rotulos_regionais_duplicados_normalizados': sum(count > 1 for count in names.values()),
             'rotulos_fortianalyzer_duplicados': sum(count > 1 for count in forti_names.values()),
             'candidatos_regionais_por_codigo_ou_nome_sem_aproximacao': dict(links),
+            'por_regra_vinculo_regional': dict(rules),
             'por_papel': roles, 'vinculos_aprovados_pela_auditoria': False}
     if unresolved:
         result['rotulos_sem_vinculo_unico'] = details

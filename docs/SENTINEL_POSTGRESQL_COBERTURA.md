@@ -76,6 +76,17 @@ aplica aliases de sites automaticamente a contatos. Todo vinculo e provisorio
 ate conferencia. Nao fundir pessoas por nome, nem presumir que e-mail
 compartilhado identifica uma unica pessoa.
 
+Quatro aliases especificos do SLA foram conferidos no cache de firewalls do
+Rigel: V024_REGIONAL_CEARA2 -> REG_CEARA_2,
+V028_REGIONAL_CAMPINAS_BASE_2 -> REG_CAMPINAS_02,
+V041_REGIONAL_CAXIAS_DO_SUL -> REG_CAXIAS e
+V049_REGIONAL_MACAE01 -> REG_MACAE (nao REG_GRSA_MACAE).
+services/sla_contact_matching.py exige tambem o rotulo FortiAnalyzer
+correspondente e a existencia do destino no catalogo. Rotulo divergente ou
+destino ausente fica pendente; nao ha fallback aproximado. Essas regras
+nao alteram a planilha, a busca da tela, os aliases UniFi nem o escopo AD.
+O relatorio discrimina alias_sla_verificado de identidade_normalizada_unica.
+
 Modelo alvo a validar: cadastro de contatos, meios de contato e vinculos
 contato-regional-papel, com origem e vigencia. Baseline e observacoes admins
 em tabelas separadas, com evidencia de coleta e aprovacoes independentes.
