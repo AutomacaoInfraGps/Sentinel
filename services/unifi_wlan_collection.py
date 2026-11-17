@@ -4,6 +4,13 @@ from datetime import datetime, timezone
 import re
 
 
+def without_wlan_catalog(sites):
+    """Keep the legacy public-status shape without adding configuration evidence."""
+    excluded = {'wlans_configuradas', 'wlans_coletadas_em', 'wlans_situacao', 'coleta_wlans_confirmada'}
+    return [{key: value for key, value in site.items() if key not in excluded}
+            for site in sites if isinstance(site, dict)] if isinstance(sites, list) else []
+
+
 def confirmed_wlan_receipt(response, payload):
     response.raise_for_status()
     if isinstance(payload, list):

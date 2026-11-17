@@ -115,3 +115,76 @@ alteracao de permissao AD foi criada.
 
 Os sites sem regional continuam sem vinculo automatico. Reaproveitar somente
 o relacionamento site/regional aprovado; nao relacionar pelo nome do planeta.
+
+## Carga inicial preparada: migracao 012
+
+A auditoria de producao confirmou 188 WLANs configuradas, com ID nativo e
+networkconf_id em todos os registros, 43 sites com coleta confirmada e sem
+identidades duplicadas. Na publicacao revisada, 141 estavam ativas e 47
+inativas; 176 tinham regional e 12 pertenciam a sites ainda sem regional.
+Essas 12 nao devem ser descartadas ou vinculadas por semelhanca de SSID.
+
+`scripts/database/import_wlan_catalog.py` usa exclusivamente
+`sites[].wlans_configuradas`, exige evidencia de configuracao em todos os
+sites publicados e horario explicito com fuso. Nao usa redes_wifi, runtime
+dos APs, timestamp global ou relogio de importacao como coleta WLAN.
+Como os horarios ja possuem fuso, nao existe argumento source-timezone.
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    'C:\Automacao\scripts\database\import_wlan_catalog.py'
+```
+
+A simulacao e padrao e nao acessa banco, API ou DPAPI. Exibe contagens, datas
+e hashes, nunca nomes de SSIDs, IDs ou credenciais. O digest inclui os dois
+arquivos, endpoint, sites/vinculos calculados e linhas tipadas da carga.
+Todos os sites publicados sao conferidos, inclusive os de lista vazia;
+uma carga global sem WLANs e bloqueada. Ausencia de site no arquivo nao
+significa exclusao de inventario SQL.
+
+### Modelo
+
+`operacional.wlans_unifi` tem chave controladora + site + ID nativo da WLAN
+e FK composta para os sites UniFi ja cadastrados. O relacionamento regional
+vem do site; nao e duplicado em cada WLAN. Nome do SSID, maiusculas e espacos
+sao preservados, mas nunca usados como chave. networkconf_id e uma referencia
+nativa, nao uma rede inventada pelo rotulo/VLAN; nao ha FK para tabela de
+redes de dados nesta etapa. Bandas usam text[] com parametros do driver,
+nao arrays construidos manualmente por concatenacao de valores.
+
+Ativo pode ser nulo se a origem nao o informou. Nao significa disponibilidade
+de radio/Internet. Campos de seguranca e payloads brutos nao sao armazenados.
+A migracao cria a tabela com sentinel_owner e concede apenas SELECT ao leitor
+e SELECT/INSERT ao coletor. Nao concede UPDATE/DELETE ou CREATE adicionais.
+
+### Guardas e sequencia
+
+1. Publicar todos os arquivos. A resposta de status publico UniFi passa a
+   excluir somente os novos campos de configuracao WLAN, mantendo os campos
+   anteriores de apresentacao. Reiniciar apenas o aplicativo para carregar
+   essa protecao. Isso nao implementa nova autorizacao para o endpoint antigo.
+2. Revisar a simulacao de producao. Fazer backup custom-format de sentinel e
+   conferir o catalogo com pg_restore antes da migracao.
+3. Congelar unifi.json e estrutura_regionais.json em pasta com ACL restrita,
+   simular com --source e --regionals apontando para as copias e revisar digest.
+4. Aplicar somente 012_wlan_catalog.sql como sentinel_admin, com ON_ERROR_STOP,
+   confirmando COMMIT. A migracao valida banco, porta 5433 e data_directory.
+5. Conferir as mesmas copias com --check-database. O endpoint precisa ser o
+   da controladora existente; codigos regionais e sites precisam existir,
+   nomes e vinculos regionais precisam coincidir com o SQL (inclusive nulos).
+   Divergencias bloqueiam a carga; o importador nao altera pais nem permissoes.
+6. Somente com a tabela WLAN vazia e guardas aprovadas, aplicar usando
+   --apply --expected-digest com o digest exato da copia revisada.
+7. Validar contagens de WLANs, ativo e vinculos com sentinel_api. Nao repetir
+   a carga inicial em tabela ocupada. A transacao e revertida em erro ou
+   divergencia; o sucesso so e impresso depois do commit pelo contexto.
+
+O escritor bloqueia regionais, controladoras, sites e WLANs nessa ordem.
+Insercoes usam parametros, sem SQL arbitrario da SofIA. O coletor via DPAPI
+continua sendo uma conta tecnica; as consultas futuras da SofIA devem
+filtrar a regional do site pelo escopo autenticado, excluindo sites sem
+regional das respostas de usuarios limitados. Esta carga nao troca leitores,
+nao habilita sincronizacao automatica e nao altera o fluxo de APs ja homologado.
+
+Testes locais de transacao usam mocks; aplicacao e conferencia reais dependem
+da homologacao no Rigel. Nao afirmar que o SQL foi aplicado apenas pela simulacao.

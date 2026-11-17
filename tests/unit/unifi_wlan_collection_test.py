@@ -7,7 +7,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock
 
-from services.unifi_wlan_collection import configured_wlan_catalog, confirmed_wlan_receipt
+from services.unifi_wlan_collection import configured_wlan_catalog, confirmed_wlan_receipt, without_wlan_catalog
 from services.unifi_networks import (
     extract_unifi_items, merge_wifi_networks, sanitize_ap_wifi_networks, sanitize_site_wifi_networks,
 )
@@ -44,6 +44,23 @@ def native_functions():
 
 
 class UnifiWlanCollectionTests(unittest.TestCase):
+    def test_public_status_keeps_existing_fields_without_new_configuration(self):
+        sites = [{'id': 'site', 'nome': 'Site', 'total_aps': 1, 'redes_wifi': [{'nome': 'MARTE'}],
+                  'wlans_configuradas': [{'wlan_id': 'CONFIG_PRIVATE'}], 'wlans_coletadas_em': AT,
+                  'wlans_situacao': 'confirmada', 'coleta_wlans_confirmada': True}]
+        before = deepcopy(sites)
+        result = without_wlan_catalog(sites)
+        self.assertEqual(before, sites)
+        self.assertEqual(result, [{'id': 'site', 'nome': 'Site', 'total_aps': 1, 'redes_wifi': [{'nome': 'MARTE'}]}])
+        self.assertNotIn('CONFIG_PRIVATE', repr(result))
+        self.assertEqual(without_wlan_catalog(None), [])
+        path = Path(__file__).resolve().parents[2] / 'web_config.py'
+        tree = ast.parse(path.read_text(encoding='utf-8-sig'))
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                        and node.name == 'api_public_status_unifi')
+        self.assertTrue(any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                            and node.func.id == 'without_wlan_catalog' for node in ast.walk(function)))
+
     def test_safe_projection_is_detached_and_keeps_real_id_without_passwords(self):
         source = [wlan()]
         before = deepcopy(source)
