@@ -36,6 +36,13 @@ edicao de planilha ou importacao de web_config. Usa caminhos configurados,
 nao adivinha o local da planilha. Saida contem apenas contagens e categorias;
 nomes, contas, e-mails, caminhos, motivos brutos e credenciais nao sao exibidos.
 
+Com --unresolved, o relatorio acrescenta apenas rotulos regionais externos,
+chaves/nomes de equipamentos sem vinculo unico e chaves de baseline fora do
+cache. Nao exporta nomes de pessoas, e-mails, contas aprovadas/observadas ou
+motivos brutos. A opcao nao aprova vinculos nem altera fontes; os rotulos
+devem ser tratados como informacao interna. A ausencia no cache nao comprova
+que um equipamento ou sua baseline deixou de existir.
+
 Baseline e lista observada sao conjuntos distintos. Conta encontrada nunca
 e aprovada automaticamente. Falha de consulta preserva conhecimento anterior,
 nao prova ausencia, exclusao ou baseline vazia. Ha regras especificas de

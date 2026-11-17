@@ -122,8 +122,37 @@ class AdministrativeSourcesTest(unittest.TestCase):
             with patch.object(module, '_contacts_from_workbook', return_value={'situacao': 'lido'}) as contacts:
                 report = module.audit_sources(root)
                 self.assertEqual(report['fontes']['monitor_admins']['baseline_dispositivos'], 1)
-                contacts.assert_called_once_with(root / 'external.xlsx', 'Contacts', REGIONS)
+                contacts.assert_called_once_with(root / 'external.xlsx', 'Contacts', REGIONS, unresolved=False)
             self.assertEqual(before, {name: (root / name).read_bytes() for name in files})
+
+    def test_unresolved_admin_details_only_export_device_identifiers(self):
+        cache = {'dispositivos': {'DEVICE_01': {'nome': 'FGT_UNKNOWN', 'tipo': 'fortigate',
+                'admins': ['ACCOUNT_PRIVATE'], 'motivo': 'SECRET_PRIVATE'}}}
+        baseline = {'DEVICE_01': ['APPROVED_PRIVATE'], 'DEVICE_OLD': ['APPROVED_PRIVATE']}
+        firewalls = {'firewalls_por_regional': {}}
+        default = module.audit_admins(cache, baseline, firewalls, REGIONS)
+        self.assertNotIn('pendencias_identidade', default)
+        result = module.audit_admins(cache, baseline, firewalls, REGIONS, unresolved=True)
+        self.assertEqual(result['pendencias_identidade']['chaves_baseline_fora_do_cache'], ['DEVICE_OLD'])
+        self.assertEqual(result['pendencias_identidade']['equipamentos_sem_vinculo_unico'][0]['nome_dispositivo'], 'FGT_UNKNOWN')
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_unresolved_contact_details_exclude_people_and_resolved_rows(self):
+        records = [{'NOME_REGIONAL': 'V001_UNKNOWN', 'NOME_REG_FORTI': 'REPORT_UNKNOWN',
+                    'NOME_GERENTE': 'PERSON_PRIVATE', 'EMAIL_GERENTE': 'EMAIL_PRIVATE@example.test'},
+                   {'NOME_REGIONAL': 'V021_BAHIA', 'NOME_DIRETOR_1': 'PERSON_PRIVATE'}]
+        self.assertNotIn('rotulos_sem_vinculo_unico', module.audit_contacts(records, REGIONS))
+        result = module.audit_contacts(records, REGIONS, unresolved=True)
+        self.assertEqual(result['rotulos_sem_vinculo_unico'], [
+            {'rotulo_regional_sla': 'V001_UNKNOWN', 'rotulo_fortianalyzer': 'REPORT_UNKNOWN',
+             'motivo': 'nao_encontrado', 'candidatos_regionais': []}])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_unresolved_keeps_all_ambiguous_candidates_without_approving(self):
+        regions = {'REG_ONE': {'nome': 'Same'}, 'REG_TWO': {'nome': 'Same'}}
+        result = module.audit_contacts([{'NOME_REGIONAL': 'Same'}], regions, unresolved=True)
+        self.assertEqual(result['rotulos_sem_vinculo_unico'][0]['candidatos_regionais'], ['REG_ONE', 'REG_TWO'])
+        self.assertFalse(result['vinculos_aprovados_pela_auditoria'])
 
 
 if __name__ == '__main__':

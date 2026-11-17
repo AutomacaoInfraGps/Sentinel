@@ -1,5 +1,6 @@
-"""Read-only coverage of admin baselines and external SLA contacts; counts only."""
+"""Read-only coverage; optional unresolved labels never include accounts or contacts."""
 
+import argparse
 from collections import Counter, defaultdict
 import json
 from pathlib import Path
@@ -36,7 +37,7 @@ def _list_stats(value):
             'duplicados_exatos': len(valid) - len(set(valid))}
 
 
-def audit_admins(cache, baseline, firewalls, regionals):
+def audit_admins(cache, baseline, firewalls, regionals, *, unresolved=False):
     devices = cache.get('dispositivos') if isinstance(cache, dict) else None
     if not isinstance(devices, dict) or not isinstance(baseline, dict):
         raise ValueError('Invalid admin source')
@@ -61,7 +62,8 @@ def audit_admins(cache, baseline, firewalls, regionals):
               'baseline_duplicados_exatos': 0,
               'baseline_dispositivos_fora_do_cache': sum(key not in devices for key in baseline),
               'dispositivos_sem_entrada_baseline': sum(key not in baseline for key in devices)}
-    for device in devices.values():
+    details = []
+    for device_key, device in devices.items():
         if not isinstance(device, dict):
             raise ValueError('Invalid admin device')
         kind = device.get('tipo')
@@ -77,6 +79,10 @@ def audit_admins(cache, baseline, firewalls, regionals):
         binding = ('central_sem_regional' if kind in ('fortimanager', 'fortianalyzer') else
                    'unico' if len(matches) == 1 else 'ambiguo' if matches else 'nao_encontrado')
         result['vinculo_por_nome_exato_firewall'][binding] += 1
+        if unresolved and binding in ('ambiguo', 'nao_encontrado'):
+            details.append({'chave_dispositivo': _text(device_key),
+                            'nome_dispositivo': _text(device.get('nome')),
+                            'motivo': binding, 'candidatos_regionais': sorted(matches)})
         stats = _list_stats(device.get('admins'))
         result['listas_admins_invalidas'] += stats is None
         if stats:
@@ -91,16 +97,22 @@ def audit_admins(cache, baseline, firewalls, regionals):
             result['baseline_contas_invalidas'] += stats['invalidos']
             result['baseline_duplicados_exatos'] += stats['duplicados_exatos']
     result['publicacao'] = _time_kind(cache.get('atualizado_em'))
+    if unresolved:
+        result['pendencias_identidade'] = {
+            'equipamentos_sem_vinculo_unico': details,
+            'chaves_baseline_fora_do_cache': sorted(_text(key) for key in baseline if key not in devices),
+        }
     return result
 
 
-def audit_contacts(records, regionals):
+def audit_contacts(records, regionals, *, unresolved=False):
     identities = defaultdict(set)
     for code, entry in regionals.items():
         for value in (code, entry.get('nome')):
             if _text(value):
                 identities[normalize_unifi_site(value)].add(code)
     names, forti_names, links = Counter(), Counter(), Counter()
+    details = []
     roles = {role: {'com_nome': 0, 'com_email': 0, 'nome_sem_email': 0, 'email_sem_nome': 0}
              for role, _, _ in ROLES}
     for record in records:
@@ -111,20 +123,27 @@ def audit_contacts(records, regionals):
             forti_names[forti.casefold()] += 1
         matches = identities.get(normalize_unifi_site(name), set())
         links['candidato_unico' if len(matches) == 1 else 'ambiguo' if matches else 'nao_encontrado'] += 1
+        if unresolved and len(matches) != 1:
+            details.append({'rotulo_regional_sla': name, 'rotulo_fortianalyzer': forti,
+                            'motivo': 'ambiguo' if matches else 'nao_encontrado',
+                            'candidatos_regionais': sorted(matches)})
         for role, name_col, email_col in ROLES:
             has_name, has_email = _filled(record.get(name_col)), _filled(record.get(email_col))
             roles[role]['com_nome'] += has_name
             roles[role]['com_email'] += has_email
             roles[role]['nome_sem_email'] += has_name and not has_email
             roles[role]['email_sem_nome'] += has_email and not has_name
-    return {'linhas': len(records), 'regionais_sem_rotulo': sum(not _text(row.get('NOME_REGIONAL')) for row in records),
+    result = {'linhas': len(records), 'regionais_sem_rotulo': sum(not _text(row.get('NOME_REGIONAL')) for row in records),
             'rotulos_regionais_duplicados_normalizados': sum(count > 1 for count in names.values()),
             'rotulos_fortianalyzer_duplicados': sum(count > 1 for count in forti_names.values()),
             'candidatos_regionais_por_codigo_ou_nome_sem_aproximacao': dict(links),
             'por_papel': roles, 'vinculos_aprovados_pela_auditoria': False}
+    if unresolved:
+        result['rotulos_sem_vinculo_unico'] = details
+    return result
 
 
-def _contacts_from_workbook(path, sheet_name, regionals):
+def _contacts_from_workbook(path, sheet_name, regionals, *, unresolved=False):
     # Read formulas as formulas: cached formula results must not masquerade as contacts.
     from openpyxl import load_workbook
     with Path(path).open('rb') as stream:
@@ -152,12 +171,12 @@ def _contacts_from_workbook(path, sheet_name, regionals):
                     records.append(record)
             if formulas:
                 return {'situacao': 'formulas_exigem_revisao', 'celulas_com_formula': formulas}
-            return {'situacao': 'lido', **audit_contacts(records, regionals)}
+            return {'situacao': 'lido', **audit_contacts(records, regionals, unresolved=unresolved)}
         finally:
             workbook.close()
 
 
-def audit_sources(root=ROOT):
+def audit_sources(root=ROOT, *, unresolved=False):
     root = Path(root)
     report = {'modo': 'auditoria_administrativa_somente_leitura_sem_banco', 'fontes': {}}
     try:
@@ -177,7 +196,7 @@ def audit_sources(root=ROOT):
         if not baseline_path.is_absolute():
             baseline_path = root / baseline_path
         result = audit_admins(_read(root / 'output/dashboard_admins_cache.json'), _read(baseline_path),
-                              _read(root / 'output/dashboard_firewalls_cache.json'), regions)
+                              _read(root / 'output/dashboard_firewalls_cache.json'), regions, unresolved=unresolved)
         report['fontes']['monitor_admins'] = {'situacao': 'lido', **result}
     except Exception:
         report['fontes']['monitor_admins'] = {'situacao': 'fonte_ausente_ou_invalida'}
@@ -191,7 +210,8 @@ def audit_sources(root=ROOT):
             if not path.is_absolute() or path.suffix.lower() != '.xlsx':
                 report['fontes']['contatos_sla'] = {'situacao': 'caminho_absoluto_xlsx_exigido'}
             else:
-                report['fontes']['contatos_sla'] = _contacts_from_workbook(path, section.get('sheet_name') or '', regions)
+                report['fontes']['contatos_sla'] = _contacts_from_workbook(
+                    path, section.get('sheet_name') or '', regions, unresolved=unresolved)
     except ImportError:
         report['fontes']['contatos_sla'] = {'situacao': 'dependencia_openpyxl_ausente'}
     except Exception:
@@ -199,8 +219,12 @@ def audit_sources(root=ROOT):
     return report
 
 
-def main():
-    print(json.dumps(audit_sources(), indent=2, ensure_ascii=True))
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--unresolved', action='store_true',
+                        help='Exibe somente identificadores pendentes de equipamento e rotulos regionais, sem contas ou dados pessoais.')
+    args = parser.parse_args(argv)
+    print(json.dumps(audit_sources(unresolved=args.unresolved), indent=2, ensure_ascii=True))
     return 0
 
 
