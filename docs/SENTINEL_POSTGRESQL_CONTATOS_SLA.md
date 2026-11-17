@@ -61,7 +61,17 @@ Operacoes SQL exigem copias explicitas: --source arquivo.xlsx --sheet ABA
 sentinel, usando sentinel_collector via DPAPI. --check-database e somente
 leitura. --apply exige --expected-digest exato e as tres tabelas vazias.
 
-Transacao bloqueia regionais, fontes, vinculos e contatos nessa ordem. Confere
+Transacao adquire pg_try_advisory_xact_lock com chave fixa da carga SLA antes
+de conferir tabelas vazias; outra carga cooperante e recusada sem espera.
+O bloqueio e liberado automaticamente em commit/rollback. Advisory lock nao
+impede SQL externo que nao siga o protocolo; PKs, FKs e a chave fixa da fonte
+continuam protegendo a integridade. As tabelas sao bloqueadas na ordem
+regionais (ACCESS SHARE), fontes, vinculos e contatos (ROW EXCLUSIVE).
+Esses modos sao compativeis com SELECT/INSERT, sem conceder UPDATE ou MAINTAIN.
+O bloqueio forte SHARE ROW EXCLUSIVE usado inicialmente era incompativel com
+os grants da 014 e foi removido do importador apos erro 42501 no Rigel.
+Nao reaplicar a 014: a correcao e apenas no Python. Conferir contagens antes
+de repetir a carga com o importador atualizado. Confere
 existencia de regionais antes de inserir. INSERTs parametrizados, sem UPDATE,
 DELETE ou SQL arbitrario. Confere contagens e papeis antes do commit. Quem
 abre a conexao controla commit/rollback; sucesso e impresso depois do commit.

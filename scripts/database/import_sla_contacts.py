@@ -24,6 +24,7 @@ from unifi_site_matching import normalize_unifi_site
 
 SOURCE_ID = 'sentinel_sla_principal'
 TABLES = ('fontes_contatos_sla', 'regionais_contatos_sla', 'contatos_regionais_sla')
+BOOTSTRAP_LOCK = (0x534C4101, 14)
 
 
 @dataclass(frozen=True, repr=False)
@@ -153,8 +154,15 @@ def write_contact_catalog(connection, catalog, *, progress=None):
         cursor.execute("SET LOCAL statement_timeout='30s'")
         progress.phase = 'validacao_destino'
         _identity(cursor)
-        for table in ('regionais', *TABLES):
-            cursor.execute('LOCK TABLE operacional.' + table + ' IN SHARE ROW EXCLUSIVE MODE')
+        progress.phase = 'bloqueio_carga'
+        # Serialize cooperating importers without granting UPDATE just for table locks.
+        cursor.execute('SELECT pg_try_advisory_xact_lock(%s,%s)', BOOTSTRAP_LOCK)
+        if cursor.fetchone() != (True,):
+            raise ImportErrorSafe('Outra carga de contatos esta em andamento. Nao repetir agora.')
+        cursor.execute('LOCK TABLE operacional.regionais IN ACCESS SHARE MODE')
+        for table in TABLES:
+            cursor.execute('LOCK TABLE operacional.' + table + ' IN ROW EXCLUSIVE MODE')
+        progress.phase = 'conferencia_destino'
         inspection = _inspect(cursor, catalog)
         if not inspection['tabelas_contatos_vazias']:
             raise ImportErrorSafe('Tabelas de contatos nao estao vazias. Nao repetir a carga inicial.')

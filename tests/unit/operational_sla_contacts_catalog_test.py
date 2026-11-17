@@ -107,11 +107,18 @@ class SlaContactsCatalogTest(unittest.TestCase):
 
     def test_writer_uses_bound_values_verifies_counts_and_leaves_commit_to_caller(self):
         snap = catalog()
-        conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (0,), (0,), (0,), (1,), (1,), (1,)],
+        conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (True,), (0,), (0,), (0,), (1,), (1,), (1,)],
                                   [[('REG_BAHIA',)], [('REG_BAHIA',)], [('diretor', 1)]])
         module.write_contact_catalog(conn, snap)
         sql = [call.args[0] for call in cursor.execute.call_args_list]
         self.assertEqual(sum(statement.startswith('LOCK') for statement in sql), 4)
+        self.assertIn('LOCK TABLE operacional.regionais IN ACCESS SHARE MODE', sql)
+        for table in module.TABLES:
+            self.assertIn('LOCK TABLE operacional.' + table + ' IN ROW EXCLUSIVE MODE', sql)
+        self.assertFalse(any('SHARE ROW EXCLUSIVE' in statement for statement in sql))
+        advisory_index = next(i for i, statement in enumerate(sql) if 'pg_try_advisory_xact_lock' in statement)
+        first_count_index = next(i for i, statement in enumerate(sql) if statement.startswith('SELECT count(*)'))
+        self.assertLess(advisory_index, first_count_index)
         self.assertEqual(sum(statement.startswith('INSERT') for statement in sql), 3)
         for call in cursor.execute.call_args_list:
             self.assertNotIn('PRIVATE', call.args[0])
@@ -122,16 +129,36 @@ class SlaContactsCatalogTest(unittest.TestCase):
 
     def test_occupied_or_missing_regional_blocks_before_insert(self):
         for counts, regions in (((1, 0, 0), [('REG_BAHIA',)]), ((0, 0, 0), [])):
-            conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), *((n,) for n in counts)], [regions])
+            conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (True,), *((n,) for n in counts)], [regions])
             with self.assertRaises(module.ImportErrorSafe):
                 module.write_contact_catalog(conn, catalog())
             self.assertFalse(any(call.args[0].startswith('INSERT') for call in cursor.execute.call_args_list))
 
     def test_post_insert_count_mismatch_cancels(self):
-        conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (0,), (0,), (0,), (1,), (1,), (0,)],
+        conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (True,), (0,), (0,), (0,), (1,), (1,), (0,)],
                                   [[('REG_BAHIA',)], [('REG_BAHIA',)]])
         with self.assertRaises(module.ImportErrorSafe):
             module.write_contact_catalog(conn, catalog())
+        conn.commit.assert_not_called()
+
+    def test_concurrent_bootstrap_is_refused_before_counts_or_inserts(self):
+        conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (False,)])
+        with self.assertRaises(module.ImportErrorSafe):
+            module.write_contact_catalog(conn, catalog())
+        sql = [call.args[0] for call in cursor.execute.call_args_list]
+        self.assertFalse(any(statement.startswith(('LOCK', 'INSERT', 'SELECT count(*)')) for statement in sql))
+        cursor.fetchall.assert_not_called()
+
+    def test_writer_table_lock_modes_work_with_select_insert_permissions(self):
+        conn, cursor = connection([('sentinel', 'sentinel_collector', 5433), (True,), (0,), (0,), (0,), (1,), (1,), (1,)],
+                                  [[('REG_BAHIA',)], [('REG_BAHIA',)], [('diretor', 1)]])
+        def enforce_least_privilege(sql, *parameters):
+            if sql.startswith('LOCK TABLE'):
+                permitted = (' IN ACCESS SHARE MODE', ' IN ROW EXCLUSIVE MODE')
+                if not sql.endswith(permitted):
+                    raise PermissionError('Lock requires privileges not granted by migration 014')
+        cursor.execute.side_effect = enforce_least_privilege
+        module.write_contact_catalog(conn, catalog())
         conn.commit.assert_not_called()
 
     def test_inspection_never_writes(self):
