@@ -188,3 +188,57 @@ nao habilita sincronizacao automatica e nao altera o fluxo de APs ja homologado.
 
 Testes locais de transacao usam mocks; aplicacao e conferencia reais dependem
 da homologacao no Rigel. Nao afirmar que o SQL foi aplicado apenas pela simulacao.
+
+## Sincronizacao opt-in (013)
+
+`data_store.save_data('unifi', ...)` publica, depois da troca atomica do JSON
+e independentemente do resultado do escritor de APs, uma projecao WLAN sem
+segredos em `output/wlans_postgres_publication.json`. O arquivo e um checkpoint
+da ultima publicacao confirmada, nao uma fila duravel nem historico completo.
+O coletor principal `Unifi.Py` fornece as evidencias; o coletor legado pode
+nao trazer esses campos. Nesse caso a publicacao anterior e preservada.
+
+Somente sites com coleta WLAN confirmada entram na projecao. IDs, bandas,
+tipos, origem e horario de cada rede sao validados pelo mesmo parser da carga
+inicial. Datas futuras ou divergentes do recibo do site sao recusadas.
+Captura do arquivo nao substitui horario de coleta. A projecao de exibicao,
+incluindo nomes de planetas e runtime dos APs, nao entra na carga SQL.
+
+Listas vazias confirmadas podem coexistir com sites contendo redes, mas nao
+apagam registros. Publicacao global sem WLAN observada preserva checkpoint e
+banco. Nao ha remocao, inferencia de inatividade por ausencia ou sincronizacao
+de senhas. Ativo/inativo e configuracao, nao disponibilidade operacional.
+
+013 adiciona atualizado_no_banco_em e permite hashes legados nulos apos upsert;
+novas linhas e linhas atualizadas usam o marcador tipado por controladora,
+site e WLAN em operacional.sincronizacoes_wlans. Concede UPDATE na tabela WLAN
+e SELECT/INSERT/UPDATE nos marcadores, sem DELETE. Nao muda privilegios dos
+leitores ou do esquema. Escritor bloqueia regionais, controladoras, sites,
+WLANs e marcadores nessa ordem, com timeout curto. Commit inclui dados e
+marcadores; falha nao impede a publicacao JSON original.
+
+Controladora, site e vinculos regionais precisam coincidir com os pais SQL.
+O escritor WLAN nao cria sites nem altera seu escopo; divergencias exigem
+revisao do cadastro/fluxo AP existente. IDs nativos sao a chave, nao SSIDs.
+Coletas antigas sao ignoradas; mesmo horario com conteudo divergente bloqueia
+a transacao. Uma publicacao parcial nao remove observacoes ausentes do SQL.
+O checkpoint tambem recusa retrocesso ou conflito de linhas sobrepostas.
+
+Homologacao, sem pular etapas:
+
+1. Publicar arquivos, inclusive novos nao rastreados, e fazer pull no Rigel.
+2. Fazer backup custom-format e conferir catalogo antes de aplicar
+   scripts/database/sql/013_wlan_shadow_sync.sql como sentinel_admin.
+3. Reiniciar somente o aplicativo e executar nova coleta UniFi principal.
+   Flag ausente significa gravacao automatica desligada; checkpoint e salvo.
+4. Executar sync_wlan_catalog.py (somente leitura por padrao). Congelar o
+   checkpoint em pasta de backup com ACL restrita e conferir --publication.
+5. Aplicar a copia com --apply --expected-digest exato e conferir novamente.
+6. Somente apos aprovar, criar instance/operational-postgres-wlans-shadow.json
+   com {"enabled":true}, reiniciar aplicativo e executar uma nova coleta.
+7. Conferir a publicacao nova sem --apply: pendentes zero e conteudo ja
+   sincronizado true comprovam o ciclo automatico. Nao usar importador inicial.
+
+Ausencia ou {"enabled":false} desliga apenas novas gravacoes automaticas.
+SQL ja gravado e checkpoints permanecem. Nao ha troca de leitores ou alteracao
+do Fluxo Neural; escopo AD continua obrigatorio em qualquer futura leitura SQL.

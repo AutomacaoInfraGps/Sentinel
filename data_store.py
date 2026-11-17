@@ -54,6 +54,13 @@ def save_data(component, data):
             logging.getLogger(__name__).warning(
                 'PostgreSQL paralelo de APs indisponivel. Arquivo original preservado.'
             )
+        try:
+            from services.operational_wlan_postgres import publish_wlan_catalog
+            publish_wlan_catalog(data, file_path, logging.getLogger(__name__))
+        except Exception:
+            logging.getLogger(__name__).warning(
+                'PostgreSQL paralelo de WLANs indisponivel. Arquivo original preservado.'
+            )
 
     return True
 
