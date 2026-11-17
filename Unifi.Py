@@ -8,6 +8,7 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 from services.unifi_ap_collection import confirmed_device_response, ap_collection_evidence
+from services.unifi_wlan_collection import confirmed_wlan_receipt, configured_wlan_catalog
 from services.unifi_models import nome_modelo_unifi
 from services.unifi_networks import (
     extract_unifi_items,
@@ -67,9 +68,10 @@ def deve_ocultar_ap_teste(ap, site_desc):
     return site == "API_TESTE" or (nome == "nano hd" and ip == "10.134.0.104")
 
 
-def _obter_dados_unifi_caminhos(caminhos):
+def _obter_dados_unifi_caminhos(caminhos, *, with_evidence=False):
     diagnostico = []
     ultimo_erro = None
+    empty_receipt = None
     for caminho in caminhos:
         try:
             response = session.get(f"{base_url}{caminho}", timeout=12)
@@ -77,17 +79,26 @@ def _obter_dados_unifi_caminhos(caminhos):
                 diagnostico.append(f"{caminho}=404")
                 continue
             response.raise_for_status()
-            data = extract_unifi_items(response.json())
+            raw_payload = response.json()
+            data = extract_unifi_items(raw_payload)
+            receipt = None
+            if with_evidence:
+                try:
+                    receipt = confirmed_wlan_receipt(response, raw_payload)
+                except ValueError:
+                    pass
+                if receipt is not None and not data and empty_receipt is None:
+                    empty_receipt = receipt
             diagnostico.append(f"{caminho}={response.status_code}/{len(data)}")
             if data:
-                return data, diagnostico
+                return (data, diagnostico, receipt) if with_evidence else (data, diagnostico)
         except Exception as exc:
             ultimo_erro = exc
             status = getattr(getattr(exc, "response", None), "status_code", "erro")
             diagnostico.append(f"{caminho}={status}")
     if ultimo_erro and not diagnostico:
         raise ultimo_erro
-    return [], diagnostico
+    return ([], diagnostico, empty_receipt) if with_evidence else ([], diagnostico)
 
 
 def _obter_dados_unifi_site(site_id, recurso):
@@ -98,17 +109,18 @@ def _obter_dados_unifi_site(site_id, recurso):
     return data
 
 
-def obter_redes_wifi_site(site_id, aps=None):
+def obter_redes_wifi_site(site_id, aps=None, *, with_catalog=False):
     """Coleta somente metadados seguros das WLANs configuradas no site."""
     try:
-        wlans, diagnostico = _obter_dados_unifi_caminhos((
+        wlans, diagnostico, receipt = _obter_dados_unifi_caminhos((
             f"/api/s/{site_id}/rest/wlanconf",
             f"/proxy/network/api/s/{site_id}/rest/wlanconf",
             f"/v2/api/site/{site_id}/wlan",
             f"/proxy/network/v2/api/site/{site_id}/wlan",
             f"/v2/api/site/{site_id}/wlan/enriched-configuration",
             f"/proxy/network/v2/api/site/{site_id}/wlan/enriched-configuration",
-        ))
+        ), with_evidence=True)
+        catalog = configured_wlan_catalog(wlans, receipt)
         configured = sanitize_site_wifi_networks(
             wlans,
             _obter_dados_unifi_site(site_id, "networkconf"),
@@ -117,10 +129,12 @@ def obter_redes_wifi_site(site_id, aps=None):
         networks = merge_wifi_networks(configured, observed)
         if not networks:
             print(f"Diagnostico WLAN {site_id}: {'; '.join(diagnostico)}")
-        return networks
+        return (networks, catalog) if with_catalog else networks
     except Exception as exc:
         print(f"Nao foi possivel coletar as redes Wi-Fi do site {site_id}: {exc}")
-        return sanitize_ap_wifi_networks(aps)
+        networks = sanitize_ap_wifi_networks(aps)
+        catalog = configured_wlan_catalog([], None)
+        return (networks, catalog) if with_catalog else networks
 
 # === CONSTRUÇÃO DO HTML ===
 html = """
@@ -166,7 +180,7 @@ for site in sites:
             d for d in devices
             if d.get("type") == "uap" and not deve_ocultar_ap_teste(d, site_desc)
         ]
-        redes_wifi = obter_redes_wifi_site(site_id, aps)
+        redes_wifi, wlan_catalog = obter_redes_wifi_site(site_id, aps, with_catalog=True)
         if not aps and not redes_wifi:
             continue
 
@@ -178,6 +192,7 @@ for site in sites:
             "coleta_aps_confirmada": True,
             "total_aps": len(aps),
             "redes_wifi": redes_wifi,
+            **wlan_catalog,
         }
         sites_data.append(site_data)
 

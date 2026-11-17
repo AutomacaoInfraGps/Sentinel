@@ -120,6 +120,28 @@ class WlanSourcesAuditTests(unittest.TestCase):
             (root / 'estrutura_regionais.json').write_text('{}', encoding='utf-8')
             self.assertEqual(audit_sources(root)['fontes']['catalogo_regional']['situacao'], 'ausente_ou_invalido')
 
+    def test_separate_configuration_is_audited_without_changing_display_counts(self):
+        source = payload()
+        source['sites'][0].update({
+            'coleta_wlans_confirmada': True, 'wlans_coletadas_em': '2026-11-17T13:00:00Z',
+            'wlans_situacao': 'confirmada',
+            'wlans_configuradas': [network(wlan_id='a', origem='configuracao_unifi', coletado_em='2026-11-17T13:00:00Z'),
+                                   network(wlan_id='b', origem='configuracao_unifi', coletado_em='2026-11-17T13:00:00Z')],
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'data').mkdir()
+            (root / 'estrutura_regionais.json').write_text(json.dumps({'regionais': REGIONS}), encoding='utf-8')
+            (root / 'data/unifi.json').write_text(json.dumps(source), encoding='utf-8')
+            result = audit_sources(root)
+        self.assertEqual(result['fontes']['unifi_nativo']['registros_wifi'], 1)
+        separate = result['fontes']['unifi_configuracao_separada']
+        self.assertEqual(separate['registros_wifi'], 2)
+        self.assertEqual(separate['ids_wlan'], {'presente': 2})
+        self.assertEqual(separate['coleta_explicita_por_rede'], {'com_fuso': 2})
+        self.assertEqual(separate['sites_por_situacao'], {'confirmada': 1})
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
 
 if __name__ == '__main__':
     unittest.main()

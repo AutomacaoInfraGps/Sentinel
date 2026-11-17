@@ -125,7 +125,23 @@ def audit_sources(root=ROOT):
     except (OSError, ValueError, RecursionError):
         report['fontes']['catalogo_regional'] = {'situacao': 'ausente_ou_invalido'}
     try:
-        report['fontes']['unifi_nativo'] = audit_unifi_wlans(_read(root / 'data/unifi.json'), regionals)
+        payload = _read(root / 'data/unifi.json')
+        report['fontes']['unifi_nativo'] = audit_unifi_wlans(payload, regionals)
+        separate = {'controller': payload.get('controller'), 'timestamp': payload.get('timestamp'), 'sites': []}
+        situations = Counter()
+        for site in payload['sites']:
+            if not isinstance(site, dict):
+                separate['sites'].append(None)
+                continue
+            projected = {key: site.get(key) for key in ('id', 'nome', 'wlans_coletadas_em', 'coleta_wlans_confirmada')}
+            if 'wlans_configuradas' in site:
+                projected['redes_wifi'] = site['wlans_configuradas']
+            separate['sites'].append(projected)
+            situation = site.get('wlans_situacao')
+            situations[situation if isinstance(situation, str) and situation in
+                       ('confirmada', 'sem_confirmacao_api', 'identidade_ou_estrutura_invalida') else 'ausente_ou_outro'] += 1
+        report['fontes']['unifi_configuracao_separada'] = {
+            **audit_unifi_wlans(separate, regionals), 'sites_por_situacao': dict(situations)}
     except (OSError, ValueError, RecursionError):
         report['fontes']['unifi_nativo'] = {'situacao': 'ausente_ou_invalido'}
     return report
