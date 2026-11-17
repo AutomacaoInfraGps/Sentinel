@@ -195,6 +195,16 @@ class GerenciadorRegionais:
                 "PostgreSQL paralelo de servidores indisponivel. Arquivo original preservado."
             )
 
+        try:
+            import logging
+            from services.operational_link_postgres import publish_link_catalog
+            publish_link_catalog(payload, self.arquivo_regionais, logging.getLogger(__name__))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PostgreSQL paralelo de links indisponivel. Arquivo original preservado."
+            )
+
     def _normalizar_servidor(self, servidor: Dict, existente: Optional[Dict] = None) -> Dict:
         dados = dict(existente or {})
         dados.update(servidor)

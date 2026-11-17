@@ -2853,6 +2853,7 @@ def _persistir_links_internet_exibicao_lote(links_por_regional: dict):
     alteradas = []
     campos_temporais = {
         "ultima_verificacao",
+        "coletado_em",
         "ultima_atualizacao_mapa",
         "updated_at",
         "changed_at",
@@ -3081,6 +3082,7 @@ def _load_regional_interfaces(
             })
     source = "fortimanager"
     proxy_error = None
+    runtime_coletado_em = None
 
     if device_info and device_info.get("name"):
         if include_configuration or not interfaces:
@@ -3115,6 +3117,7 @@ def _load_regional_interfaces(
                 with FortiManagerClient() as fm:
                     monitor_interfaces = fm.proxy_monitor_interfaces(adom, device_info.get("name"))
             if monitor_interfaces:
+                runtime_coletado_em = datetime.now(timezone.utc).isoformat()
                 if interfaces:
                     for interface in interfaces:
                         interface_name = str(interface.get("name") or interface.get("interface") or "").strip().lower()
@@ -3200,6 +3203,7 @@ def _load_regional_interfaces(
         "resolved": resolved,
         "device": device_info,
         "adom": adom,
+        "runtime_coletado_em": runtime_coletado_em,
     }
 
 
@@ -3605,7 +3609,9 @@ def _coletar_links_regional(
 
     if not interfaces_result.get("success"):
         if persist and links_fallback:
-            _persistir_links_internet_exibicao(codigo_regional, links_fallback)
+            _persistir_links_internet_exibicao(codigo_regional, [
+                {**link, "coleta_status_confirmada": False} for link in links_fallback
+            ])
         return {
             "success": False,
             "message": interfaces_result.get("message"),
@@ -3628,6 +3634,7 @@ def _coletar_links_regional(
         ]
     interface_lan = _selecionar_interface_lan(interfaces)
     sdwan_members_map = {}
+    sdwan_coletado_em = None
 
     if include_sdwan:
         try:
@@ -3643,6 +3650,7 @@ def _coletar_links_regional(
                     with FortiManagerClient() as fm:
                         sdwan_result = fm.proxy_sdwan_members_with_sla(device_adom, device_name)
             if sdwan_result.get("success"):
+                sdwan_coletado_em = datetime.now(timezone.utc).isoformat()
                 for member in sdwan_result.get("membros", []):
                     _registrar_sdwan_member(sdwan_members_map, member)
         except Exception as exc:
@@ -3663,7 +3671,9 @@ def _coletar_links_regional(
 
     if not interfaces_wan:
         if persist and links_fallback:
-            _persistir_links_internet_exibicao(codigo_regional, links_fallback)
+            _persistir_links_internet_exibicao(codigo_regional, [
+                {**link, "coleta_status_confirmada": False} for link in links_fallback
+            ])
         return {
             "success": False,
             "message": "Nenhuma interface WAN encontrada no equipamento da regional",
@@ -3705,6 +3715,7 @@ def _coletar_links_regional(
         link_existente = _find_link_for_interface(links_referencia, normalized_link)
         link_final = dict(link_existente or {})
         link_final.update(normalized_link)
+        link_final["coleta_status_confirmada"] = False
 
         sdwan_member = _buscar_sdwan_member(
             sdwan_members_map,
@@ -3715,6 +3726,7 @@ def _coletar_links_regional(
             link_final.get("provedor"),
             normalized_link.get("provedor"),
         )
+        status_resolvido = modo_resolvido = None
         if sdwan_member:
             link_final["modo_verificacao"] = "sla"
             sla_status = str(sdwan_member.get("sla_status") or sdwan_member.get("status") or "").strip().lower()
@@ -3743,6 +3755,16 @@ def _coletar_links_regional(
                 link_final["sla_status"] = ""
                 link_final["sdwan_member_id"] = None
                 link_final["status"] = status_interface
+
+        if (sdwan_member and sdwan_coletado_em and status_resolvido in {"online", "offline"}
+                and modo_resolvido in {"monitor_zabbix_packet_loss", "sla"}):
+            link_final.update(coleta_status_confirmada=True, coletado_em=sdwan_coletado_em,
+                              coleta_status_origem="sdwan_monitor")
+        elif (normalized_link.get("link_mode_status") in {"online", "offline"}
+              and interfaces_result.get("runtime_coletado_em")):
+            link_final.update(coleta_status_confirmada=True,
+                              coletado_em=interfaces_result["runtime_coletado_em"],
+                              coleta_status_origem="proxy_interface")
 
         if interface_lan:
             link_final["interface_local"] = _format_interface_local_label(interface_lan) or None
@@ -12608,6 +12630,9 @@ def api_testar_link_regional(codigo_regional, id_link):
                 "link_mode_status": link_preparado.get("link_mode_status") or "",
                 "packet_loss_percent": link_preparado.get("packet_loss_percent"),
                 "sdwan_member_id": link_preparado.get("sdwan_member_id"),
+                "coleta_status_confirmada": bool(
+                    link_preparado.get("coleta_status_confirmada") is True and not warning
+                ),
             })
             _atualizar_link_internet_exibicao(codigo_regional, id_link, link_atualizado)
 
