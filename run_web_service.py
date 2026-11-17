@@ -76,6 +76,12 @@ def main():
         from web_config import app
 
         try:
+            from services.operational_sla_contacts import start_contact_sync_worker
+            start_contact_sync_worker(app.logger)
+        except Exception:
+            app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de contatos SLA.')
+
+        try:
             import gerenciador_atualizacoes
             threading.Thread(target=gerenciador_atualizacoes.start_update_threads, daemon=True).start()
         except Exception as exc:
