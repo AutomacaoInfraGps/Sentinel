@@ -126,7 +126,7 @@ def _firewall_license_notification(item):
     return {
         "id": _notification_id("firewalls", item, kind),
         "type": notification_type, "severity": "critical" if flags["vencimento_critico"] else "important",
-        "icon": "bi-calendar-exclamation", "title": title,
+        "icon": "bi-calendar-x" if flags["vencimento_critico"] else "bi-calendar-event", "title": title,
         "message": f"{name}: {product} {deadline}.",
         "regional": regional, "device": name, "days_remaining": days,
         "persistent": False,

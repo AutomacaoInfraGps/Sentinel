@@ -47,6 +47,15 @@ class FirewallLicenseNotificationTest(unittest.TestCase):
             self.assertEqual(item['days_remaining'], day)
         self.assertEqual(build_notifications({'firewalls': [firewall(61)]}), [])
 
+    def test_license_icons_are_compatible_with_the_loaded_bootstrap_version(self):
+        for day in (-1, 0, 1, 35, 60):
+            with self.subTest(days=day):
+                item = build_notifications({'firewalls': [firewall(day)]})[0]
+                self.assertEqual(item['icon'], 'bi-calendar-x' if day <= 0 else 'bi-calendar-event')
+        expired = firewall(0)
+        expired['licencas'][0]['status'] = 'expired'
+        self.assertEqual(build_notifications({'firewalls': [expired]})[0]['icon'], 'bi-calendar-x')
+
     def test_deadlines_precede_other_events_and_sort_by_urgency(self):
         records = {'firewalls': [firewall(35), firewall(0), firewall(4)],
                    'links': [{'nome': 'WAN', 'status': 'offline', 'changed_at': '2026-11-16T15:00:00'}]}
