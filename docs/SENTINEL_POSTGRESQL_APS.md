@@ -30,6 +30,18 @@ ele nao comprova uma observacao individual de cada AP ou sucesso em todos os sit
   permite distinguir quantidade de APs e quantidade de sites. Correspondencia
   ambigua ou destino ausente nao gera vinculo. A auditoria nao aplica a busca
   parcial de fallback usada em algumas telas; casos restantes exigem revisao.
+
+### Identidade regional para a migracao
+
+O resolvedor do cadastro considera codigo e nome, nunca descricao geografica:
+por exemplo, RHMED e MACAE podem compartilhar a descricao Rio de Janeiro sem
+ser a identidade REG_RIO_DE_JANEIRO. Empates reais de codigo/nome continuam
+sem vinculo. Aliases explicitos com destino existente tem precedencia.
+Se um alias apontar para codigo ausente, somente uma identidade unica exata
+normalizada de codigo/nome pode resolver o site, com motivo especifico
+`identidade_unica_com_alias_desatualizado`. Isso nao altera os aliases do mapa,
+as telas, o catalogo regional ou as permissoes AD. Nunca criar uma regional ou
+escolher outra apenas pela cidade, por prefixo parcial ou pelo IP do AP.
 - Cobertura de IP, modelos, firmware, status e coleta explicita por AP.
 - Chaves JSON repetidas e estruturas invalidas rejeitadas.
 

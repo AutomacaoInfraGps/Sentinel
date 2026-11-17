@@ -43,22 +43,28 @@ def normalize_unifi_site(value):
 
 
 def resolve_unifi_site_for_catalog(regionals, site_name):
-    """Return a code and fixed reason; never select the first ambiguous match."""
+    """Resolve catalog identity by code/name, not shared geographic descriptions."""
     target = normalize_unifi_site(site_name)
     if not target:
         return None, 'sem_referencia'
+    missing_alias = False
     if target in UNIFI_SITE_ALIASES:
         code = UNIFI_SITE_ALIASES[target]
         if code is None:
             return None, 'alias_sem_regional'
-        return (code, 'alias_explicito') if code in regionals else (None, 'destino_alias_ausente')
+        if code in regionals:
+            return code, 'alias_explicito'
+        missing_alias = True
     matches = set()
     for code, entry in regionals.items():
         candidates = {normalize_regional_token(value) for value in
-                      (code, entry.get('nome'), entry.get('descricao'))}
+                      (code, entry.get('nome'))}
         candidates = {value[4:] if value.startswith('REG_') else value for value in candidates if value}
         if target in candidates:
             matches.add(code)
     if len(matches) == 1:
-        return next(iter(matches)), 'identidade_normalizada_unica'
-    return None, 'ambiguo' if matches else 'nao_encontrado'
+        reason = 'identidade_unica_com_alias_desatualizado' if missing_alias else 'identidade_normalizada_unica'
+        return next(iter(matches)), reason
+    if matches:
+        return None, 'ambiguo'
+    return None, 'destino_alias_ausente' if missing_alias else 'nao_encontrado'
