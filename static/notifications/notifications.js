@@ -19,6 +19,7 @@
     let loadTimer = null;
     const NORMAL_REFRESH_MS = 30000;
     const ACTIVE_REFRESH_MS = 10000;
+    const REQUEST_TIMEOUT_MS = 10000;
     const baseDocumentTitle = document.title.replace(/^\(\d+\+?\)\s*/, '');
 
     const setDocumentTitleCount = (value) => {
@@ -93,8 +94,11 @@
     const load = async () => {
         if (loadInFlight) return;
         loadInFlight = true;
+        const controller = new AbortController();
+        const requestTimer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         try {
             const response = await fetch(widget.dataset.listUrl, {
+                signal: controller.signal,
                 cache: 'no-store',
                 credentials: 'same-origin',
                 headers: { Accept: 'application/json' },
@@ -113,6 +117,7 @@
                 : 'Reconectando ao monitoramento...';
             scheduleLoad(ACTIVE_REFRESH_MS);
         } finally {
+            window.clearTimeout(requestTimer);
             loadInFlight = false;
         }
     };
