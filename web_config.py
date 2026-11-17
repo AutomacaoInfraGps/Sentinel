@@ -18,6 +18,7 @@ import socket
 import platform
 import unicodedata
 from unifi_site_matching import UNIFI_SITE_ALIASES, normalize_unifi_site
+from services.unifi_wlan_collection import without_wlan_catalog
 import zipfile
 from io import BytesIO
 from copy import deepcopy
@@ -11202,7 +11203,7 @@ def api_public_status_unifi():
                 'controller_porta': unifi_data.get('controller', {}).get('porta', 'Não disponível'),
                 'controller_versao': unifi_data.get('controller', {}).get('versao', 'Não disponível'),
                 'aps': unifi_data.get('aps', []),
-                'sites': unifi_data.get('sites', []),
+                'sites': without_wlan_catalog(unifi_data.get('sites', [])),
                 'dados_atualizados': dados_atualizados,
                 'timestamp': timestamp_str
             }
