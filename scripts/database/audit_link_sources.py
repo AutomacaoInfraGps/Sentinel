@@ -15,7 +15,8 @@ SOURCES = {'fortigate', 'fortimanager', 'fortimanager_config+proxy_monitor',
            'fortimanager_proxy_monitor', 'fallback_local'}
 STATUSES = {'online', 'offline', 'unknown', 'warning', 'inativo', 'maintenance',
             'up', 'down', 'unavailable'}
-MODES = {'sla', 'interface', 'fortimanager_device_offline', 'ping', 'fisico'}
+MODES = {'sla', 'interface', 'fortimanager_device_offline', 'ping', 'fisico',
+         'monitor_zabbix_packet_loss', 'link_mode'}
 
 
 def _value(value):

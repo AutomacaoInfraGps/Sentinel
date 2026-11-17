@@ -59,5 +59,84 @@ viram IDs. Duplicidades sao diagnostico, nao criterio automatico de fusao.
 4. Backup, copias congeladas protegidas, migracao, carga e leitura com api.
 5. So depois, persistencia paralela controlada e homologacao de coleta nova.
 
-Nao existe migracao SQL, importador ou flag de links criado nesta etapa.
-Preservar as sincronizacoes ja habilitadas das outras categorias.
+## Resultado real e carga inicial preparada
+
+Auditoria do Rigel: 51 regionais; links tem 330 registros e cinco interfaces
+repetidas na regional. links_internet_auto tem 88 registros, todos com ID,
+interface/endpoint e vinculo regional, sem duplicidades; 84 online/4 offline.
+85 com origem fortimanager_config+proxy_monitor e tres fortimanager.
+Tres regionais nao possuem lista automatica. Estado e mapa mostram tambem 88.
+Ha 50 IDs presentes em ambas as listas na mesma regional, sem comprovar que
+todos os demais atributos coincidam. Nao fundir nem somar os dois conjuntos.
+
+Preparados (ainda NAO aplicados ao Rigel):
+
+- scripts/database/sql/008_link_catalog.sql, tabela operacional.links_internet.
+- scripts/database/import_link_catalog.py, simulacao por padrao e escrita
+  protegida somente no Rigel em tabela vazia.
+
+A carga le APENAS links_internet_auto de estrutura_regionais.json. Nao refaz
+filtros de apresentacao, nao importa do mapa, nao recorre a links nas tres
+regionais sem lista e nao altera as listas originais. Lista automatica vazia
+e respeitada; ausencia e vazia sao contadas separadamente. Os 330 registros do
+cadastro legado continuam preservados no JSON e AINDA NAO foram migrados por
+este importador. Migracao integral desse cadastro exige tratamento separado.
+
+Chave: (codigo_regional, id_origem), ID exato do cadastro. Nao declarar esse ID
+como identificador nativo permanente do firewall. Nao fundir por provedor/IP
+nem gerar ID por posicao. Duplicidade de chave ou endpoint/interface dentro
+da regional bloqueia a carga inteira. IDs repetidos entre regionais sao validos.
+
+Serial, VDOM e coletado_em ausentes ficam NULL. Nao inferir serial de um IP nem
+criar FK de firewall sem correlacao verificada. Interface_monitorada e endpoint
+sao exigidos como atributos, nao usados para inventar o ID. regional tem FK
+para regionais ja existentes. O papel SQL tecnico continua sem representar AD.
+
+ultima_verificacao e armazenada como verificado_em, com fuso IANA EXPLICITO
+--source-timezone para datas legadas sem fuso. verificacao_sem_fuso_na_origem
+preserva essa condicao e fuso_verificacao_legada documenta a configuracao usada.
+Esse horario pode ter sido atualizado em persistencia de fallback: NAO e uma
+coleta nova confirmada, nem indica frescor garantido. coletado_em so recebe um
+campo explicitamente existente e com fuso; nunca e copiado de verificado_em,
+publicacao do cadastro, mtime ou relogio do importador.
+
+Campos de perda de pacotes, modo SLA/interface e fontes sao preservados sem
+recalcular o status. Booleanos/numeros/IPs sao validados; NaN/infinito/perda fora
+de 0..100 sao recusados. SLA JSON bruto, comentarios, senhas e campos arbitrarios
+nao entram no SQL nem nos relatorios. Desconhecidos textuais de modo/origem podem
+ser preservados como atributos limitados, mas o resumo usa categoria fixa para
+nao exportar valores arbitrarios. A auditoria passou a reconhecer explicitamente
+monitor_zabbix_packet_loss e link_mode, ja existentes no codigo.
+
+## Implantacao incremental
+
+1. Commit/push e pull dos novos arquivos. Nao precisa reiniciar: nenhum hook
+   de links foi acrescentado, nenhuma sincronizacao foi habilitada.
+2. Rodar SOMENTE a simulacao:
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    C:\Automacao\scripts\database\import_link_catalog.py `
+    --source-timezone America/Sao_Paulo
+```
+
+3. Rever contagens, lacunas e digest. Nao executar SQL antes dessa revisao.
+4. Novo pg_dump custom e pg_restore --list, seguido de copia congelada PROTEGIDA
+   de estrutura_regionais.json no E:, fora do Git. Pode conter credenciais ou
+   referencias do ambiente; nao compartilhar o arquivo inteiro.
+5. Simular usando --source no arquivo congelado. Guardar seu digest_carga,
+   que inclui hash bruto, fuso e registros tipados, nao apenas a lista resumida.
+6. Aplicar SOMENTE 008 como sentinel_admin, psql -X/ON_ERROR_STOP=1.
+7. Conferir copia com --check-database: tabela vazia e codigos existentes.
+8. Aplicar copia com --apply --expected-digest do arquivo revisado.
+9. Conferir como sentinel_api: contagem/status e totais das outras categorias.
+
+Writer transacional, identidade sentinel_collector/sentinel/5433; lock de
+regionais antes de links, timeouts, tabela vazia, parametros SQL, contagem
+final total/por status. Migracao protege data_directory e owner. Reader somente
+SELECT; coletor SELECT/INSERT, sem UPDATE/DELETE/TRUNCATE/CREATE. Testes locais
+usam SQL simulado; migracao ainda exige homologacao PostgreSQL real.
+
+Sem flag/sincronizacao automatica de links nesta etapa. Preservar as demais
+sincronizacoes. Antes da escrita automatica, separar coleta real de fallback
+e publicacao, para nao atualizar falsamente a atualidade dos dados no banco.
