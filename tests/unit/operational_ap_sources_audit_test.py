@@ -68,6 +68,18 @@ class ApSourcesAuditTests(unittest.TestCase):
         result = audit_unifi(self.payload(), {'A': {'nome': 'Regional'}})
         self.assertEqual(result['regional_por_texto_exato_sem_alias'], {'sem_correspondencia_exata': 1})
 
+    def test_shared_unifi_rules_count_aps_and_sites_separately(self):
+        payload = self.payload()
+        payload['sites'][0]['nome'] = 'V021_SANTO_ANDRE'
+        payload['aps'][0]['site'] = 'V021_SANTO_ANDRE'
+        payload['aps'].append(copy.deepcopy(payload['aps'][0]))
+        result = audit_unifi(payload, {'REG_ABC': {}})
+        self.assertEqual(result['regional_por_texto_exato_sem_alias'], {'sem_correspondencia_exata': 2})
+        self.assertEqual(result['regional_por_regras_unifi_sem_aproximacao'], {'alias_explicito': 2})
+        self.assertEqual(result['sites_por_regras_unifi_sem_aproximacao'], {'alias_explicito': 1})
+        self.assertEqual(audit_unifi(payload, {})['regional_por_regras_unifi_sem_aproximacao'],
+                         {'destino_alias_ausente': 2})
+
     def test_unknown_status_is_redacted_and_invalid_records_counted(self):
         payload = self.payload()
         payload['aps'][0]['status'] = 'SECRET_MARKER'

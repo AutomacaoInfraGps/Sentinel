@@ -24,6 +24,12 @@ ele nao comprova uma observacao individual de cada AP ou sucesso em todos os sit
 - Correspondencia regional somente por codigo/nome/descricao exatos, ignorando
   maiusculas e espacos externos. Esta contagem NAO reproduz os aliases do mapa
   nem altera as permissoes ou vinculos existentes.
+- O resumo `regional_por_regras_unifi_sem_aproximacao` aplica a normalizacao
+  existente do mapa (inclusive prefixos Vnnn) e seus aliases explicitos,
+  compartilhados em `unifi_site_matching.py`. O resumo adicional por site
+  permite distinguir quantidade de APs e quantidade de sites. Correspondencia
+  ambigua ou destino ausente nao gera vinculo. A auditoria nao aplica a busca
+  parcial de fallback usada em algumas telas; casos restantes exigem revisao.
 - Cobertura de IP, modelos, firmware, status e coleta explicita por AP.
 - Chaves JSON repetidas e estruturas invalidas rejeitadas.
 

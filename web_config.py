@@ -17,6 +17,7 @@ import ipaddress
 import socket
 import platform
 import unicodedata
+from unifi_site_matching import UNIFI_SITE_ALIASES, normalize_unifi_site
 import zipfile
 from io import BytesIO
 from copy import deepcopy
@@ -4382,31 +4383,11 @@ def _mapa_encontrar_regional_por_nome(regionais, nome):
     return None
 
 
-_MAPA_UNIFI_SITE_ALIAS = {
-    "BH": "REG_REGIONAL BELO HORIZONTE",
-    "PARA": "REG_PARA",
-    "ORMEC_PARA": "REG_ORMEC_PARA",
-    "REGIONAL_BH": "REG_REGIONAL BELO HORIZONTE",
-    "SAO_JOSE_DOS_CAMPOS": "REG_SJC",
-    "SANTO_ANDRE": "REG_ABC",
-    "REGALAGOAS": "REG_ALAGOAS",
-    "REGMARANHAO": "REG_MARANHAO",
-    "REG_S_LEOPOLDO": "REG_SAO_LEOPOLDO",
-    "S_LEOPOLDO": "REG_SAO_LEOPOLDO",
-    "S_LEOPOLDO_2": "REG_LEOPOLDO_B2",
-    "TLSV_PORTO_ALEGRE": "REG_TLSV_POA",
-    "TRADE_POP": None,
-    "TAGG": None,
-    "CONTROL_MACEIO": "REG_CONTROL_MCO",
-    "CEARA1": "REG_CEARA",
-    "MACAE_MARFOOD": "REG_MACAE",
-}
+_MAPA_UNIFI_SITE_ALIAS = UNIFI_SITE_ALIASES
 
 
 def _mapa_normalizar_site_unifi(nome):
-    token = _mapa_normalizar_token(nome)
-    token = re.sub(r"^V\d+_", "", token)
-    return _mapa_normalizar_token(token)
+    return normalize_unifi_site(nome)
 
 
 def _mapa_encontrar_regional_unifi(regionais, nome):

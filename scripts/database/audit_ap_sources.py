@@ -7,9 +7,14 @@ import ipaddress
 import json
 from pathlib import Path
 import re
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from unifi_site_matching import resolve_unifi_site_for_catalog  # noqa: E402
 
 
 def _text(value):
@@ -81,6 +86,12 @@ def audit_unifi(payload, regionals):
                 regional_labels[label].add(code)
     counts = Counter()
     macs, identities, statuses, dates, links, bindings = (Counter() for _ in range(6))
+    normalized_bindings = Counter()
+    normalized_sites = Counter()
+    for site in sites:
+        if isinstance(site, dict):
+            _, reason = resolve_unifi_site_for_catalog(regionals, site.get('nome'))
+            normalized_sites[reason] += 1
     for ap in aps:
         if not isinstance(ap, dict):
             counts['registros_invalidos'] += 1
@@ -115,6 +126,8 @@ def audit_unifi(payload, regionals):
         regional_candidates = regional_labels.get(label.casefold(), set()) if label else set()
         bindings['exato_unico' if len(regional_candidates) == 1 else
                  'ambiguo' if regional_candidates else 'sem_correspondencia_exata'] += 1
+        _, reason = resolve_unifi_site_for_catalog(regionals, label)
+        normalized_bindings[reason] += 1
         status = _text(ap.get('status')).lower()
         statuses[status if status in ('online', 'offline', 'warning', 'unknown', 'maintenance', 'inativo')
                  else 'outro_ou_ausente'] += 1
@@ -134,6 +147,8 @@ def audit_unifi(payload, regionals):
         'identidades_site_mac_repetidas': sum(n > 1 for n in identities.values()),
         'aps_com_site_e_mac_identificados': sum(identities.values()),
         'vinculo_ap_site': dict(links), 'regional_por_texto_exato_sem_alias': dict(bindings),
+        'regional_por_regras_unifi_sem_aproximacao': dict(normalized_bindings),
+        'sites_por_regras_unifi_sem_aproximacao': dict(normalized_sites),
         'por_status': dict(statuses), 'coleta_explicita_por_ap': dict(dates),
     }
 
