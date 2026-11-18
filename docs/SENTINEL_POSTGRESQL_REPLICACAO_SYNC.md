@@ -30,6 +30,10 @@ ou credenciais. E substituido atomicamente apos leitura estavel. Sua carga
 exige que a revisao da fonte atual ainda corresponda aos hashes: congelar
 o recibo nao congela os dados, nem autoriza reproduzir revisoes antigas.
 Se a fonte mudar, recapturar e revisar o novo digest, nao forcar aplicacao.
+Na revalidacao de um recibo, o hash e conferido antes de comparar as datas
+da fonte com a captura antiga. Uma publicacao mais nova deve ser diagnosticada
+como fonte alterada, nao como relogio futuro. Datas posteriores a captura
+continuam bloqueadas quando o hash corresponde ao recibo.
 
 O digest normalizado vincula o caminho efetivo (em hash), fuso, bytes e
 projecao tipada. A hora da captura nao altera o digest. O marcador lido_em

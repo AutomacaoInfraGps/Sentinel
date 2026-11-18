@@ -3,6 +3,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from io import StringIO
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -104,6 +105,26 @@ class ReplicationShadowTests(unittest.TestCase):
             receipt.write_text(json.dumps({**self.snapshot.receipt(), **changes}))
             with self.assertRaises((module.SnapshotError, ValueError)):
                 module.load_replication_publication(receipt)
+
+    def test_new_publication_after_receipt_is_reported_as_changed_not_future(self):
+        receipt = self.root / 'receipt.json'
+        module.save_replication_publication(self.snapshot, receipt)
+        changed = payload(timestamp='2026-11-18T11:05:00',
+                          servidores=[row(ultima_replicacao='2026-11-18T11:05:00')])
+        self.source.write_text(json.dumps(changed), encoding='utf-8')
+        with patch.object(module, 'SOURCE_PATH', self.source), patch.object(module, 'connect_collector') as connect:
+            with self.assertRaisesRegex(module.SnapshotError, 'Fonte mudou desde a captura'):
+                module.load_replication_publication(receipt)
+            with self.assertRaisesRegex(module.SnapshotError, 'Fonte mudou desde a captura'):
+                module.verify_current(self.snapshot)
+            connect.assert_not_called()
+
+    def test_unchanged_future_source_still_blocked(self):
+        raw = json.dumps(payload(timestamp='2026-11-19T11:00:00')).encode()
+        self.source.write_bytes(raw)
+        with patch.object(module, 'SOURCE_PATH', self.source):
+            with self.assertRaisesRegex(module.SnapshotError, 'horario declarado futuro'):
+                module.read_current_snapshot(ZONE, NOW, expected_sha256=hashlib.sha256(raw).hexdigest())
 
     def test_inspection_read_only_and_reports_marker_counts(self):
         conn, cur = MagicMock(), MagicMock()

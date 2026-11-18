@@ -64,7 +64,7 @@ def prepare_replication_snapshot(catalog, source_path, captured_at):
     return ReplicationSnapshot(captured_at, digest, config_hash, catalog)
 
 
-def read_current_snapshot(source_timezone=None, captured_at=None):
+def read_current_snapshot(source_timezone=None, captured_at=None, *, expected_sha256=None):
     if source_timezone is None:
         settings = _read(CONFIG_PATH)
         source_timezone = settings.get('source_timezone') if isinstance(settings, dict) else None
@@ -74,11 +74,14 @@ def read_current_snapshot(source_timezone=None, captured_at=None):
     catalog = build_replication_catalog(raw, source_timezone)
     if SOURCE_PATH.read_bytes() != raw:
         raise SnapshotError('Fonte mudou durante a leitura. Banco preservado.')
+    if expected_sha256 is not None and catalog.source_sha256 != expected_sha256:
+        raise SnapshotError('Fonte mudou desde a captura do recibo. Capture e confira novamente. Banco preservado.')
     return prepare_replication_snapshot(catalog, SOURCE_PATH, captured_at or datetime.now(timezone.utc))
 
 
 def verify_current(snapshot):
-    current = read_current_snapshot(snapshot.catalog.source_timezone, snapshot.captured_at)
+    current = read_current_snapshot(snapshot.catalog.source_timezone, snapshot.captured_at,
+                                    expected_sha256=snapshot.catalog.source_sha256)
     if current.receipt() != snapshot.receipt():
         raise SnapshotError('Fonte ou configuracao mudou. Capture e confira novamente.')
 
@@ -109,7 +112,7 @@ def load_replication_publication(path=PUBLICATION_PATH):
     captured = _aware_time(receipt['capturado_em'])
     if captured > datetime.now(timezone.utc):
         raise SnapshotError('Recibo com horario futuro.')
-    snapshot = read_current_snapshot(receipt['fuso_origem'], captured)
+    snapshot = read_current_snapshot(receipt['fuso_origem'], captured, expected_sha256=receipt['sha256_arquivo'])
     if snapshot.receipt() != receipt:
         raise SnapshotError('Fonte ou configuracao mudou. Capture e confira novamente.')
     return snapshot
