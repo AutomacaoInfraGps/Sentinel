@@ -22,7 +22,9 @@ from services.operational_server_postgres import (
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=ROOT / "estrutura_regionais.json")
-    parser.add_argument("--apply", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--apply", action="store_true")
+    mode.add_argument("--simulate", action="store_true", help='Simular a projecao sem conexao SQL ou acesso ao cofre.')
     parser.add_argument("--expected-digest")
     args = parser.parse_args(argv)
     progress = DatabaseProgress(phase="leitura_origem")
@@ -31,6 +33,9 @@ def main(argv=None):
             raise SnapshotError("Execute somente no Rigel.")
         payload = json.loads(args.source.read_text(encoding="utf-8-sig"), object_pairs_hook=_unique_keys)
         snapshot = prepare_server_snapshot(payload)
+        if args.simulate:
+            print(json.dumps({**snapshot.summary(), 'modo': 'simulacao_sem_conexao_ao_banco'}, indent=2, ensure_ascii=True))
+            return 0
         if args.apply and args.expected_digest != snapshot.digest:
             raise SnapshotError("Gravacao exige o digest exato da conferencia revisada.")
         progress.phase = "conexao"

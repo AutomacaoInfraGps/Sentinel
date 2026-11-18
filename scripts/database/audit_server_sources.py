@@ -15,8 +15,8 @@ if str(ROOT) not in sys.path:
 from scripts.database.audit_ap_sources import _unique_object, _time_kind
 
 SQL_FIELDS = ('id', 'nome', 'tipo', 'ip', 'modelo', 'funcao', 'sistema_operacional',
-              'status', 'ativo', 'ultima_verificacao', 'tempo_resposta')
-EXTRA_FIELDS = ('tipo_monitoramento', 'descricao', 'erro', 'em_manutencao',
+              'status', 'ativo', 'ultima_verificacao', 'tempo_resposta', 'tipo_monitoramento')
+EXTRA_FIELDS = ('descricao', 'erro', 'em_manutencao',
                 'maintenance_status', 'maintenanceid', 'status_reason', 'status_details',
                 'hardware', 'details', 'detalhes', 'coletado_em', 'updated_at')
 HARDWARE_FIELDS = ('memoria_gib', 'cpu', 'discos', 'bitdefender', 'temperaturas',
@@ -188,6 +188,7 @@ def audit_sources(root=ROOT):
     return {'modo': 'auditoria_servidores_somente_leitura_sem_banco', 'fontes': sources,
             'comparacao_cache_cadastro': comparison,
             'projecao_sql_eh_referencia_do_codigo_nao_conferencia_do_banco': True,
+            'projecao_do_codigo_requer_migracao_022': True,
             'frescor_e_prioridade_efetiva_do_cache_nao_avaliados': True,
             'fontes_lidas_separadamente_sem_snapshot_atomico': True,
             'cache_nao_aprovado_como_cadastro_ou_medicao_de_hardware': True,

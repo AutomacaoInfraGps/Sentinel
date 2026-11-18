@@ -17,7 +17,7 @@ from services.operational_postgres import (
 
 CONFIG_PATH = PROJECT_ROOT / "instance" / "operational-postgres-servers-shadow.json"
 SERVER_FIELDS = ("id", "nome", "tipo", "ip", "modelo", "funcao", "sistema_operacional",
-                 "status", "ativo", "ultima_verificacao", "tempo_resposta")
+                 "status", "ativo", "ultima_verificacao", "tempo_resposta", "tipo_monitoramento")
 
 
 @dataclass(frozen=True, repr=False)
@@ -26,11 +26,15 @@ class ServerSnapshot:
     digest: str
     regionals: tuple = field(repr=False)
     servers: tuple = field(repr=False)
+    legacy_digest: str = field(repr=False)
 
     def summary(self):
         return {"cadastro_publicado_em": self.published_at.isoformat(),
                 "sha256_normalizado": self.digest, "regionais": len(self.regionals),
                 "servidores": len(self.servers),
+                "versao_projecao": 2,
+                "servidores_com_tipo_monitoramento": sum(row[12] is not None for row in self.servers),
+                "tipo_monitoramento_inferido": False,
                 "servidores_sem_data_de_observacao": sum(row[10] is None for row in self.servers)}
 
 
@@ -53,11 +57,14 @@ def prepare_server_snapshot(payload):
             servers.append({key: record.get(key) for key in SERVER_FIELDS})
         safe["regionais"][code] = {"nome": entry.get("nome"), "servidores": servers}
     catalog = build_catalog(json.dumps(safe, ensure_ascii=True).encode(), SOURCE_TIMEZONE,
-                            allow_empty_servers=True)
+                            allow_empty_servers=True, include_monitoring_type=True)
     rows = tuple(sorted(catalog.servers, key=lambda row: row[:2]))
-    canonical = json.dumps((published, catalog.regionals, rows),
+    legacy = json.dumps((published, catalog.regionals, tuple(row[:12] for row in rows)),
+                       default=lambda value: value.isoformat(), ensure_ascii=True, separators=(",", ":"))
+    canonical = json.dumps((2, published, catalog.regionals, rows),
                            default=lambda value: value.isoformat(), ensure_ascii=True, separators=(",", ":"))
-    return ServerSnapshot(published, hashlib.sha256(canonical.encode()).hexdigest(), catalog.regionals, rows)
+    return ServerSnapshot(published, hashlib.sha256(canonical.encode()).hexdigest(), catalog.regionals, rows,
+                          hashlib.sha256(legacy.encode()).hexdigest())
 
 
 MARKER_SQL = """SELECT cadastro_publicado_em, conteudo_sha256
@@ -65,6 +72,8 @@ MARKER_SQL = """SELECT cadastro_publicado_em, conteudo_sha256
 COUNTS_SQL = """SELECT
     (SELECT count(*) FROM operacional.regionais WHERE presente_no_cadastro),
     (SELECT count(*) FROM operacional.servidores WHERE presente_no_snapshot)"""
+MONITORING_SQL = ('SELECT codigo_regional,id_origem,tipo_monitoramento FROM operacional.servidores '
+                  'WHERE presente_no_snapshot ORDER BY codigo_regional,id_origem')
 
 
 def inspect_server_snapshot(connection, snapshot):
@@ -76,8 +85,13 @@ def inspect_server_snapshot(connection, snapshot):
         current = cursor.fetchone()
         cursor.execute(COUNTS_SQL)
         counts = cursor.fetchone()
+        cursor.execute(MONITORING_SQL)
+        monitoring = tuple(cursor.fetchall())
     return {**snapshot.summary(), "modo": "conferencia_sem_gravacao",
             "banco_regionais_no_cadastro": counts[0], "banco_servidores_presentes": counts[1],
+            "banco_servidores_com_tipo_monitoramento": sum(row[2] is not None for row in monitoring),
+            "tipo_monitoramento_confere": monitoring == tuple((row[0], row[1], row[12]) for row in snapshot.servers),
+            "marcador_compativel_com_projecao_anterior": bool(current and current[1] == snapshot.legacy_digest),
             "ultima_publicacao_sincronizada": current[0].isoformat() if current else None,
             "conteudo_ja_sincronizado": bool(current and current[1] == snapshot.digest),
             "publicacao_mais_antiga": bool(current and snapshot.published_at < current[0])}
@@ -98,7 +112,7 @@ def write_server_snapshot(connection, snapshot):
             return "sem_alteracoes"
         if current and snapshot.published_at < current[0]:
             return "publicacao_antiga_ignorada"
-        if current and snapshot.published_at == current[0]:
+        if current and snapshot.published_at == current[0] and current[1] != snapshot.legacy_digest:
             raise SnapshotError("Publicacoes distintas com mesmo horario. Revise a origem.")
         cursor.execute("UPDATE operacional.regionais SET presente_no_cadastro=false WHERE presente_no_cadastro")
         cursor.execute("UPDATE operacional.servidores SET presente_no_snapshot=false WHERE presente_no_snapshot")
@@ -109,12 +123,13 @@ def write_server_snapshot(connection, snapshot):
         for row in snapshot.servers:
             cursor.execute("""INSERT INTO operacional.servidores AS s
                 (codigo_regional,id_origem,nome,tipo,ip,modelo,funcao,sistema_operacional,
-                 status,ativo,ultima_verificacao,tempo_resposta,arquivo_origem_sha256,
+                 status,ativo,ultima_verificacao,tempo_resposta,tipo_monitoramento,arquivo_origem_sha256,
                  presente_no_snapshot,atualizado_no_banco_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,true,CURRENT_TIMESTAMP)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,true,CURRENT_TIMESTAMP)
                 ON CONFLICT(codigo_regional,id_origem) DO UPDATE SET
                  nome=EXCLUDED.nome,tipo=EXCLUDED.tipo,ip=EXCLUDED.ip,modelo=EXCLUDED.modelo,
                  funcao=EXCLUDED.funcao,sistema_operacional=EXCLUDED.sistema_operacional,
+                 tipo_monitoramento=EXCLUDED.tipo_monitoramento,
                  ativo=EXCLUDED.ativo, presente_no_snapshot=true,
                  arquivo_origem_sha256=NULL, atualizado_no_banco_em=CURRENT_TIMESTAMP,
                  status=CASE WHEN s.ultima_verificacao IS NULL OR
@@ -129,6 +144,9 @@ def write_server_snapshot(connection, snapshot):
         cursor.execute(COUNTS_SQL)
         if cursor.fetchone() != (len(snapshot.regionals), len(snapshot.servers)):
             raise SnapshotError("Contagens divergentes. Publicacao cancelada.")
+        cursor.execute(MONITORING_SQL)
+        if tuple(cursor.fetchall()) != tuple((row[0], row[1], row[12]) for row in snapshot.servers):
+            raise SnapshotError('Tipo de monitoramento divergente. Publicacao cancelada.')
         cursor.execute("""INSERT INTO operacional.sincronizacoes_servidores
             (fonte,cadastro_publicado_em,conteudo_sha256) VALUES ('estrutura_regionais',%s,%s)
             ON CONFLICT(fonte) DO UPDATE SET cadastro_publicado_em=EXCLUDED.cadastro_publicado_em,

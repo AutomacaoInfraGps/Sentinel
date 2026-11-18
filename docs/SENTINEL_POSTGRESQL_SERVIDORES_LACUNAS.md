@@ -22,7 +22,7 @@ as fontes nao representam uma transacao atomica conjunta.
 
 ## Campos e fontes existentes
 
-002/003 e services/operational_server_postgres.py projetam id, nome, tipo,
+002/003 e a projecao original de services/operational_server_postgres.py projetam id, nome, tipo,
 ip, modelo, funcao, sistema_operacional, status, ativo, ultima_verificacao e
 tempo_resposta do cadastro regional. O cadastro define identidade/existencia;
 o escritor paralelo e disparado ao salvar esse cadastro. Nao concluir que
@@ -80,4 +80,7 @@ Revisar resultado do Rigel. Se nao houver hardware persistido, nao inventar
 uma carga historica: preparar captura tipada no caminho de coleta real em
 etapa propria, preservando leitura atual e controles de acesso. Definir
 escopo dos campos extras de cadastro/estado separadamente do hardware.
-Nenhuma migracao ou mudanca do escritor/leitor de Servidores foi feita.
+A extensao cadastral tipo_monitoramento 022 foi preparada posteriormente em
+SENTINEL_POSTGRESQL_SERVIDORES_MONITORAMENTO.md, ainda sem homologacao. O
+resumo da auditoria reflete a projecao atual do codigo, que exige 022, nao
+prova que a coluna ja foi instalada no Rigel. O leitor web segue inalterado.

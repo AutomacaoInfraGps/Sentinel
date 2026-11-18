@@ -47,7 +47,7 @@ def _text(value, length=240, *, required=False):
     return value or None
 
 
-def build_catalog(raw, source_timezone, *, allow_empty_servers=False):
+def build_catalog(raw, source_timezone, *, allow_empty_servers=False, include_monitoring_type=False):
     try:
         zone = ZoneInfo(source_timezone)
     except (ValueError, ZoneInfoNotFoundError):
@@ -93,6 +93,8 @@ def build_catalog(raw, source_timezone, *, allow_empty_servers=False):
                             _text(record.get("modelo")), _text(record.get("funcao")),
                             _text(record.get("sistema_operacional")), _text(record.get("status"), 120),
                             active, _observation(record.get("ultima_verificacao"), zone), response))
+            if include_monitoring_type:
+                servers[-1] += (_text(record.get('tipo_monitoramento'), 120),)
     if not servers and not allow_empty_servers:
         raise ImportErrorSafe("Cadastro sem servidores. Carga bloqueada.")
     return ServerCatalog(hashlib.sha256(raw).hexdigest(), source_timezone,

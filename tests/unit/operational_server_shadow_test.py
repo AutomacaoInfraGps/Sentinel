@@ -1,6 +1,7 @@
 from copy import deepcopy
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import timedelta
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -31,6 +32,7 @@ class Cursor:
     def __init__(self, current=None, counts=(1, 1), failure=None):
         self.current, self.counts, self.failure = current, counts, failure
         self.calls, self.result = [], None
+        self.monitoring_rows = []
 
     def __enter__(self):
         return self
@@ -40,6 +42,8 @@ class Cursor:
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+        if sql.startswith('INSERT INTO operacional.servidores AS'):
+            self.monitoring_rows.append((params[0], params[1], params[12]))
         if self.failure and self.failure in sql:
             raise RuntimeError("PRIVATE_DRIVER_VALUE")
         if sql.startswith("SELECT current_database"):
@@ -52,6 +56,9 @@ class Cursor:
     def fetchone(self):
         return self.result
 
+    def fetchall(self):
+        return sorted(self.monitoring_rows)
+
 
 def connection(cursor):
     conn = MagicMock()
@@ -60,6 +67,112 @@ def connection(cursor):
 
 
 class ServerShadowTest(unittest.TestCase):
+    def test_monitoring_type_preserved_without_inference_and_changes_only_new_digest(self):
+        raw = payload()
+        first = prepare_server_snapshot(raw)
+        self.assertIsNone(first.servers[0][12])
+        self.assertFalse(first.summary()['tipo_monitoramento_inferido'])
+        raw['regionais']['REG_A']['servidores'][0]['tipo_monitoramento'] = 'idrac'
+        second = prepare_server_snapshot(raw)
+        self.assertEqual(second.servers[0][12], 'idrac')
+        self.assertEqual(second.legacy_digest, first.legacy_digest)
+        self.assertNotEqual(second.digest, first.digest)
+        self.assertEqual(second.summary()['servidores_com_tipo_monitoramento'], 1)
+
+    def test_legacy_hash_matches_previous_projection_serialization(self):
+        from scripts.database.import_server_catalog import build_catalog
+        raw = payload()
+        snapshot = prepare_server_snapshot(raw)
+        catalog = build_catalog(json.dumps(raw).encode(), 'America/Sao_Paulo')
+        rows = tuple(sorted(catalog.servers, key=lambda row: row[:2]))
+        old = json.dumps((snapshot.published_at, catalog.regionals, rows),
+                         default=lambda value: value.isoformat(), ensure_ascii=True, separators=(',', ':'))
+        self.assertEqual(snapshot.legacy_digest, hashlib.sha256(old.encode()).hexdigest())
+
+    def test_same_time_upgrade_requires_exact_legacy_digest(self):
+        raw = payload()
+        raw['regionais']['REG_A']['servidores'][0]['tipo_monitoramento'] = 'vm'
+        snapshot = prepare_server_snapshot(raw)
+        cursor = Cursor(current=(snapshot.published_at, snapshot.legacy_digest))
+        self.assertEqual(write_server_snapshot(connection(cursor), snapshot), 'sincronizado')
+        params = next(params for sql, params in cursor.calls if sql.startswith('INSERT INTO operacional.servidores AS'))
+        self.assertEqual(params[12], 'vm')
+        cursor = Cursor(current=(snapshot.published_at, 'wrong'))
+        with self.assertRaises(SnapshotError):
+            write_server_snapshot(connection(cursor), snapshot)
+        self.assertFalse(any(sql.startswith(('UPDATE', 'INSERT')) for sql, _ in cursor.calls))
+
+    def test_base_fields_changed_at_same_time_cannot_use_legacy_upgrade(self):
+        raw = payload()
+        first = prepare_server_snapshot(raw)
+        raw['regionais']['REG_A']['servidores'][0]['status'] = 'offline'
+        changed = prepare_server_snapshot(raw)
+        cursor = Cursor(current=(first.published_at, first.legacy_digest))
+        with self.assertRaises(SnapshotError):
+            write_server_snapshot(connection(cursor), changed)
+
+    def test_v2_metadata_change_at_same_time_is_still_a_conflict(self):
+        raw = payload()
+        record = raw['regionais']['REG_A']['servidores'][0]
+        record['tipo_monitoramento'] = 'vm'
+        first = prepare_server_snapshot(raw)
+        record['tipo_monitoramento'] = 'idrac'
+        changed = prepare_server_snapshot(raw)
+        cursor = Cursor(current=(first.published_at, first.digest))
+        with self.assertRaises(SnapshotError):
+            write_server_snapshot(connection(cursor), changed)
+        self.assertFalse(any(sql.startswith(('UPDATE', 'INSERT')) for sql, _ in cursor.calls))
+
+    def test_monitoring_extension_does_not_change_bootstrap_tuple_contract(self):
+        from scripts.database.import_server_catalog import build_catalog
+        raw = payload()
+        raw['regionais']['REG_A']['servidores'][0]['tipo_monitoramento'] = 'vm'
+        catalog = build_catalog(json.dumps(raw).encode(), 'America/Sao_Paulo')
+        self.assertEqual(len(catalog.servers[0]), 12)
+        self.assertEqual(len(prepare_server_snapshot(raw).servers[0]), 13)
+
+    def test_metadata_readback_mismatch_prevents_marker(self):
+        snapshot = prepare_server_snapshot(payload())
+        cursor = Cursor()
+        cursor.fetchall = lambda: []
+        with self.assertRaises(SnapshotError):
+            write_server_snapshot(connection(cursor), snapshot)
+        self.assertFalse(any(sql.startswith('INSERT INTO operacional.sincronizacoes_servidores') for sql, _ in cursor.calls))
+
+    def test_metadata_does_not_export_values_or_accept_invalid_types(self):
+        raw = payload()
+        record = raw['regionais']['REG_A']['servidores'][0]
+        record['tipo_monitoramento'] = 'VALUE_PRIVATE'
+        snapshot = prepare_server_snapshot(raw)
+        self.assertNotIn('PRIVATE', json.dumps(snapshot.summary()))
+        self.assertNotIn('PRIVATE', repr(snapshot))
+        for value in (False, {}, 1, 'X' * 121):
+            record['tipo_monitoramento'] = value
+            with self.assertRaises(ImportErrorSafe):
+                prepare_server_snapshot(raw)
+
+    def test_cli_simulate_requires_no_sql_or_secret_access(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / 'source.json'
+            source.write_text(json.dumps(payload()), encoding='utf-8')
+            original = source.read_bytes()
+            with patch.dict('os.environ', {'COMPUTERNAME': 'RIGEL'}), \
+                    patch('scripts.database.sync_server_catalog.connect_collector') as connect, \
+                    redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(sync_main(['--source', str(source), '--simulate']), 0)
+                connect.assert_not_called()
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(json.loads(out.getvalue())['versao_projecao'], 2)
+            self.assertEqual(json.loads(out.getvalue())['modo'], 'simulacao_sem_conexao_ao_banco')
+            self.assertNotIn('PRIVATE', out.getvalue())
+
+    def test_022_adds_only_nullable_monitoring_type_without_rewriting_state_or_grants(self):
+        sql = (PROJECT_ROOT / 'scripts/database/sql/022_server_monitoring_type.sql').read_text()
+        self.assertIn('ADD COLUMN tipo_monitoramento varchar(120)', sql)
+        self.assertNotIn('DEFAULT', sql)
+        self.assertNotIn('GRANT', sql)
+        self.assertNotIn('UPDATE operacional.servidores', sql)
+
     def test_projection_excludes_secrets_and_is_detached(self):
         raw = payload()
         snapshot = prepare_server_snapshot(raw)
