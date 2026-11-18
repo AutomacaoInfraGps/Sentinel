@@ -85,6 +85,58 @@ class ContactShadowTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.load_contact_publication(path)
 
+    def test_unrelated_regional_monitoring_changes_revalidate_without_sql(self):
+        path = self.root / 'receipt.json'
+        module.save_contact_publication(self.snap, path)
+        original_receipt = path.read_bytes()
+        regions_path = self.root / 'estrutura_regionais.json'
+        regions = json.loads(regions_path.read_text())
+        regions['atualizado_em'] = '2026-11-18T07:15:00'
+        regions['regionais']['REG_BAHIA']['servidores'] = [{'status': 'online'}]
+        regions_path.write_text(json.dumps(regions), encoding='utf-8')
+        with patch.object(module, 'PROJECT_ROOT', self.root), patch.object(module, 'connect_collector') as connect:
+            loaded = module.load_contact_publication(path)
+            module.verify_current(self.snap)
+            connect.assert_not_called()
+        self.assertEqual(loaded.digest, self.snap.digest)
+        self.assertTrue(loaded.summary()['catalogo_regional_revalidado'])
+        self.assertEqual(loaded.summary()['sha256_catalogo_regionais_no_recibo'], self.snap.catalog.regionals_sha256)
+        self.assertNotEqual(loaded.catalog.regionals_sha256, self.snap.catalog.regionals_sha256)
+        self.assertEqual(original_receipt, path.read_bytes())
+
+    def test_meaningful_binding_change_is_not_ignored(self):
+        path = self.root / 'receipt.json'
+        module.save_contact_publication(self.snap, path)
+        regions = {'regionais': {'REG_OTHER': {'nome': 'Bahia'}}}
+        (self.root / 'estrutura_regionais.json').write_text(json.dumps(regions), encoding='utf-8')
+        with patch.object(module, 'PROJECT_ROOT', self.root):
+            with self.assertRaises(module.SnapshotError):
+                module.load_contact_publication(path)
+            with self.assertRaises(module.SnapshotError):
+                module.verify_current(self.snap)
+
+    def test_workbook_bytes_still_require_a_new_capture(self):
+        path = self.root / 'receipt.json'
+        module.save_contact_publication(self.snap, path)
+        source = self.root / 'source.xlsx'
+        source.write_bytes(source.read_bytes() + b'changed')
+        with patch.object(module, 'PROJECT_ROOT', self.root), self.assertRaises(module.SnapshotError):
+            module.load_contact_publication(path)
+
+    def test_receipt_missing_hash_or_extra_payload_is_refused(self):
+        path = self.root / 'receipt.json'
+        for key in ('missing', 'extra', 'invalid_hash'):
+            receipt = self.snap.receipt()
+            if key == 'missing':
+                receipt.pop('sha256_catalogo_regionais')
+            elif key == 'extra':
+                receipt['contatos'] = ['PERSON_PRIVATE']
+            else:
+                receipt['sha256_planilha'] = 'not-a-hash'
+            path.write_text(json.dumps(receipt), encoding='utf-8')
+            with self.subTest(key=key), self.assertRaises(module.SnapshotError):
+                module.load_contact_publication(path)
+
     def test_failed_receipt_replace_preserves_previous_file(self):
         path = self.root / 'receipt.json'
         module.save_contact_publication(self.snap, path)
@@ -210,6 +262,18 @@ class ContactShadowTests(unittest.TestCase):
             with patch.object(cli, 'load_contact_publication', return_value=self.snap):
                 self.assertEqual(main(['--apply', '--expected-digest', 'wrong', '--publication', str(path)]), 1)
                 connect.assert_not_called()
+
+    def test_cli_reports_fixed_safe_source_error_without_driver_misclassification(self):
+        import scripts.database.sync_sla_contacts as cli
+        path = self.root / 'receipt.json'
+        module.save_contact_publication(self.snap, path)
+        output, error = StringIO(), StringIO()
+        with patch.dict(os.environ, {'COMPUTERNAME': 'RIGEL'}), patch.object(cli, 'LOCK_PATH', self.root / 'cli.lock'), patch.object(cli, 'load_contact_publication', side_effect=module.SnapshotError('Planilha ou vinculos mudaram. Capture novamente.')), patch.object(cli, 'connect_collector') as connect, redirect_stdout(output), redirect_stderr(error):
+            self.assertEqual(main(['--publication', str(path)]), 1)
+            connect.assert_not_called()
+        self.assertIn('Capture novamente', error.getvalue())
+        self.assertNotIn('ErroDeBancoOuDriver', error.getvalue())
+        self.assertEqual(output.getvalue(), '')
 
     def test_worker_singleton_starts_only_when_called(self):
         with patch.object(module, '_worker', None), patch.object(module.threading, 'Thread') as thread:

@@ -40,8 +40,12 @@ distribuida entre XLSX e PostgreSQL nem promessa de consistencia instantanea.
 
 Sem --capture ou --apply, o CLI apenas confere banco e recibo. Pode receber
 --publication apontando para uma copia congelada DO RECIBO. Para aplica-la,
-os arquivos de origem atuais ainda precisam corresponder aos hashes. Se
-mudarem, capturar e revisar novamente: recibo nao contem dados suficientes
+o XLSX e a identidade da origem precisam corresponder aos hashes. O catalogo
+regional e relido e revalidado pelo digest tipado: atualizacoes de estado
+operacional sem mudanca de vinculos nao invalidam o recibo. O resumo mostra
+catalogo_regional_revalidado e sha256_catalogo_regionais_no_recibo para manter
+a procedencia do hash antigo e do atual. Se a planilha ou os vinculos mudarem,
+capturar e revisar novamente: recibo nao contem dados suficientes
 para restaurar versoes anteriores da planilha. Copias XLSX de backup continuam
 protegidas separadamente e nao sao enviadas para chat ou Git.
 
@@ -76,8 +80,11 @@ apagar referencias antigas para forcar a carga.
 Conteudo tipado identico evita reescrever contatos, mas atualiza comprovante
 de leitura e hashes da fonte. Digest tipado nao inclui relogio de captura ou
 campos irrelevantes de regionais; inclui caminho/aba via hash, vinculos,
-linha de origem e contatos. Recibo exige hashes brutos iguais, mesmo se o
-conteudo tipado nao mudou. Captura antiga nao sobrescreve marcador mais novo;
+linha de origem e contatos. Recibo exige hash bruto do XLSX igual, mesmo se o
+conteudo tipado nao mudou, e estrutura exata com hashes validos. Nao exige
+hash bruto regional igual quando o parser recalcula os mesmos vinculos e
+conteudo tipado. Nao ignora mudanca de codigo, regra de vinculo ou ambiguidade.
+Captura antiga nao sobrescreve marcador mais novo;
 mesmo horario com conteudo conflitante bloqueia. Conferencia verifica linhas
 de contato antes de gravar marcador. Commit inclui dados e marcador.
 
@@ -114,3 +121,8 @@ Flag false/ausente desliga novas gravacoes no proximo ciclo; reinicio garante
 que nao haja ciclo antigo em andamento. Nao reverte SQL ja gravado. Testes
 locais usam XLSX sinteticos e mocks, nao validam DPAPI/producao nem substituem
 backup e homologacao transacional real do Rigel.
+
+Erros de validacao SnapshotError retornam somente mensagens fixas seguras,
+sem valores de celulas, nomes, e-mails ou caminhos. Nao devem ser classificados
+como ErroDeBancoOuDriver. O erro original da conferencia pode acontecer antes
+da conexao; nao repetir --apply nem a migracao para resolver esse caso.

@@ -1,12 +1,13 @@
 """One-way, opt-in polling of the existing SLA workbook; receipts contain no PII."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import hashlib
 import json
 import logging
 import os
 from pathlib import Path
+import re
 import tempfile
 import threading
 
@@ -34,6 +35,7 @@ class ContactSnapshot:
     digest: str
     config_hash: str
     catalog: object = field(repr=False)
+    receipt_regionals_sha256: str | None = None
 
     def receipt(self):
         return {'version': 1, 'capturado_em': self.captured_at.isoformat(),
@@ -45,6 +47,9 @@ class ContactSnapshot:
         original = self.catalog.summary()
         return {**self.receipt(), 'regionais_sla': len(self.catalog.assignments),
                 'vinculos_preenchidos': len(self.catalog.contacts), 'por_papel': original['por_papel'],
+                'catalogo_regional_revalidado': bool(self.receipt_regionals_sha256 and
+                    self.receipt_regionals_sha256 != self.catalog.regionals_sha256),
+                'sha256_catalogo_regionais_no_recibo': self.receipt_regionals_sha256 or self.catalog.regionals_sha256,
                 'planilha_modificada': False}
 
 
@@ -72,9 +77,16 @@ def read_current_snapshot(captured_at=None):
     return prepare_contact_snapshot(catalog, source, captured_at or datetime.now(timezone.utc))
 
 
+def _same_source_revision(first, second):
+    # The whole regional JSON includes live monitoring state unrelated to SLA.
+    # Its relevant bindings are already covered by the validated typed digest.
+    return all(first.get(key) == second.get(key) for key in (
+        'version', 'capturado_em', 'sha256_normalizado', 'origem_config_sha256', 'sha256_planilha'))
+
+
 def verify_current(snapshot):
     current = read_current_snapshot(snapshot.captured_at)
-    if current.receipt() != snapshot.receipt():
+    if not _same_source_revision(current.receipt(), snapshot.receipt()):
         raise SnapshotError('Fonte mudou apos a captura. Gere e confira uma publicacao nova.')
 
 
@@ -96,15 +108,21 @@ def save_contact_publication(snapshot, path=PUBLICATION_PATH):
 
 def load_contact_publication(path=PUBLICATION_PATH):
     receipt = _read(Path(path))
-    if not isinstance(receipt, dict) or receipt.get('version') != 1:
+    fields = {'version', 'capturado_em', 'sha256_normalizado', 'origem_config_sha256',
+              'sha256_planilha', 'sha256_catalogo_regionais'}
+    if (not isinstance(receipt, dict) or set(receipt) != fields
+            or type(receipt.get('version')) is not int or receipt['version'] != 1):
         raise SnapshotError('Recibo invalido.')
+    for key in fields - {'version', 'capturado_em'}:
+        if not isinstance(receipt[key], str) or not re.fullmatch(r'[0-9a-f]{64}', receipt[key]):
+            raise SnapshotError('Hash de recibo invalido.')
     captured = _aware_time(receipt.get('capturado_em'))
     if captured > datetime.now(timezone.utc):
         raise SnapshotError('Recibo com horario futuro.')
     snapshot = read_current_snapshot(captured)
-    if receipt != snapshot.receipt():
-        raise SnapshotError('Recibo nao corresponde as fontes atuais. Capture novamente.')
-    return snapshot
+    if not _same_source_revision(receipt, snapshot.receipt()):
+        raise SnapshotError('Planilha, origem ou vinculos mudaram apos a captura. Capture e confira novamente; nao repita a gravacao.')
+    return replace(snapshot, receipt_regionals_sha256=receipt['sha256_catalogo_regionais'])
 
 
 MARKER_SQL = ('SELECT lido_em,conteudo_sha256,origem_config_sha256 '

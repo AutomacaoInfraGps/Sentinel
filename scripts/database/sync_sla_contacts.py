@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.database.import_firewall_cache import ImportErrorSafe, _database_error
 from services.operational_sla_contacts import (
-    PUBLICATION_PATH, LOCK_PATH, _InterprocessFileLock, read_current_snapshot, save_contact_publication,
+    PUBLICATION_PATH, LOCK_PATH, SnapshotError, _InterprocessFileLock, read_current_snapshot, save_contact_publication,
     load_contact_publication, inspect_contact_snapshot, write_contact_snapshot, connect_collector,
 )
 
@@ -48,7 +48,7 @@ def main(argv=None):
                     phase = 'finalizacao_transacao'
         print(json.dumps(result, indent=2, ensure_ascii=True))
         return 0
-    except ImportErrorSafe as exc:
+    except (ImportErrorSafe, SnapshotError) as exc:
         print(str(exc), file=sys.stderr)
     except Exception as exc:
         print(str(_database_error(phase, exc)), file=sys.stderr)
