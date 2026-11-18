@@ -13,6 +13,14 @@ Nao exporta nomes de controladores, caminhos, detalhes ou erros brutos.
 
 Enviar somente o JSON resumido. Nao enviar os arquivos de origem.
 
+O resumo inclui publicacao_declarada_iso (validada, sem inventar fuso) e
+sha256_arquivo de cada leitura estavel. A representacao ISO e canonica e
+pode reduzir a precisao fracionaria ao microssegundo; o hash cobre os bytes
+originais. Uma mudanca nesses campos nao comprova nova consulta ao AD:
+salvar novamente o cache tambem pode alterar a data de publicacao.
+comparacao_identidades mede a intersecao de nomes completos, sem exibi-los
+e sem fundir nomes curtos ou interpretar ausencia como remocao.
+
 ## Fontes e selecao
 
 A rota /replicacao le data/replicacao.json pelo data_store.py da raiz e uma

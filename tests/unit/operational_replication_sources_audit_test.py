@@ -1,5 +1,6 @@
 import ast
 from contextlib import redirect_stdout
+import hashlib
 from io import StringIO
 import json
 import os
@@ -23,6 +24,27 @@ def payload(**changes):
 
 
 class ReplicationAuditTests(unittest.TestCase):
+    def test_publication_is_validated_without_inventing_timezone(self):
+        self.assertEqual(module.audit_payload(payload())['publicacao_declarada_iso'],
+                         '2026-11-18T08:00:00')
+        self.assertEqual(module._publication('2026-11-18T07:18:45.6223500-03:00'),
+                         '2026-11-18T07:18:45.622350-03:00')
+        for value in ('SECRET_PRIVATE', None, {}, 5):
+            self.assertIsNone(module._publication(value))
+
+    def test_name_comparison_is_full_name_only_and_does_not_export_names(self):
+        local = payload(servidores=[record(), record(tipo='Destino')])
+        public = {'detalhes': {'controladores': [record()]}}
+        comparison = module.compare_names(local, public)
+        self.assertTrue(comparison['mesmo_conjunto_de_nomes_completos'])
+        self.assertEqual(comparison['nomes_completos_em_comum'], 1)
+        public['detalhes']['controladores'] = [record(nome='HOST_PRIVATE.other.test')]
+        comparison = module.compare_names(local, public)
+        self.assertEqual(comparison['nomes_completos_em_comum'], 0)
+        self.assertNotIn('PRIVATE', json.dumps(comparison))
+        self.assertEqual(module.compare_names(local, None), {'comparavel': False})
+        self.assertEqual(module.compare_names(local, payload(servidores=[None])), {'comparavel': False})
+
     def test_summary_does_not_echo_hosts_errors_unknown_statuses_or_secrets(self):
         value = payload(password='SECRET_PRIVATE', servidores=[record(status='STATUS_PRIVATE')])
         report = module.audit_payload(value)
@@ -143,6 +165,8 @@ class ReplicationAuditTests(unittest.TestCase):
             path.write_bytes(raw)
             report = module.audit_sources(root, path)
             self.assertEqual(path.read_bytes(), raw)
+            self.assertEqual(report['fontes']['local']['sha256_arquivo'], hashlib.sha256(raw).hexdigest())
+            self.assertTrue(report['publicacao_e_hash_nao_comprovam_nova_coleta_ad'])
             self.assertNotIn(str(root), json.dumps(report))
             self.assertNotIn('PRIVATE', json.dumps(report))
 

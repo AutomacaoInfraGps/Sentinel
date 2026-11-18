@@ -2,6 +2,8 @@
 
 import argparse
 from collections import Counter
+from datetime import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -44,6 +46,15 @@ def _integer(value):
     return None
 
 
+def _publication(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.strip().replace('Z', '+00:00')).isoformat()
+    except ValueError:
+        return None
+
+
 def _ui_total(payload):
     """Reproduce normal valid counts, refusing booleans/negative/unsafe coercions."""
     if not payload:
@@ -74,6 +85,7 @@ def audit_payload(payload):
         records, schema, errors = None, 'sem_lista_reconhecida', None
     totals = {key: _integer(payload[key]) for key in TOTAL_FIELDS if key in payload}
     base = {'formato': schema, 'publicacao': _time_kind(payload.get('timestamp')),
+            'publicacao_declarada_iso': _publication(payload.get('timestamp')),
             'totais_declarados_validos': {key: value for key, value in totals.items() if value is not None},
             'totais_declarados_invalidos': sum(value is None for value in totals.values()),
             'total_usado_pela_selecao_da_tela': _ui_total(payload),
@@ -162,7 +174,8 @@ def _read_source(path):
         info = audit_payload(payload)
         if path.read_bytes() != raw:
             return None, {'situacao': 'alterado_durante_leitura'}
-        return payload, {'situacao': 'lido', 'codificacao': encoding_used, **info}
+        return payload, {'situacao': 'lido', 'codificacao': encoding_used,
+                         'sha256_arquivo': hashlib.sha256(raw).hexdigest(), **info}
     except Exception:
         return None, {'situacao': 'leitura_ou_estrutura_invalida'}
 
@@ -180,18 +193,43 @@ def predict_selection(local, public):
     return 'publica' if right > left else 'local'
 
 
+def compare_names(local, public):
+    def names(payload):
+        if not isinstance(payload, dict):
+            return None
+        if 'servidores' in payload:
+            records = payload['servidores']
+        else:
+            details = payload.get('detalhes')
+            records = details.get('controladores') if isinstance(details, dict) else None
+        if not isinstance(records, list) or any(
+                not isinstance(row, dict) or not _text(row.get('nome')) for row in records):
+            return None
+        return {_text(row['nome']).casefold() for row in records}
+
+    left, right = names(local), names(public)
+    if left is None or right is None:
+        return {'comparavel': False}
+    return {'comparavel': True, 'nomes_completos_em_comum': len(left & right),
+            'nomes_completos_somente_local': len(left - right),
+            'nomes_completos_somente_publica': len(right - left),
+            'mesmo_conjunto_de_nomes_completos': left == right}
+
+
 def audit_sources(root=ROOT, public_source=None):
     public_path, origin = public_source_path() if public_source is None else (Path(public_source), 'argumento_explicito')
     local, local_info = _read_source(Path(root) / 'data/replicacao.json')
     public, public_info = _read_source(public_path)
     return {'modo': 'auditoria_replicacao_ad_somente_leitura_sem_banco',
             'fontes': {'local': local_info, 'publica': public_info},
+            'comparacao_identidades': compare_names(local, public),
             'resolucao_caminho_publico': origin,
             'selecao_prevista_pela_regra_da_tela': predict_selection(local, public),
             'criterio_da_tela': 'maior_total_declarado_com_preferencia_local_no_empate',
             'selecao_nao_prioriza_data': True,
             'ressalva_fonte_com_falha': any(info['situacao'] not in ('lido', 'ausente') for info in (local_info, public_info)),
             'ultima_replicacao_pode_ser_horario_da_coleta': True,
+            'publicacao_e_hash_nao_comprovam_nova_coleta_ad': True,
             'secao_deve_ser_preservada_sem_inferencia': True,
             'sem_inferencia_de_regional': True,
             'nomes_e_erros_brutos_exportados': False,
