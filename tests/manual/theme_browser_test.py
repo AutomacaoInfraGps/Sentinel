@@ -93,6 +93,42 @@ def create_theme_app():
                                vpn_total=3, vpn_online=2, vpn_offline=1, vpn_total_regionais=2,
                                vpn_regionais_sem_offline=1, vpn_regionais_com_offline=1)
 
+    @app.get("/theme-admins")
+    def admins_preview():
+        devices = {}
+        baseline = {}
+        for index, state in enumerate(("ok", "indisponivel", "alerta", "offline", "sem_permissao", "limitado")):
+            key = f"FGT_EXEMPLO_{index}"
+            devices[key] = dict(nome=key, tipo="fortigate", admins=["admin.exemplo"],
+                                novos=["novo.exemplo"] if state == "alerta" else [], removidos=[],
+                                offline=state == "offline", sem_permissao=state == "sem_permissao",
+                                consulta_indisponivel=state == "indisponivel",
+                                monitoramento_limitado=state == "limitado", motivo="Consulta de exemplo",
+                                ultima_coleta_valida="2026-11-18T07:00:00")
+            baseline[key] = ["admin.exemplo"]
+        return render_template("admin_logins.html", dispositivos=devices, baseline=baseline,
+                               total_disp=6, total_alertas=1, total_indisponivel=1, total_offline=1,
+                               total_ok=3, admin_eventos=[], cache_atualizado_em="2026-11-18T07:00:00")
+
+    @app.get("/theme-emails")
+    def emails_preview():
+        record = dict(_row_index=0, NOME_REGIONAL="V001_REGIONAL_EXEMPLO", NOME_REG_FORTI="REPORT_EXEMPLO",
+                      NOME_DIRETOR_1="Diretor Exemplo", EMAIL_DIRETOR="diretor@example.test",
+                      NOME_GERENTE="SEM_GERENTE", EMAIL_GERENTE="SEM_EMAIL",
+                      NOME_APOIO_1="Apoio Exemplo", EMAIL_APOIO_1="apoio@example.test",
+                      NOME_APOIO_2="SEM_APOIO", EMAIL_APOIO_2="SEM_EMAIL")
+        return render_template("emails_contatos.html", registros=[record], required_columns=list(record)[1:], page_error=None,
+                               config=dict(xlsx_path="C:/preview/contatos.xlsx", sheet_name="MODELOPY"))
+
+    @app.get("/theme-firewalls")
+    def firewalls_preview():
+        fw = dict(nome="FGT_EXEMPLO", hostname="FGT_EXEMPLO", ip="192.0.2.1", model="FortiGate-60F",
+                  serial="SERIAL_EXEMPLO", firmware="7.4", licencas=[], status_disponibilidade="online",
+                  ultima_verificacao="2026-11-18T07:00:00")
+        return render_template("firewalls.html", firewalls_por_regional={"REG_EXEMPLO": [fw]},
+                               total_firewalls=1, total_online=1, total_offline=0,
+                               total_licencas=0, total_ok=0, total_vencer=0, total_expirado=0, total_alertas=0)
+
     return app
 
 
