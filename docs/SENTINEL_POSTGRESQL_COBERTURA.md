@@ -14,8 +14,8 @@ todos os campos, historico e funcionalidades do Sentinel.
 
 | Dominio | Fonte atual | Situacao PostgreSQL operacional |
 | --- | --- | --- |
-| Monitor de Admins | output/dashboard_admins_cache.json | Carga inicial 016 preparada; pendente de homologacao no Rigel |
-| Baseline aprovada | fortianalyzer.admin_baseline_file em environment.json, padrao admin_baseline.json | Carga 016 separada das observacoes; pendente de homologacao |
+| Monitor de Admins | output/dashboard_admins_cache.json | 016 homologada: 54 dispositivos, 227 contas observadas; espelho 017 preparado, ainda nao homologado |
+| Baseline aprovada | fortianalyzer.admin_baseline_file em environment.json, padrao admin_baseline.json | 016 homologada: 233 contas aprovadas separadas das observacoes; 017 opt-in preparado |
 | Contatos e papeis regionais | email_contatos.xlsx_path / sheet_name, planilha externa do SLA | 014/015 homologadas; 38 regionais e 127 vinculos; nova leitura automatica confirmada em 18/11/2026 07:16:39 -03:00 |
 | Maquinas virtuais | gerenciar_vms.py / data/vms.json | Sem migracao especifica; nao confundir com servidores cadastrados |
 | Replicacao AD | data/replicacao.json e fonte publica escolhida pela rota | Sem migracao especifica |

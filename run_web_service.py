@@ -82,6 +82,12 @@ def main():
             app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de contatos SLA.')
 
         try:
+            from services.operational_admins import start_admin_sync_worker
+            start_admin_sync_worker(app.logger)
+        except Exception:
+            app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de admins.')
+
+        try:
             import gerenciador_atualizacoes
             threading.Thread(target=gerenciador_atualizacoes.start_update_threads, daemon=True).start()
         except Exception as exc:
