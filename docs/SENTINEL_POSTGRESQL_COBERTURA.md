@@ -24,7 +24,8 @@ todos os campos, historico e funcionalidades do Sentinel.
 | Maquinas virtuais | gerenciar_vms.py / data/vms.json | 018 homologada: 1 VM RJ, status declarado Unknown e verificacao NULL; sem telemetria/credenciais, sincronizacao automatica ou fusao com servidores |
 | Replicacao AD | data/replicacao.json e fonte publica escolhida pela rota | 019/020 homologadas: 1 fonte, 35 linhas (3 Origem, 32 Destino), 32 controladores e 2 erros operacionais; nova leitura automatica confirmada em 18/11/2026 11:38:38 -03:00; leitor web inalterado |
 | Certificados | certificate_disk_report_acrab.json | 021 homologada: 1 fonte e 3 thumbprints distintos; origem/coleta nao confirmadas preservadas como false/NULL; sem sincronizacao ou troca do leitor web |
-| Campos adicionais de Servidores | cadastro regional, grupo servidores do cache e retorno de hardware sob demanda | Rigel: SQL alinhado ao cadastro (76, 71 online/5 offline); sem hardware nas duas fontes auditadas. Extensao cadastral tipo_monitoramento 022 preparada, ainda nao homologada; estado extra/cache/hardware seguem pendentes |
+| Campos adicionais de Servidores | cadastro regional, grupo servidores do cache e retorno de hardware sob demanda | 022 validada manualmente: 76 tipos de monitoramento conferem com fonte v2; automatismo posterior pendente por decisao do usuario. Estado extra/cache/hardware seguem pendentes |
+| Campos adicionais de Switches | cache de status, cache operacional, metadados e inventario firmware SQLite | Auditoria JSON somente leitura preparada em audit_switch_sources.py; SQLite apenas detectado, nao aberto; ainda sem conferencia dessas lacunas no Rigel ou nova migracao |
 | Metadados adicionais das regionais | estrutura_regionais.json | Nao considerar integralmente migrados so pela existencia da tabela regionais |
 | Historicos, aprovacoes, notificacoes e relatorios | Fontes por modulo | Precisam levantamento proprio; sincronizar estado atual nao cria historico |
 
