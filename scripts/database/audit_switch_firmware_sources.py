@@ -84,7 +84,18 @@ def audit_inventory(rows):
             'horarios_consulta_firmware': dict(dates), 'por_origem_declarada': dict(sources)}
 
 
-def compare_with_cache(rows, cache):
+def _label(value):
+    return _text(value)[:255]
+
+
+def _candidate(name, record, identity):
+    return {'nome': _label(name), 'ip': _ip(record.get('ip')),
+            'regional': _label(record.get('regional')),
+            'tipo_origem': identity[0] if identity else None,
+            'id_origem': _label(identity[1]) if identity else None}
+
+
+def compare_with_cache(rows, cache, *, unresolved=False):
     by_ip, by_name = defaultdict(list), defaultdict(list)
     invalid_records = 0
     for name, record in cache.items():
@@ -92,23 +103,24 @@ def compare_with_cache(rows, cache):
             invalid_records += 1
             continue
         identity = _identity(name, record)
+        candidate = (identity, _candidate(name, record, identity))
         address = _ip(record.get('ip'))
         if address:
-            by_ip[address].append(identity)
-        by_name[_text(name).casefold()].append(identity)
+            by_ip[address].append(candidate)
+        by_name[_text(name).casefold()].append(candidate)
     matches = Counter()
+    pending = []
     for row in rows:
         host_ip, declared_ip = _ip(row.get('host')), _ip(row.get('ip_address'))
-        if host_ip and declared_ip and host_ip != declared_ip:
-            matches['enderecos_da_fonte_conflitantes'] += 1
-            continue
         ip_candidates = by_ip.get(declared_ip or host_ip, [])
         name_candidates = by_name.get(_text(row.get('switch_name')).casefold(), [])
-        if len(ip_candidates) > 1 or len(name_candidates) > 1:
+        if host_ip and declared_ip and host_ip != declared_ip:
+            category = 'enderecos_da_fonte_conflitantes'
+        elif len(ip_candidates) > 1 or len(name_candidates) > 1:
             category = 'ambiguo_nao_aprovado'
-        elif any(candidate is None for candidate in (*ip_candidates, *name_candidates)):
+        elif any(candidate[0] is None for candidate in (*ip_candidates, *name_candidates)):
             category = 'candidato_sem_identidade_valida'
-        elif ip_candidates and name_candidates and ip_candidates[0] != name_candidates[0]:
+        elif ip_candidates and name_candidates and ip_candidates[0][0] != name_candidates[0][0]:
             category = 'ip_e_nome_apontam_identidades_diferentes'
         elif ip_candidates and name_candidates:
             category = 'ip_e_nome_concordantes_candidato'
@@ -119,10 +131,19 @@ def compare_with_cache(rows, cache):
         else:
             category = 'sem_correspondencia'
         matches[category] += 1
-    return {'registros_invalidos_no_cache': invalid_records, 'candidatos_sem_aprovacao': dict(matches)}
+        if unresolved and category != 'ip_e_nome_concordantes_candidato':
+            pending.append({'host': _label(row.get('host')), 'switch_name': _label(row.get('switch_name')),
+                            'ip_address': declared_ip, 'regional': _label(row.get('regional')),
+                            'motivo': category,
+                            'candidatos_por_ip': [candidate[1] for candidate in ip_candidates],
+                            'candidatos_por_nome': [candidate[1] for candidate in name_candidates]})
+    result = {'registros_invalidos_no_cache': invalid_records, 'candidatos_sem_aprovacao': dict(matches)}
+    if unresolved:
+        result['pendencias_identidade'] = pending
+    return result
 
 
-def audit_sources(root=ROOT, database=None):
+def audit_sources(root=ROOT, database=None, *, unresolved=False):
     root = Path(root)
     rows, source = read_inventory(database or root / 'data/switch_updates/scheduled_updates.sqlite3')
     cache, cache_info = _read_source(root / 'output/switches_status_cache.json')
@@ -130,14 +151,15 @@ def audit_sources(root=ROOT, database=None):
     if rows is not None:
         source.update(audit_inventory(rows))
         if cache_info['situacao'] == 'lido' and isinstance(cache, dict):
-            comparison = {'comparavel': True, **compare_with_cache(rows, cache)}
+            comparison = {'comparavel': True, **compare_with_cache(rows, cache, unresolved=unresolved)}
     return {'modo': 'auditoria_firmware_switches_sqlite_somente_leitura_sem_postgresql',
             'fontes': {'inventario_firmware_sqlite': source, 'cache_status': cache_info},
             'comparacao_com_cache': comparison,
             'vinculos_nao_aprovados_automaticamente': True,
             'modelo_e_versao_nao_comprovam_atualizacao_executada': True,
             'consulta_firmware_nao_confundida_com_status_de_rede': True,
-            'nomes_ips_modelos_versoes_e_erros_brutos_exportados': False,
+            'diagnostico_de_identidades_solicitado': unresolved,
+            'modelos_versoes_erros_e_credenciais_exportados': False,
             'tabelas_de_jobs_consultadas': False, 'agendador_importado': False,
             'escrita_sql_habilitada': False, 'equipamentos_consultados': False,
             'cofre_acessado': False}
@@ -146,8 +168,9 @@ def audit_sources(root=ROOT, database=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--database', type=Path, help='Caminho SQLite explicito, inclusive snapshot consistente ja preparado.')
+    parser.add_argument('--unresolved', action='store_true', help='Exibe somente identidades pendentes e candidatos, sem aprovar vinculos.')
     args = parser.parse_args(argv)
-    print(json.dumps(audit_sources(database=args.database), indent=2, ensure_ascii=True))
+    print(json.dumps(audit_sources(database=args.database, unresolved=args.unresolved), indent=2, ensure_ascii=True))
     return 0
 
 

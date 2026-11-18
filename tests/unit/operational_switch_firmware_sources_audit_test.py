@@ -81,6 +81,52 @@ class FirmwareSourceAuditTests(unittest.TestCase):
             self.assertEqual(info['situacao'], 'arquivo_ausente')
             self.assertEqual(list(Path(folder).iterdir()), [])
 
+    def test_unresolved_lists_only_pending_with_whitelisted_candidates(self):
+        rows = [firmware(switch_name='GOOD', host='192.0.2.9', ip_address='192.0.2.9'),
+                firmware(switch_name='SHARED'),
+                firmware(switch_name='CONFLICT', host='192.0.2.3', ip_address='192.0.2.3'),
+                firmware(switch_name='MISSING', host='192.0.2.8', ip_address='192.0.2.8')]
+        cache = {'GOOD': cache_record(hostid='9', ip='192.0.2.9'),
+                 'SHARED': cache_record(password='SECRET_PRIVATE', model='MODEL_PRIVATE'),
+                 'OTHER': cache_record(hostid='2', status_details='ERROR_PRIVATE'),
+                 'CONFLICT': cache_record(hostid='3', ip='192.0.2.4'),
+                 'IP_TARGET': cache_record(hostid='4', ip='192.0.2.3')}
+        report = module.compare_with_cache(rows, cache, unresolved=True)
+        pending = report['pendencias_identidade']
+        self.assertEqual([item['switch_name'] for item in pending], ['SHARED', 'CONFLICT', 'MISSING'])
+        self.assertEqual(len(pending[0]['candidatos_por_ip']), 2)
+        self.assertEqual(pending[0]['motivo'], 'ambiguo_nao_aprovado')
+        self.assertEqual(pending[1]['motivo'], 'ip_e_nome_apontam_identidades_diferentes')
+        self.assertEqual(pending[1]['candidatos_por_ip'][0]['id_origem'], '4')
+        self.assertEqual(pending[1]['candidatos_por_nome'][0]['id_origem'], '3')
+        self.assertEqual(pending[2]['candidatos_por_ip'], [])
+        self.assertEqual(pending[2]['candidatos_por_nome'], [])
+        for forbidden in ('MODEL_PRIVATE', 'VERSION_PRIVATE', 'SECRET_PRIVATE', 'ERROR_PRIVATE'):
+            self.assertNotIn(forbidden, json.dumps(report))
+        self.assertNotIn('pendencias_identidade', module.compare_with_cache(rows, cache))
+
+    def test_unresolved_source_conflict_and_invalid_candidate_are_not_approved(self):
+        report = module.compare_with_cache([firmware(host='192.0.2.2'), firmware()],
+                                           {'NAME_PRIVATE': cache_record(hostid=None)}, unresolved=True)
+        pending = report['pendencias_identidade']
+        self.assertEqual(pending[0]['motivo'], 'enderecos_da_fonte_conflitantes')
+        self.assertEqual(pending[1]['motivo'], 'candidato_sem_identidade_valida')
+        self.assertIsNone(pending[1]['candidatos_por_nome'][0]['id_origem'])
+
+    def test_unresolved_cli_forwards_explicit_flag(self):
+        with patch.object(module, 'audit_sources', return_value={}) as audit, redirect_stdout(StringIO()):
+            self.assertEqual(module.main(['--unresolved']), 0)
+        audit.assert_called_once_with(database=None, unresolved=True)
+
+    def test_unresolved_full_report_remains_read_only_and_limits_labels(self):
+        with patch.object(module, 'read_inventory', return_value=([firmware(switch_name='X' * 300)], {})), \
+                patch.object(module, '_read_source', return_value=({}, {'situacao': 'lido'})):
+            report = module.audit_sources(unresolved=True)
+        self.assertTrue(report['diagnostico_de_identidades_solicitado'])
+        self.assertFalse(report['modelos_versoes_erros_e_credenciais_exportados'])
+        self.assertFalse(report['escrita_sql_habilitada'])
+        self.assertEqual(len(report['comparacao_com_cache']['pendencias_identidade'][0]['switch_name']), 255)
+
     def test_read_only_mode_preserves_data_and_never_selects_jobs(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'data with spaces.sqlite3'

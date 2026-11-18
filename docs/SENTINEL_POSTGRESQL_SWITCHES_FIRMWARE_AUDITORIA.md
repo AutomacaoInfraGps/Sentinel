@@ -49,11 +49,32 @@ consulta registros de jobs mesmo quando estao no mesmo arquivo fisico.
 Resumo inclui cobertura de campos textuais, formatos temporais, duplicidade
 de host/nome/IP e origens conhecidas (inclusive bulk_webui, gravado pela
 consulta em lote da tela). Origens inesperadas ficam em categoria fixa,
-nunca sao exibidas como chaves arbitrarias. Nomes, IPs, regionais, modelos,
-versoes, erros brutos ou credenciais nao saem no JSON. Nao calcula confianca
+nunca sao exibidas como chaves arbitrarias. No modo padrao, nomes, IPs,
+regionais, modelos, versoes, erros brutos ou credenciais nao saem no JSON. Nao calcula confianca
 de firmware, idade/suporte de versao, sucesso de atualizacao ou novas coletas.
 
 ## Identidade e proxima etapa
+
+Resultado confirmado no Rigel: 140 registros de firmware, todos com horario
+com fuso e origem bulk_webui. Comparacao com o cache: 137 candidatos com IP
+e nome concordantes; 1 ambiguo, 1 com IP e nome apontando identidades
+diferentes e 1 sem correspondencia. Nenhum vinculo foi aprovado.
+
+Para conferir somente as pendencias, executar:
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    'C:\Automacao\scripts\database\audit_switch_firmware_sources.py' `
+    --unresolved
+```
+
+Essa opcao explicita inclui nomes, hosts, IPs normalizados, regionais e
+identidades candidatas (tipo/id de origem), limitando rotulos a 255 caracteres.
+Somente linhas pendentes aparecem em pendencias_identidade, separando
+candidatos por IP e por nome, sem escolher automaticamente um deles.
+O resumo padrao continua sem identificadores. Modelos, versoes, erros,
+credenciais e conteudo de jobs continuam excluidos nos dois modos.
+O resultado pode mudar se o inventario ou cache forem atualizados entre execucoes.
 
 O inventario SQLite e identificado por host e nao guarda hostid Zabbix.
 A tela usa cruzamento por IP ou nome; a auditoria somente sugere candidatos
