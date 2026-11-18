@@ -23,7 +23,7 @@ todos os campos, historico e funcionalidades do Sentinel.
 | Contatos e papeis regionais | email_contatos.xlsx_path / sheet_name, planilha externa do SLA | 014/015 homologadas; 38 regionais e 127 vinculos; nova leitura automatica confirmada em 18/11/2026 07:16:39 -03:00 |
 | Maquinas virtuais | gerenciar_vms.py / data/vms.json | 018 homologada: 1 VM RJ, status declarado Unknown e verificacao NULL; sem telemetria/credenciais, sincronizacao automatica ou fusao com servidores |
 | Replicacao AD | data/replicacao.json e fonte publica escolhida pela rota | 019/020 homologadas: 1 fonte, 35 linhas (3 Origem, 32 Destino), 32 controladores e 2 erros operacionais; nova leitura automatica confirmada em 18/11/2026 11:38:38 -03:00; leitor web inalterado |
-| Certificados | certificate_disk_report_acrab.json | Auditoria somente leitura preparada em audit_certificate_sources.py; ainda sem conferencia Rigel, migracao ou sincronizacao especifica |
+| Certificados | certificate_disk_report_acrab.json | Auditoria Rigel: 3 thumbprints distintos, datas com fuso; origem/coleta nao confirmadas. Carga somente de metadados legados 021 preparada, ainda nao homologada; sem sincronizacao ou troca do leitor web |
 | Metadados adicionais das regionais | estrutura_regionais.json | Nao considerar integralmente migrados so pela existencia da tabela regionais |
 | Historicos, aprovacoes, notificacoes e relatorios | Fontes por modulo | Precisam levantamento proprio; sincronizar estado atual nao cria historico |
 

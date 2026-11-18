@@ -76,4 +76,6 @@ Fonte vazia legitima permanece distinta de arquivo ausente/ilegivel.
 Antes de esquema SQL: revisar auditoria do Rigel, decidir identidade da fonte,
 host/repositorio e tratamento de datas desconhecidas. Depois backup, copias
 restritas, simulacao tipada com digest, migracao e conferencia. Nenhuma
-migracao de certificados ou sincronizacao automatica esta preparada nesta etapa.
+migracao e aplicada pela auditoria. A carga conservadora 021 esta descrita em
+SENTINEL_POSTGRESQL_CERTIFICADOS_CARGA.md, ainda sem homologacao; nao ha
+sincronizacao automatica preparada para o legado.
