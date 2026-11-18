@@ -21,7 +21,7 @@ todos os campos, historico e funcionalidades do Sentinel.
 | Monitor de Admins | output/dashboard_admins_cache.json | 016/017 homologadas: 54 dispositivos, 227 contas observadas; nova leitura automatica em 18/11/2026 08:20:34 -03:00 |
 | Baseline aprovada | fortianalyzer.admin_baseline_file em environment.json, padrao admin_baseline.json | 233 contas aprovadas separadas das observacoes; espelho 017 automatico confirmado, sem mudanca da baseline |
 | Contatos e papeis regionais | email_contatos.xlsx_path / sheet_name, planilha externa do SLA | 014/015 homologadas; 38 regionais e 127 vinculos; nova leitura automatica confirmada em 18/11/2026 07:16:39 -03:00 |
-| Maquinas virtuais | gerenciar_vms.py / data/vms.json | Sem migracao especifica; nao confundir com servidores cadastrados |
+| Maquinas virtuais | gerenciar_vms.py / data/vms.json | 1 VM RJ auditada; carga apenas cadastral 018 preparada, ainda nao homologada; sem telemetria/credenciais ou fusao com servidores |
 | Replicacao AD | data/replicacao.json e fonte publica escolhida pela rota | Sem migracao especifica |
 | Certificados | certificate_disk_report_acrab.json | Sem migracao especifica |
 | Metadados adicionais das regionais | estrutura_regionais.json | Nao considerar integralmente migrados so pela existencia da tabela regionais |

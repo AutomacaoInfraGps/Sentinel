@@ -1,5 +1,10 @@
 # VMs: auditoria antes de definir a carga SQL
 
+Resultado posterior: o operador confirmou a unica VM do RJ e seu vinculo.
+A carga limitada ao cadastro foi preparada em 018; consultar
+[SENTINEL_POSTGRESQL_VMS_CADASTRO.md](SENTINEL_POSTGRESQL_VMS_CADASTRO.md).
+Ainda nao aplicada no Rigel nesta revisao; a auditoria abaixo continua sem SQL.
+
 ## Primeira etapa
 
 scripts/database/audit_vm_sources.py le SOMENTE data/vms.json e o catalogo
