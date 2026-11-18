@@ -88,6 +88,12 @@ def main():
             app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de admins.')
 
         try:
+            from services.operational_replication import start_replication_sync_worker
+            start_replication_sync_worker(app.logger)
+        except Exception:
+            app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de replicacao AD.')
+
+        try:
             import gerenciador_atualizacoes
             threading.Thread(target=gerenciador_atualizacoes.start_update_threads, daemon=True).start()
         except Exception as exc:
