@@ -1,5 +1,9 @@
 # Cobertura e proximas etapas de persistencia
 
+Auditoria por tela atualizada em 18/11/2026:
+[SENTINEL_POSTGRESQL_AUDITORIA_TELAS_20261118.md](SENTINEL_POSTGRESQL_AUDITORIA_TELAS_20261118.md).
+Inclui lacunas de campos nas telas ja espelhadas e bancos separados (SQLite e SofIA).
+
 ## Homologado no Rigel em 2026-11-17
 
 As migracoes 001 a 013 e as conferencias de producao cobrem os dominios:
@@ -14,8 +18,8 @@ todos os campos, historico e funcionalidades do Sentinel.
 
 | Dominio | Fonte atual | Situacao PostgreSQL operacional |
 | --- | --- | --- |
-| Monitor de Admins | output/dashboard_admins_cache.json | 016 homologada: 54 dispositivos, 227 contas observadas; espelho 017 preparado, ainda nao homologado |
-| Baseline aprovada | fortianalyzer.admin_baseline_file em environment.json, padrao admin_baseline.json | 016 homologada: 233 contas aprovadas separadas das observacoes; 017 opt-in preparado |
+| Monitor de Admins | output/dashboard_admins_cache.json | 016/017 homologadas: 54 dispositivos, 227 contas observadas; nova leitura automatica em 18/11/2026 08:20:34 -03:00 |
+| Baseline aprovada | fortianalyzer.admin_baseline_file em environment.json, padrao admin_baseline.json | 233 contas aprovadas separadas das observacoes; espelho 017 automatico confirmado, sem mudanca da baseline |
 | Contatos e papeis regionais | email_contatos.xlsx_path / sheet_name, planilha externa do SLA | 014/015 homologadas; 38 regionais e 127 vinculos; nova leitura automatica confirmada em 18/11/2026 07:16:39 -03:00 |
 | Maquinas virtuais | gerenciar_vms.py / data/vms.json | Sem migracao especifica; nao confundir com servidores cadastrados |
 | Replicacao AD | data/replicacao.json e fonte publica escolhida pela rota | Sem migracao especifica |
