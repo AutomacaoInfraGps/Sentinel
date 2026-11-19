@@ -2375,7 +2375,7 @@ def _is_legacy_named_wan_candidate(link: dict) -> bool:
     provider = str(link.get("provedor") or link.get("alias") or link.get("description") or "").strip().lower()
     return (
         _is_excluded_wan_name(name)
-        and "wan" in provider
+        and ("wan" in provider or link.get("sdwan_member_confirmado") is True)
         and _is_public_ip(_extract_interface_ip(link.get("ip")))
     )
 
@@ -2462,7 +2462,7 @@ def _is_wan_interface(interface: dict) -> bool:
         return False
 
     if has_public_ip:
-        return role_wan or edge_name
+        return role_wan or edge_name or interface.get("sdwan_member_confirmado") is True
 
     if not is_up:
         return False
@@ -2678,6 +2678,7 @@ def _normalize_synced_link(interface: dict, fortigate_host=None, fortigate_porta
         "ip_publico_status": "pppoe" if not interface_ip and addressing_mode == "pppoe" else ("sem_ip_publico" if not interface_ip else ""),
         "status": status,
         "link_mode_status": link_mode_status,
+        "sdwan_member_confirmado": interface.get("sdwan_member_confirmado") is True,
         "ativo": True,
         "interface_monitorada": interface_name or None,
         "fortigate_host": fortigate_host,
@@ -3121,6 +3122,10 @@ def _load_regional_interfaces(
             if monitor_interfaces:
                 runtime_coletado_em = datetime.now(timezone.utc).isoformat()
                 if interfaces:
+                    known_names = {
+                        str(item.get("name") or item.get("interface") or "").strip().lower()
+                        for item in interfaces
+                    }
                     for interface in interfaces:
                         interface_name = str(interface.get("name") or interface.get("interface") or "").strip().lower()
                         runtime = monitor_interfaces.get(interface_name)
@@ -3128,6 +3133,13 @@ def _load_regional_interfaces(
                             continue
                         interface.update(runtime)
                         interface["_link_mode_status"] = "online" if _interface_esta_online(runtime) else "offline"
+                    for name, runtime in monitor_interfaces.items():
+                        if name.strip().lower() not in known_names:
+                            interface = dict(runtime)
+                            interface.setdefault("name", name)
+                            interface.setdefault("interface", name)
+                            interface["_link_mode_status"] = "online" if _interface_esta_online(runtime) else "offline"
+                            interfaces.append(interface)
                     source = "fortimanager_config+proxy_monitor"
                 else:
                     interfaces = list(monitor_interfaces.values())
@@ -3626,14 +3638,6 @@ def _coletar_links_regional(
         }
 
     interfaces = interfaces_result.get("interfaces", [])
-    interfaces_wan = [interface for interface in interfaces if _is_wan_interface(interface)]
-    interfaces_override = _REGIONAL_LINK_INTERFACE_INCLUDE_OVERRIDE.get(codigo_regional.upper())
-    if interfaces_override:
-        interfaces_wan = [
-            interface
-            for interface in interfaces_wan
-            if str(interface.get("name") or interface.get("interface") or "").strip().lower() in interfaces_override
-        ]
     interface_lan = _selecionar_interface_lan(interfaces)
     sdwan_members_map = {}
     sdwan_coletado_em = None
@@ -3661,6 +3665,21 @@ def _coletar_links_regional(
                 codigo_regional,
                 exc,
             )
+
+    # Resolve membership before filtering legacy port names such as dmz/ha1.
+    interfaces_wan = []
+    for original in interfaces:
+        interface = dict(original)
+        interface["sdwan_member_confirmado"] = bool(_buscar_sdwan_member(
+            sdwan_members_map, interface.get("name"), interface.get("interface")))
+        if _is_wan_interface(interface):
+            interfaces_wan.append(interface)
+    interfaces_override = _REGIONAL_LINK_INTERFACE_INCLUDE_OVERRIDE.get(codigo_regional.upper())
+    if interfaces_override:
+        interfaces_wan = [
+            interface for interface in interfaces_wan
+            if str(interface.get("name") or interface.get("interface") or "").strip().lower() in interfaces_override
+        ]
 
     if sdwan_members_map:
         interfaces_monitoradas = []
@@ -4127,12 +4146,44 @@ def _mapa_salvar_cache(dados):
         return dados
 
 
+def _mapa_links_regionais(info):
+    links = []
+    for link in _obter_links_internet_exibicao(info):
+        item = _preparar_link_para_template(link)
+        item.update({
+            "nome": item.get("nome") or item.get("interface_monitorada") or item.get("interface") or "Link",
+            "ip": item.get("ip") or item.get("ip_exibicao") or item.get("url") or "",
+            "descricao": item.get("provedor") or item.get("tipo") or "",
+            "status": _mapa_status(item.get("status") or ("online" if item.get("ativo", True) else "offline")),
+        })
+        links.append(item)
+    return links
+
+
+def _mapa_sincronizar_links_payload(payload):
+    """Reconcile only links; do not freshen unrelated cached measurements."""
+    cadastro = gerenciador_regionais.recarregar_regionais().get("regionais") or {}
+    regionais = {item["codigo"]: item for item in payload.get("regionais") or []}
+    mudou = False
+    for codigo, regional in regionais.items():
+        if codigo not in cadastro:
+            continue
+        links = _mapa_links_regionais(cadastro[codigo])
+        if regional.get("links") != links:
+            regional["links"] = links
+            mudou = True
+    if mudou:
+        payload["resumo"] = _mapa_recalcular_regionais(regionais)
+    return payload
+
+
 def _mapa_carregar_cache():
     try:
         if not _MAPA_CACHE_FILE.exists():
             return None, None
 
         dados = json.loads(_MAPA_CACHE_FILE.read_text(encoding="utf-8"))
+        _mapa_sincronizar_links_payload(dados)
         atualizado_em = dados.get("cache_atualizado_em") or dados.get("fontes", {}).get("atualizado_em")
         idade = None
         if atualizado_em:
@@ -4709,17 +4760,7 @@ def _montar_dados_mapa_monitoramento():
             })
             regionais[codigo]["servidores"].append(servidor_mapa)
 
-        for link in _obter_links_internet_exibicao(info):
-            link_completo = _preparar_link_para_template(link)
-            link_mapa = dict(link_completo)
-            link_mapa.update({
-                "nome": link_completo.get("nome") or link_completo.get("interface_monitorada") or link_completo.get("interface") or "Link",
-                "ip": link_completo.get("ip") or link_completo.get("ip_exibicao") or link_completo.get("url") or "",
-                "descricao": link_completo.get("provedor") or link_completo.get("tipo") or "",
-                "status": _mapa_status(link_completo.get("status") or ("online" if link_completo.get("ativo", True) else "offline")),
-                "ultima_verificacao": link_completo.get("ultima_verificacao"),
-            })
-            regionais[codigo]["links"].append(link_mapa)
+        regionais[codigo]["links"] = _mapa_links_regionais(info)
 
     dashboard = _mapa_ler_json_output("dados_dashboard.json")
     for codigo, dados in (dashboard.get("regionais") or {}).items():
