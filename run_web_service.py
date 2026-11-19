@@ -94,6 +94,12 @@ def main():
             app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de replicacao AD.')
 
         try:
+            from services.operational_switch_firmware import start_firmware_sync_worker
+            start_firmware_sync_worker(app.logger)
+        except Exception:
+            app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de firmware de switches.')
+
+        try:
             import gerenciador_atualizacoes
             threading.Thread(target=gerenciador_atualizacoes.start_update_threads, daemon=True).start()
         except Exception as exc:

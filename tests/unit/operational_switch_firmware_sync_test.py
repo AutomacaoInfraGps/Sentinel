@@ -42,7 +42,8 @@ class FirmwareSyncTests(unittest.TestCase):
         statements = [call.args[0] for call in cur.execute.call_args_list]
         self.assertFalse(any('PRIVATE' in sql for sql in statements))
         self.assertFalse(any(sql.startswith(('DELETE', 'TRUNCATE', 'UPDATE operacional.fontes_')) for sql in statements))
-        self.assertTrue(any('ON CONFLICT (fonte_id,host_origem)' in sql for sql in statements))
+        self.assertFalse(any('INSERT INTO operacional.inventario_' in sql for sql in statements))
+        self.assertTrue(any('INSERT INTO operacional.sincronizacoes_' in sql for sql in statements))
         conn.commit.assert_not_called()
 
     def test_exact_repeat_is_noop_only_after_full_content_comparison(self):
@@ -53,6 +54,17 @@ class FirmwareSyncTests(unittest.TestCase):
         drift = stored(snap)
         drift[0] = (*drift[0][:6], 'DIFFERENT_PRIVATE', *drift[0][7:])
         self.assertFalse(module._report((snap.source, module._marker(snap), drift), snap)['conteudo_ja_sincronizado'])
+
+    def test_new_capture_with_identical_metadata_updates_only_marker(self):
+        previous = catalog()
+        incoming = catalog(when='2026-11-19T13:00:00Z')
+        conn, cur = connection([IDENTITY, (True,), previous.source, module._marker(previous),
+                                previous.source, module._marker(incoming)], [stored(previous), stored(incoming)])
+        self.assertEqual(module.write_catalog(conn, incoming), 'sincronizado')
+        statements = [call.args[0] for call in cur.execute.call_args_list]
+        self.assertFalse(any(sql.startswith(('UPDATE operacional.inventario_', 'INSERT INTO operacional.inventario_'))
+                             for sql in statements))
+        self.assertTrue(any('INSERT INTO operacional.sincronizacoes_' in sql for sql in statements))
 
     def test_older_capture_or_same_time_different_digest_block(self):
         old = catalog()

@@ -52,6 +52,7 @@ def _report(state, catalog):
             'ultima_captura_sincronizada': marker[0].isoformat() if marker else None,
             'captura_mais_antiga': catalog.source[2] < last_time,
             'conflito_mesmo_horario': catalog.source[2] == last_time and catalog.digest != last_digest,
+            'conteudo_atual_confere': active == catalog.rows,
             'conteudo_ja_sincronizado': marker == _marker(catalog) and active == catalog.rows}
 
 
@@ -87,15 +88,16 @@ def write_catalog(connection, catalog, *, progress=None):
             if old and (row[8] < old[8] or (row[8] == old[8] and row[1:10] != old[1:10])):
                 raise ImportErrorSafe('Consulta de firmware antiga ou conflitante para host existente.')
         progress.phase = 'sincronizacao_firmware'
-        cursor.execute('UPDATE operacional.inventario_firmware_switches SET presente_na_captura=false, '
-                       'atualizado_em=CURRENT_TIMESTAMP WHERE fonte_id=%s AND presente_na_captura', (SOURCE,))
-        columns = ROW_COLUMNS.split(',')
-        assignments = ','.join(column + '=EXCLUDED.' + column for column in columns if column != 'host_origem')
-        for row in catalog.rows:
-            cursor.execute('INSERT INTO operacional.inventario_firmware_switches (fonte_id,' + ROW_COLUMNS + ',presente_na_captura,atualizado_em) '
-                           'VALUES (' + ','.join(['%s'] * 13) + ',true,CURRENT_TIMESTAMP) '
-                           'ON CONFLICT (fonte_id,host_origem) DO UPDATE SET ' + assignments +
-                           ',presente_na_captura=true,atualizado_em=CURRENT_TIMESTAMP', (SOURCE, *row))
+        if not report['conteudo_atual_confere']:
+            cursor.execute('UPDATE operacional.inventario_firmware_switches SET presente_na_captura=false, '
+                           'atualizado_em=CURRENT_TIMESTAMP WHERE fonte_id=%s AND presente_na_captura', (SOURCE,))
+            columns = ROW_COLUMNS.split(',')
+            assignments = ','.join(column + '=EXCLUDED.' + column for column in columns if column != 'host_origem')
+            for row in catalog.rows:
+                cursor.execute('INSERT INTO operacional.inventario_firmware_switches (fonte_id,' + ROW_COLUMNS + ',presente_na_captura,atualizado_em) '
+                               'VALUES (' + ','.join(['%s'] * 13) + ',true,CURRENT_TIMESTAMP) '
+                               'ON CONFLICT (fonte_id,host_origem) DO UPDATE SET ' + assignments +
+                               ',presente_na_captura=true,atualizado_em=CURRENT_TIMESTAMP', (SOURCE, *row))
         marker_columns = MARKER_COLUMNS.split(',')
         cursor.execute('INSERT INTO operacional.sincronizacoes_firmware_switches (fonte_id,' + MARKER_COLUMNS + ') '
                        'VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (fonte_id) DO UPDATE SET ' +
@@ -109,23 +111,33 @@ def write_catalog(connection, catalog, *, progress=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', required=True, type=Path, help='JSON congelado de firmware, nao SQLite.')
+    sources = parser.add_mutually_exclusive_group(required=True)
+    sources.add_argument('--source', type=Path, help='JSON congelado de firmware, nao SQLite.')
+    sources.add_argument('--current', action='store_true', help='Confere fontes atuais contra SQL, sem gravar.')
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--expected-digest')
     args = parser.parse_args(argv)
     progress = DatabaseProgress(phase='leitura_captura')
     try:
-        raw = args.source.read_bytes()
-        catalog = build_catalog(raw)
-        if args.source.read_bytes() != raw:
-            raise ImportErrorSafe('Captura mudou durante a leitura.')
         if os.environ.get('COMPUTERNAME', '').upper() != 'RIGEL':
             raise ImportErrorSafe('Execute a operacao SQL somente no Rigel.')
+        if args.current:
+            if args.apply:
+                raise ImportErrorSafe('--current e somente leitura. Gravacao manual exige --source congelado.')
+            from services.operational_switch_firmware import read_current_catalog, automatic_enabled
+            catalog = read_current_catalog()
+        else:
+            raw = args.source.read_bytes()
+            catalog = build_catalog(raw)
+            if args.source.read_bytes() != raw:
+                raise ImportErrorSafe('Captura mudou durante a leitura.')
         if args.apply and args.expected_digest != catalog.digest:
             raise ImportErrorSafe('Gravacao exige o digest exato da captura revisada.')
         from services.operational_postgres import connect_collector
         progress.phase = 'conexao'
         result = {**catalog.report, 'postgresql_acessado': True}
+        if args.current:
+            result['sincronizacao_automatica_firmware'] = automatic_enabled()
         with connect_collector(read_only=not args.apply) as connection:
             if args.apply:
                 result['modo'] = write_catalog(connection, catalog, progress=progress)

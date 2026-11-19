@@ -84,5 +84,9 @@ SELECT capturado_em, registros, sincronizado_em
 FROM operacional.sincronizacoes_firmware_switches;
 ```
 
-Implementacao preparada e testada localmente. Aplicacao e sincronizacao 024
-ainda aguardam resultados do Rigel; automatizacao e uma etapa posterior.
+Aplicacao 024 e sincronizacao manual de nova captura confirmadas no Rigel:
+140 preservados/presentes, conteudo_ja_sincronizado=true, marcador em
+2026-11-19T08:20:38.228239-03:00. Digest da nova captura:
+459b7b5a9f62c0ecc6606e9f4694d18f3f70ed3da56a94e967e4a4197f2d8caf.
+Automatizacao opt-in descrita em SENTINEL_POSTGRESQL_SWITCHES_FIRMWARE_AUTOMATICO.md;
+ativacao e recorrencia ainda nao confirmadas no servidor.
