@@ -105,6 +105,10 @@ de regionais ou metadados. Sem reinicio de PostgreSQL ou servico web nesta etapa
 Fonte congelada e a evidencia revisada, nao promessa de que o cadastro vivo nao
 mudou depois; futuras sincronizacoes exigem etapa propria.
 
-Codigo/migracao preparados e testados localmente. Captura congelada, migracao
-025 e carga ainda nao confirmadas no Rigel. Automatizacao e leitor SQL das
-telas nao foram alterados.
+Captura congelada, migracao 025 e carga confirmadas no Rigel: 1 fonte,
+51 metadados e conteudo_confere_com_captura=true; zero divergencias do cadastro.
+Arquivo: E:\Sentinel\PostgreSQL\backups\carga-metadados-regionais-20261119-094823-416\metadados-regionais.json,
+digest bea18ab2136e8b825ff4aa863547ef7c66f48072e038670510e65571bb9c59ad,
+capturado em 2026-11-19T12:48:24.129727+00:00.
+Automatizacao e leitores das telas permanecem inalterados. Proxima etapa:
+SENTINEL_POSTGRESQL_REGIONAIS_METADADOS_SYNC.md.
