@@ -18,6 +18,29 @@ nao contem estatistica. Por isso o JSON existente nao permite distinguir zero
 medido de valor padrao. A data de coleta do inventario nao comprova essa medicao.
 Nao promover esses valores a telemetria confirmada nem ligar por nome sozinho.
 
+## Resultado informado no Rigel em 19/11/2026
+
+Arquivo auditado: SHA256
+cacb9598ae895704b24c60b79a3dad01ede3badaa5b6abf0c76096f59dfb37a6.
+Publicacao declarada sem fuso, sem conversao automatica.
+
+- 31 sites na projecao RF, 102 grupos de canais e 125 linhas de radio.
+- 125 candidatos unicos por site/nome, sem aprovacao de vinculos.
+- Nenhuma linha com MAC, site_id, ID textual de radio ou coleta explicita.
+- 91 identidades do inventario sem linha RF; nao representam 91 radios ausentes.
+- Percentuais no intervalo esperado nas 125 linhas, sem soma TX/RX maior que total.
+- Zeros sem comprovacao: cu_total 20, cu_self_tx 26, cu_self_rx 76, tx_retry 30.
+  Contagens por campo, nao quantidade de radios distintos sem medicao.
+- Riscos declarados: OK 93, ATENCAO 26, CRITICO 6. Nao reavaliados como medicao.
+
+Nao houve acesso PostgreSQL nem carga. O resultado nao aprova nomes como chave
+de equipamento e nao permite distinguir zeros medidos de defaults. Recomenda-se
+uma projecao nativa separada, preservando o agregado atual para compatibilidade
+da tela, antes de criar o espelho RF. Identidade e valores devem vir da resposta
+da controladora, sem preencher ausencias com zero. Horario de recebimento da
+resposta deve ser distinguido de data de medicao, quando esta for fornecida.
+Esta mudanca do coletor e uma proxima etapa, ainda nao implementada/homologada.
+
 ## Execucao no Rigel
 
 Publicar codigo e fazer pull antes de executar:
