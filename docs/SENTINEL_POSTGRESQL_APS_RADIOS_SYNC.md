@@ -1,7 +1,7 @@
 # Sincronizacao manual RF UniFi (028)
 
-Implementacao preparada; homologacao no Rigel ainda pendente. Nao ativa worker,
-nao muda coletores, leitores das telas, configuracao de startup ou PostgreSQL.
+Etapa manual homologada no Rigel em 19/11/2026. Automatizacao opcional preparada,
+ainda sem ativacao/homologacao em producao. Nao muda coletores ou leitores das telas.
 Pre-requisito: 027 e carga inicial conferidas integralmente.
 
 ## Sequencia de homologacao
@@ -64,4 +64,65 @@ sincronizacao so grava o marcador se as linhas RF ja conferem.
 - Testes locais sinteticos, incluindo falha de commit e mensagens sanitizadas.
   DDL ainda nao executado em PostgreSQL local; validacao real sera no Rigel.
 
-Nao habilitar sincronizacao automatica nesta etapa.
+## Homologacao manual concluida
+
+Backup anterior a 028: sentinel-antes-sync-radios-unifi-20261119-161808-165.dump,
+236781 bytes, listagem validada. Migracao 028 terminou com COMMIT.
+Marcador inicializado com a captura original e conferencia integral positiva.
+
+Nova captura: sync-radios-unifi-20261119-162148-160/radios-unifi.json,
+digest 2136bda6e05a934c2256a61b2d160758f323fd5d953b923540ee10cf043fe245.
+Apos aplicacao, conferencia somente leitura confirmou conteudo_atual_confere e
+conteudo_ja_sincronizado true; ultima captura 2026-11-19T16:21:48.958530-03:00,
+216 recebimentos, 453 configuracoes e 425 estatisticas presentes/preservadas.
+Sem conflitos, regressao de horarios ou mudanca de vinculos; 16 tx_retry ausentes.
+
+## Automatizacao opcional preparada
+
+services/operational_ap_radios.py e iniciado por run_web_service.py em thread
+daemon, independente das requisicoes HTTP. Cada ciclo espera 300 segundos apos
+terminar; um processo usa trava de arquivo e a transacao usa o advisory lock RF.
+Nao necessita nova migracao alem da 028 ja aplicada.
+
+Desabilitado por padrao. Somente RIGEL com enabled booleano true no arquivo
+instance/operational-postgres-ap-radios-shadow.json permite leitura da fonte e
+conexao SQL. Flag ausente/invalida/string true nao habilita. Aceita BOM UTF-8
+do PowerShell. Nao criar essa flag em outra maquina.
+
+O worker le data/unifi.json, monta a mesma captura validada em memoria e faz
+leitura dupla para detectar alteracao. Nao consulta APs/controladora, nao executa
+coletor nem exporta uma nova captura bruta em disco. Usa o escritor manual ja
+homologado, sem relaxar os bloqueios por identidade/horarios/conflitos. Mudancas
+legitimas de site exigem revisao; o worker nao corrige vinculos para passar.
+
+Antes de ativar, apos pull, executar somente leitura:
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    'C:\Automacao\scripts\database\sync_ap_radio_catalog.py' --current
+```
+
+--current nao permite --apply. Mostra a flag configurada, nao a saude da thread.
+Cada leitura gera um capturado_em novo: conteudo_ja_sincronizado=false pode ser
+normal mesmo com conteudo_atual_confere=true. Revisar todos os bloqueios antes
+de habilitar; dados novos podem legitimamente diferir dos persistidos.
+
+Somente apos essa conferencia, habilitar {"enabled":true} na flag e combinar
+reinicio do servico web em janela sem checklist/jobs ativos. Nao reiniciar PG.
+Publicar codigo por si so nao habilita; processo antigo precisa carregar o worker.
+
+Apos commit, status atomico e sanitizado e publicado em
+output/ap_radios_postgres_sync_status.json, com modo, contagens, hashes,
+capturado_em, confirmado_em_utc e sincronizacao_automatica_radios=true. Sem
+nomes, MACs, IPs ou respostas brutas. Conferir primeira publicacao e avancos de
+capturado_em/confirmado_em_utc em dois ciclos separados por pelo menos 5 minutos.
+Nova captura nao significa nova medicao: sem_data_de_medicao continua preservado.
+
+Falha deixa o ultimo status de sucesso intacto; nao confundir arquivo antigo
+com ciclo recente. Warning sanitizado: falha_sincronizacao_radios_unifi, procurar
+tambem logs/web_task_stderr.log. Se SQL confirmar mas publicacao do status falhar,
+proximo ciclo reconcilia normalmente; nao repetir carga inicial.
+
+Para interromper proximos ciclos, mudar a flag para {"enabled":false}; flag e
+revalidada antes da conexao e antes de sair da transacao. Nao desfaz commits ja
+concluidos. Preservar dados SQL e fontes/capturas anteriores.

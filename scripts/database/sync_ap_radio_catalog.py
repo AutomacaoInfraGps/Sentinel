@@ -168,7 +168,9 @@ def write_catalog(connection, catalog, *, progress=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, required=True, help='Captura RF congelada revisada.')
+    sources = parser.add_mutually_exclusive_group(required=True)
+    sources.add_argument('--source', type=Path, help='Captura RF congelada revisada.')
+    sources.add_argument('--current', action='store_true', help='Confere fonte RF atual contra SQL, sem gravar.')
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--expected-digest')
     args = parser.parse_args(argv)
@@ -176,15 +178,23 @@ def main(argv=None):
     try:
         if os.environ.get('COMPUTERNAME', '').upper() != 'RIGEL':
             raise ImportErrorSafe('Execute a operacao SQL somente no Rigel.')
-        raw = args.source.read_bytes()
-        catalog = build_catalog(raw)
-        if args.source.read_bytes() != raw:
-            raise CaptureError('Captura mudou durante a leitura.')
+        if args.current:
+            if args.apply:
+                raise ImportErrorSafe('--current e somente leitura; gravacao manual exige --source congelado.')
+            from services.operational_ap_radios import read_current_catalog, automatic_enabled
+            catalog = read_current_catalog()
+        else:
+            raw = args.source.read_bytes()
+            catalog = build_catalog(raw)
+            if args.source.read_bytes() != raw:
+                raise CaptureError('Captura mudou durante a leitura.')
         if args.apply and args.expected_digest != catalog.digest:
             raise CaptureError('Gravacao exige o digest exato da captura revisada.')
         from services.operational_postgres import connect_collector
 
         result = summary(catalog.payload)
+        if args.current:
+            result['sincronizacao_automatica_radios'] = automatic_enabled()
         progress.phase = 'conexao'
         with connect_collector(read_only=not args.apply) as connection:
             if args.apply:
