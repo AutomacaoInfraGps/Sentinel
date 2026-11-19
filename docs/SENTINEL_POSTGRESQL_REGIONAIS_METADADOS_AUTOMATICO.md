@@ -7,7 +7,18 @@ preservados/presentes, nenhum codigo/nome divergente, descricao e estado/UF
 concordantes. Marcador: 2026-11-19T10:24:43.196292-03:00. Digest revisado:
 7e9f4b1bc3abcdf724ba9fac809a3a655518be08f81f2a4bc520a3acead43fc2.
 sha256_metadados: aed53b775b365216945d7fa8ec83d018ac81756afbce97cd0d323056e0342b61.
-Automatizacao preparada nesta entrega; ativacao/recorrencia ainda nao confirmadas.
+Worker ativado no Rigel e recorrencia confirmada pelos resultados enviados pelo
+operador em 19/11/2026. Primeiro commit automatico: 11:09:39.532106 -03:00;
+commit posterior: 14:49:55.985518 -03:00, captura 14:49:55.470375 -03:00.
+Ambos com modo sincronizado, 51 regionais e flag automatico true.
+
+Conferencia --current as 14:50:20 -03:00: 51 preservadas/presentes,
+conteudo_atual_confere=true, zero codigos ausentes, nomes divergentes ou
+regionais fora do cadastro, sem conflitos/regressoes. sha256_metadados permanece
+aed53b775b365216945d7fa8ec83d018ac81756afbce97cd0d323056e0342b61.
+conteudo_ja_sincronizado=false nessa leitura nao indica divergencia: a conferencia
+criou outra captura, posterior ao marcador, sem gravar. Estes resultados comprovam
+os ciclos observados, nao monitoramento continuo nem conexao remota desta revisao.
 
 ## Escopo e controles
 
