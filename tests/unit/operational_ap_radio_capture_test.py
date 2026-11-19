@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from scripts.database import capture_ap_radio_catalog as module
 from services.unifi_radio_collection import ap_radio_evidence
@@ -37,6 +37,85 @@ def capture(original=None):
 
 
 class ApRadioCaptureTests(unittest.TestCase):
+    def destination(self, endpoint=('192.0.2.1', 8443), sites=None, aps=None):
+        connection, cursor = MagicMock(), MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchone.side_effect = [('sentinel', 'sentinel_collector', 5433), endpoint]
+        cursor.fetchall.side_effect = [sites if sites is not None else [('PRIVATE_SITE',)],
+                                      aps if aps is not None else [('00:11:22:33:44:55', 'PRIVATE_SITE')]]
+        return connection, cursor
+
+    def test_destination_checks_existing_ids_readonly_without_names(self):
+        connection, cursor = self.destination()
+        result = module.inspect_destination(connection, capture())
+        self.assertTrue(result['destino_compativel'])
+        self.assertFalse(result['tabelas_rf_conferidas'])
+        self.assertFalse(result['vinculos_existentes_modificados'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertNotIn('192.0.2.1', json.dumps(result))
+        queries = [call.args[0] for call in cursor.execute.call_args_list]
+        self.assertEqual(queries[0], 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
+        self.assertTrue(all(query.startswith(('SET ', 'SELECT ')) for query in queries))
+        self.assertTrue(all('nome' not in query.lower() for query in queries))
+
+    def test_destination_reports_missing_moved_and_endpoint_mismatch_without_fixes(self):
+        connection, _ = self.destination(endpoint=None, sites=[], aps=[])
+        result = module.inspect_destination(connection, capture())
+        self.assertFalse(result['destino_compativel'])
+        self.assertFalse(result['controladora_encontrada'])
+        self.assertEqual(result['aps_da_captura_ausentes'], 1)
+        self.assertEqual(result['sites_da_captura_ausentes'], 1)
+        connection, _ = self.destination(endpoint=('other.invalid', 8443),
+                                         aps=[('00:11:22:33:44:55', 'other')])
+        result = module.inspect_destination(connection, capture())
+        self.assertFalse(result['destino_compativel'])
+        self.assertEqual(result['aps_com_site_divergente'], 1)
+
+    def test_destination_wrong_database_identity_blocks_before_inventory_queries(self):
+        connection, cursor = self.destination()
+        cursor.fetchone.side_effect = [('other', 'sentinel_collector', 5433)]
+        with self.assertRaises(ValueError):
+            module.inspect_destination(connection, capture())
+        self.assertEqual(len(cursor.execute.call_args_list), 3)
+
+    def test_cli_sql_requires_rigel_frozen_source_and_readonly_connection(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'snapshot.json'
+            raw = module._encode(capture())
+            path.write_bytes(raw)
+            out, error = StringIO(), StringIO()
+            connection, _ = self.destination()
+            connection.__enter__.return_value = connection
+            with patch.dict('os.environ', {'COMPUTERNAME': 'RIGEL'}), patch(
+                    'services.operational_postgres.connect_collector', return_value=connection) as connect, redirect_stdout(out), redirect_stderr(error):
+                self.assertEqual(module.main(['--check-database']), 1)
+                connect.assert_not_called()
+                self.assertEqual(module.main(['--source', str(path), '--check-database']), 0)
+                connect.assert_called_once_with(read_only=True)
+            result = json.loads(out.getvalue())
+            self.assertTrue(result['banco']['destino_compativel'])
+            self.assertTrue(result['vinculos_sql_conferidos'])
+            self.assertEqual(result['modo'], 'conferencia_destino_somente_leitura')
+            self.assertNotIn('PRIVATE', out.getvalue())
+            self.assertEqual(path.read_bytes(), raw)
+            with patch.dict('os.environ', {'COMPUTERNAME': 'OTHER'}), patch(
+                    'services.operational_postgres.connect_collector') as connect, redirect_stderr(error):
+                self.assertEqual(module.main(['--source', str(path), '--check-database']), 1)
+                connect.assert_not_called()
+
+    def test_cli_sql_failure_omits_driver_message_and_source_values(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'snapshot.json'
+            path.write_bytes(module._encode(capture()))
+            out, error = StringIO(), StringIO()
+            with (patch.dict('os.environ', {'COMPUTERNAME': 'RIGEL'}), patch(
+                    'services.operational_postgres.connect_collector', side_effect=RuntimeError('SECRET_MARKER')),
+                    redirect_stdout(out), redirect_stderr(error)):
+                self.assertEqual(module.main(['--source', str(path), '--check-database']), 1)
+            self.assertEqual(out.getvalue(), '')
+            self.assertNotIn('SECRET_MARKER', error.getvalue())
+            self.assertIn('conexao', error.getvalue())
+
     def test_safe_snapshot_separate_tables_and_nulls_round_trip(self):
         original = payload()
         before = deepcopy(original)

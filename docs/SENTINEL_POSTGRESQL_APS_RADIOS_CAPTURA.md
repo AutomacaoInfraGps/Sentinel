@@ -15,8 +15,9 @@ nao comprova radios ausentes/falha. Valores podem variar em cada coleta.
 ## Entrega sem PostgreSQL
 
 scripts/database/capture_ap_radio_catalog.py le data/unifi.json sem importar
-coletores, config, web_config, cofre ou drivers SQL. Nao faz consultas de rede.
-Padrao: simulacao, nenhuma gravacao. Nao tem --apply nem --check-database.
+coletores, config ou web_config. No padrao nao importa cofre/drivers SQL nem
+faz consultas de rede: simulacao, nenhuma gravacao. Nao tem --apply.
+--check-database e opcional, exige --source congelado e somente confere o destino.
 Nao cria migracao/roles/escritor automatico e nao troca fonte da tela.
 
 ```powershell
@@ -28,7 +29,49 @@ Revisar o resumo real antes de preparar a etapa SQL. Esperado a partir da
 conferencia anterior: 216 APs, 453 configuracoes e 425 estatisticas, mas nao
 fixar esses numeros como requisito universal de inventario.
 vinculos_sql_conferidos permanece false: nenhuma existencia/site/endpoint
-de destino foi consultada. Identidade unica no JSON nao equivale a FK validada.
+de destino foi consultada na simulacao. Identidade unica no JSON nao equivale a FK validada.
+
+## Captura informada pelo operador
+
+Backup informado no Rigel:
+E:\Sentinel\PostgreSQL\backups\sentinel-antes-radios-unifi-20261119-152814-905.dump,
+205895 bytes, em 19/11/2026 15:28:21. Captura criada em pasta restrita:
+E:\Sentinel\PostgreSQL\backups\carga-radios-unifi-20261119-152903-923\radios-unifi.json.
+Capturado_em 2026-11-19T18:29:04.620727+00:00;
+digest dae75c115929e5e9bb6a20035b85f93cdffec2d9f0df742667aca2f828426e79;
+sha256_projecao 9551dbbc3893e9d26073375ae6a57eb69ae3a199c1018a5a3ae860eaee43d4d1.
+216 APs em 39 sites, 453 configuracoes, 425 estatisticas, 16 tx_retry ausentes.
+Vinculos SQL ainda nao conferidos; estes dados sao resultados enviados, nao
+acesso remoto desta revisao ao banco ou ao arquivo do Rigel.
+
+## Conferencia somente leitura do destino
+
+Depois de publicar e fazer pull, no Rigel sob a conta operacional:
+
+```powershell
+& 'C:\Automacao\.venv31410\Scripts\python.exe' `
+    'C:\Automacao\scripts\database\capture_ap_radio_catalog.py' `
+    --source 'E:\Sentinel\PostgreSQL\backups\carga-radios-unifi-20261119-152903-923\radios-unifi.json' `
+    --check-database
+```
+
+Revalida captura/hash e verifica que o arquivo nao mudou durante a leitura.
+Conecta com sentinel_collector/127.0.0.1:5433/sentinel via credencial SQL ja
+configurada no cofre da conta operacional. Nao acessa credenciais da controladora.
+Usa default_transaction_read_only e REPEATABLE READ, READ ONLY, timeout de 5s,
+validacao de banco/usuario/porta e SELECTs parametrizados nas tabelas existentes:
+controladoras_unifi, sites_unifi e aps_unifi.
+
+Retorna apenas se a controladora existe/endpoint confere, quantos sites/MACs
+da captura estao ausentes e quantos APs estao em site divergente. Nao confere
+por nome nem altera vinculos. Sites extras no banco (inclusive sem APs) nao
+invalidam a captura. Uma coleta SQL mais recente nao comprova medicao RF.
+Esperado destino_compativel=true e zero ausencias/divergencias.
+vinculos_sql_conferidos=true significa consulta concluida; a compatibilidade
+e informada separadamente em banco.destino_compativel. Conferencia divergente
+produz diagnostico, nunca ajusta o destino para fazer a carga passar.
+tabelas_rf_conferidas permanece false: nenhuma tabela RF foi criada ou lida.
+Nao emitir carga ate revisar esse resultado e preparar esquema/permissoes.
 
 ## Conteudo e validacoes
 

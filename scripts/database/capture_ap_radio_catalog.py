@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import ipaddress
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -218,14 +219,50 @@ def summary(payload):
     }
 
 
+def inspect_destination(connection, payload):
+    from services.operational_postgres import _identity
+
+    controller = payload['controladora']
+    with connection.cursor() as cursor:
+        cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
+        cursor.execute("SET LOCAL statement_timeout='5s'")
+        _identity(cursor)
+        cursor.execute('SELECT host,porta FROM operacional.controladoras_unifi WHERE id=%s', (controller['id'],))
+        endpoint = cursor.fetchone()
+        cursor.execute('SELECT id_origem FROM operacional.sites_unifi WHERE controladora_id=%s', (controller['id'],))
+        sites = {row[0] for row in cursor.fetchall()}
+        cursor.execute('SELECT mac,site_id FROM operacional.aps_unifi WHERE controladora_id=%s', (controller['id'],))
+        aps = dict(cursor.fetchall())
+    missing_sites = len({ap['site_id'] for ap in payload['aps']} - sites)
+    missing_aps = sum(ap['mac'] not in aps for ap in payload['aps'])
+    moved_aps = sum(ap['mac'] in aps and aps[ap['mac']] != ap['site_id'] for ap in payload['aps'])
+    matches = endpoint == (controller['host'], controller['porta'])
+    return {
+        'controladora_encontrada': endpoint is not None,
+        'endpoint_controladora_confere': matches,
+        'sites_da_captura_ausentes': missing_sites,
+        'aps_da_captura_ausentes': missing_aps,
+        'aps_com_site_divergente': moved_aps,
+        'destino_compativel': bool(matches and not (missing_sites or missing_aps or moved_aps)),
+        'tabelas_rf_conferidas': False,
+        'vinculos_existentes_modificados': False,
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, help='Simula novamente uma captura RF congelada, nao o JSON bruto.')
     parser.add_argument('--capture', type=Path, help='Cria uma captura nova sem sobrescrever; sem SQL.')
+    parser.add_argument('--check-database', action='store_true', help='Com --source, confere somente leitura dos vinculos de APs existentes no Rigel.')
     args = parser.parse_args(argv)
+    phase = 'leitura_captura'
     try:
         if args.source and args.capture:
             raise CaptureError('--source e --capture nao podem ser combinados.')
+        if args.check_database and (args.source is None or args.capture):
+            raise CaptureError('Conferencia SQL exige --source congelado e nao aceita --capture.')
+        if args.check_database and os.environ.get('COMPUTERNAME', '').upper() != 'RIGEL':
+            raise CaptureError('Execute a conferencia SQL somente no Rigel.')
         path = args.source or ROOT / 'data/unifi.json'
         raw = path.read_bytes()
         payload = validate_capture(raw) if args.source else capture_payload(raw)
@@ -236,12 +273,26 @@ def main(argv=None):
             with args.capture.open('xb') as stream:
                 stream.write(_encode(payload))
         result = {'modo': 'captura_congelada_sem_postgresql' if args.capture else 'simulacao_sem_conexao_ao_banco', **summary(payload)}
+        if args.check_database:
+            from services.operational_postgres import connect_collector
+
+            phase = 'conexao'
+            with connect_collector(read_only=True) as connection:
+                phase = 'conferencia_destino'
+                result['banco'] = inspect_destination(connection, payload)
+            result.update(modo='conferencia_destino_somente_leitura', postgresql_acessado=True,
+                          vinculos_sql_conferidos=True)
         print(json.dumps(result, indent=2, ensure_ascii=True))
         return 0
     except CaptureError as exc:
         print(str(exc), file=sys.stderr)
-    except (OSError, TypeError, ValueError, OverflowError, RecursionError):
-        print('Falha na leitura ou captura RF. Mensagem e valores foram omitidos.', file=sys.stderr)
+    except Exception as exc:
+        if args.check_database and phase in ('conexao', 'conferencia_destino'):
+            from scripts.database.import_firewall_cache import _database_error
+
+            print(str(_database_error(phase, exc)), file=sys.stderr)
+        else:
+            print('Falha na leitura ou captura RF. Mensagem e valores foram omitidos.', file=sys.stderr)
     return 1
 
 
