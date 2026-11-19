@@ -8,6 +8,7 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 from services.unifi_ap_collection import confirmed_device_response, ap_collection_evidence
+from services.unifi_radio_collection import ap_radio_evidence
 
 # === CONFIGURAÇÕES ===
 controller_host = UNIFI_CONFIG["host"]
@@ -126,6 +127,7 @@ for site in sites:
                 "uptime": ap.get("uptime", 0),
                 "site": site_desc,
                 **ap_collection_evidence(ap, site_id, collected_at),
+                "radios_nativos": ap_radio_evidence(ap, site_id, collected_at),
             }
             all_aps.append(ap_data)
             

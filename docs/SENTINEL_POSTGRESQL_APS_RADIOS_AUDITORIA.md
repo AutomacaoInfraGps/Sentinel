@@ -39,7 +39,56 @@ uma projecao nativa separada, preservando o agregado atual para compatibilidade
 da tela, antes de criar o espelho RF. Identidade e valores devem vir da resposta
 da controladora, sem preencher ausencias com zero. Horario de recebimento da
 resposta deve ser distinguido de data de medicao, quando esta for fornecida.
-Esta mudanca do coletor e uma proxima etapa, ainda nao implementada/homologada.
+O ajuste descrito abaixo foi implementado depois da auditoria, mas ainda depende
+de publicacao e de nova coleta/conferencia no Rigel.
+
+## Projecao nativa adicional, sem carga SQL
+
+services/unifi_radio_collection.py adiciona radios_nativos a cada AP nas duas
+versoes do coletor (Unifi.Py e scripts/Unifi.py). Usa exclusivamente a resposta
+stat/device ja consultada, sem nova requisicao. O agregado legado e todos os
+campos existentes permanecem inalterados. Nenhum leitor da tela foi trocado.
+
+A projecao versionada contem MAC normalizado, site_id, recebido_em com fuso,
+estado online declarado e duas tabelas independentes: configuracoes (radio_table)
+e estatisticas (radio_table_stats). Whitelist de nome de interface, banda
+declarada e canal; estatisticas incluem cu_total, cu_self_tx, cu_self_rx e
+tx_retry a partir de tx_retries_pct, sem arredondamento adicional.
+Canal auto e zero explicito sao preservados, sem inferir canal operacional.
+Nao ha inferencia de banda a partir do numero do canal.
+
+Campos ausentes, nulos ou invalidos ficam NULL com situacao discriminada;
+zero numerico explicitamente informado permanece zero. Booleanos, textos
+numericos, NaN/infinito e percentuais fora de 0-100 nao sao aceitos como metricas.
+Lista ausente, nula, invalida e presente vazia sao situacoes distintas.
+Linhas de estrutura invalida sao contadas sem copiar seu conteudo.
+Nomes de interface ausentes/duplicados nao se tornam IDs pela banda ou posicao;
+configuracao e estatisticas nao sao associadas automaticamente.
+
+recebido_em e o horario da resposta validada de dispositivos do site. Nao e
+data de medicao do radio: medido_em permanece NULL e data_medicao_confirmada
+false. Estatisticas de um AP offline podem estar antigas; presencia/valor zero
+na resposta nao comprovam estado atual ou ausencia de interferencia.
+Segredos, clientes, payloads brutos, IPs e nomes de pessoas nao entram na whitelist.
+
+O espelho SQL atual continua excluindo radios_nativos: teste confirma digest
+e artefato de APs inalterados. Escritas de inventario ja habilitadas continuam
+no fluxo existente; nao foi criado escritor, tabela, carga ou flag RF.
+
+Depois do push/pull, aguardar uma coleta UniFi normal (ou atualizar somente
+as antenas pela tela existente). Nao executar checklist completo apenas para
+isso nem reiniciar PostgreSQL. Repetir audit_ap_radio_sources.py: a nova fonte
+radios_nativos informa contagens, identidades concordantes, recebimento com
+fuso, interfaces e metricas ausentes/nulas/invalidas/explicitamente informadas,
+sem exportar identificadores ou valores individuais. Antes de nova coleta,
+aps_sem_projecao_nativa e esperado. As duas fontes sao auditadas separadamente:
+a versao scripts/Unifi.py nao cria o agregado legado de interferencia.
+
+Validacao local sintetica: 83 testes passaram, incluindo comparacao do JSON
+legado e numero de requisicoes das duas versoes antes/depois da extensao.
+Nao foi executada coleta real. Um teste adicional de escopo regional que importa
+web_config nao concluiu por indisponibilidade de credenciais DPAPI locais;
+nao houve alteracao de permissoes/escopo nesta etapa.
 
 ## Execucao no Rigel
 
@@ -62,7 +111,7 @@ aproximacao, aprovacao de vinculos ou alteracao de permissoes. Canais inteiros
 positivos sao apenas formato, nao validacao regulatoria ou prova de banda.
 Nomes repetidos permanecem ambiguos. Risco e contado como declarado, sem recalculo.
 
-Proxima decisao depende do resultado real. Uma preservacao do legado deve ser
+Proxima decisao de carga depende do resultado real da nova coleta. Uma preservacao do legado deve ser
 identificada como projecao nao confirmada; telemetria nativa exigira evidencia
 explicita de origem/identidade/ausencia, em etapa separada. Nenhuma migracao,
-carga, sincronizacao ou troca do leitor foi preparada nesta auditoria.
+carga, sincronizacao RF ou troca do leitor foi preparada nesta etapa.

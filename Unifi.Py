@@ -8,6 +8,7 @@ from datetime import datetime
 from config import UNIFI_HTML, UNIFI_CONFIG, ensure_directories
 from data_store import save_data
 from services.unifi_ap_collection import confirmed_device_response, ap_collection_evidence
+from services.unifi_radio_collection import ap_radio_evidence
 from services.unifi_wlan_collection import confirmed_wlan_receipt, configured_wlan_catalog
 from services.unifi_models import nome_modelo_unifi
 from services.unifi_networks import (
@@ -226,6 +227,7 @@ for site in sites:
                 "uptime": ap.get("uptime", 0),
                 "site": site_desc,
                 **ap_collection_evidence(ap, site_id, collected_at),
+                "radios_nativos": ap_radio_evidence(ap, site_id, collected_at),
             })
 
             # ===== HTML DA LINHA (sempre gerado, independente de rádio) =====

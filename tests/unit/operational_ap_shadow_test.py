@@ -43,6 +43,19 @@ def connection(ones, lists=()):
 
 
 class ApShadowTests(unittest.TestCase):
+    def test_native_radio_extension_does_not_change_current_sql_projection(self):
+        from services.unifi_radio_collection import ap_radio_evidence
+        native = payload()
+        original = module.prepare_ap_snapshot(native, REGIONS, NOW)
+        native['aps'][0]['radios_nativos'] = ap_radio_evidence({
+            'mac': native['aps'][0]['mac'],
+            'radio_table_stats': [{'name': 'wifi0', 'cu_total': 0}],
+        }, native['aps'][0]['site_id'], NOW.isoformat())
+        extended = module.prepare_ap_snapshot(native, REGIONS, NOW)
+        self.assertEqual(extended.digest, original.digest)
+        self.assertEqual(extended.artifact, original.artifact)
+        self.assertNotIn('radios_nativos', extended.artifact.decode())
+
     def test_projection_is_detached_typed_and_has_only_confirmed_clock(self):
         native = payload()
         before = deepcopy(native)

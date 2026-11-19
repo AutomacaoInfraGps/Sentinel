@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from scripts.database.audit_ap_radio_sources import audit_radio, audit_sources
+from scripts.database.audit_ap_radio_sources import audit_native_radios, audit_radio, audit_sources
 
 
 class ApRadioSourcesAuditTests(unittest.TestCase):
@@ -93,6 +93,44 @@ class ApRadioSourcesAuditTests(unittest.TestCase):
             for raw in (b'{"aps": [], "aps": []}', b'{}', b'[]', b'PRIVATE_SECRET'):
                 path.write_bytes(raw)
                 self.assertEqual(audit_sources(root)['fontes']['projecao_radio_unifi'], {'situacao': 'ausente_ou_invalido'})
+
+    def test_native_absence_is_not_empty_radio_success(self):
+        result = audit_native_radios(self.payload())
+        self.assertEqual(result['contagens'], {'aps_sem_projecao_nativa': 1})
+        self.assertEqual(result['tabelas']['estatisticas'], {})
+
+    def test_native_counts_without_join_or_raw_export(self):
+        from services.unifi_radio_collection import ap_radio_evidence
+        payload = self.payload()
+        ap = payload['aps'][0]
+        ap['radios_nativos'] = ap_radio_evidence({
+            'mac': ap['mac'], 'state': 1,
+            'radio_table': [{'name': 'wifi0', 'radio': 'na', 'channel': 'auto'}],
+            'radio_table_stats': [{'name': 'wifi0', 'cu_total': 0, 'tx_retries_pct': None}],
+        }, ap['site_id'], '2026-11-19T14:00:00-03:00')
+        original = copy.deepcopy(payload)
+        result = audit_native_radios(payload)
+        self.assertEqual(result['contagens']['identidades_concordantes'], 1)
+        self.assertEqual(result['recebimento_por_ap'], {'com_fuso': 1})
+        self.assertEqual(result['medicao_explicita_por_ap'], {'ausente': 1})
+        self.assertEqual(result['metricas_estatisticas']['cu_total']['zeros_informados_na_resposta'], 1)
+        self.assertEqual(result['metricas_estatisticas']['cu_self_rx'], {'ausente': 1})
+        self.assertEqual(result['metricas_estatisticas']['tx_retry'], {'nulo': 1})
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertFalse(result['tabelas_associadas_automaticamente'])
+        self.assertEqual(original, payload)
+
+    def test_native_invalid_shapes_and_identity_never_guess_by_name(self):
+        from services.unifi_radio_collection import ap_radio_evidence
+        payload = self.payload()
+        ap = payload['aps'][0]
+        ap['radios_nativos'] = ap_radio_evidence({'mac': '00:11:22:33:44:66'}, 'other', 'invalid')
+        ap['radios_nativos']['configuracoes'] = None
+        result = audit_native_radios(payload)
+        self.assertEqual(result['contagens']['identidades_ausentes_ou_divergentes'], 1)
+        self.assertEqual(result['tabelas']['configuracoes'], {'estrutura_invalida': 1})
+        ap['radios_nativos']['version'] = True
+        self.assertEqual(audit_native_radios(payload)['contagens'], {'projecoes_invalidas': 1})
 
 
 if __name__ == '__main__':

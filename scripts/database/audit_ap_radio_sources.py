@@ -127,6 +127,75 @@ def audit_radio(payload):
     }
 
 
+def audit_native_radios(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get('aps'), list):
+        raise ValueError('Invalid inventory')
+    counts, received, measured = Counter(), Counter(), Counter()
+    tables = {name: Counter() for name in ('configuracoes', 'estatisticas')}
+    metrics = {field: Counter() for field in METRICS}
+    for ap in payload['aps']:
+        if not isinstance(ap, dict):
+            counts['aps_invalidos'] += 1
+            continue
+        if 'radios_nativos' not in ap:
+            counts['aps_sem_projecao_nativa'] += 1
+            continue
+        native = ap['radios_nativos']
+        if (not isinstance(native, dict) or type(native.get('version')) is not int
+                or native['version'] != 1 or native.get('origem') != 'resposta_stat_device_unifi'):
+            counts['projecoes_invalidas'] += 1
+            continue
+        counts['aps_com_projecao_nativa'] += 1
+        mac, site = _mac(native.get('mac')), _text(native.get('site_id'))
+        matches = bool(mac and site and mac == _mac(ap.get('mac')) and site == _text(ap.get('site_id')))
+        counts['identidades_concordantes' if matches else 'identidades_ausentes_ou_divergentes'] += 1
+        received[_time_kind(native.get('recebido_em'))] += 1
+        measured[_time_kind(native.get('medido_em'))] += 1
+        for name, categories in tables.items():
+            table = native.get(name)
+            if not isinstance(table, dict) or not isinstance(table.get('registros'), list):
+                categories['estrutura_invalida'] += 1
+                continue
+            state = table.get('situacao')
+            categories[state if isinstance(state, str) and state in (
+                'ausente', 'nulo', 'estrutura_invalida', 'presente') else 'situacao_invalida'] += 1
+            invalid = table.get('registros_invalidos')
+            if type(invalid) is int and invalid >= 0:
+                categories['registros_descartados_com_estrutura_invalida'] += invalid
+            else:
+                categories['contador_invalidos_invalido'] += 1
+            rows = table['registros']
+            names = Counter(_text(row.get('nome_interface')) for row in rows if isinstance(row, dict))
+            for row in rows:
+                if not isinstance(row, dict):
+                    categories['linhas_invalidas'] += 1
+                    continue
+                categories['linhas'] += 1
+                interface = _text(row.get('nome_interface'))
+                categories['com_interface_unica' if interface and names[interface] == 1 else 'sem_interface_unica'] += 1
+                if name != 'estatisticas':
+                    continue
+                states = row.get('situacao_campos')
+                states = states if isinstance(states, dict) else {}
+                for field, values in metrics.items():
+                    state, value = states.get(field), row.get(field)
+                    if state == 'informado' and _percent(value):
+                        values['informado_na_resposta'] += 1
+                        values['zeros_informados_na_resposta'] += value == 0
+                    elif isinstance(state, str) and state in ('ausente', 'nulo', 'invalido') and value is None:
+                        values[state] += 1
+                    else:
+                        values['estrutura_invalida'] += 1
+    return {
+        'situacao': 'lido', 'aps': len(payload['aps']), 'contagens': dict(counts),
+        'recebimento_por_ap': dict(received), 'medicao_explicita_por_ap': dict(measured),
+        'tabelas': {key: dict(value) for key, value in tables.items()},
+        'metricas_estatisticas': {key: dict(value) for key, value in metrics.items()},
+        'tabelas_associadas_automaticamente': False,
+        'recebimento_nao_comprova_data_de_medicao': True,
+    }
+
+
 def audit_sources(root=ROOT):
     report = {
         'modo': 'auditoria_radios_aps_somente_leitura_sem_banco', 'fontes': {},
@@ -142,11 +211,18 @@ def audit_sources(root=ROOT):
     try:
         raw = (Path(root) / 'data/unifi.json').read_bytes()
         payload = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=_unique_object)
-        result = audit_radio(payload)
-        result['sha256_arquivo'] = hashlib.sha256(raw).hexdigest()
     except (OSError, ValueError, RecursionError):
-        result = {'situacao': 'ausente_ou_invalido'}
-    report['fontes']['projecao_radio_unifi'] = result
+        for name in ('projecao_radio_unifi', 'radios_nativos'):
+            report['fontes'][name] = {'situacao': 'ausente_ou_invalido'}
+        return report
+    digest = hashlib.sha256(raw).hexdigest()
+    for name, audit in (('projecao_radio_unifi', audit_radio), ('radios_nativos', audit_native_radios)):
+        try:
+            result = audit(payload)
+            result['sha256_arquivo'] = digest
+        except (ValueError, RecursionError):
+            result = {'situacao': 'ausente_ou_invalido'}
+        report['fontes'][name] = result
     return report
 
 
