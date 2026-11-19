@@ -1,4 +1,4 @@
-"""Simulate or freeze a whitelisted native RF projection; no SQL operations."""
+"""Offline native RF capture with optional read-only inventory checks on the Rigel."""
 
 import argparse
 from collections import Counter
@@ -219,20 +219,14 @@ def summary(payload):
     }
 
 
-def inspect_destination(connection, payload):
-    from services.operational_postgres import _identity
-
+def destination_status(cursor, payload):
     controller = payload['controladora']
-    with connection.cursor() as cursor:
-        cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
-        cursor.execute("SET LOCAL statement_timeout='5s'")
-        _identity(cursor)
-        cursor.execute('SELECT host,porta FROM operacional.controladoras_unifi WHERE id=%s', (controller['id'],))
-        endpoint = cursor.fetchone()
-        cursor.execute('SELECT id_origem FROM operacional.sites_unifi WHERE controladora_id=%s', (controller['id'],))
-        sites = {row[0] for row in cursor.fetchall()}
-        cursor.execute('SELECT mac,site_id FROM operacional.aps_unifi WHERE controladora_id=%s', (controller['id'],))
-        aps = dict(cursor.fetchall())
+    cursor.execute('SELECT host,porta FROM operacional.controladoras_unifi WHERE id=%s', (controller['id'],))
+    endpoint = cursor.fetchone()
+    cursor.execute('SELECT id_origem FROM operacional.sites_unifi WHERE controladora_id=%s', (controller['id'],))
+    sites = {row[0] for row in cursor.fetchall()}
+    cursor.execute('SELECT mac,site_id FROM operacional.aps_unifi WHERE controladora_id=%s', (controller['id'],))
+    aps = dict(cursor.fetchall())
     missing_sites = len({ap['site_id'] for ap in payload['aps']} - sites)
     missing_aps = sum(ap['mac'] not in aps for ap in payload['aps'])
     moved_aps = sum(ap['mac'] in aps and aps[ap['mac']] != ap['site_id'] for ap in payload['aps'])
@@ -247,6 +241,16 @@ def inspect_destination(connection, payload):
         'tabelas_rf_conferidas': False,
         'vinculos_existentes_modificados': False,
     }
+
+
+def inspect_destination(connection, payload):
+    from services.operational_postgres import _identity
+
+    with connection.cursor() as cursor:
+        cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
+        cursor.execute("SET LOCAL statement_timeout='5s'")
+        _identity(cursor)
+        return destination_status(cursor, payload)
 
 
 def main(argv=None):

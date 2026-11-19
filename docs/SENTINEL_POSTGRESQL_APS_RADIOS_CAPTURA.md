@@ -44,6 +44,13 @@ sha256_projecao 9551dbbc3893e9d26073375ae6a57eb69ae3a199c1018a5a3ae860eaee43d4d1
 Vinculos SQL ainda nao conferidos; estes dados sao resultados enviados, nao
 acesso remoto desta revisao ao banco ou ao arquivo do Rigel.
 
+Atualizacao posterior informada pelo operador: conferencia de destino concluida,
+controladora/endpoint concordantes e zero sites/APs ausentes ou em site divergente;
+destino_compativel=true. Tabelas RF nao foram conferidas por esse comando.
+Migracao/carga inicial preparadas em
+[SENTINEL_POSTGRESQL_APS_RADIOS_CARGA.md](SENTINEL_POSTGRESQL_APS_RADIOS_CARGA.md),
+ainda sem confirmacao de aplicacao da 027 ou gravacao no Rigel.
+
 ## Conferencia somente leitura do destino
 
 Depois de publicar e fazer pull, no Rigel sob a conta operacional:
