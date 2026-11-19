@@ -40,7 +40,10 @@ da tela, antes de criar o espelho RF. Identidade e valores devem vir da resposta
 da controladora, sem preencher ausencias com zero. Horario de recebimento da
 resposta deve ser distinguido de data de medicao, quando esta for fornecida.
 O ajuste descrito abaixo foi implementado depois da auditoria, mas ainda depende
-de publicacao e de nova coleta/conferencia no Rigel.
+da conferencia de cada nova publicacao. A primeira projecao nativa foi conferida
+no Rigel: 216 identidades concordantes, 453 configuracoes e 425 estatisticas,
+sem descartes; tx_retry ausente em 16 linhas. Detalhes e simulacao seguinte:
+[SENTINEL_POSTGRESQL_APS_RADIOS_CAPTURA.md](SENTINEL_POSTGRESQL_APS_RADIOS_CAPTURA.md).
 
 ## Projecao nativa adicional, sem carga SQL
 
