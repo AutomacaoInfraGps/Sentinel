@@ -11,8 +11,28 @@ em 16. Recebimento com fuso, medicao desconhecida, tabelas nao associadas.
 
 Conferencia do destino enviada pelo operador: controladora encontrada e
 endpoint concordante, zero sites/APs ausentes e zero APs com site divergente;
-destino_compativel=true. Nenhum vinculo foi alterado. Nao comprova tabelas RF
-criadas, carga feita ou RF atual: a captura continua sendo a revisada de 15:29:04.
+destino_compativel=true. Nenhum vinculo foi alterado. Essa conferencia anterior
+nao comprovava carga ou RF atual: a captura continua sendo a revisada de 15:29:04.
+
+## Homologacao da carga inicial
+
+Operador confirmou a aplicacao da migracao 027 com quatro CREATE TABLE e
+COMMIT. Conferencia anterior a carga: quatro tabelas RF vazias e destino
+compativel. Aplicacao com o digest acima retornou
+carga_inicial_radios_unifi_confirmada.
+
+Pos-conferencia somente leitura enviada em 19/11/2026:
+1 fonte, 216 recebimentos, 453 configuracoes e 425 estatisticas;
+conteudo_confere_com_captura=true, tabelas_rf_vazias=false e
+destino_compativel=true, sem sites/APs ausentes ou em site divergente.
+Comparacao integral tipada com a mesma captura, nao apenas contagem de linhas.
+As 16 ausencias de tx_retry e a medicao desconhecida foram preservadas.
+
+Carga inicial homologada pelos resultados enviados, sem acesso remoto desta
+revisao. Nao repetir --apply. Nao houve ativacao de sincronizacao automatica RF,
+troca de leitores, medicao nova ou associacao automatica entre as duas tabelas.
+Proxima etapa: planejar sincronizacao manual controlada com nova captura,
+antes de qualquer automatizacao; ainda nao implementada nesta entrega.
 
 ## Modelo e acesso
 

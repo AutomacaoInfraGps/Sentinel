@@ -49,7 +49,10 @@ controladora/endpoint concordantes e zero sites/APs ausentes ou em site divergen
 destino_compativel=true. Tabelas RF nao foram conferidas por esse comando.
 Migracao/carga inicial preparadas em
 [SENTINEL_POSTGRESQL_APS_RADIOS_CARGA.md](SENTINEL_POSTGRESQL_APS_RADIOS_CARGA.md),
-ainda sem confirmacao de aplicacao da 027 ou gravacao no Rigel.
+confirmadas posteriormente no Rigel: 027 com COMMIT, carga inicial e
+pos-conferencia integral com 1 fonte, 216 recebimentos, 453 configuracoes,
+425 estatisticas e conteudo_confere_com_captura=true. Sem sincronizacao RF
+automatica ou troca do leitor; nao repetir a carga inicial.
 
 ## Conferencia somente leitura do destino
 
