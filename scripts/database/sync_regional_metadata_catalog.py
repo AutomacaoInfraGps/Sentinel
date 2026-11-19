@@ -129,23 +129,33 @@ def write_catalog(connection, catalog, *, progress=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', required=True, type=Path, help='Captura congelada somente dos metadados.')
+    sources = parser.add_mutually_exclusive_group(required=True)
+    sources.add_argument('--source', type=Path, help='Captura congelada somente dos metadados.')
+    sources.add_argument('--current', action='store_true', help='Confere cadastro atual contra SQL, sem gravar.')
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--expected-digest')
     args = parser.parse_args(argv)
     progress = DatabaseProgress(phase='leitura_captura')
     try:
-        raw = args.source.read_bytes()
-        catalog = build_catalog(raw)
-        if args.source.read_bytes() != raw:
-            raise ImportErrorSafe('Captura mudou durante a leitura.')
         if os.environ.get('COMPUTERNAME', '').upper() != 'RIGEL':
             raise ImportErrorSafe('Execute a operacao SQL somente no Rigel.')
+        if args.current:
+            if args.apply:
+                raise ImportErrorSafe('--current e somente leitura; gravacao manual exige --source congelado.')
+            from services.operational_regional_metadata import read_current_catalog, automatic_enabled
+            catalog = read_current_catalog()
+        else:
+            raw = args.source.read_bytes()
+            catalog = build_catalog(raw)
+            if args.source.read_bytes() != raw:
+                raise ImportErrorSafe('Captura mudou durante a leitura.')
         if args.apply and args.expected_digest != catalog.digest:
             raise ImportErrorSafe('Gravacao exige o digest exato da captura revisada.')
         from services.operational_postgres import connect_collector
         progress.phase = 'conexao'
         result = catalog.summary()
+        if args.current:
+            result['sincronizacao_automatica_metadados'] = automatic_enabled()
         with connect_collector(read_only=not args.apply) as connection:
             if args.apply:
                 result['modo'] = write_catalog(connection, catalog, progress=progress)

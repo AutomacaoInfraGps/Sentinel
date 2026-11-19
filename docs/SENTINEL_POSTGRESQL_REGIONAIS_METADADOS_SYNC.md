@@ -109,5 +109,10 @@ SELECT capturado_em, regionais, sincronizado_em
 FROM operacional.sincronizacoes_metadados_regionais;
 ```
 
-Implementacao preparada e testada localmente. Migracao e sincronizacao 026
-ainda aguardam execucao e resultados do Rigel.
+Migracao 026, primeira sincronizacao e nova captura manual confirmadas no Rigel:
+51 preservados/presentes, conteudo_atual_confere=true e conteudo_ja_sincronizado=true,
+zero divergencias/conflitos. Nova captura em 2026-11-19T13:24:43.196292+00:00,
+digest 7e9f4b1bc3abcdf724ba9fac809a3a655518be08f81f2a4bc520a3acead43fc2,
+arquivo E:\Sentinel\PostgreSQL\backups\sync-metadados-regionais-20261119-102442-307\metadados-regionais.json.
+Worker opt-in posterior descrito em SENTINEL_POSTGRESQL_REGIONAIS_METADADOS_AUTOMATICO.md;
+ativacao e recorrencia ainda nao confirmadas no Rigel.

@@ -100,6 +100,12 @@ def main():
             app.logger.warning('Nao foi possivel iniciar o espelhamento opcional de firmware de switches.')
 
         try:
+            from services.operational_regional_metadata import start_regional_metadata_sync_worker
+            start_regional_metadata_sync_worker(app.logger)
+        except Exception:
+            app.logger.warning('Nao foi possivel iniciar o espelhamento opcional dos metadados regionais.')
+
+        try:
             import gerenciador_atualizacoes
             threading.Thread(target=gerenciador_atualizacoes.start_update_threads, daemon=True).start()
         except Exception as exc:
