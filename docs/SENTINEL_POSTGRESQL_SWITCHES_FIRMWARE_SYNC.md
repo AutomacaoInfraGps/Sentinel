@@ -89,4 +89,5 @@ Aplicacao 024 e sincronizacao manual de nova captura confirmadas no Rigel:
 2026-11-19T08:20:38.228239-03:00. Digest da nova captura:
 459b7b5a9f62c0ecc6606e9f4694d18f3f70ed3da56a94e967e4a4197f2d8caf.
 Automatizacao opt-in descrita em SENTINEL_POSTGRESQL_SWITCHES_FIRMWARE_AUTOMATICO.md;
-ativacao e recorrencia ainda nao confirmadas no servidor.
+ativacao e recorrencia confirmadas no Rigel em 19/11/2026, com ciclos automaticos
+concluidos as 08:35:41 e 08:40:43 -03:00, 140 registros nos dois.

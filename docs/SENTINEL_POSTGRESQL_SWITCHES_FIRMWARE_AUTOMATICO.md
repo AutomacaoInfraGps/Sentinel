@@ -6,7 +6,12 @@ Rigel: migracoes 023/024 aplicadas, 140 registros preservados e presentes,
 137 candidatos e 3 pendencias sem vinculos. Sincronizacao manual de nova
 captura confirmada: 2026-11-19T08:20:38.228239-03:00, digest
 459b7b5a9f62c0ecc6606e9f4694d18f3f70ed3da56a94e967e4a4197f2d8caf.
-Automatizacao preparada nesta entrega, ainda nao confirmada no Rigel.
+Automatizacao ativada e recorrencia confirmada no Rigel em 19/11/2026:
+primeiro commit 11:35:41.763596 UTC (08:35:41 -03:00), segundo commit
+11:40:43.554960 UTC (08:40:43 -03:00), capturas 11:35:38.142989 e
+11:40:41.806194 UTC. Ambos com 140 registros; inventario projetado manteve hash
+960439a310abf10236c7432d16ef921ef537bcc8a4162688cf0d7f0f4424f3bb.
+Isso comprova dois ciclos, nao nova coleta de firmware ou saude futura continua.
 
 ## Escopo
 
