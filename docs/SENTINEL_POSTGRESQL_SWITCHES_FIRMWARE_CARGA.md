@@ -76,7 +76,9 @@ Capturado em 2026-11-19T10:38:43.358543+00:00, 140 registros com os mesmos
 53a51969fd08a9c57231c1b75e9a28bf16bbc8a7422bb58acd5c5310764a72fb.
 Inventario projetado: 960439a310abf10236c7432d16ef921ef537bcc8a4162688cf0d7f0f4424f3bb.
 Backup anterior a migracao informado como feito pelo usuario; caminho/tamanho
-desse backup ainda nao recebidos. Nenhuma aplicacao SQL desta carga foi confirmada.
+desse backup ainda nao recebidos. Migracao 023 e carga confirmadas no Rigel:
+1 fonte, 140 registros e conteudo_confere_com_captura=true, com o mesmo digest.
+Sincronizacao manual posterior descrita em SENTINEL_POSTGRESQL_SWITCHES_FIRMWARE_SYNC.md.
 
 ## Migracao 023 e carga inicial
 
