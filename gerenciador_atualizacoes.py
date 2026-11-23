@@ -229,32 +229,30 @@ def check_unifi():
         time.sleep(interval)
 
 def check_servers():
-    """Verifica servidores"""
-    interval = 120  # 2 minutos
+    """Atualiza conectividade compartilhada sem depender de cliques no mapa."""
+    from services.server_connectivity import POLL_SECONDS, poll_catalog
+    interval = POLL_SECONDS
     
     while True:
+        started = time.monotonic()
         try:
-            log_message("Verificando servidores...")
+            log_message("Verificando conectividade dos servidores...")
             
-            # Executa o script Python
-            script_path = PROJECT_ROOT / "verificar_servidores_v2.py"
-            success = run_script(script_path, ["--modo=rapido"])
+            status = poll_catalog(PROJECT_ROOT / 'estrutura_regionais.json')
             
             # Atualiza o status
             update_status('servidores', interval)
             
-            # Verifica se os arquivos foram gerados
-            dashboard_file = PROJECT_ROOT / "output" / "dashboard_hierarquico.html"
-            if dashboard_file.exists():
-                log_message(f"Dashboard hierárquico gerado: {dashboard_file}")
-            else:
-                log_message("Dashboard hierárquico não foi gerado")
+            log_message(
+                f"Conectividade automatica: {status['concluidos']} alvos; "
+                f"{status['confirmados']} confirmados; {status['inconclusivos']} inconclusivos"
+            )
         
-        except Exception as e:
-            log_message(f"Erro ao verificar servidores: {str(e)}")
+        except Exception:
+            log_message('falha_monitoramento_conectividade_servidores')
         
         # Aguarda o intervalo
-        time.sleep(interval)
+        time.sleep(max(1, interval - (time.monotonic() - started)))
 
 def check_gps():
     """Verifica GPS Amigo"""

@@ -223,3 +223,42 @@ nova tentativa. Abrir/recarregar mapa nao deve criar arquivos de observacao.
 Conferir que uma regional com manutencao mantem sua camada de manutencao.
 Depois testar todas as regionais e checklist em janela combinada. Nao executar
 hardware ou checklist completo apenas para validar a leitura do mapa.
+
+## Correcao: monitoramento automatico continuo
+
+A primeira etapa acima nao estava completa: deixar a conectividade apenas nos
+botoes/checklist retirava a deteccao automatica de quedas. Nao considerar essa
+versao homologada isoladamente. Esta correcao restaura a consulta automatica sem
+reintroduzir pings independentes nas telas.
+
+- `gerenciador_atualizacoes.check_servers`, ja iniciado pelo servico web, agora
+  chama `server_connectivity.poll_catalog` imediatamente e em ciclos com alvo
+  de 30 segundos, no lugar do subprocesso legado V2 de dois minutos.
+- O monitor le o cadastro bruto local somente para extrair IPs validos de
+  servidores ativos. Nao resolve referencias de credenciais, nao usa cofre,
+  nao coleta hardware e nao modifica cadastro ou PostgreSQL.
+- O pool continua limitado a cinco testes por processo. Trava de ciclo impede
+  monitores simultaneos; recibo recente evita duplicar um ciclo concluido por
+  outra instancia. A mesma trava por IP coordena botoes e checklist.
+- Ciclo automatico renova a observacao mesmo se a anterior tiver menos de 30
+  segundos; se uma consulta ja estava em andamento quando o pedido entrou,
+  seu resultado e compartilhado. Reaproveitamento manual de ate 30 s permanece.
+- Se o ciclo demorar mais de 30 segundos, o proximo so inicia apos terminar;
+  nao acumula ciclos. Cinco testes e tres tentativas por alvo podem alongar
+  bastante uma queda generalizada. Medir a duracao no Rigel antes de ajustar
+  concorrencia ou retries. Nao prometer deteccao instantanea.
+- O mapa mantem a leitura automatica existente a cada 60 segundos, aplicando
+  a observacao compartilhada na resposta mesmo com cache do mapa anterior.
+  A latencia de exibicao inclui fila/ciclo, teste e proximo refresh da tela.
+- Recibo agregado em `output/server_connectivity/_monitor_status.json`:
+  modo, automatico, inicio/fim UTC, duracao, alvos, confirmados, inconclusivos e
+  intervalo-alvo. Sem nomes, IPs ou credenciais. Falha externa e registrada como
+  `falha_monitoramento_conectividade_servidores`, sem excecao bruta no log.
+
+Homologacao pendente: publicar a correcao, pull no Rigel e reiniciar sem jobs
+ativos. Sem pressionar botoes ou executar checklist, verificar dois recibos
+concluidos com inicio/fim diferentes e alvos esperados. Abrir mapa e comparar
+status/horario com cards de servidores. Para teste de queda, usar somente alvo
+de homologacao com interrupcao autorizada; nao desligar servidor de producao
+nem bloquear rede apenas para validar este patch. Testes unitarios simulam
+online -> offline sem qualquer chamada manual de coleta entre ciclos.

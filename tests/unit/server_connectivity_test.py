@@ -3,6 +3,7 @@
 import ast
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Lock
@@ -10,6 +11,7 @@ from time import sleep
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from unittest.mock import MagicMock
 
 from services import server_connectivity as service
 
@@ -188,6 +190,76 @@ class ConnectivityTests(unittest.TestCase):
         self.assertEqual(payload['regionais'][0]['links'], [{'status': 'offline'}])
         self.assertEqual(payload['regionais'][0]['servidores'][0]['status'], 'online')
         self.probe.assert_not_called()
+
+    def catalog(self, servers):
+        path = service.ROOT / 'catalog.json'
+        path.write_text(json.dumps({'regionais': {'PRIVATE': {'servidores': servers}}}))
+        return path
+
+    def test_automatic_cycle_detects_fall_without_map_checklist_or_button(self):
+        catalog = self.catalog([self.server])
+        with patch.object(service, 'POLL_SECONDS', 0):
+            service.poll_catalog(catalog)
+            self.assertEqual(service.project(self.server)['status'], 'online')
+            def negative(ip, evidencia):
+                self.positive(ip, evidencia)
+                return False
+            self.probe.side_effect = negative
+            service.poll_catalog(catalog)
+        self.assertEqual(service.project(self.server)['status'], 'offline')
+        self.assertEqual(self.probe.call_count, 2)
+
+    def test_automatic_cycle_deduplicates_targets_and_skips_inactive_invalid_ips(self):
+        catalog = self.catalog([self.server, self.server,
+                                dict(self.server, ip='192.0.2.2', ativo=False),
+                                dict(self.server, ip='invalid')])
+        status = service.poll_catalog(catalog)
+        self.probe.assert_called_once()
+        self.assertEqual(status['alvos'], 1)
+        self.assertEqual(status['alvos_invalidos'], 1)
+        self.assertEqual(status['confirmados'], 1)
+        self.assertEqual(status['modo'], 'concluido')
+        publication = (service.ROOT / '_monitor_status.json').read_text()
+        for secret in ('SECRET', 'private-id', '192.0.2.1', 'PRIVATE'):
+            self.assertNotIn(secret, publication)
+
+    def test_second_scheduler_does_not_repeat_recent_completed_cycle(self):
+        catalog = self.catalog([self.server])
+        first = service.poll_catalog(catalog)
+        self.assertEqual(service.poll_catalog(catalog), first)
+        self.probe.assert_called_once()
+
+    def test_automatic_failure_keeps_monitor_running_without_confirming_offline(self):
+        catalog = self.catalog([self.server])
+        self.probe.side_effect = OSError('SECRET')
+        status = service.poll_catalog(catalog)
+        self.assertEqual(status['inconclusivos'], 1)
+        self.assertEqual(status['confirmados'], 0)
+        self.assertNotIn('SECRET', (service.ROOT / '_monitor_status.json').read_text())
+
+    def test_invalid_catalog_never_probes_or_overwrites_observations(self):
+        catalog = self.catalog([self.server])
+        catalog.write_text('{}')
+        with self.assertRaises(ValueError):
+            service.poll_catalog(catalog)
+        self.probe.assert_not_called()
+
+    def test_scheduler_repeats_cycle_with_no_legacy_subprocess(self):
+        root = Path(__file__).resolve().parents[2]
+        tree = ast.parse((root / 'gerenciador_atualizacoes.py').read_text(encoding='utf-8-sig'))
+        nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'check_servers']
+        clock = MagicMock()
+        clock.monotonic.side_effect = [0, 1, 30, 31]
+        clock.sleep.side_effect = [None, StopIteration]
+        status = {'concluidos': 1, 'confirmados': 1, 'inconclusivos': 0}
+        namespace = {'time': clock, 'PROJECT_ROOT': service.ROOT,
+                     'log_message': MagicMock(), 'update_status': MagicMock()}
+        exec(compile(ast.Module(body=nodes, type_ignores=[]), 'isolated-scheduler', 'exec'), namespace)
+        with patch.object(service, 'poll_catalog', return_value=status) as poll:
+            with self.assertRaises(StopIteration):
+                namespace['check_servers']()
+        self.assertEqual(poll.call_count, 2)
+        self.assertEqual(clock.sleep.call_args_list[0].args, (29,))
 
 
 if __name__ == '__main__':

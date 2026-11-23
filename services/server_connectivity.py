@@ -1,6 +1,6 @@
 """Shared ICMP observations. Readers never contact equipment or load credentials."""
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from hashlib import sha256
 import ipaddress
@@ -16,6 +16,7 @@ from core.secret_store import _InterprocessFileLock
 ROOT = Path(__file__).resolve().parents[1] / 'output' / 'server_connectivity'
 POOL = ThreadPoolExecutor(max_workers=5, thread_name_prefix='server-ping')
 REUSE_SECONDS = 30
+POLL_SECONDS = 30
 FIELDS = ('status', 'tempo_resposta', 'erro', 'ultima_verificacao', 'coletado_em',
           'coleta_status_confirmada', 'coleta_status_origem', 'erro_coleta_codigo')
 
@@ -72,7 +73,7 @@ def read_observation(ip):
         return None
 
 
-def _collect(ip):
+def _collect(ip, max_age=REUSE_SECONDS, requested_at=None):
     from vm_manager import verificar_vm_online
 
     path = _path(ip)
@@ -81,7 +82,7 @@ def _collect(ip):
         previous = _read(path)
         if previous:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(previous['tentativa_em'])).total_seconds()
-            if age < REUSE_SECONDS:
+            if age < max_age or (requested_at and datetime.fromisoformat(previous['tentativa_em']) >= requested_at):
                 return previous
         evidence = {}
         started = monotonic()
@@ -106,12 +107,70 @@ def _collect(ip):
         return observation
 
 
-def submit(ip):
-    return POOL.submit(_collect, ip)
+def submit(ip, *, max_age=REUSE_SECONDS):
+    return POOL.submit(_collect, ip, max_age, datetime.now(timezone.utc))
 
 
 def collect(ip):
     return submit(ip).result()
+
+
+def poll_catalog(catalog_path):
+    """One automatic cycle, independent of map visits and daily checklists."""
+    ROOT.mkdir(parents=True, exist_ok=True)
+    with _InterprocessFileLock(ROOT / '_monitor.lock', timeout=.1):
+        status_path = ROOT / '_monitor_status.json'
+        try:
+            last = json.loads(status_path.read_text(encoding='utf-8'))
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(last['iniciado_em_utc'])).total_seconds()
+            if last.get('modo') == 'concluido' and 0 <= age < POLL_SECONDS:
+                return last
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        catalog = json.loads(Path(catalog_path).read_text(encoding='utf-8-sig'))
+        if not isinstance(catalog, dict) or not isinstance(catalog.get('regionais'), dict):
+            raise ValueError('Cadastro de servidores invalido')
+        targets = set()
+        invalid = 0
+        for regional in catalog['regionais'].values():
+            if not isinstance(regional, dict) or not isinstance(regional.get('servidores', []), list):
+                raise ValueError('Lista de servidores invalida')
+            for server in regional.get('servidores', []):
+                if not isinstance(server, dict):
+                    invalid += 1
+                    continue
+                if server.get('ativo') is False:
+                    continue
+                try:
+                    targets.add(str(ipaddress.ip_address(str(server.get('ip') or '').strip())))
+                except ValueError:
+                    invalid += 1
+        del catalog
+        started = monotonic()
+        status = {
+            'modo': 'coletando', 'automatico': True,
+            'iniciado_em_utc': datetime.now(timezone.utc).isoformat(),
+            'intervalo_alvo_segundos': POLL_SECONDS, 'limite_paralelo_por_processo': 5,
+            'alvos': len(targets), 'alvos_invalidos': invalid,
+            'concluidos': 0, 'confirmados': 0, 'inconclusivos': 0,
+        }
+        _write(status_path, status)
+        # Refresh old samples but share a probe already running when requested.
+        jobs = [submit(ip, max_age=0) for ip in sorted(targets)]
+        for job in as_completed(jobs):
+            try:
+                observation = job.result()
+                confirmed = observation.get('coleta_status_confirmada') is True
+            except Exception:
+                confirmed = False
+            status['concluidos'] += 1
+            status['confirmados' if confirmed else 'inconclusivos'] += 1
+        status.update(
+            modo='concluido', concluido_em_utc=datetime.now(timezone.utc).isoformat(),
+            duracao_segundos=round(monotonic() - started, 2),
+        )
+        _write(status_path, status)
+        return status
 
 
 def project(server):
