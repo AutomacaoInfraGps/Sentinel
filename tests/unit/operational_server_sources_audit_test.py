@@ -32,6 +32,43 @@ class ServerSourceAuditTests(unittest.TestCase):
         self.assertEqual(report['cobertura_campos_da_projecao_sql_atual']['tempo_resposta'], 1)
         self.assertEqual(report['cobertura_campos_fora_da_projecao_sql_atual']['em_manutencao'], 1)
 
+    def test_maintenance_missing_null_false_true_and_text_are_distinct_and_safe(self):
+        records = [server(), server(em_manutencao=None), server(em_manutencao=False),
+                   server(em_manutencao=True), server(em_manutencao='PRIVATE')]
+        result = module.audit_records([('A', row) for row in records])
+        self.assertEqual(result['tipos_campos_fora_da_projecao_sql']['em_manutencao'], {
+            'ausente': 1, 'nulo': 1, 'booleano_false': 1, 'booleano_true': 1, 'texto_preenchido': 1})
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_description_error_lengths_and_cache_clock_never_export_content(self):
+        result = module.audit_records([('A', server(funcao='PRIVATE', descricao='PRIVATE', erro='SECRET', updated_at='2026-11-23T10:00:00Z')),
+                                       ('A', server(tipo='OTHER_PRIVATE', descricao='PRIVATE', erro='X' * 501)),
+                                       ('A', server(erro='X' * 4001))])
+        self.assertEqual(result['descricao_comparada_com_projecao_funcao_tipo'], {
+            'igual_a_funcao_ou_tipo': 1, 'diferente_de_funcao_ou_tipo': 1})
+        self.assertEqual(result['tamanhos_mensagens_erro_sem_conteudo'], {
+            'ate_500_caracteres': 1, '501_a_4000_caracteres': 1, 'acima_4000_caracteres': 1})
+        self.assertEqual(result['horarios_atualizacao_cache_nao_sao_coleta'], {'com_fuso': 1, 'ausente': 2})
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertNotIn('SECRET', json.dumps(result))
+
+    def test_same_declared_clock_differences_and_maintenance_transition_are_diagnostic(self):
+        original = server(status='offline', erro='PRIVATE', tempo_resposta=0)
+        cached = server(status='online', erro=None, tempo_resposta=0.2, em_manutencao=False)
+        result = module.compare_records([('A', original)], [('A', cached)])
+        self.assertEqual(result['manutencao_cadastro_para_cache_por_tipo'], {'ausente -> booleano_false': 1})
+        self.assertEqual(result['mudancas_status_cadastro_para_cache'], {'offline -> online': 1})
+        self.assertEqual(result['campos_divergentes_com_mesmo_horario_de_verificacao'], {
+            'status': 1, 'tempo_resposta': 1, 'erro': 1, 'em_manutencao': 1})
+        cached.pop('ultima_verificacao')
+        self.assertEqual(module.compare_records([('A', original)], [('A', cached)])['campos_divergentes_com_mesmo_horario_de_verificacao'], {})
+
+    def test_unknown_status_transitions_do_not_export_raw_values(self):
+        result = module.compare_records([('A', server(status='PRIVATE'))], [('A', server(status='SECRET'))])
+        self.assertEqual(result['mudancas_status_cadastro_para_cache'], {'ausente_ou_outro -> ausente_ou_outro': 1})
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertNotIn('SECRET', json.dumps(result))
+
     def test_ids_are_scoped_to_region_and_duplicate_normalization_is_diagnostic(self):
         values = [('A', server()), ('B', server()), ('A', server(id='server_private'))]
         report = module.audit_records(values)

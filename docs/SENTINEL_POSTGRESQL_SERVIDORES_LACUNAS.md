@@ -80,7 +80,47 @@ Revisar resultado do Rigel. Se nao houver hardware persistido, nao inventar
 uma carga historica: preparar captura tipada no caminho de coleta real em
 etapa propria, preservando leitura atual e controles de acesso. Definir
 escopo dos campos extras de cadastro/estado separadamente do hardware.
-A extensao cadastral tipo_monitoramento 022 foi preparada posteriormente em
-SENTINEL_POSTGRESQL_SERVIDORES_MONITORAMENTO.md, ainda sem homologacao. O
-resumo da auditoria reflete a projecao atual do codigo, que exige 022, nao
-prova que a coluna ja foi instalada no Rigel. O leitor web segue inalterado.
+A extensao cadastral tipo_monitoramento 022 foi homologada manualmente no
+Rigel em 18/11/2026: 76 valores conferidos com a projecao v2. Automatismo
+posterior ficou pendente por decisao do usuario. Ver
+SENTINEL_POSTGRESQL_SERVIDORES_MONITORAMENTO.md. O resumo da auditoria reflete
+a projecao atual do codigo, nao uma nova consulta ao banco. Leitor web inalterado.
+
+## Evidencia recebida em 23/11/2026
+
+Auditoria do Rigel fornecida pelo operador: 51 regionais, 76 servidores em cada
+fonte e 76 pares por ID exato na regional, sem identidades repetidas ou IPs
+invalidos. Cadastro declara 71 online/5 offline; cache declara 73 online/3 offline.
+Ha 2 diferencas de status/erro e 69 de tempo_resposta, com ultima_verificacao
+igual nos pares. Nenhum dos 76 registros tem coletado_em explicito; os horarios
+de verificacao sao sem fuso. Cache tem updated_at nos 76, nao usado como coleta.
+
+Fora da projecao SQL: cadastro tem 5 erros e nenhuma descricao/manutencao;
+cache tem 3 erros, 76 descricoes e 76 campos em_manutencao presentes. Presenca
+nao distingue true de false. Nenhuma fonte tem hardware/details/detalhes neste
+recorte. Nao inferir que ha 76 manutencoes nem migrar cache como cadastro.
+
+Codigo do mapa monta descricao usando funcao ou tipo e faz teste de conectividade
+proprio para estado/resposta/erro, podendo manter ultima_verificacao copiada do
+cadastro. Publicacao do mapa e updated_at nao corrigem essa falta de evidencia
+individual de coleta. Isso explica por que igualdade de horario nao basta para
+escolher automaticamente a fonte com mais servidores online.
+
+## Detalhamento adicional somente leitura
+
+O mesmo audit_server_sources.py agora acrescenta, sem novas flags:
+
+- Tipos de cada campo extra: ausente, nulo, booleano_true/false, texto vazio ou
+  preenchido, numero, lista e objeto. Valores arbitrarios nunca sao exportados.
+- Contagem de descricoes iguais/diferentes de funcao ou tipo, sem exporta-las;
+  igualdade nao prova autoria nem campo independente.
+- Faixas de comprimento das mensagens de erro, sem seu conteudo. Essa auditoria
+  nao aprova mensagens livres para importacao sem revisao de sensibilidade.
+- Transicoes de manutencao cadastro/cache por tipo e de status usando somente
+  vocabulario permitido; valores de status desconhecidos sao agrupados.
+- Campos diferentes com horario textual valido de verificacao identico.
+
+Executar novamente o comando do inicio e revisar os novos agregados antes de
+definir uma captura/migracao. Fontes continuam independentes e sem snapshot
+atomico; nenhuma prioridade temporal e inferida. Sem SQL, API, cofre, alteracao
+de arquivo ou ativacao automatica nesta etapa.

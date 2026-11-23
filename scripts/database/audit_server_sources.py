@@ -32,6 +32,25 @@ def _present(value):
     return value is not None and value != '' and value != [] and value != {}
 
 
+def _field_kind(record, field):
+    if field not in record:
+        return 'ausente'
+    value = record[field]
+    if value is None:
+        return 'nulo'
+    if isinstance(value, bool):
+        return 'booleano_true' if value else 'booleano_false'
+    if isinstance(value, str):
+        return 'texto_preenchido' if value.strip() else 'texto_vazio'
+    if isinstance(value, (int, float)):
+        return 'numero'
+    if isinstance(value, list):
+        return 'lista'
+    if isinstance(value, dict):
+        return 'objeto'
+    return 'outro_tipo'
+
+
 def _ip(value):
     try:
         return str(ipaddress.ip_address(_text(value)))
@@ -60,6 +79,10 @@ def audit_records(records):
     identities, addresses, statuses, checked, collected = Counter(), Counter(), Counter(), Counter(), Counter()
     invalid = missing_id = nontext_id = padded_id = invalid_ip = invalid_hardware = 0
     credential_fields = rows_with_hardware = 0
+    extra_kinds = {field: Counter() for field in EXTRA_FIELDS}
+    descriptions = Counter()
+    error_sizes = Counter()
+    updated = Counter()
     for regional, record in records:
         if not isinstance(record, dict):
             invalid += 1
@@ -68,6 +91,15 @@ def audit_records(records):
             sql[field] += _present(record.get(field))
         for field in EXTRA_FIELDS:
             extras[field] += _present(record.get(field))
+            extra_kinds[field][_field_kind(record, field)] += 1
+        description = _text(record.get('descricao'))
+        if description:
+            expected = _text(record.get('funcao') or record.get('tipo'))
+            descriptions['igual_a_funcao_ou_tipo' if description == expected else 'diferente_de_funcao_ou_tipo'] += 1
+        error = record.get('erro')
+        if isinstance(error, str) and error.strip():
+            error_sizes['ate_500_caracteres' if len(error) <= 500 else '501_a_4000_caracteres' if len(error) <= 4000 else 'acima_4000_caracteres'] += 1
+        updated[_time_kind(record.get('updated_at'))] += 1
         identifier = _text(record.get('id'))
         missing_id += not bool(identifier)
         nontext_id += record.get('id') is not None and not isinstance(record['id'], str)
@@ -101,6 +133,10 @@ def audit_records(records):
             'horarios_ultima_verificacao': dict(checked), 'horarios_coleta_explicita': dict(collected),
             'registros_com_hardware': rows_with_hardware, 'objetos_hardware_invalidos': invalid_hardware,
             'campos_hardware_presentes_sem_validacao_de_medicao': dict(hardware),
+            'tipos_campos_fora_da_projecao_sql': {field: dict(counts) for field, counts in extra_kinds.items()},
+            'descricao_comparada_com_projecao_funcao_tipo': dict(descriptions),
+            'tamanhos_mensagens_erro_sem_conteudo': dict(error_sizes),
+            'horarios_atualizacao_cache_nao_sao_coleta': dict(updated),
             'registros_com_campos_de_acesso_preenchidos': credential_fields}
 
 
@@ -141,6 +177,9 @@ def compare_records(catalog, operational):
         if address:
             ips[(code, address)].append(record)
     matches = Counter()
+    maintenance_pairs = Counter()
+    status_pairs = Counter()
+    differences_same_clock = Counter()
     differences = Counter({field: 0 for field in ('status', 'ultima_verificacao', 'tempo_resposta',
                                                 'erro', 'em_manutencao', 'status_reason', 'status_details')})
     for code, record in operational:
@@ -155,14 +194,29 @@ def compare_records(catalog, operational):
             category = 'id_e_ip_apontam_cadastros_diferentes'
         elif by_id:
             category = 'id_exato_na_regional'
+            previous = by_id[0]
+            maintenance_pairs[_field_kind(previous, 'em_manutencao') + ' -> ' + _field_kind(record, 'em_manutencao')] += 1
+            previous_status = _text(previous.get('status')).lower()
+            current_status = _text(record.get('status')).lower()
+            if previous_status != current_status:
+                old_label = previous_status if previous_status in STATUSES else 'ausente_ou_outro'
+                new_label = current_status if current_status in STATUSES else 'ausente_ou_outro'
+                status_pairs[old_label + ' -> ' + new_label] += 1
             for field in differences:
                 differences[field] += record.get(field) != by_id[0].get(field)
+                if (record.get(field) != previous.get(field)
+                        and _time_kind(previous.get('ultima_verificacao')) in {'sem_fuso', 'com_fuso'}
+                        and record.get('ultima_verificacao') == previous.get('ultima_verificacao')):
+                    differences_same_clock[field] += 1
         elif by_ip:
             category = 'apenas_ip_na_regional_candidato_nao_aprovado'
         else:
             category = 'sem_correspondencia_na_regional'
         matches[category] += 1
-    return {'vinculos_candidatos': dict(matches), 'divergencias_em_pares_por_id_exato': dict(differences)}
+    return {'vinculos_candidatos': dict(matches), 'divergencias_em_pares_por_id_exato': dict(differences),
+            'manutencao_cadastro_para_cache_por_tipo': dict(maintenance_pairs),
+            'mudancas_status_cadastro_para_cache': dict(status_pairs),
+            'campos_divergentes_com_mesmo_horario_de_verificacao': dict(differences_same_clock)}
 
 
 def audit_sources(root=ROOT):
@@ -191,6 +245,9 @@ def audit_sources(root=ROOT):
             'projecao_do_codigo_requer_migracao_022': True,
             'frescor_e_prioridade_efetiva_do_cache_nao_avaliados': True,
             'fontes_lidas_separadamente_sem_snapshot_atomico': True,
+            'descricao_igual_a_funcao_tipo_nao_comprova_campo_independente': True,
+            'ausencia_de_manutencao_nao_convertida_para_false': True,
+            'horario_do_cache_nao_confirma_verificacao_individual': True,
             'cache_nao_aprovado_como_cadastro_ou_medicao_de_hardware': True,
             'consulta_hardware_sob_demanda_nao_executada': True,
             'nomes_ips_erros_e_credenciais_exportados': False,
