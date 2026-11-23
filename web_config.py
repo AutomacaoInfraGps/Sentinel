@@ -110,6 +110,7 @@ from maintenance_status import (
     normalize_ip,
 )
 from operational_state import load_operational_state, publish_group_records, publish_map_snapshot
+from services import server_connectivity
 from notification_center import (
     build_notifications,
     build_switch_update_notifications,
@@ -3918,6 +3919,7 @@ def servidores():
                     servidores_operacionais_por_regional.get(codigo_regional)
                     or regional_info.get('servidores', [])
                 )
+                servidores = [server_connectivity.project(item) for item in servidores]
                 total_servidores += len(servidores)
 
                 # Usa o último status persistido no JSON para evitar verificar todas as regionais
@@ -4221,6 +4223,7 @@ def _mapa_carregar_cache():
 
         dados = json.loads(_MAPA_CACHE_FILE.read_text(encoding="utf-8"))
         _mapa_sincronizar_links_payload(dados)
+        _mapa_sincronizar_servidores_payload(dados)
         atualizado_em = dados.get("cache_atualizado_em") or dados.get("fontes", {}).get("atualizado_em")
         idade = None
         if atualizado_em:
@@ -4585,19 +4588,28 @@ def _mapa_status_servidor_tempo_real(servidor, evidencia=None):
 
 
 def _mapa_servidor_tempo_real(servidor):
-    evidencia = {}
-    status, tempo_resposta, erro = _mapa_status_servidor_tempo_real(servidor, evidencia=evidencia)
-    item = dict(servidor)
+    item = server_connectivity.project(servidor)
     item.update({
         "nome": servidor.get("nome") or servidor.get("id") or "Servidor",
         "ip": servidor.get("ip") or "",
         "descricao": servidor.get("funcao") or servidor.get("tipo") or "",
-        "status": status, "tempo_resposta": tempo_resposta, "erro": erro,
-        **evidencia,
     })
-    if evidencia.get("coleta_status_confirmada") is True:
-        item["ultima_verificacao"] = datetime.fromisoformat(evidencia["coletado_em"]).astimezone().isoformat()
     return item
+
+
+def _mapa_sincronizar_servidores_payload(payload):
+    regionais = {}
+    mudou = False
+    for regional in payload.get('regionais') or []:
+        regionais[regional.get('codigo')] = regional
+        atuais = regional.get('servidores') or []
+        novos = [_mapa_servidor_tempo_real(item) for item in atuais]
+        if novos != atuais:
+            regional['servidores'] = novos
+            mudou = True
+    if mudou:
+        payload['resumo'] = _mapa_recalcular_regionais(regionais)
+    return payload
 
 
 def _mapa_recalcular_regionais(regionais):
@@ -5280,6 +5292,8 @@ def _fresh_operational_records(
     if not snapshot_is_fresh(group_data.get("updated_at")):
         return []
     records = [dict(item) for item in (group_data.get("records") or [])]
+    if group == 'servidores':
+        records = [server_connectivity.project(item) for item in records]
     if has_request_context() and current_user.is_authenticated:
         records = filter_records(
             records,
@@ -5300,6 +5314,8 @@ def _fresh_operational_records(
 
 
 def _reconcile_notification_servers(operational_servers):
+    from services import server_connectivity
+
     reconciled = []
     for operational in operational_servers or []:
         item = dict(operational)
@@ -5320,7 +5336,7 @@ def _reconcile_notification_servers(operational_servers):
             for field in ("status", "tempo_resposta", "erro", "ultima_verificacao"):
                 if field in canonical:
                     item[field] = canonical[field]
-        reconciled.append(item)
+        reconciled.append(server_connectivity.project(item))
     return reconciled
 
 
@@ -5804,27 +5820,7 @@ def listar_regionais():
 @login_required
 def api_verificar_regional(codigo_regional):
     """API para verificar status de todos os servidores de uma regional"""
-    try:
-        codigo_regional = codigo_regional.replace(" ", "_")
-        resultados = verificador_v2.verificar_regional(codigo_regional)
-
-        online = len([r for r in resultados if r.get('status') == 'online'])
-        offline = len([r for r in resultados if r.get('status') == 'offline'])
-        warning = len([r for r in resultados if r.get('status') == 'warning'])
-
-        return jsonify({
-            'success': True,
-            'resultados': resultados,
-            'resumo': {
-                'total': len(resultados),
-                'online': online,
-                'offline': offline,
-                'warning': warning
-            }
-        })
-
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'})
+    return api_testar_todos_servidores(codigo_regional.replace(' ', '_'))
 
 
 def _normalizar_chave_regional_switch(valor):
@@ -5991,7 +5987,7 @@ def _obter_vpns_detalhe_regional(
 
 
 def _servidor_para_exibicao(servidor):
-    seguro = dict(servidor or {})
+    seguro = server_connectivity.project(servidor or {})
     seguro.pop("senha", None)
     seguro.pop("password", None)
     seguro.pop("credential_ref", None)
@@ -6085,6 +6081,8 @@ def detalhar_regional(codigo_regional):
                 for campo in campos_operacionais:
                     if campo in operacional:
                         servidor_completo[campo] = operacional[campo]
+
+            servidor_completo = server_connectivity.project(servidor_completo)
 
             # garante campos pra não quebrar o template
             servidor_completo.setdefault("status", "unknown")
@@ -12020,31 +12018,20 @@ def api_testar_servidor_regional(codigo_regional, id_servidor):
         if not ip:
             return jsonify({"success": False, "message": "Servidor sem IP cadastrado"}), 400
 
-        from datetime import datetime
-
-        inicio = datetime.now()
-        online = verificar_vm_online(ip)
-        tempo_resposta = round((datetime.now() - inicio).total_seconds(), 2)
-        novo_status = "online" if online else "offline"
-
-        # ✅ Atualiza os dados do servidor dentro da regional
-        servidor["status"] = novo_status
-        servidor["tempo_resposta"] = tempo_resposta
-        servidor["erro"] = None if online else "Timeout"
-        timestamp = datetime.now().isoformat()
-        servidor["ultima_verificacao"] = timestamp
-
-        # ✅ Salva no JSON (isso é o mais importante)
-        gerenciador_regionais.atualizar_servidor(codigo_regional, id_servidor, servidor)
+        server_connectivity.collect(ip)
+        servidor = server_connectivity.project(servidor)
+        novo_status = servidor.get('status') or 'unknown'
+        timestamp = servidor.get('ultima_verificacao')
 
         return jsonify({
             "success": True,
             "status": novo_status,
-            "tempo_resposta": tempo_resposta,
-            "erro": servidor["erro"],
+            "tempo_resposta": servidor.get('tempo_resposta'),
+            "erro": servidor.get('erro'),
+            "coleta_status_confirmada": servidor.get('coleta_status_confirmada', False),
             "timestamp": timestamp,
             "ultima_verificacao": timestamp,
-            "message": "Servidor ONLINE" if online else "Servidor OFFLINE"
+            "message": "Verificacao de conectividade concluida"
         })
 
     except Exception as e:
@@ -13174,9 +13161,11 @@ def api_testar_todos_servidores(codigo_regional):
         offline_count = 0
         warning_count = 0  # mantido por compatibilidade
 
-        from datetime import datetime
-
-        for servidor in servidores:
+        pendentes = [
+            server_connectivity.submit(servidor.get('ip')) if servidor.get('ip') else None
+            for servidor in servidores
+        ]
+        for servidor, pendente in zip(servidores, pendentes):
             servidor_id = servidor.get("id")
             ip = servidor.get("ip")
 
@@ -13189,35 +13178,32 @@ def api_testar_todos_servidores(codigo_regional):
                 "status": "offline",
                 "tempo_resposta": None,
                 "erro": None,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": servidor.get('ultima_verificacao')
             }
 
             if not ip:
                 resultado["erro"] = "Servidor sem IP"
-                offline_count += 1
+                resultado['status'] = servidor.get('status') or 'unknown'
+                resultado['coleta_status_confirmada'] = False
+                resultado['erro_coleta_codigo'] = 'alvo_sem_ip'
+                warning_count += 1
                 resultados.append(resultado)
                 continue
 
-            inicio = datetime.now()
-            online = verificar_vm_online(ip)
-            resultado["tempo_resposta"] = round((datetime.now() - inicio).total_seconds(), 2)
+            pendente.result()
+            observado = server_connectivity.project(servidor)
+            for campo in server_connectivity.FIELDS:
+                if campo in observado:
+                    resultado[campo] = observado[campo]
+            resultado['status'] = observado.get('status') or 'unknown'
+            resultado['timestamp'] = observado.get('ultima_verificacao')
 
-            if online:
-                resultado["status"] = "online"
+            if resultado['status'] == 'online':
                 online_count += 1
-            else:
-                resultado["status"] = "offline"
-                resultado["erro"] = "Timeout"
+            elif resultado['status'] == 'offline':
                 offline_count += 1
-
-            # ✅ Atualiza o servidor no JSON (igual o TESTAR)
-            servidor["status"] = resultado["status"]
-            servidor["tempo_resposta"] = resultado["tempo_resposta"]
-            servidor["erro"] = resultado["erro"]
-            servidor["ultima_verificacao"] = resultado["timestamp"]
-
-            # ✅ Atualiza no arquivo de forma segura (mantém seu padrão)
-            gerenciador_regionais.atualizar_servidor(codigo_regional, servidor_id, servidor)
+            else:
+                warning_count += 1
 
             resultados.append(resultado)
 

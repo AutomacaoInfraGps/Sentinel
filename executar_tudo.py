@@ -1926,14 +1926,16 @@ for servidor in servidores_configurados:
 
     # Executa o script de checklist apropriado baseado no 'tipo'
     try:
-        from vm_manager import verificar_vm_online
+        from services.server_connectivity import verificar_online as verificar_vm_online
 
         nome_servidor = servidor.get('servidor_nome') or ip
         print(f"[EXEC] Verificando servidor virtual {nome_servidor} ({ip})")
 
-        inicio = datetime.now()
-        online = verificar_vm_online(ip)
-        tempo_resposta = round((datetime.now() - inicio).total_seconds(), 2)
+        evidencia_conectividade = {}
+        online = verificar_vm_online(ip, evidencia=evidencia_conectividade)
+        if evidencia_conectividade.get('coleta_status_confirmada') is not True:
+            raise RuntimeError('Coleta de conectividade nao confirmada')
+        tempo_resposta = evidencia_conectividade.get('tempo_resposta')
 
         if online:
             resultado_hardware = coletar_hardware_vm(servidor)
@@ -2119,14 +2121,17 @@ try:
     else:
         vms_configuradas = []
     
-    from vm_manager import verificar_vm_online
+    from services.server_connectivity import verificar_online as verificar_vm_online
     
     for vm in vms_configuradas:
         try:
             print(f"[EXEC] Verificando VM {vm['name']} ({vm['ip']})")
             
             # Verifica se a VM está online
-            vm_online = verificar_vm_online(vm['ip'])
+            evidencia_conectividade = {}
+            vm_online = verificar_vm_online(vm['ip'], evidencia=evidencia_conectividade)
+            if evidencia_conectividade.get('coleta_status_confirmada') is not True:
+                raise RuntimeError('Coleta de conectividade nao confirmada')
             
             vm_info = {
                 'name': vm['name'],
@@ -2134,7 +2139,9 @@ try:
                 'regional': vm.get('regional', 'N/A'),
                 'username': vm.get('username', 'N/A'),
                 'description': vm.get('description', 'N/A'),
-                'last_check': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                'last_check': datetime.fromisoformat(
+                    evidencia_conectividade['ultima_verificacao']
+                ).astimezone().strftime('%Y-%m-%d %H:%M:%S')
             }
             
             if vm_online:

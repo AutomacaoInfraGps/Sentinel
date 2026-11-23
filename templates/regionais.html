@@ -1457,6 +1457,9 @@ function verificarTodasRegionais(button) {
 
                 totalOnline += response.resumo.online;
                 totalServidores += response.resumo.total;
+                totalErros += (response.resultados || []).filter(
+                    resultado => resultado.coleta_status_confirmada === false
+                ).length;
 
                 atualizarIndicadoresStatus(codigo, response.resultados);
 

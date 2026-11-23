@@ -5,12 +5,14 @@ from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
 import vm_manager
 from scripts.database import audit_server_sources as audit
+from services import server_connectivity
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,9 +38,19 @@ class ServerCollectionEvidenceTests(unittest.TestCase):
         self.ns = {'datetime': datetime, '_mapa_status': lambda value: value or 'unknown',
                    'verificar_vm_online': vm_manager.verificar_vm_online, 'current_app': MagicMock()}
         exec(self.code, self.ns)
+        self.ns['server_connectivity'] = server_connectivity
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = patch.object(server_connectivity, 'ROOT', Path(temporary.name))
+        root.start()
+        self.addCleanup(root.stop)
         self.record = {'id': 'PRIVATE', 'ip': '192.0.2.1', 'status': 'offline', 'funcao': 'PRIVATE',
                        'ultima_verificacao': '2026-11-18T10:00:00', 'coletado_em': 'OLD',
                        'coleta_status_confirmada': True}
+
+    def project_after_collection(self, record):
+        server_connectivity.collect(record['ip'])
+        return self.ns['_mapa_servidor_tempo_real'](record)
 
     def ping_result(self, output):
         return SimpleNamespace(stdout=output, returncode=0)
@@ -104,7 +116,7 @@ class ServerCollectionEvidenceTests(unittest.TestCase):
         original = dict(self.record)
         self.ping.return_value = self.ping_result('TTL=64')
         with redirect_stdout(StringIO()):
-            item = self.ns['_mapa_servidor_tempo_real'](self.record)
+            item = self.project_after_collection(self.record)
         self.assertEqual(self.record, original)
         self.assertEqual(item['status'], 'online')
         self.assertEqual(datetime.fromisoformat(item['ultima_verificacao']), AT)
@@ -118,7 +130,7 @@ class ServerCollectionEvidenceTests(unittest.TestCase):
         self.record['status'] = 'online'
         self.ping.side_effect = OSError('SECRET')
         with redirect_stdout(StringIO()):
-            item = self.ns['_mapa_servidor_tempo_real'](self.record)
+            item = self.project_after_collection(self.record)
         self.assertEqual(item['status'], 'online')
         self.assertEqual(item['ultima_verificacao'], self.record['ultima_verificacao'])
         self.assertFalse(item['coleta_status_confirmada'])
@@ -131,15 +143,14 @@ class ServerCollectionEvidenceTests(unittest.TestCase):
         self.record['ip'] = ''
         item = self.ns['_mapa_servidor_tempo_real'](self.record)
         self.ping.assert_not_called()
-        self.assertFalse(item['coleta_status_confirmada'])
-        self.assertIsNone(item['coletado_em'])
-        self.assertEqual(item['erro_coleta_codigo'], 'alvo_sem_ip')
+        self.assertEqual(item['ultima_verificacao'], self.record['ultima_verificacao'])
+        self.assertNotIn('erro_coleta_codigo', item)
 
     def test_confirmed_negative_response_sets_offline_with_current_clock(self):
         self.record['status'] = 'online'
         self.ping.return_value = self.ping_result('Request timed out.')
         with redirect_stdout(StringIO()):
-            item = self.ns['_mapa_servidor_tempo_real'](self.record)
+            item = self.project_after_collection(self.record)
         self.assertEqual(item['status'], 'offline')
         self.assertTrue(item['coleta_status_confirmada'])
         self.assertEqual(datetime.fromisoformat(item['ultima_verificacao']), AT)
@@ -147,7 +158,7 @@ class ServerCollectionEvidenceTests(unittest.TestCase):
     def test_audit_reports_confirmed_marker_and_clock_without_identifiers(self):
         self.ping.return_value = self.ping_result('TTL=64')
         with redirect_stdout(StringIO()):
-            item = self.ns['_mapa_servidor_tempo_real'](self.record)
+            item = self.project_after_collection(self.record)
         report = audit.audit_records([('PRIVATE', item)])
         self.assertEqual(report['horarios_coleta_explicita'], {'com_fuso': 1})
         self.assertEqual(report['tipos_campos_fora_da_projecao_sql']['coleta_status_confirmada'], {'booleano_true': 1})

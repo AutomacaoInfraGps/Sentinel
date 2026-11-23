@@ -174,3 +174,52 @@ SQL/rede/cofre. Instrumentacao ainda nao homologada no Rigel.
 Sem migracao SQL, carga ou ativacao de sincronizador nesta etapa. Hardware e
 mensagens livres exigem tratamento proprio; nenhum historico anterior e
 fabricado para preencher os novos campos.
+
+## Conectividade compartilhada e custo de consulta (23/11/2026)
+
+Esta etapa substitui o procedimento acima de disparar pings pelo mapa.
+Preparada localmente; ainda precisa de homologacao no Rigel.
+
+- `services/server_connectivity.py` publica observacoes ICMP atomicas em
+  `output/server_connectivity/`. Um arquivo por endereco normalizado, com nome
+  SHA-256, somente campos operacionais: sem senha, ID de cadastro ou hardware.
+  Compartilhar alcance do mesmo IP nao funde identidades de servidores.
+- Pool com ate cinco testes simultaneos por processo web/CLI. Trava por alvo
+  entre processos e reaproveitamento de tentativa com menos de 30 segundos,
+  inclusive inconclusiva, evitam repetir ping em cliques sobrepostos.
+  Nao e limite global de cinco entre varias instancias do aplicativo.
+- Preservados os tres pings e timeouts de 3000 ms/5 s do verificador existente.
+  Nao foi medida latencia de producao nem prometido tempo total. O tempo salvo
+  continua sendo duracao do teste, nao RTT. Consultas de hardware sao separadas.
+- Botao geral de Regionais, teste individual e rota legada `/verificar` usam
+  a mesma conectividade ICMP. A rota legada deixa de testar HTTP/porta 443 como
+  criterio de conectividade; diagnosticos especializados do verificador V2
+  continuam disponiveis fora dessa rota.
+- Respostas permanecem no contrato HTTP existente: o navegador aguarda cada
+  regional, com servidores dessa regional em paralelo. Nao ha novo job duravel,
+  nem retomada apos reinicio. Nao reiniciar enquanto uma verificacao estiver ativa.
+- Mapa/fluxo neural, cards e dashboard de servidores leem a observacao sem
+  disparar ping. Reconciliacao de cache do mapa nao renova sua data global nem
+  medições dos demais equipamentos. O arquivo antigo em disco so muda quando
+  a montagem/publicacao normal do mapa terminar; a resposta web aplica overlay.
+- `conectividade_desatualizada` indica observacao acima de 300 segundos ou
+  tentativa inconclusiva. Ler resultado antigo nao o transforma em coleta nova.
+  Falha de execucao preserva ultimo estado/horario conhecido e marca tentativa
+  nao confirmada. Manutencao/inatividade explicitas nao viram online pelo ping.
+- O checklist completo usa a mesma observacao ICMP de ate 30 segundos nas duas
+  etapas principais. Falha de coleta nao confirmada segue caminho de erro,
+  nao confirma offline. Hardware, servicos e relatorios ainda podem fazer
+  prechecks proprios; este patch nao paraleliza hardware nem altera credenciais.
+- Testes rapidos nao regravam o cadastro nem acionam sincronizadores SQL por
+  servidor. A projecao PostgreSQL atual continua cadastral: nao passa a ler o
+  novo cache automaticamente. Corte SQL e leitores restantes ficam em etapa
+  posterior, com auditoria e migracao especificas. Nao repetir cargas iniciais.
+
+Validacao operacional: publicar/pull; reiniciar somente sem jobs ativos; testar
+primeiro uma regional pequena pelo botao de servidores; abrir card, detalhe,
+infra e mapa e comparar status/horario. Repetir em menos de 30 segundos deve
+reaproveitar a mesma observacao. Apos 30 segundos, teste explicito deve produzir
+nova tentativa. Abrir/recarregar mapa nao deve criar arquivos de observacao.
+Conferir que uma regional com manutencao mantem sua camada de manutencao.
+Depois testar todas as regionais e checklist em janela combinada. Nao executar
+hardware ou checklist completo apenas para validar a leitura do mapa.

@@ -52,6 +52,7 @@ class LinkSdwanCanonicalTests(unittest.TestCase):
                    '_extract_monitor_zabbix_packet_loss': lambda value: None,
                    '_persistir_links_internet_exibicao': MagicMock(),
                    '_mapa_status': lambda value: value,
+                   '_mapa_sincronizar_servidores_payload': lambda value: value,
                    '_formatar_nome_link_dashboard': lambda value: value['nome'],
                    '_ordenar_links_internet': lambda value: value}
         exec(self.code, self.ns)
