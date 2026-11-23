@@ -106,7 +106,7 @@ class FortiManagerClient:
             self.session.close()
         return False
 
-    def _request(self, method, url, data=None):
+    def _request(self, method, url, data=None, *, verbose=False):
         payload = {
             "id": 1,
             "method": method,
@@ -118,6 +118,8 @@ class FortiManagerClient:
             ],
             "session": self.sessionid
         }
+        if verbose:
+            payload["verbose"] = 1
         response = self.session.post(self.base_url, json=payload, timeout=20)
         response.raise_for_status()
         return self._ensure_success(response.json(), f"Falha ao consultar {url}")
@@ -126,7 +128,7 @@ class FortiManagerClient:
         return self._request("get", "/dvmdb/adom")
 
     def list_devices(self, adom="root"):
-        return self._request("get", f"/dvmdb/adom/{adom}/device")
+        return self._request("get", f"/dvmdb/adom/{adom}/device", verbose=True)
 
     def list_firmware_versions(self):
         """Lista releases FortiGate conhecidas pelo FortiGuard/FortiManager."""

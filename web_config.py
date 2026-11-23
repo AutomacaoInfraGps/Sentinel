@@ -3063,6 +3063,16 @@ def _load_regional_interfaces(
             "interfaces": []
         }
 
+    if (resolved.get("fortimanager_inventory_available") is True
+            and _device_fortimanager_desconectado(device_info)):
+        return {
+            "success": False, "status": "fortimanager_device_offline",
+            "message": "FortiManager informa o firewall desconectado; interfaces nao consultadas.",
+            "resolved": resolved, "device": device_info, "adom": adom,
+            "interfaces": [], "source": "fortimanager",
+            "disponibilidade_observada_em": datetime.now(timezone.utc).isoformat(),
+        }
+
     interfaces = []
     if not include_configuration:
         for link in _obter_links_internet_exibicao(regional_info):
@@ -3486,7 +3496,11 @@ def _get_gerenciador_fortigate_regional(codigo_regional: str, regional_info: dic
 
     device_info = {}
     if target_name:
-        device_info = {"name": target_name, "ip": target_ip}
+        device_info = {
+            key: device_match[key] for key in ("status", "conn_status", "dev_status")
+            if key in device_match
+        } if str(device_match.get("name") or "").strip().upper() == str(target_name).strip().upper() else {}
+        device_info.update(name=target_name, ip=target_ip)
     elif "device_match" in locals() and device_match:
         device_info = device_match
     else:
@@ -3540,16 +3554,19 @@ def _device_fortimanager_desconectado(device_info: dict) -> bool:
     if not isinstance(device_info, dict):
         return False
 
+    conn_status = device_info.get("conn_status")
+    conn_norm = str(conn_status if conn_status is not None else "").strip().lower()
+    if conn_norm in {"down", "offline", "disconnected"}:
+        return True
+    if conn_norm in {"up", "online", "connected"}:
+        return False
+    if conn_norm in {"0", "1", "2", "unknown"}:
+        return False
+
     status_norm = str(device_info.get("status") or "").strip().lower()
     if status_norm in {"offline", "down", "disconnected", "unreachable"}:
         return True
     if status_norm in {"online", "up", "connected", "ready"}:
-        return False
-
-    conn_norm = str(device_info.get("conn_status") or "").strip().lower()
-    if conn_norm in {"0", "2", "down", "offline", "disconnected"}:
-        return True
-    if conn_norm in {"1", "up", "online", "connected"}:
         return False
 
     return False
@@ -3622,6 +3639,24 @@ def _coletar_links_regional(
     )
 
     if not interfaces_result.get("success"):
+        if interfaces_result.get("status") == "fortimanager_device_offline":
+            device = interfaces_result.get("device") or {}
+            links = [{
+                **link, "status": "offline", "modo_verificacao": "fortimanager_device_offline",
+                "coleta_status_confirmada": False, "sla_status": "unknown", "sla_data": {},
+                "packet_loss_percent": None, "link_mode_status": "",
+                "estado_inferido_do_firewall": True, "firewall_nome_origem": device.get("name"),
+                "disponibilidade_observada_em": interfaces_result.get("disponibilidade_observada_em"),
+            } for link in links_fallback]
+            if persist and links:
+                _persistir_links_internet_exibicao(codigo_regional, links)
+            return {
+                "success": bool(links), "status": "fortimanager_device_offline",
+                "message": interfaces_result.get("message"), "links": links,
+                "atualizados": [], "criados": [], "total_atualizados": len(links),
+                "total_criados": 0, "source": "fortimanager",
+                "resolved": interfaces_result.get("resolved") or {},
+            }
         if persist and links_fallback:
             _persistir_links_internet_exibicao(codigo_regional, [
                 {**link, "coleta_status_confirmada": False} for link in links_fallback
@@ -3737,6 +3772,8 @@ def _coletar_links_regional(
         link_final = dict(link_existente or {})
         link_final.update(normalized_link)
         link_final["coleta_status_confirmada"] = False
+        for campo in ("estado_inferido_do_firewall", "firewall_nome_origem", "disponibilidade_observada_em"):
+            link_final.pop(campo, None)
 
         sdwan_member = _buscar_sdwan_member(
             sdwan_members_map,
@@ -4571,6 +4608,7 @@ def _mapa_recalcular_regionais(regionais):
         "firewalls_ok": 0,
         "firewalls_alerta": 0,
         "firewalls_inativo": 0,
+        "firewalls_unknown": 0,
         "firewalls_maintenance": 0,
         "admins_ok": 0,
         "admins_alerta": 0,
@@ -4649,7 +4687,12 @@ def _mapa_recalcular_regionais(regionais):
             or item.get("status_disponibilidade") == "maintenance"
         )
         fw_alerta = fw_offline + fw_critical + fw_warning
-        fw_ok = len(regional["firewalls"]) - fw_alerta - fw_inativo - fw_maintenance
+        fw_unknown = sum(
+            1 for item in regional["firewalls"]
+            if item.get("status_disponibilidade") == "unknown"
+            and item.get("status") not in {"offline", "warning", "inativo", "maintenance"}
+        )
+        fw_ok = len(regional["firewalls"]) - fw_alerta - fw_inativo - fw_maintenance - fw_unknown
         adm_alerta = sum(1 for item in regional["admins"] if item.get("status") != "online")
         adm_ok = len(regional["admins"]) - adm_alerta
         regional["totais"]["firewalls_ok"] = fw_ok
@@ -4658,12 +4701,14 @@ def _mapa_recalcular_regionais(regionais):
         regional["totais"]["firewalls_warning"] = fw_warning
         regional["totais"]["firewalls_criticos"] = fw_critical
         regional["totais"]["firewalls_inativo"] = fw_inativo
+        regional["totais"]["firewalls_unknown"] = fw_unknown
         regional["totais"]["firewalls_maintenance"] = fw_maintenance
         regional["totais"]["admins_ok"] = adm_ok
         regional["totais"]["admins_alerta"] = adm_alerta
         resumo["firewalls_ok"] += fw_ok
         resumo["firewalls_alerta"] += fw_alerta
         resumo["firewalls_inativo"] += fw_inativo
+        resumo["firewalls_unknown"] += fw_unknown
         resumo["firewalls_maintenance"] += fw_maintenance
         resumo["admins_ok"] += adm_ok
         resumo["admins_alerta"] += adm_alerta
@@ -4914,6 +4959,7 @@ def _montar_dados_mapa_monitoramento():
                 "offline"
                 if status_disponibilidade == "offline"
                 else "inativo" if status_disponibilidade == "inativo"
+                else "unknown" if status_disponibilidade == "unknown"
                 else "warning" if tem_critica or tem_expirada else "online"
             )
             firewall_mapa = dict(firewall)
@@ -6675,43 +6721,25 @@ def _status_firewall_disponibilidade(firewall):
     status_norm = str(status or "").strip().lower()
     if status_norm in {"maintenance", "manutencao", "manutenção"}:
         return "maintenance"
+    if status_norm in {"inactive", "inativo", "disabled", "desabilitado"}:
+        return "inativo"
+    conn_norm = str(conn_status if conn_status is not None else "").strip().lower()
+    if conn_norm in {"down", "offline", "disconnected"}:
+        return "offline"
+    if conn_norm in {"up", "online", "connected"}:
+        return "online"
+    if conn_norm in {"0", "1", "2", "unknown"}:
+        return "unknown"
     if status_norm in {"ready", "online", "ok", "active", "up"}:
         return "online"
     if status_norm in {"offline", "down", "error", "erro", "unreachable"}:
         return "offline"
-    if status_norm in {"inactive", "inativo", "disabled", "desabilitado"}:
-        return "inativo"
 
-    conn_norm = str(conn_status or "").strip().lower()
-    if conn_norm in {"2", "up", "online", "connected"}:
-        return "online"
-    if conn_norm in {"0", "1", "down", "offline", "disconnected"}:
-        return "offline"
     if conn_norm in {"inactive", "inativo", "disabled", "desabilitado"}:
         return "inativo"
 
-    dev_norm = str(dev_status or "").strip().lower()
-    if dev_norm in {"15", "up", "online", "connected"}:
-        return "online"
-
-    # Fallback adicional: se houver informação de licenças e pelo menos
-    # uma licença não estiver em 'offline' ou claramente ausente, considerar
-    # o equipamento como online. Isso evita mostrar 'Inativo' quando o
-    # FortiManager retorna 'unknown' mas as licenças indicam funcionamento.
-    try:
-        if isinstance(firewall, dict):
-            licencas = firewall.get('licencas') or []
-            if isinstance(licencas, list) and len(licencas) > 0:
-                for lic in licencas:
-                    if not isinstance(lic, dict):
-                        continue
-                    lic_status = str(lic.get('status') or '').strip().lower()
-                    if lic_status and lic_status not in {'offline', 'indisponivel', 'timeout', 'erro_consulta', 'no_license', 'unknown'}:
-                        return 'online'
-    except Exception:
-        pass
-
-    return "inativo"
+    # Configuration/install state and license validity do not prove connectivity.
+    return "unknown"
 
 
 def _obter_firewalls_regionais_live(codigo_regional):
@@ -8468,7 +8496,14 @@ def listar_firewalls(return_data=False, force_refresh=False):
                 # Se encontrou regional, buscar licenças
                 if regional_encontrada:
                     try:
-                        licenses_data = fm_client.proxy_monitor_license(adom, device_name)
+                        if _device_fortimanager_desconectado(device_data):
+                            licenses_data = {"_erro": "offline"}
+                        else:
+                            try:
+                                licenses_data = fm_client.proxy_monitor_license(adom, device_name)
+                            except Exception:
+                                current_app.logger.warning("Consulta de licenca indisponivel; identidade do firewall preservada.")
+                                licenses_data = {"_erro": "erro_consulta"}
                         
                         firewall_info = {
                             'codigo_regional': regional_encontrada,
@@ -8476,6 +8511,8 @@ def listar_firewalls(return_data=False, force_refresh=False):
                             'hostname': device_hostname,
                             'ip': device_ip,
                             'status': device_status,
+                            'conn_status': device_data.get('conn_status'),
+                            'dev_status': device_data.get('dev_status'),
                             'model': device_model,
                             'serial': device_serial,
                             'firmware': device_firmware,
