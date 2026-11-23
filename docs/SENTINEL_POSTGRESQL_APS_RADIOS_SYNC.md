@@ -1,7 +1,8 @@
 # Sincronizacao manual RF UniFi (028)
 
-Etapa manual homologada no Rigel em 19/11/2026. Automatizacao opcional preparada,
-ainda sem ativacao/homologacao em producao. Nao muda coletores ou leitores das telas.
+Etapa manual homologada no Rigel em 19/11/2026. Automatizacao opcional ativada
+em 19/11 e recorrencia/conteudo confirmados em 23/11/2026, conforme evidencias
+abaixo. Nao muda coletores ou leitores das telas.
 Pre-requisito: 027 e carga inicial conferidas integralmente.
 
 ## Sequencia de homologacao
@@ -77,7 +78,7 @@ conteudo_ja_sincronizado true; ultima captura 2026-11-19T16:21:48.958530-03:00,
 216 recebimentos, 453 configuracoes e 425 estatisticas presentes/preservadas.
 Sem conflitos, regressao de horarios ou mudanca de vinculos; 16 tx_retry ausentes.
 
-## Automatizacao opcional preparada
+## Automatizacao opcional homologada
 
 services/operational_ap_radios.py e iniciado por run_web_service.py em thread
 daemon, independente das requisicoes HTTP. Cada ciclo espera 300 segundos apos
@@ -126,3 +127,28 @@ proximo ciclo reconcilia normalmente; nao repetir carga inicial.
 Para interromper proximos ciclos, mudar a flag para {"enabled":false}; flag e
 revalidada antes da conexao e antes de sair da transacao. Nao desfaz commits ja
 concluidos. Preservar dados SQL e fontes/capturas anteriores.
+
+## Evidencias de recorrencia e conteudo (23/11/2026)
+
+Saidas de producao fornecidas pelo operador:
+
+- Primeiro ciclo automatico: capturado_em 2026-11-19T19:29:16.272814+00:00;
+  confirmado_em_utc 2026-11-19T19:29:19.761217+00:00, modo sincronizado.
+- Ciclo posterior: capturado_em 2026-11-23T10:52:22.721724+00:00;
+  confirmado_em_utc 2026-11-23T10:52:27.430181+00:00, modo sincronizado e
+  sincronizacao_automatica_radios=true. Confirma nova execucao apos o primeiro
+  ciclo; nao demonstra ausencia de falhas em todos os ciclos intermediarios.
+- Conferencia --current em 2026-11-23T10:54:48.865336+00:00: destino e fonte
+  compativeis, conteudo_atual_confere=true; zero sites/APs ausentes, mudancas
+  de site, conflitos ou regressao de publicacao/captura/recebimento.
+- 216 recebimentos, 453 configuracoes e 425 estatisticas presentes/preservadas;
+  39 sites, 409 tx_retry informados e 16 ausentes. Os 216 APs seguem sem data
+  de medicao confirmada; nao houve associacao automatica entre as tabelas.
+
+Na conferencia, ultima_captura_sincronizada=2026-11-23T07:52:22.721724-03:00
+e conteudo_ja_sincronizado=false. Este false corresponde ao novo envelope de
+captura gerado pelo --current, nao a divergencia das linhas: a igualdade integral
+do conteudo foi confirmada separadamente. Nao repetir --apply por esse motivo.
+
+Etapa RF encerrada com base nessas evidencias, sem nova migracao ou alteracao
+de dados nesta verificacao. As telas continuam lendo suas fontes anteriores.
