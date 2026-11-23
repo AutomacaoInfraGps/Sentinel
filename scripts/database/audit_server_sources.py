@@ -18,7 +18,8 @@ SQL_FIELDS = ('id', 'nome', 'tipo', 'ip', 'modelo', 'funcao', 'sistema_operacion
               'status', 'ativo', 'ultima_verificacao', 'tempo_resposta', 'tipo_monitoramento')
 EXTRA_FIELDS = ('descricao', 'erro', 'em_manutencao',
                 'maintenance_status', 'maintenanceid', 'status_reason', 'status_details',
-                'hardware', 'details', 'detalhes', 'coletado_em', 'updated_at')
+                'hardware', 'details', 'detalhes', 'coletado_em', 'updated_at',
+                'coleta_status_confirmada', 'coleta_status_origem', 'erro_coleta_codigo')
 HARDWARE_FIELDS = ('memoria_gib', 'cpu', 'discos', 'bitdefender', 'temperaturas',
                    'ventoinhas', 'fabricante', 'uptime')
 STATUSES = {'online', 'offline', 'warning', 'maintenance', 'unknown', 'error', 'unreachable'}

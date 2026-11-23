@@ -6,7 +6,7 @@ import os
 import json
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def _ensure_list(value):
@@ -19,8 +19,13 @@ def _ensure_list(value):
 # Caminho raiz do projeto
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-def verificar_vm_online(ip):
+def verificar_vm_online(ip, evidencia=None):
     """Verifica se uma VM esta online usando ping."""
+    if evidencia is not None:
+        evidencia.clear()
+        evidencia.update(coleta_status_confirmada=False, coletado_em=None,
+                         coleta_status_origem='icmp_ping', erro_coleta_codigo=None)
+    tentativas_reconhecidas = 0
     try:
         ultimo_output = ""
         for tentativa in range(1, 4):
@@ -43,12 +48,25 @@ def verificar_vm_online(ip):
             )
 
             if ("ttl=" in output_lower or "ttl " in output_lower) and not resposta_invalida:
+                if evidencia is not None:
+                    evidencia.update(coleta_status_confirmada=True,
+                                     coletado_em=datetime.now(timezone.utc).isoformat())
                 print(f"VM {ip} esta online! Tentativa {tentativa}/3")
                 return True
+            if resposta_invalida:
+                tentativas_reconhecidas += 1
 
+        if evidencia is not None:
+            if tentativas_reconhecidas == 3:
+                evidencia.update(coleta_status_confirmada=True,
+                                 coletado_em=datetime.now(timezone.utc).isoformat())
+            else:
+                evidencia['erro_coleta_codigo'] = 'resposta_ping_nao_reconhecida'
         print(f"VM {ip} nao respondeu ao ping apos 3 tentativas. Saida: {ultimo_output}")
         return False
     except Exception as ping_error:
+        if evidencia is not None:
+            evidencia['erro_coleta_codigo'] = 'erro_execucao_ping'
         print(f"Erro ao verificar conectividade: {str(ping_error)}")
         return False
 def obter_servicos_vm(ip, username, password):

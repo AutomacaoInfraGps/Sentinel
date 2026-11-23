@@ -124,3 +124,53 @@ Executar novamente o comando do inicio e revisar os novos agregados antes de
 definir uma captura/migracao. Fontes continuam independentes e sem snapshot
 atomico; nenhuma prioridade temporal e inferida. Sem SQL, API, cofre, alteracao
 de arquivo ou ativacao automatica nesta etapa.
+
+## Resultado do detalhamento e evidencia de coleta preparada
+
+Segunda auditoria do Rigel recebida em 23/11/2026 confirmou:
+
+- 76 transicoes ausente -> booleano_false em em_manutencao. Nao ha 76
+  manutencoes ativas; ausencia no cadastro continua diferente de false no cache.
+- 76 descricoes iguais a funcao ou tipo, coerentes com a projecao do mapa.
+- 5 erros textuais no cadastro e 3 no cache, todos ate 500 caracteres. Nao
+  houve exposicao nem aprovacao de mensagens livres para uma carga SQL.
+- 2 transicoes offline -> online e 72 tempos_resposta divergentes no cache,
+  mantendo a mesma ultima_verificacao textual do cadastro.
+- Hardware/details/detalhes e coletado_em ausentes em todos os registros.
+
+A proxima etapa nao deve copiar esse cache sobre o cadastro. Foi preparada
+instrumentacao do ping ja executado pelo mapa, sem adicionar requisicoes:
+
+- verificar_vm_online(ip) preserva seu contrato booleano legado. O parametro
+  opcional evidencia recebe campos tipados quando usado pelo mapa.
+- Resposta positiva reconhecida ou tres respostas negativas reconhecidas
+  registram coleta_status_confirmada=true, coleta_status_origem=icmp_ping e
+  coletado_em UTC com fuso. Falha de alcance ICMP nao prova host desligado nem
+  estado de VM/hipervisor, hardware, aplicacao ou servico.
+- Excecao de execucao ou saida nao reconhecida nao confirma queda. Fica
+  coleta_status_confirmada=false, coletado_em=NULL e erro_coleta_codigo fixo,
+  sem incluir conteudo bruto de excecao nesse campo.
+- O mapa usa esse marcador: em consulta confirmada, ultima_verificacao passa
+  a representar o instante real, com offset local para os formatadores atuais;
+  coletado_em permanece UTC. Nao converte horarios legados sem fuso.
+- Sem IP ou com coleta inconclusiva, preserva status/ultima_verificacao do
+  cadastro e nao reaproveita marcador true/coletado_em anterior como evidencia
+  nova. Erro de coleta fica separado de resultado negativo de conectividade.
+- tempo_resposta continua sendo duracao do teste completo, incluindo retries,
+  e nao uma nova promessa de RTT ICMP ou medicao de hardware.
+
+A projecao do mapa adiciona esses campos ao registro operacional. O cadastro
+original e a projecao SQL existente nao sao alterados. A manutencao continua
+uma camada separada, nao inferida do ping. Publicacao do cache, updated_at ou
+mudanca de status por manutencao nao substituem a evidencia da consulta.
+
+Depois de publicar/pull, combinar reinicio do web sem jobs/checklist ativos.
+Atualizar o mapa pelo fluxo existente e aguardar a conclusao da coleta normal;
+nao confundir a primeira resposta do cache antigo com resultado novo. Repetir
+audit_server_sources.py: conferir coletado_em com_fuso, tipos de
+coleta_status_confirmada, origem e erros de coleta. A auditoria continua sem
+SQL/rede/cofre. Instrumentacao ainda nao homologada no Rigel.
+
+Sem migracao SQL, carga ou ativacao de sincronizador nesta etapa. Hardware e
+mensagens livres exigem tratamento proprio; nenhum historico anterior e
+fabricado para preencher os novos campos.

@@ -4552,23 +4552,52 @@ def _mapa_adicionar_alerta(regional, tipo, quantidade, severidade, descricao):
         regional["status"] = severidade
 
 
-def _mapa_status_servidor_tempo_real(servidor):
+def _mapa_status_servidor_tempo_real(servidor, evidencia=None):
+    if evidencia is not None:
+        evidencia.clear()
+        evidencia.update(coleta_status_confirmada=False, coletado_em=None,
+                         coleta_status_origem='icmp_ping', erro_coleta_codigo=None)
     ip = str(servidor.get("ip") or "").strip()
     if not ip:
+        if evidencia is not None:
+            evidencia['erro_coleta_codigo'] = 'alvo_sem_ip'
         return _mapa_status(servidor.get("status")), None, "Servidor sem IP"
 
     try:
         inicio = datetime.now()
-        online = verificar_vm_online(ip)
+        online = verificar_vm_online(ip, evidencia=evidencia) if evidencia is not None else verificar_vm_online(ip)
         tempo_resposta = round((datetime.now() - inicio).total_seconds(), 2)
+        if evidencia is not None and evidencia.get('coleta_status_confirmada') is not True:
+            return _mapa_status(servidor.get("status")), None, "Coleta de conectividade nao confirmada"
         return ("online" if online else "offline"), tempo_resposta, (None if online else "Timeout")
     except Exception as exc:
+        if evidencia is not None:
+            evidencia.update(coleta_status_confirmada=False, coletado_em=None,
+                             erro_coleta_codigo='erro_execucao_ping')
+            current_app.logger.warning("Falha na coleta de conectividade de servidor no mapa; estado anterior preservado.")
+            return _mapa_status(servidor.get("status")), None, "Coleta de conectividade nao confirmada"
         current_app.logger.warning(
             "Falha ao testar servidor %s no mapa: %s",
             servidor.get("nome") or servidor.get("id") or ip,
             exc,
         )
         return _mapa_status(servidor.get("status")), None, str(exc)
+
+
+def _mapa_servidor_tempo_real(servidor):
+    evidencia = {}
+    status, tempo_resposta, erro = _mapa_status_servidor_tempo_real(servidor, evidencia=evidencia)
+    item = dict(servidor)
+    item.update({
+        "nome": servidor.get("nome") or servidor.get("id") or "Servidor",
+        "ip": servidor.get("ip") or "",
+        "descricao": servidor.get("funcao") or servidor.get("tipo") or "",
+        "status": status, "tempo_resposta": tempo_resposta, "erro": erro,
+        **evidencia,
+    })
+    if evidencia.get("coleta_status_confirmada") is True:
+        item["ultima_verificacao"] = datetime.fromisoformat(evidencia["coletado_em"]).astimezone().isoformat()
+    return item
 
 
 def _mapa_recalcular_regionais(regionais):
@@ -4792,18 +4821,7 @@ def _montar_dados_mapa_monitoramento():
         regionais[codigo] = _mapa_criar_regional(codigo, info)
 
         for servidor in info.get("servidores", []) or []:
-            status_servidor, tempo_resposta, erro_servidor = _mapa_status_servidor_tempo_real(servidor)
-            servidor_mapa = dict(servidor)
-            servidor_mapa.update({
-                "nome": servidor.get("nome") or servidor.get("id") or "Servidor",
-                "ip": servidor.get("ip") or "",
-                "descricao": servidor.get("funcao") or servidor.get("tipo") or "",
-                "status": status_servidor,
-                "tempo_resposta": tempo_resposta,
-                "erro": erro_servidor,
-                "ultima_verificacao": servidor.get("ultima_verificacao"),
-            })
-            regionais[codigo]["servidores"].append(servidor_mapa)
+            regionais[codigo]["servidores"].append(_mapa_servidor_tempo_real(servidor))
 
         regionais[codigo]["links"] = _mapa_links_regionais(info)
 
